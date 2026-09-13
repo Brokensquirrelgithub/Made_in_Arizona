@@ -1,3 +1,4 @@
+MIA_WORLD_RESULTS
 PASS Suzuki garage roaming route ready
 PASS Suzuki leaves bed and reaches garage floor
 PASS generated campaign starts from menu

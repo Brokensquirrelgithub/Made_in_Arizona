@@ -325,7 +325,8 @@ namespace MadeInArizona
         {
             if(ended||definition==null||Game==null||!Game.IsPlaying)return;
             Kills++;BumpCombo();int points=200+Mathf.Min(Combo,15)*25;Score+=points;
-            bool air=Game.Player&&Game.Player.transform.position.y>2.8f;
+            float groundHeight=Game.Player&&GeneratedWorld.Active?GeneratedWorld.HeightAt(Game.Player.transform.position):0;
+            bool air=Game.Player&&!Game.Player.Grounded&&Game.Player.transform.position.y-groundHeight>2.8f;
             LastAward=air?"AIRBORNE KILL +"+points:Combo>=3?"MULTI-KILL +"+points:"VEHICLE DESTROYED +"+points;
             if(air)UnlockAchievement("airborne","AIRBORNE KILL");
         }

@@ -1,6 +1,6 @@
 # Requested Asset Store packs
 
-Status at 13 September 2026. The Unity sign-in page is open in Codex; only the Nature package was present in the local cache. No unacquired package is represented as integrated.
+Status verified 13 September 2026. Only the Nature package is present in the local Unity Asset Store cache. No unacquired package is represented as integrated.
 
 | Pack | Status |
 |---|---|
@@ -16,3 +16,7 @@ Status at 13 September 2026. The Unity sign-in page is open in Codex; only the N
 | [Western Audio & Music](https://assetstore.unity.com/packages/audio/sound-fx/western-audio-music-67788) | Awaiting download and audition. |
 
 The Pandazole Nature models and atlas remain under their original `Assets/Pandazole_Ultimate_Pack` paths with GUID metadata. These are third-party assets governed by the [Unity Asset Store license](https://unity.com/legal/as-terms), not original project artwork. The build creates a Resources catalog of complete selected models, combining trunk/canopy components with their authored transforms before runtime size normalization. Runtime batching preserves atlas UVs and authored normals, reuses cached source arrays, and unloads distant ecology tiles.
+
+## Audio audit — 13 September 2026
+
+The three linked audio packs have **not** made it into the project. No WAV, OGG, MP3 or AIFF files are present under `Assets`, and none of these packages are in the local Unity Asset Store cache. `AudioManager.Awake` generates the weapon, explosion, engine and interface clips through `AudioSynthesis`; `MusicManager` still supplies procedural music. Downloading a pack alone will not replace these calls: the clips must be imported, auditioned and connected to the runtime mix.

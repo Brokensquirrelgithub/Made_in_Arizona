@@ -81,3 +81,15 @@ Native screenshot review found and corrected two issues that state-only checks h
 Captures 23 (baseline), 24 (depth blur), 27 (vignette), and 26 (explosion flash) were inspected separately. Vignette visibly darkens the edges; blur preserves the near vehicle while softening distant scenery; the explosion lights the ground and produces a bloom halo. Shadow support is checked in the pipeline and light state. Captures 20–22 verify complete Nature assets in the generated landscape, and 25 shows Suzuki on the floor. A non-convex terrain closest-point warning was corrected with a bounds distance estimate. Point-light shadow resolution tiers now limit atlas demand.
 
 Only the already-cached Pandazole Nature package is integrated. The other nine requested packs await authenticated Unity downloads; see [ASSET_PACKS.md](ASSET_PACKS.md). Windows was built, not executed. These checks do not establish RTX 3080 performance or Valheim-equivalent world detail.
+
+## Campaign continuity audit — 13 September
+
+The checkpoint passed the existing 60-check native Mac suite before changes. The updated Mac and Windows builds succeeded with zero errors. A new native generated-terrain campaign suite passed **66 checks**, including all 15 jobs on seed 173 at 1600 metres, sequential mission unlocks, persisted completion/rewards/best scores, the forced vehicle, both bosses' weak points, and grounded versus airborne kill achievements. Exact results: [generated-campaign-results.txt](Validation/generated-campaign-results.txt). Run with `-miaSmokeTest -miaGeneratedCampaignTest`; saves and world configuration use the isolated integration-test directories.
+
+The older campaign suite deliberately uses compact legacy maps; the new flag closes the gap between that coverage and the generated maps used in normal play. It starts from a fresh campaign and advances unlocks normally. Objective fixtures teleport, apply direct damage and accelerate defense timers, so this verifies state-machine and persistence continuity, not natural traversal, AI route reliability or difficulty balance across every seed.
+
+Fixed an achievement regression: absolute world height classified grounded hill kills as airborne. Scoring now requires the player to be ungrounded and more than 2.8 metres above the local terrain (or the legacy zero-height baseline).
+
+The requested audio packs remain absent. The asset-cache, imported-file and runtime-code audit is recorded in [ASSET_PACKS.md](ASSET_PACKS.md).
+
+Final updated-build verification: the full legacy/combat/handling/dev-tuning suite passed **88 checks**, and the world/presentation suite passed **27 checks**, both with exit code 0. Together with the 66-check generated campaign run, all 181 checks passed. Exact current outputs are in `Validation/runtime-results.txt`, `Validation/asset-polish-world-results.txt` and `Validation/generated-campaign-results.txt`. Windows was rebuilt but not executed.

@@ -24,6 +24,14 @@ namespace MadeInArizona
             Application.logMessageReceived += OnLog;
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0)
+            {
+                var campaignKeyboard=InputSystem.AddDevice<Keyboard>();
+                game.WorldConfig.seed=173;game.WorldConfig.size=1600;
+                yield return TestCampaign(campaignKeyboard,0);
+                InputSystem.RemoveDevice(campaignKeyboard);
+                FinishResults();yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0){yield return TestWorldGeneration();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) { game.Save.settings.quality=3;game.ApplySettings();game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f); }
             Check("garage startup", game && game.Player && game.State == GameState.Garage);
@@ -116,6 +124,10 @@ namespace MadeInArizona
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCombatTest") >= 0) yield return TestVehicleCombat(keyboard);
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCampaignTest") >= 0) yield return TestCampaign(keyboard);
             InputSystem.RemoveDevice(keyboard);
+            FinishResults();
+        }
+        void FinishResults()
+        {
             Application.logMessageReceived -= OnLog;
             string output = Path.Combine(Application.temporaryCachePath, "mia-smoke-results.txt");
             string result = string.Join("\n", checks) + "\n" + string.Join("\n", failures) + "\nRESULT: " + (failures.Count == 0 ? "PASS" : "FAIL");
@@ -419,20 +431,39 @@ namespace MadeInArizona
             Physics.SyncTransforms();
             CameraController.Instance.Snap();
         }
-        IEnumerator TestCampaign(Keyboard keyboard)
+        IEnumerator TestCampaign(Keyboard keyboard,int firstMission=1)
         {
             var game = GameManager.Instance;
-            for (int index = 1; index < ContentCatalog.Missions.Length; index++) {
-                game.Save.unlockedMission = 14;
+            for (int index = firstMission; index < ContentCatalog.Missions.Length; index++) {
+                if(firstMission>0)game.Save.unlockedMission = 14;
+                Check("campaign mission unlocked " + (index+1),game.Save.unlockedMission>=index);
+                int moneyBefore=game.Save.money;
                 game.StartMission(index);
                 yield return new WaitForSecondsRealtime(.2f);
+                if(game.UseGeneratedWorld)Check("generated terrain active for mission " + (index+1),GeneratedWorld.Active!=null);
+
                 if (index == 5) Check("forced inappropriate vehicle", game.CurrentVehicle.id == "thimble");
+                if(game.UseGeneratedWorld && index==0) {
+                    Teleport(game.World.PlayerSpawn);
+                    yield return new WaitForSecondsRealtime(.6f);
+                    Check("starter rests on generated terrain",game.Player.Grounded);
+                    game.Mission.RegisterKill();
+                    Check("grounded hill kill is not airborne",!game.Save.achievements.Contains("airborne"));
+                    Teleport(game.World.PlayerSpawn+Vector3.up*10);
+                    yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
+                    game.Mission.RegisterKill();
+                    Check("airborne kill still unlocks achievement",game.Save.achievements.Contains("airborne"));
+                }
                 int checkpoint = 0;
                 for (int step = 0; step < 18 && game.IsPlaying; step++) {
                     game.Player.Repair(10000);
                     var mission = game.Mission;
                     var mode = mission.Definition.mode;
-                    if (mode == MissionMode.Demolition && mission.Stage == 0) {
+                    if(index==0 && mission.Stage==0) {
+                        Teleport(mission.ObjectivePosition+Vector3.up);
+                    } else if(index==0 && mission.Stage==1) {
+                        DestroyHostiles();
+                    } else if (mode == MissionMode.Demolition && mission.Stage == 0) {
                         foreach (var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None)) {
                             if (!prop || prop.Explosive) continue;
                             prop.ApplyDamage(10000, prop.transform.position, game.Player.gameObject);
@@ -470,6 +501,8 @@ namespace MadeInArizona
                     yield return new WaitForSecondsRealtime(.1f);
                 }
                 Check("campaign objective completion " + (index + 1) + " " + game.Mission.Definition.mode, game.State == GameState.Won);
+                var persisted=SaveSystem.Load();
+                Check("campaign rewards persist for mission " + (index+1),persisted.completedMissions.Contains(index) && persisted.money>moneyBefore && persisted.bestScores.Count>index && persisted.bestScores[index]>0);
                 game.ReturnToGarage();
                 yield return new WaitForSecondsRealtime(.1f);
             }

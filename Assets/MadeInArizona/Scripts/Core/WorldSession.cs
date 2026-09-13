@@ -8,7 +8,7 @@ namespace MadeInArizona
         WorldGenConfig worldConfig;
         float configPoll;
         public WorldGenConfig WorldConfig => worldConfig ?? (worldConfig=WorldConfigStore.Load());
-        public bool UseGeneratedWorld => !SmokeTestRunner.Active || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0;
+        public bool UseGeneratedWorld => !SmokeTestRunner.Active || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0;
         public string GenerationStatus {get;private set;}="Preparing terrain…";
         public void ShowMainMenu()
         {

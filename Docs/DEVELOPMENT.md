@@ -91,3 +91,7 @@ The baseline player now has 1.6× steering agility and 1.2× acceleration. Small
 DevVisuals applies real URP volume components and the renderer's SSAO feature. Effects include bloom, exposure, contrast, saturation, chromatic aberration, camera-only motion blur, Gaussian depth of field, vignette, sunlight, ambient light and haze. DOF starts disabled. Camera zoom/shake are live. Masked procedural albedo adds dust/pitting over existing surface normals.
 
 `-miaDevTest` adds health/damage, persistence, effect, AO-feature and menu-resume coverage to the native smoke suite; `-miaHandlingTest` includes the stronger turn and breakable momentum tests.
+
+## Generated campaign regression
+
+Run the native player with `-miaSmokeTest -miaGeneratedCampaignTest` to exercise all 15 jobs on generated terrain (seed 173, size 1600). This is separate from `-miaWorldTest` and the compact-map suite. It verifies sequential unlocks, persisted completion/rewards/scores, boss pods, the forced vehicle and airborne achievements. The test uses isolated saves and controlled objective fixtures, and does not replace human navigation or balance playtests.
