@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: sweeper
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: sweeper
+  displayName: Shop-floor Sweeper
+  description: A close-range eight-pellet shotgun. Excellent at turning fences into
+    shorter fences.
+  contentOrder: 2
+  damage: 9
+  fireRate: 1.7
+  speed: 70
+  blastRadius: 0
+  heat: 11
+  projectileColor: {r: 0.3, g: 1, b: 1, a: 1}

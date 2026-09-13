@@ -1,0 +1,63 @@
+MIA_SMOKE_RESULTS
+PASS garage startup
+PASS catalog: eight vehicles and fifteen missions
+PASS six-way texture pairs and shader
+PASS Suzuki present
+PASS save round trip
+PASS mission startup
+PASS destructible scene
+PASS roads have distinct depth planes and no overlay shadow casters
+PASS responsive 90 degree launch turn
+PASS small breakable retains driving momentum
+PASS head-on wall reverse escape
+PASS angled wall reverse escape
+PASS live health capacity and zero incoming damage
+PASS enemy capacity and outgoing damage modifiers
+PASS dev tuning persists through save reload
+PASS dev controls update real post-processing
+PASS ambient occlusion renderer feature present
+PASS dev menu resumes gameplay
+PASS keyboard driving moves rigidbody
+PASS weapons initialize
+PASS swept projectile destroys target
+PASS Ultra shaders supported
+PASS gamepad movement and twin-stick fire
+PASS localized damage
+PASS field repair
+PASS pause freezes simulation
+PASS resume restores simulation
+PASS recovery reaches junkyard phase
+PASS combat advances objective
+PASS ledger interaction
+PASS mission completion
+PASS progression saved
+PASS garage return
+PASS mechanical part modifies stats
+PASS second starter vehicle selectable
+PASS combat trial starts without campaign unlock
+PASS sustained vehicle gun overheats
+PASS vehicle gun recovers after cooling
+PASS enemy vehicle weapons damage player
+PASS real projectiles defeat both vehicle waves
+PASS vehicle hits and kills confirm
+PASS combat trial preserves campaign progression
+PASS combat trial replay restarts its own mode
+PASS campaign objective completion 2 Salvage
+PASS campaign objective completion 3 Demolition
+PASS campaign objective completion 4 Convoy
+PASS campaign objective completion 5 Rescue
+PASS forced inappropriate vehicle
+PASS campaign objective completion 6 Race
+PASS campaign objective completion 7 Escape
+PASS campaign objective completion 8 Defense
+PASS campaign objective completion 9 Convoy
+PASS campaign objective completion 10 Recovery
+PASS boss components disable in mission 11
+PASS campaign objective completion 11 Boss
+PASS campaign objective completion 12 Demolition
+PASS campaign objective completion 13 Salvage
+PASS campaign objective completion 14 Defense
+PASS boss components disable in mission 15
+PASS campaign objective completion 15 Boss
+
+RESULT: PASS

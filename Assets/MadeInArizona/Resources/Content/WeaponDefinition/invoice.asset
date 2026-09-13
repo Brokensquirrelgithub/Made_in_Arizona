@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: invoice
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: invoice
+  displayName: Past-Due Rocket
+  description: Single high-explosive notice. Blast can trigger propane and ammunition
+    chain reactions.
+  contentOrder: 1
+  damage: 100
+  fireRate: 0.9
+  speed: 44
+  blastRadius: 8
+  heat: 18
+  projectileColor: {r: 1, g: 0.35, b: 0.08, a: 1}

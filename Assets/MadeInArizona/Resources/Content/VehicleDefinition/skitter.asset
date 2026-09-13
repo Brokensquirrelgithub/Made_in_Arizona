@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: skitter
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: skitter
+  displayName: Skitter Sport 1000
+  description: A roll cage surrounding an argument. Extraordinary response, almost
+    no protection from the consequences.
+  contentOrder: 6
+  cost: 2600
+  unlockMission: 7
+  mass: 640
+  horsepower: 112
+  torque: 103
+  maxSpeed: 143
+  grip: 1.15
+  turnSpeed: 126
+  maxHealth: 180
+  rideHeight: 0.78
+  wheelbase: 2.2
+  trackWidth: 1.7
+  suspensionTravel: 0.61
+  springStiffness: 24320
+  damping: 2880
+  finalDrive: 5.1
+  color: {r: 0.68, g: 0.34, b: 0.95, a: 1}
+  drivetrain: 2
+  differential: 1

@@ -1,0 +1,4 @@
+MIA_VFX_REVIEW: PASS
+Native Metal player, 1600 x 900, Arizona Summer.
+Daylight, front light, back light, and local light captures produced.
+No runtime exceptions. Exit code 0.

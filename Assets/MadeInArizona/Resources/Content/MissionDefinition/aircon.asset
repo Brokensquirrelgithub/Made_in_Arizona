@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: aircon
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: aircon
+  title: 2. Window Unit, Moving Vehicle
+  region: South Sunsprawl
+  briefing: Customer states the AC works only downhill. Recover three components
+    from an illegal mobile HVAC conversion before the finance patrol confiscates
+    the evidence.
+  opening: 'Mara: There is a window air conditioner strapped to the roof. Its extension
+    cord goes into the alternator. We are going to need three different tools.'
+  midpoint: 'Bea: He used the condenser as a spoiler. It makes measurable downforce.
+    Unfortunately the measurement is one.'
+  closing: 'Mara: We restored the factory AC. The customer says it lacks the old
+    system''s sense of occasion.'
+  optionalObjective: Finish with at least 65% chassis health
+  contentOrder: 1
+  reward: 820
+  enemyCount: 5
+  targetCount: 3
+  timeLimit: 480
+  objectiveDuration: 45
+  mode: 8
+  optionalKind: 1
+  optionalThreshold: 0.65
+  forcedVehicle: 

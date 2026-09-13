@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a073d4ec4f4eb292a5415bc305c15, type: 3}
+  m_Name: welded
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
+  id: welded
+  displayName: Welded spare differential
+  category: Differential
+  description: +10% grip, -18% turn response. Costs $90; the tire bill arrives separately.
+  contentOrder: 11
+  cost: 90
+  unlockMission: 0
+  salvageCost: 0
+  mass: 3
+  hpMultiplier: 1
+  torqueMultiplier: 1
+  gripMultiplier: 1.1
+  coolingMultiplier: 1
+  healthBonus: 0
+  maxSpeedMultiplier: 1
+  turnMultiplier: 0.82
+  rideHeightBonus: 0
+  suspensionMultiplier: 1
+  springMultiplier: 1
+  dampingMultiplier: 1
+  finalDriveMultiplier: 1
+  changesDrivetrain: 0
+  changesDifferential: 1
+  drivetrain: 0
+  differential: 2
+  compatibleVehicles: []

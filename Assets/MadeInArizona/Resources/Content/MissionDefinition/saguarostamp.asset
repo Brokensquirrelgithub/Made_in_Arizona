@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: saguarostamp
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: saguarostamp
+  title: 10. The Vehicle With Three Titles
+  region: Docket 66
+  briefing: Recover an illegally seized truck from corporate bounty crews. Break
+    their interception waves, retrieve the title archive and return to the extraction
+    point.
+  opening: 'Rick: Absolutely clean title. Three of them, actually. Mara: Rick, that
+    is the precise opposite of reassuring.'
+  midpoint: 'Mara: Every title routes debt to a company named Shade Optional Holdings.
+    The same signature is on our original $173 work order.'
+  closing: 'Rick: So the title is clean now? Mara: The title is evidence, Rick. Please
+    stop laminating evidence.'
+  optionalObjective: Finish in under 280 seconds
+  contentOrder: 9
+  reward: 2200
+  enemyCount: 10
+  targetCount: 4
+  timeLimit: 480
+  objectiveDuration: 45
+  mode: 0
+  optionalKind: 2
+  optionalThreshold: 280
+  forcedVehicle: 

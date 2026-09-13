@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: climb
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: climb
+  title: 6. Wrong Car, Right Mountain
+  region: Juniper Switchbacks
+  briefing: Drive the tiny Thimble through four mountain checkpoints before the financing
+    beacon expires. Your selected compatible upgrades carry over.
+  opening: 'Ellis: The narrow gate only admits the hatchback. Mara: Of course the
+    road to the radio tower was designed by someone with a golf cart.'
+  midpoint: 'Bea: Second gear, steady throttle. You do not need boost here. Please
+    record that I said this voluntarily.'
+  closing: 'Ellis: We reached the tower. The hatchback has earned a mountain certification.
+    The paperwork is a dent shaped like a rock.'
+  optionalObjective: Finish in under 160 seconds
+  contentOrder: 5
+  reward: 1500
+  enemyCount: 6
+  targetCount: 4
+  timeLimit: 220
+  objectiveDuration: 45
+  mode: 4
+  optionalKind: 2
+  optionalThreshold: 160
+  forcedVehicle: thimble

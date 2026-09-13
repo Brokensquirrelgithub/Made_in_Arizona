@@ -1,0 +1,11 @@
+{
+  "seed": 117,
+  "townCount": 4,
+  "poiCount": 18,
+  "size": 1600.0,
+  "terrainHeight": 65.0,
+  "vegetation": 1.0,
+  "riverWidth": 10.0,
+  "biomeThresholds": { "lowland": 0.28, "scrub": 0.52, "highland": 0.76 },
+  "pins": []
+}

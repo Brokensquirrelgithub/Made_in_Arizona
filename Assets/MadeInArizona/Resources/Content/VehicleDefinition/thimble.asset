@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: thimble
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: thimble
+  displayName: 1991 Thimble Sprint
+  description: Three cylinders, 760 kilos, one outstanding invoice. Low mass makes
+    every honest horsepower count.
+  contentOrder: 0
+  cost: 0
+  unlockMission: 0
+  mass: 760
+  horsepower: 58
+  torque: 85
+  maxSpeed: 116
+  grip: 1.08
+  turnSpeed: 112
+  maxHealth: 240
+  rideHeight: 0.56
+  wheelbase: 2.23
+  trackWidth: 1.36
+  suspensionTravel: 0.23
+  springStiffness: 28880
+  damping: 3420
+  finalDrive: 4.1
+  color: {r: 0.15, g: 0.78, b: 0.68, a: 1}
+  drivetrain: 0
+  differential: 0

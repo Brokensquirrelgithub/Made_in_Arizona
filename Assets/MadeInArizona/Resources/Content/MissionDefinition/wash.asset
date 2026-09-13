@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: wash
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: wash
+  title: '7. Customer States: Slight Flood'
+  region: Tin Cup Wash
+  briefing: A flash flood is entering the wash. Follow four marked high-ground checkpoints
+    and extract before the channel fills. Corporate patrols are still attempting
+    a traffic stop.
+  opening: 'Ellis: Rain upstream. We leave now. No joke. Follow the markers and do
+    not stop in the channel.'
+  midpoint: 'Mara: They installed a toll reader in a dry wash. It just invoiced a
+    boulder for an oversized vehicle.'
+  closing: 'Ellis: Everyone is clear. The automated toll notice has been forwarded
+    to the river.'
+  optionalObjective: Keep at least 55% chassis health
+  contentOrder: 6
+  reward: 1650
+  enemyCount: 7
+  targetCount: 4
+  timeLimit: 190
+  objectiveDuration: 45
+  mode: 7
+  optionalKind: 1
+  optionalThreshold: 0.55
+  forcedVehicle: 

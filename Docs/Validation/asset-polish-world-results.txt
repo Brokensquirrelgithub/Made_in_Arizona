@@ -1,0 +1,29 @@
+PASS Suzuki garage roaming route ready
+PASS Suzuki leaves bed and reaches garage floor
+PASS generated campaign starts from menu
+PASS Pandazole nature meshes and atlas packaged
+PASS vignette slider reaches live volume stack
+PASS orthographic blur renderer feature packaged
+PASS orthographic blur slider drives pixel radius
+PASS explosion flash is bright and shadow enabled
+PASS Arizona outline excludes rectangular corners
+PASS generated terrain has collision chunks
+PASS world contains real elevation variation
+PASS starter drives generated terrain beyond legacy bounds
+PASS same seed reproduces towns and terrain
+PASS partial JSON retains playable last-valid world
+PASS valid JSON automatically regenerates changed seed
+PASS different seed changes terrain
+PASS JSON authored location placed
+PASS off-road specialty salvage collected through interaction
+PASS map discovery persists
+PASS specialty material crafts player-only weapon upgrade
+PASS maximum world size generates with bounded geometry
+PASS dense streamed ecology generates plants and stones
+PASS ecology streaming stays within bounded tile budget
+PASS road markings face upward
+PASS wind scenery shader supported
+PASS occasional road patrol spawns away from starter
+PASS road patrol population is bounded
+
+RESULT: PASS

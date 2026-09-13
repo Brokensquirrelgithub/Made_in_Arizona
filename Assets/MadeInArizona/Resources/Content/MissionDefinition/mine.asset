@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: mine
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: mine
+  title: 11. A Very Large Cooling Problem
+  region: Open Invoice Mine
+  briefing: Disable the mining foreman's landship. Shoot its exposed cooling, weapon
+    and generator pods to weaken the machine, then destroy the chassis and recover
+    its control key.
+  opening: 'Ellis: That haul truck is wearing the cooling plant. Mara: Good. I was
+    worried this would be a normal-sized radiator job.'
+  midpoint: 'Mara: Hit the external pods. Weapon power, cooling and generator are
+    separate systems. Somebody left the service access exposed.'
+  closing: 'Mara: We shut it down. The corporate app still says the technician is
+    arriving between eight and five.'
+  optionalObjective: Keep at least 45% chassis health
+  contentOrder: 10
+  reward: 2500
+  enemyCount: 8
+  targetCount: 1
+  timeLimit: 600
+  objectiveDuration: 45
+  mode: 6
+  optionalKind: 1
+  optionalThreshold: 0.45
+  forcedVehicle: 

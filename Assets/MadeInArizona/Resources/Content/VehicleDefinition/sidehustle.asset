@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: sidehustle
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: sidehustle
+  displayName: Side Hustle Tradesman
+  description: Former AC van. The ladders are structural. Weapon room and armor at
+    the expense of everything involving a corner.
+  contentOrder: 4
+  cost: 1800
+  unlockMission: 4
+  mass: 2250
+  horsepower: 195
+  torque: 320
+  maxSpeed: 119
+  grip: 0.92
+  turnSpeed: 59
+  maxHealth: 520
+  rideHeight: 0.68
+  wheelbase: 3.3
+  trackWidth: 1.84
+  suspensionTravel: 0.3
+  springStiffness: 99000
+  damping: 10125
+  finalDrive: 3.9
+  color: {r: 0.86, g: 0.82, b: 0.67, a: 1}
+  drivetrain: 1
+  differential: 0

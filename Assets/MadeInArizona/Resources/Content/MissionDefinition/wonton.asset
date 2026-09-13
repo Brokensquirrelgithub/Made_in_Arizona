@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: wonton
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: wonton
+  title: 12. Wonton Destruction
+  region: Last Exit Service Plaza
+  briefing: Demolish Sunsprawl's automated impound plaza. Their catering truck contains
+    the warrant printer. Inspect the food stalls for a completely unnecessary distinction.
+  opening: 'Silt: Your written plan says wonton destruction. Mara: Typo. Nova: The
+    catering truck has already been highlighted.'
+  midpoint: 'Ivo: This dumpling expresses notes of contractual overreach. Mara: Please
+    move away from the propane before reviewing dinner.'
+  closing: 'Mara: Impound records recovered. We have also become the first garage
+    with a catering-related incident plaque.'
+  optionalObjective: Cause 35 pieces of collateral damage
+  contentOrder: 11
+  reward: 2700
+  enemyCount: 11
+  targetCount: 25
+  timeLimit: 510
+  objectiveDuration: 45
+  mode: 1
+  optionalKind: 0
+  optionalThreshold: 35
+  forcedVehicle: 

@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a073d4ec4f4eb292a5415bc305c15, type: 3}
+  m_Name: blower
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
+  id: blower
+  displayName: Roots blower with honest belt
+  category: Induction
+  description: +32% power, +38% torque; +68 kg and 18% less cooling. Larger RWD vehicles
+    only.
+  contentOrder: 4
+  cost: 950
+  unlockMission: 4
+  salvageCost: 0
+  mass: 68
+  hpMultiplier: 1.32
+  torqueMultiplier: 1.38
+  gripMultiplier: 1
+  coolingMultiplier: 0.82
+  healthBonus: 0
+  maxSpeedMultiplier: 1
+  turnMultiplier: 1
+  rideHeightBonus: 0
+  suspensionMultiplier: 1
+  springMultiplier: 1
+  dampingMultiplier: 1
+  finalDriveMultiplier: 1
+  changesDrivetrain: 0
+  changesDifferential: 0
+  drivetrain: 0
+  differential: 0
+  compatibleVehicles:
+  - foreclosure
+  - perennial
+  - sidehustle
+  - sunskip

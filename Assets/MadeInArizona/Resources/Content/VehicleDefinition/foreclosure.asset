@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: foreclosure
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: foreclosure
+  displayName: Foreclosure 6.8D
+  description: Its torque curve is a mesa. Its turning circle is a county. Includes
+    a payment schedule longer than either.
+  contentOrder: 3
+  cost: 2800
+  unlockMission: 5
+  mass: 3000
+  horsepower: 290
+  torque: 920
+  maxSpeed: 113
+  grip: 0.94
+  turnSpeed: 48
+  maxHealth: 640
+  rideHeight: 0.82
+  wheelbase: 3.55
+  trackWidth: 1.94
+  suspensionTravel: 0.32
+  springStiffness: 132000
+  damping: 13500
+  finalDrive: 3.73
+  color: {r: 0.25, g: 0.29, b: 0.34, a: 1}
+  drivetrain: 1
+  differential: 2

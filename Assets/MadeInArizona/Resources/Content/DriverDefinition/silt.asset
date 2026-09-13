@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82ac906d68f08484f9725ee9689ae88c, type: 3}
+  m_Name: silt
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.DriverDefinition
+  id: silt
+  displayName: Silt Mercer
+  biography: Prepared for sinkholes, tax audits and magnetic pole reversal. Actually
+    did need the spare fan belt yesterday.
+  perk: 'Packed spares: repairs restore 40% more; traction +3%.'
+  line: I packed a contingency for the contingency catching fire.
+  contentOrder: 3
+  color: {r: 0.63, g: 0.69, b: 0.36, a: 1}
+  repairMultiplier: 1.4
+  powerMultiplier: 1
+  gripMultiplier: 1.03

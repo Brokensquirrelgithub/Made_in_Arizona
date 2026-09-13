@@ -1,0 +1,3 @@
+MIA_VALIDATION_PASS: catalog identities, narrative completeness, tuning and content bounds.
+MIA_BUILD: StandaloneOSX Succeeded | 0 errors | 357793946 bytes | 00:00:14.7325440
+MIA_BUILD: StandaloneWindows64 Succeeded | 0 errors | 232564479 bytes | 00:00:12.0786060

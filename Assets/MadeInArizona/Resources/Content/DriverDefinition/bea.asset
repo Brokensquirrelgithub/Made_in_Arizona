@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82ac906d68f08484f9725ee9689ae88c, type: 3}
+  m_Name: bea
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.DriverDefinition
+  id: bea
+  displayName: Bea Voss
+  biography: An ECU tuner with an oscilloscope, a rescue tow strap and a complicated
+    relationship with compressor maps.
+  perk: 'Calibrated trouble: power +13%; repairs restore 10% less.'
+  line: The boost target is a hypothesis. We are collecting evidence.
+  contentOrder: 2
+  color: {r: 0.75, g: 0.36, b: 0.91, a: 1}
+  repairMultiplier: 0.9
+  powerMultiplier: 1.13
+  gripMultiplier: 1

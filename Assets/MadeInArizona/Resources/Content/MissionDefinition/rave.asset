@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: rave
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: rave
+  title: 8. Maximum Permitted Joy
+  region: The Unincorporated Frequency
+  briefing: Hold the generator compound through three security waves while Nova broadcasts
+    the cooling-grid documents. Stay inside the gold perimeter to keep the uplink
+    transmitting.
+  opening: 'Nova: The permit allows amplified sound until ten. Their cease-and-desist
+    drone arrived at nine fifty-eight. I have prepared an extremely short set.'
+  midpoint: 'Nova: Uplink is live. These kicks are original, by the way. The explosions
+    are audience participation.'
+  closing: 'Nova: The records are public. The neighbors asked us to turn down the
+    security vehicles. Fair criticism.'
+  optionalObjective: Cause 20 pieces of collateral damage
+  contentOrder: 7
+  reward: 1850
+  enemyCount: 9
+  targetCount: 3
+  timeLimit: 420
+  objectiveDuration: 54
+  mode: 2
+  optionalKind: 0
+  optionalThreshold: 20
+  forcedVehicle: 

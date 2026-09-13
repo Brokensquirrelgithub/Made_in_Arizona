@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7725f9ef41fe43c7bb5d3f45c2b83e5, type: 3}
+  m_Name: PandazoleNatureCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.PandazoleNatureCatalog
+  atlas: {fileID: 2800000, guid: 78cac7c1dfe137c4ab5a709bfa74e0f0, type: 3}
+  pines:
+  - {fileID: 4300000, guid: 4d2984dcea32e47f9af6052a56179e21, type: 2}
+  - {fileID: 4300000, guid: a025760322f8944d48d56feddb947f31, type: 2}
+  - {fileID: 4300000, guid: 6517d9eea70b1496bbc0c5fe943649f0, type: 2}
+  - {fileID: 4300000, guid: 153ab060a57014b37a1dfc0a6adffd81, type: 2}
+  broadleafTrees:
+  - {fileID: 4300000, guid: 3294b6add58dd4a87a1350e92c0cf3e4, type: 2}
+  cacti:
+  - {fileID: 4300000, guid: b68c2ab64bd9e4e8abcb20a1383fd5f1, type: 2}
+  - {fileID: 4300000, guid: 472b9b2a023164ca185b1115f127ef67, type: 2}
+  - {fileID: 4300000, guid: dfe789772d7ca4e8980078ee202a125c, type: 2}
+  - {fileID: 4300000, guid: 73e401066e025431ca9f8828d4fd559f, type: 2}
+  - {fileID: 4300000, guid: 517a776257d944ef9ae481089ef0e5f2, type: 2}
+  - {fileID: 4300000, guid: e01590906bd0642bc843189591cac06c, type: 2}
+  - {fileID: 4300000, guid: b45f384f6e3fd4bda967e12a419ec7f1, type: 2}
+  - {fileID: 4300000, guid: ad2f4800849b04f5fbe6a3415acc9564, type: 2}
+  - {fileID: 4300000, guid: f2f15e765359749d19e3005c5b2d71ba, type: 2}
+  - {fileID: 4300000, guid: 376d29a4772d54211b38adaa1685243e, type: 2}
+  - {fileID: 4300000, guid: b4f155213a59546f4833826a62a604da, type: 2}
+  - {fileID: 4300000, guid: 42fd18d2ecf104b3082e28d5e1608155, type: 2}
+  - {fileID: 4300000, guid: 8b3dc54c6fc314fb5a76fcfd44bd1e53, type: 2}
+  - {fileID: 4300000, guid: 456e45f999994433b98592db6e87f0b0, type: 2}
+  rocks:
+  - {fileID: 4300000, guid: 10fc7e3045e54485eb98629b6e64b9bd, type: 2}
+  - {fileID: 4300000, guid: deaf6cd8b84b1479c8cb594739d073a1, type: 2}
+  - {fileID: 4300000, guid: 752f4b472630742ebaf3e55ed7ed29c2, type: 2}
+  - {fileID: 4300000, guid: 50c010606779f4621aaae5b8a5216fa6, type: 2}
+  - {fileID: 4300000, guid: 9bf1619ed957a4dc7be06bae5cb2ea88, type: 2}
+  - {fileID: 4300000, guid: a4abeb02867cd4a22a03e4faedef6630, type: 2}
+  - {fileID: 4300000, guid: b1756938b8bbd4ba6ab208525c380d5f, type: 2}
+  - {fileID: 4300000, guid: e0edb435d4ebe4d0eab605e9dd546e99, type: 2}
+  - {fileID: 4300000, guid: ac67b4524c1dd4170bc12c995ba4d229, type: 2}
+  - {fileID: 4300000, guid: 4717f008ca5f644fbb3a95b4483324e4, type: 2}
+  - {fileID: 4300000, guid: c58c07cd14bdd4667904a173e4cd33cd, type: 2}
+  - {fileID: 4300000, guid: a829f3d43285444049d5968ae5c427d3, type: 2}
+  - {fileID: 4300000, guid: af2d1393f7b0f475988a2872333b0d2e, type: 2}
+  - {fileID: 4300000, guid: 83e080092bc184f42acd536f65bafe96, type: 2}
+  grasses:
+  - {fileID: 4300000, guid: 0b23a53a07abb4ebc88a63e2658e479e, type: 2}
+  - {fileID: 4300000, guid: 665384e96f1b44979876e20b945bb38b, type: 2}
+  - {fileID: 4300000, guid: 7515ed009928f4e11a755d01202371c9, type: 2}
+  - {fileID: 4300000, guid: cf8d221d8ea114b018fabd07471b3cdb, type: 2}
+  - {fileID: 4300000, guid: f4ca23106f97a419fbb6ae92f45a094f, type: 2}
+  - {fileID: 4300000, guid: 8cb68c07c1cc84180aae1a400b45b131, type: 2}
+  - {fileID: 4300000, guid: 25191fd0dc66d446daf7110f4bed576e, type: 2}
+  - {fileID: 4300000, guid: b671cf647cea94f468ed7e5914ec65a1, type: 2}
+  - {fileID: 4300000, guid: 2232f3f736797424787b11a156a43a3e, type: 2}
+  - {fileID: 4300000, guid: fd23fcd986a524d9e84cca7b9873da0a, type: 2}
+  - {fileID: 4300000, guid: b1c05311acc874503aedbba0f4b533d2, type: 2}
+  - {fileID: 4300000, guid: 09ec59413e0b74ddf9980d6669e9b6d4, type: 2}
+  bushes:
+  - {fileID: 4300000, guid: f287c26cea1d141868100e2db6e7e51c, type: 2}
+  - {fileID: 4300000, guid: cbefa263dd0034fe0b1443a31ee50eec, type: 2}
+  - {fileID: 4300000, guid: d279176f9e33e4360a44d76b462f29d0, type: 2}
+  - {fileID: 4300000, guid: bb6218b9b2fe64060bcf6344e9342103, type: 2}
+  - {fileID: 4300000, guid: 2333f93f289054357bb01d209d164438, type: 2}
+  - {fileID: 4300000, guid: fc7601a50597046e7be905adcb54f067, type: 2}
+  - {fileID: 4300000, guid: b90280d561074405d84fadc40ad5f30d, type: 2}
+  - {fileID: 4300000, guid: f75851f4916a9410181f314441c5d648, type: 2}

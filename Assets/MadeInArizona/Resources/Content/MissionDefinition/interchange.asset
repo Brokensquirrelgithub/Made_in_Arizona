@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: interchange
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: interchange
+  title: 9. Thirty Lanes to Nowhere
+  region: Sunsprawl Stack Interchange
+  briefing: Protect a mobile evidence server across the unfinished interchange. Sunsprawl
+    is deploying trucks from both shoulders. The server must reach all three transfer
+    points.
+  opening: 'Mara: The interchange has thirty lanes and no exit to the hospital. Their
+    planning document calls this a retention strategy.'
+  midpoint: 'Silt: I brought spare network cable. Mara: How much? Silt: Enough to
+    make the freeway someone''s problem.'
+  closing: 'Mara: The server is safe. We left the median in better condition than
+    procurement did, which is not a high bar.'
+  optionalObjective: Build an 8-hit destruction combo
+  contentOrder: 8
+  reward: 2100
+  enemyCount: 10
+  targetCount: 3
+  timeLimit: 510
+  objectiveDuration: 45
+  mode: 3
+  optionalKind: 4
+  optionalThreshold: 8
+  forcedVehicle: 

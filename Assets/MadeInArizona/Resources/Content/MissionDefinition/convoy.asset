@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: convoy
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: convoy
+  title: 4. Notes of Hot Radiator
+  region: Copperline Boulevard
+  briefing: Escort a dispensary's evidence van through three interception points.
+    The cargo is financial records. Protect the van and stay near it to keep the
+    driver moving.
+  opening: 'Ivo: Our new release has notes of limestone after rain. Mara: Your van
+    has notes of rocket in radiator. Follow us, slowly.'
+  midpoint: 'Ivo: Sunsprawl wanted our customer data as collateral. We sell aroma
+    descriptions, Mara. Some of those descriptions are private.'
+  closing: 'Ivo: A triumphant finish with subtle hints of unpaid municipal bonds.
+    Mara: Please let a bank describe a bank for once.'
+  optionalObjective: Destroy at least 8 hostile vehicles
+  contentOrder: 3
+  reward: 1150
+  enemyCount: 6
+  targetCount: 3
+  timeLimit: 480
+  objectiveDuration: 45
+  mode: 3
+  optionalKind: 5
+  optionalThreshold: 8
+  forcedVehicle: 

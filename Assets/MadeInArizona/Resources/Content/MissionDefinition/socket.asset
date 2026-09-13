@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: socket
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: socket
+  title: 5. The Dog Has the Password
+  region: Half-Price Horizon Salvage
+  briefing: Suzuki has discovered three locked data caches while searching for a
+    missing socket. Reach each cache, interact to open it, then extract.
+  opening: 'Mara: Suzuki brought me a ten-millimeter socket and the security director''s
+    access fob. She is being promoted to accounts receivable.'
+  midpoint: 'Bea: The fob opens the cooling-grid control network. Suzuki has also
+    opened someone''s lunch. Both are time-sensitive.'
+  closing: 'Mara: We know their plan now. They will meter shade, cooling and road
+    access as one subscription. Suzuki has requested a biscuit.'
+  optionalObjective: Recover 2 roadside salvage caches
+  contentOrder: 4
+  reward: 1300
+  enemyCount: 7
+  targetCount: 3
+  timeLimit: 510
+  objectiveDuration: 45
+  mode: 5
+  optionalKind: 3
+  optionalThreshold: 2
+  forcedVehicle: 

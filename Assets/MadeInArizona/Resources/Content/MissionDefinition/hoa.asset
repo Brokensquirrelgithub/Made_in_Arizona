@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: hoa
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: hoa
+  title: 3. Notice of Excessive Clearance
+  region: Beige Vista Estates
+  briefing: Sonoran Courtesy Compliance has impounded residents' recovery equipment.
+    Demolish the enforcement infrastructure, then extract the records.
+  opening: 'Ellis: They fined a wheelchair ramp for exceeding the approved approach
+    angle. The appeal office is an armored kiosk.'
+  midpoint: 'Mara: Their own command truck violates six driveway rules. They granted
+    themselves a hardship variance.'
+  closing: 'Ellis: The residents now own the road. The HOA would like to know who
+    approved the craters.'
+  optionalObjective: Build a 6-hit destruction combo
+  contentOrder: 2
+  reward: 1050
+  enemyCount: 6
+  targetCount: 16
+  timeLimit: 480
+  objectiveDuration: 45
+  mode: 1
+  optionalKind: 4
+  optionalThreshold: 6
+  forcedVehicle: 

@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: invoice
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: invoice
+  title: 1. Customer Declined Service
+  region: Cinder Flats
+  briefing: Recover a runaway customer's vehicle. Follow the collection truck into
+    Half-Price Horizon Salvage, clear its armed friends, recover the finance ledger
+    and return to the shop.
+  opening: 'Mara: Customer states the repair was optional. The front wheel was attached
+    with a hose clamp. Follow his collection truck; we need the registration.'
+  midpoint: 'Mara: These aren''t repossession orders. Sunsprawl is buying cooling
+    infrastructure, roads and everyone''s vehicle debt. Take that ledger.'
+  closing: 'Mara: We survived a private-security junkyard to collect one hundred
+    seventy-three dollars. Including shop supplies.'
+  optionalObjective: Cause 8 pieces of collateral damage
+  contentOrder: 0
+  reward: 700
+  enemyCount: 4
+  targetCount: 3
+  timeLimit: 600
+  objectiveDuration: 45
+  mode: 0
+  optionalKind: 0
+  optionalThreshold: 8
+  forcedVehicle: 

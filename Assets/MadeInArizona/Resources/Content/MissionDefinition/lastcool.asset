@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d4f501b1307410aa35343c12db060c, type: 3}
+  m_Name: lastcool
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
+  id: lastcool
+  title: 14. Shade Is Not a Subscription
+  region: Sunsprawl Service Core
+  briefing: Defend the community cooling controls while the original debt claim is
+    challenged. Hold the marked broadcast zone through three heavy response waves.
+  opening: 'Mara: People need the cooling on. We hold this station while the residents
+    file the injunction. Nobody leaves anyone outside.'
+  midpoint: 'Silt: Their emergency shutdown requires a second signature. Suzuki put
+    a paw on the scanner. The system accepted director-level approval.'
+  closing: 'Mara: Cooling restored. Their network now lists Suzuki as interim compliance
+    officer. We are not correcting that.'
+  optionalObjective: Destroy at least 16 hostile vehicles
+  contentOrder: 13
+  reward: 3400
+  enemyCount: 18
+  targetCount: 3
+  timeLimit: 510
+  objectiveDuration: 66
+  mode: 2
+  optionalKind: 5
+  optionalThreshold: 16
+  forcedVehicle: 
