@@ -88,7 +88,7 @@ namespace MadeInArizona
         void Update()
         {
             if (IsDead || vehicle == null || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
-            if ((Health / MaxHealth < .52f || vehicle.EngineTemperature > 115) && Time.time > smokeAt)
+            if (Health / MaxHealth < .52f && Time.time > smokeAt)
             {
                 smokeAt = Time.time + .15f;
                 bool burning = Health / MaxHealth < .23f;
@@ -105,7 +105,11 @@ namespace MadeInArizona
             if (ai != null) ai.enabled = false;
             var sourceVehicle = source != null ? source.GetComponentInParent<VehicleController>() : null;
             var friendly = ai != null && ai.IsFriendly;
-            if (!vehicle.IsPlayer && !friendly) GameManager.Instance?.Mission?.RegisterKill();
+            if (!vehicle.IsPlayer && !friendly)
+            {
+                GameManager.Instance?.Mission?.RegisterKill();
+                CombatPickup.DropFromEnemy(vehicle, ai != null ? ai.Archetype : 0, ai != null ? ai.Faction : EnemyFaction.Sunsprawl);
+            }
             ExplosionSystem.Detonate(transform.position + Vector3.up * .9f, vehicle.IsPlayer ? 7 : 6, 65, source != null ? source : gameObject, ExplosionKind.Vehicle);
             if (vehicle.Visual != null)
             {

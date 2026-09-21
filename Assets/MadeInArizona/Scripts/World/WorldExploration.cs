@@ -75,6 +75,7 @@ namespace MadeInArizona
         void ActivateHideout(WorldPin pin, VehicleController player)
         {
             if (!activatedHideouts.Add(pin.id)) return;
+            EnemyFaction faction=FactionRules.ForHideout(pin.id);
             int count=Mathf.Clamp(2+pin.requiredTier,2,5);
             for(int i=0;i<count;i++)
             {
@@ -82,7 +83,7 @@ namespace MadeInArizona
                 Vector3 p=pin.position+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*(14+i*2);
                 p=Ground(p);
                 int archetype=Mathf.Clamp(i+pin.requiredTier*2,0,6);
-                var enemy=SpawnManager.Spawn(p+Vector3.up*.8f,archetype,player);
+                var enemy=SpawnManager.Spawn(p+Vector3.up*.8f,archetype,player,faction);
                 if(enemy&&pin.requiredTier>0)
                 {
                     float threat=1+pin.requiredTier*.22f;
@@ -90,7 +91,7 @@ namespace MadeInArizona
                     enemy.Damage.Initialize(enemy,enemy.Stats.maxHealth);
                 }
             }
-            GameManager.Instance?.Notify(pin.label+" • hostile faction vehicles inbound");
+            GameManager.Instance?.Notify(pin.label+" • "+FactionRules.Name(faction)+" inbound");
         }
 
         static bool HideoutClear(Vector3 center)

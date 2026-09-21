@@ -15,7 +15,6 @@ namespace MadeInArizona
         public bool IsPlayer { get; private set; }
         public float SpeedKph => Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         public float RPM { get; private set; } = 900;
-        public float EngineTemperature { get; private set; } = 82;
         public float Throttle { get; private set; }
         public float BoostCharge { get; private set; } = 1;
         public float RepairCharge { get; private set; } = 1;
@@ -27,7 +26,7 @@ namespace MadeInArizona
         bool aiFire;
         Vector3 lastVelocity;
         Vector3 preCollisionVelocity;
-        float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown, heatDamageTimer;
+        float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown;
         int driveDirection = 1;
         Transform[] wheels;
         readonly Vector3[] suspensionPoints = new Vector3[4];
@@ -37,7 +36,7 @@ namespace MadeInArizona
 
         void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
         void OnDisable() { Active.Remove(this); }
-        public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer)
+        public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             Stats = stats; IsPlayer = isPlayer;
             Body = GetComponent<Rigidbody>();
@@ -55,7 +54,7 @@ namespace MadeInArizona
             var material = new PhysicsMaterial("Sliding body") { dynamicFriction = .18f, staticFriction = .25f, bounciness = .12f };
             box.material = material;
             if (Visual != null) Destroy(Visual.gameObject);
-            Visual = VehicleVisual.Build(definition, transform, !isPlayer);
+            Visual = VehicleVisual.Build(definition, transform, !isPlayer, faction);
             wheels = new Transform[4];
             string[] names = { "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR" };
             for (int i = 0; i < 4; i++)
@@ -82,7 +81,8 @@ namespace MadeInArizona
             return null;
         }
         public void SetAIInput(Vector2 move, Vector3 aim, bool fire) { aiMove = move; aiAim = aim; aiFire = fire; }
-        public void Repair(float amount) { Damage?.Repair(amount); EngineTemperature = Mathf.Max(80, EngineTemperature - amount * .2f); }
+        public void Repair(float amount) { Damage?.Repair(amount); }
+        public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount); }
 
         void Update()
         {
@@ -95,7 +95,6 @@ namespace MadeInArizona
                 Weapons.AimAt(aimDirection);
                 if (input.Primary) Weapons.FirePrimary(aimDirection);
                 if (input.Secondary) Weapons.FireSecondary(aimDirection);
-                if (input.Tertiary) Weapons.FireTertiary(aimDirection);
                 if (input.Repair && RepairCharge > 0 && Damage.Health < Damage.MaxHealth)
                 {
                     float rate = 34;
@@ -171,10 +170,9 @@ namespace MadeInArizona
                 float acceleration = Mathf.Clamp(Mathf.Min(wheelForce, powerForce) / Body.mass * 2.65f, 3.2f, 27);
                 acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * drivetrain;
                 if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
-                if (EngineTemperature > 120) acceleration *= .62f;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
                 if (boosting) { acceleration *= 1.65f; BoostCharge -= Time.fixedDeltaTime * .22f; }
-                else BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .095f);
+                else BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .075f * Mathf.Max(.25f, Stats.cooling));
                 float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
@@ -187,7 +185,7 @@ namespace MadeInArizona
             {
                 driveDirection = 1;
                 RPM = Mathf.Lerp(RPM, 900, Time.fixedDeltaTime * 3);
-                BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .095f);
+                BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .075f * Mathf.Max(.25f, Stats.cooling));
                 if (Grounded) Body.AddForce(-planar * 1.8f, ForceMode.Acceleration);
             }
             if (Grounded)
@@ -199,9 +197,6 @@ namespace MadeInArizona
                 if (surface == SurfaceKind.Water || surface == SurfaceKind.Mud) Body.AddForce(-planar * .65f, ForceMode.Acceleration);
             }
             DriftAmount = Mathf.Clamp01(Mathf.Abs(lateralSpeed) / 12);
-            float heatTarget = 82 + Throttle * 20 + (1 - Damage.Radiator) * 70 + (boosting ? 28 : 0);
-            EngineTemperature = Mathf.MoveTowards(EngineTemperature, heatTarget, Time.fixedDeltaTime * (heatTarget > EngineTemperature ? 3.2f / Mathf.Max(.4f, Stats.cooling) : 5 * Stats.cooling));
-            if (EngineTemperature > 140 && Time.time > heatDamageTimer) { heatDamageTimer = Time.time + 1; Damage.ApplyDamage(2, transform.position + transform.forward, null); }
             if(GeneratedWorld.Active)
             {
                 if(!GeneratedWorld.Contains(transform.position) || transform.position.y<GeneratedWorld.HeightAt(transform.position)-12)

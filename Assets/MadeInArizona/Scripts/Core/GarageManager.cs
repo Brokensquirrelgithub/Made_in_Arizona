@@ -34,6 +34,19 @@ namespace MadeInArizona
             save.money-=part.cost; save.salvage-=part.salvageCost; save.ownedParts.Add(part.id); LastMessage="Purchased "+part.displayName+". Install it to apply its effects.";
             SaveSystem.Save(save); return true;
         }
+        public static bool BuyOrSelectWeapon(WeaponDefinition weapon, SaveData save)
+        {
+            if (weapon == null || !WeaponRules.GarageWeapon(weapon.id)) { LastMessage = "That weapon can only be found in the field."; return false; }
+            if (!save.ownedWeapons.Contains(weapon.id))
+            {
+                int cost = WeaponRules.ScrapCost(weapon.id);
+                if (save.salvage < cost) { LastMessage = "Need " + cost + " scrap to buy this weapon."; return false; }
+                save.salvage -= cost; save.ownedWeapons.Add(weapon.id);
+            }
+            save.selectedWeapon = weapon.id;
+            LastMessage = weapon.displayName + " fitted to RT.";
+            SaveSystem.Save(save); return true;
+        }
         public static void TogglePart(VehiclePart part,SaveData save)
         {
             if(save.installedParts.Contains(part.id)){save.installedParts.Remove(part.id);LastMessage="Removed "+part.displayName;SaveSystem.Save(save);return;}

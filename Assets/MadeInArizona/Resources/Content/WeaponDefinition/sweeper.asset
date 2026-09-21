@@ -14,12 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: sweeper
   displayName: Shop-floor Sweeper
-  description: A close-range eight-pellet shotgun. Excellent at turning fences into
-    shorter fences.
+  description: 'Garage shotgun. Eight close-range pellets; clear a path through a crowd.'
   contentOrder: 2
   damage: 9
   fireRate: 1.7
   speed: 70
   blastRadius: 0
-  heat: 11
   projectileColor: {r: 0.3, g: 1, b: 1, a: 1}

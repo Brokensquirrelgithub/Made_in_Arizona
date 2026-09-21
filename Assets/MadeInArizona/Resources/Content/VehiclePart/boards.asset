@@ -15,8 +15,7 @@ MonoBehaviour:
   id: boards
   displayName: Recovery boards and tool roll
   category: Utility
-  description: +45 health, +8% cooling, +24 kg. Tools are less cinematic than fire,
-    but considerably cheaper.
+  description: '+45 health, +8% nitro recovery, +24 kg.'
   contentOrder: 22
   cost: 290
   unlockMission: 0

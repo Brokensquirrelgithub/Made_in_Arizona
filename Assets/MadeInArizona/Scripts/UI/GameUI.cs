@@ -16,10 +16,11 @@ namespace MadeInArizona
         static readonly Color Lime = new Color(.80f, .90f, .42f);
         static readonly Color Blue = new Color(.30f, .83f, .87f);
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
-        readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "DRIVERS", "SUZUKI" };
+        readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "DRIVERS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
-        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Tertiary", "Handbrake", "Boost", "Repair", "Interact", "Pause" };
-        int station, selectedPart, selectedDriver, settingsPage, menuFocus;
+        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Repair", "Interact", "Pause" };
+        readonly int[] garageWeapons = { 0, 2, 3 };
+        int station, selectedPart, selectedWeapon, selectedDriver, settingsPage, menuFocus;
         bool settings;
         float width, height, smoothedFps = 60;
         Vector2 listScroll, detailScroll;
@@ -33,7 +34,16 @@ namespace MadeInArizona
             game.StateChanged += ResetFocus;
         }
         void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; foreach (var p in portraits ?? Array.Empty<Texture2D>()) if (p) Destroy(p); }
-        void ResetFocus() { worldSeed=null; worldMap=false; devMenu=false; settings = false; menuFocus = 0; GUI.FocusControl(null); }
+        void ResetFocus()
+        {
+            worldSeed=null; worldMap=false; devMenu=false; settings=false; menuFocus=0;
+            if (game != null && game.Save != null)
+            {
+                selectedWeapon=Array.FindIndex(garageWeapons,i=>ContentCatalog.Weapons[i].id==game.Save.selectedWeapon);
+                if (selectedWeapon < 0) selectedWeapon=0;
+            }
+            GUI.FocusControl(null);
+        }
 
         void Update()
         {
@@ -59,18 +69,19 @@ namespace MadeInArizona
                 if (direction != 0 || pad.buttonSouth.wasPressedThisFrame) AdjustSetting(direction == 0 ? 1 : direction);
                 return;
             }
-            if (pad.buttonNorth.wasPressedThisFrame) { if (game.IsPlaying) game.Pause(); settings = true; menuFocus = 0; return; }
+            if (pad.buttonNorth.wasPressedThisFrame && (game.State == GameState.Garage || game.State == GameState.Paused)) { settings = true; menuFocus = 0; return; }
             if (game.State == GameState.Garage) {
                 if(pad.buttonWest.wasPressedThisFrame){game.StartCombatTrial();return;}
-                if (pad.leftShoulder.wasPressedThisFrame) { station = (station + 4) % 5; listScroll = Vector2.zero; }
-                if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % 5; listScroll = Vector2.zero; }
+                if (pad.leftShoulder.wasPressedThisFrame) { station = (station + stations.Length - 1) % stations.Length; listScroll = Vector2.zero; }
+                if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % stations.Length; listScroll = Vector2.zero; }
                 int change = pad.dpad.down.wasPressedThisFrame || pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.up.wasPressedThisFrame || pad.dpad.left.wasPressedThisFrame ? -1 : 0;
                 if (change != 0) {
                     if (station == 0) game.SelectedMission = Mathf.Clamp(game.SelectedMission + change, 0, game.Save.unlockedMission);
                     if (station == 1) { int v = Mathf.Clamp(game.Save.selectedVehicle + change, 0, ContentCatalog.Vehicles.Length - 1); if (GarageManager.SelectVehicle(v, game.Save)) game.RefreshGarageVehicle(); }
                     if (station == 2) { selectedPart = Mathf.Clamp(selectedPart + change, 0, ContentCatalog.Parts.Length - 1); listScroll.y = Mathf.Max(0, (selectedPart - 3) * 81); }
-                    if (station == 3) selectedDriver = Mathf.Clamp(selectedDriver + change, 0, ContentCatalog.Drivers.Length - 1);
-                    if (station == 4) { game.Save.dogCosmetic = Mathf.Clamp(game.Save.dogCosmetic + change, 0, 3); game.ReturnToGarage(); station = 4; }
+                    if (station == 3) selectedWeapon = Mathf.Clamp(selectedWeapon + change, 0, garageWeapons.Length - 1);
+                    if (station == 4) selectedDriver = Mathf.Clamp(selectedDriver + change, 0, ContentCatalog.Drivers.Length - 1);
+                    if (station == 5) { game.Save.dogCosmetic = Mathf.Clamp(game.Save.dogCosmetic + change, 0, 3); game.ReturnToGarage(); station = 5; }
                 }
                 if (pad.buttonSouth.wasPressedThisFrame) ConfirmSelection();
             }
@@ -82,7 +93,8 @@ namespace MadeInArizona
         {
             if (station == 0) game.StartMission(game.SelectedMission);
             if (station == 2) BuyOrInstall(ContentCatalog.Parts[selectedPart]);
-            if (station == 3) { game.Save.selectedDriver = selectedDriver; game.RefreshGarageVehicle(); }
+            if (station == 3) SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
+            if (station == 4) { game.Save.selectedDriver = selectedDriver; game.RefreshGarageVehicle(); }
         }
 
         GUIStyle Style(int size, Color color, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
@@ -146,7 +158,7 @@ namespace MadeInArizona
             Text(48, 17, 420, 35, "MADE IN ARIZONA", 29, Cream, true);
             Tag(49, 56, "117° AUTO CARE   /   TECHNICALLY INFORMED STUPIDITY", Orange);
             Text(width - 520, 28, 240, 30, "$ " + game.Save.money.ToString("N0"), 25, Lime, true, TextAnchor.MiddleRight);
-            Text(width - 250, 31, 215, 30, game.Save.salvage + " SALVAGE    •    REP " + game.Save.reputation, 14, Muted, true, TextAnchor.MiddleRight);
+            Text(width - 250, 31, 215, 30, game.Save.salvage + " SCRAP    •    REP " + game.Save.reputation, 14, Muted, true, TextAnchor.MiddleRight);
             for (int i = 0; i < stations.Length; i++) {
                 float x = 32 + i * 175;
                 if (Button(x, 110, 165, 39, stations[i], station == i)) { station = i; listScroll = Vector2.zero; }
@@ -155,8 +167,9 @@ namespace MadeInArizona
             if (station == 0) DrawDispatch(top, panelHeight);
             if (station == 1) DrawVehicles(top, panelHeight);
             if (station == 2) DrawParts(top, panelHeight);
-            if (station == 3) DrawDrivers(top, panelHeight);
-            if (station == 4) DrawDog(top, panelHeight);
+            if (station == 3) DrawWeapons(top, panelHeight);
+            if (station == 4) DrawDrivers(top, panelHeight);
+            if (station == 5) DrawDog(top, panelHeight);
             Rect(0, height - 62, width, 62, Ink);
             Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB / RB  STATION     D-PAD  SELECT     A  CONFIRM     Y  SETTINGS" : "TAB  CHANGE STATION     ENTER  CONFIRM     F1  SETTINGS", 12, Muted, true);
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
@@ -226,7 +239,7 @@ namespace MadeInArizona
             Rect(x, y, w, 200, Ink);
             Tag(x + 24, y + 20, "DYNO SHEET / INSTALLED CONFIGURATION", Orange);
             Text(x + 24, y + 57, w - 48, 31, Mathf.RoundToInt(s.horsepower) + " HP     " + Mathf.RoundToInt(s.torque) + " NM     " + Mathf.RoundToInt(s.mass) + " KG", 24, Cream, true);
-            Text(x + 24, y + 104, w - 48, 75, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL\n" + s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + s.cooling.ToString("0.00") + " COOLING", 17, Muted);
+            Text(x + 24, y + 104, w - 48, 75, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL\n" + s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + s.cooling.ToString("0.00") + " NITRO RECOVERY", 17, Muted);
         }
 
         void DrawParts(float top, float panelHeight)
@@ -247,7 +260,7 @@ namespace MadeInArizona
             Tag(x + 24, top + 20, part.category.ToUpperInvariant() + " / SHOP NOTES", Orange);
             Text(x + 24, top + 51, 455, 78, part.displayName.ToUpperInvariant(), 32, Cream, true);
             Text(x + 24, top + 142, 455, 102, part.description, 18, Cream);
-            Text(x + 24, top + 251, 455, 42, "+" + part.mass + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nCOOLING ×" + part.coolingMultiplier.ToString("0.00") + "   •   STRUCTURE +" + part.healthBonus, 14, Muted);
+            Text(x + 24, top + 251, 455, 42, "+" + part.mass + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nNITRO RECOVERY ×" + part.coolingMultiplier.ToString("0.00") + "   •   STRUCTURE +" + part.healthBonus, 14, Muted);
             bool ownedPart = game.Save.ownedParts.Contains(part.id), isInstalled = game.Save.installedParts.Contains(part.id);
             bool compatible = GarageManager.Compatible(part, ContentCatalog.Vehicles[game.Save.selectedVehicle]);
             bool available = part.unlockMission <= game.Save.unlockedMission && compatible;
@@ -269,6 +282,36 @@ namespace MadeInArizona
             if (!game.Save.ownedParts.Contains(part.id) && !GarageManager.BuyPart(part, game.Save)) { game.Notify(GarageManager.LastMessage); return; }
             GarageManager.TogglePart(part, game.Save); game.RefreshGarageVehicle();
             game.Notify(GarageManager.LastMessage);
+        }
+
+        void SelectGarageWeapon(WeaponDefinition weapon)
+        {
+            if (GarageManager.BuyOrSelectWeapon(weapon, game.Save)) game.RefreshGarageVehicle();
+            game.Notify(GarageManager.LastMessage);
+        }
+
+        void DrawWeapons(float top, float panelHeight)
+        {
+            Rect(32, top, 500, panelHeight, Ink);
+            Tag(56, top + 20, "RT / GARAGE WEAPON • SPEND SCRAP TO OWN", Orange);
+            for (int i = 0; i < garageWeapons.Length; i++)
+            {
+                var weapon = ContentCatalog.Weapons[garageWeapons[i]];
+                string status = game.Save.selectedWeapon == weapon.id ? "FITTED" :
+                    game.Save.ownedWeapons.Contains(weapon.id) ? "OWNED" : WeaponRules.ScrapCost(weapon.id) + " SCRAP";
+                if (Button(56, top + 65 + i * 91, 450, 74, weapon.displayName + "\n" + status, selectedWeapon == i)) selectedWeapon = i;
+            }
+            Text(56, top + 370, 440, 100, "Enemy weapons live in the LT slot. Destroy the right vehicle, drive over its drop, and press Y / F to swap when carrying one.", 18, Muted);
+            var selected = ContentCatalog.Weapons[garageWeapons[selectedWeapon]];
+            float x = width - 535;
+            Rect(x, top, 503, panelHeight, Ink);
+            Tag(x + 24, top + 24, "GARAGE LOADOUT / RIGHT TRIGGER", Lime);
+            Text(x + 24, top + 64, 455, 75, selected.displayName.ToUpperInvariant(), 31, Cream, true);
+            Text(x + 24, top + 157, 455, 115, selected.description, 20, Cream);
+            Text(x + 24, top + 292, 455, 45, selected.damage + " DAMAGE    •    " + selected.fireRate.ToString("0.0") + " ROUNDS/SEC", 17, Muted);
+            bool owned = game.Save.ownedWeapons.Contains(selected.id);
+            string label = game.Save.selectedWeapon == selected.id ? "FITTED TO RT" : owned ? "EQUIP ON RT" : "BUY & EQUIP / " + WeaponRules.ScrapCost(selected.id) + " SCRAP";
+            if (Button(x + 24, top + panelHeight - 88, 455, 56, label, true)) SelectGarageWeapon(selected);
         }
 
         void DrawDrivers(float top, float panelHeight)
@@ -306,7 +349,7 @@ namespace MadeInArizona
             Rect(x, top, 448, 399, Ink);
             Tag(x + 25, top + 23, "COMPLETELY NECESSARY EQUIPMENT", Orange);
             string[] looks = { "FACTORY DOG", "SAFETY INSPECTOR", "DESERT DOGGLES", "RECOVERY CAPTAIN" };
-            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) { game.Save.dogCosmetic = i; game.ReturnToGarage(); station = 4; }
+            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) { game.Save.dogCosmetic = i; game.ReturnToGarage(); station = 5; }
         }
 
         void DrawHUD()
@@ -326,18 +369,25 @@ namespace MadeInArizona
             Text(48, height - 177, 330, 26, game.CurrentVehicle.displayName.ToUpperInvariant(), 16, Cream, true);
             Bar(48, height - 134, 240, 10, p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth), p.Damage.Health / p.Damage.MaxHealth > .3f ? Lime : Orange);
             Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", 14, Cream, true);
-            Bar(48, height - 102, 240, 6, p.EngineTemperature / 150f, Orange);
-            Text(300, height - 112, 75, 28, p.EngineTemperature.ToString("0") + "°C", 14, Orange, true);
+            Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
+            Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
             Text(48, height - 78, 320, 30, p.SpeedKph.ToString("000") + " KM/H     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
             float weaponsX = 410;
-            string[] labels = { "BELT-FED", "PROPANE ROCKET", "SCRAP SHOTGUN" };
-            string[] keys = InputManager.Instance.UsingGamepad ? new[] { "R-STICK", "LT", "RT" } : new[] { "LMB", "RMB", "Q" };
-            for (int i = 0; i < 3; i++) { Rect(weaponsX + i * 159, height - 104, 147, 76, Ink); Tag(weaponsX + 12 + i * 159, height - 90, keys[i], i == 0 ? Lime : Orange); Text(weaponsX + 12 + i * 159, height - 63, 133, 30, labels[i], 12, Cream, true); }
-            Bar(422,height-34,122,4,1-p.Weapons.Heat,p.Weapons.Overheated?Orange:Lime);
-            Bar(581,height-34,122,4,1-p.Weapons.RocketCooldown,Orange);
-            Bar(740,height-34,122,4,1-p.Weapons.ShotgunCooldown,Blue);
-            if(p.Weapons.Overheated)Text(410,height-180,470,28,"GUN OVERHEATED • COOLING",17,Orange,true);
-            Text(410, height - 146, 535, 29, InputManager.Instance.UsingGamepad ? "RB  BOOST    LB  REPAIR    B  HANDBRAKE    A  INTERACT" : "SHIFT  BOOST    R  REPAIR    SPACE  HANDBRAKE    E  INTERACT", 12, Cream, true);
+            bool padControls = InputManager.Instance.UsingGamepad;
+            Rect(weaponsX, height - 104, 210, 76, Ink);
+            Tag(weaponsX + 12, height - 90, padControls ? "RT  /  GARAGE" : "LMB  /  GARAGE", Lime);
+            Text(weaponsX + 12, height - 63, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "RIVETER", 13, Cream, true);
+            Bar(weaponsX + 12, height - 34, 186, 4, 1 - p.Weapons.GarageCooldown, Lime);
+            Rect(weaponsX + 220, height - 104, 210, 76, Ink);
+            Tag(weaponsX + 232, height - 90, padControls ? "LT  /  FIELD" : "RMB  /  FIELD", Orange);
+            Text(weaponsX + 232, height - 63, 190, 30, p.Weapons.FieldWeapon ? p.Weapons.FieldWeapon.displayName.ToUpperInvariant() + "  " + p.Weapons.FieldAmmo : "EMPTY • FIND A DROP", 12, Cream, true);
+            Bar(weaponsX + 232, height - 34, 186, 4, 1 - p.Weapons.FieldCooldown, Orange);
+            var nearbyWeapon = CombatPickup.NearbyWeapon(p);
+            if (nearbyWeapon)
+                Text(410, height - 180, 530, 27, p.Weapons.FieldWeapon ?
+                    (padControls ? "Y" : "F") + " SWAP FOR " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
+                    "DRIVE OVER " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() + " TO EQUIP", 16, Lime, true);
+            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    LB REPAIR    B BRAKE    Y SWAP" : "SHIFT BOOST    R REPAIR    SPACE BRAKE    F SWAP", 12, Cream, true);
             if (game.Mission.Combo > 1) Text(28, 136, 320, 43, "×" + game.Mission.Combo + "  INSURANCE EVENT", 23, Orange, true);
             Text(28, 185, 320, 30, game.Mission.Score.ToString("N0") + "  DAMAGE CLAIM", 17, Cream, true);
             DrawMinimap(width - 216, height - 228, 188);
@@ -362,6 +412,17 @@ namespace MadeInArizona
         void DrawCombatReadability()
         {
             if(!Camera.main || !game.Player || game.State!=GameState.Playing)return;
+            foreach(var pickup in CombatPickup.Active)
+            {
+                if(!pickup || (pickup.transform.position-game.Player.transform.position).sqrMagnitude>6400)continue;
+                var view=Camera.main.WorldToViewportPoint(pickup.transform.position+Vector3.up*1.1f);
+                if(view.z<=0||view.x<0||view.x>1||view.y<0||view.y>1)continue;
+                var point=ScreenPoint(pickup.transform.position+Vector3.up*1.1f);
+                string label=pickup.Kind==PickupKind.Weapon ? pickup.Weapon.displayName.ToUpperInvariant()+"  "+pickup.Amount :
+                    pickup.Kind==PickupKind.Health ? "+HEALTH" : pickup.Kind==PickupKind.Nitro ? "+NITRO" : "+SCRAP";
+                Color color=pickup.Kind==PickupKind.Health?Lime:pickup.Kind==PickupKind.Nitro?Blue:pickup.Kind==PickupKind.Scrap?Orange:Cream;
+                Text(point.x-82,point.y-10,164,24,label,12,color,true,TextAnchor.MiddleCenter);
+            }
             string[] names={"FLANKER","TECHNICAL","RAMMER","SNIPER","ROCKET CARRIER","JUNK BOMB","HEAVY","COMMAND"};
             foreach(var vehicle in VehicleController.Active) {
                 if(!vehicle||vehicle.IsPlayer||vehicle.Damage.IsDead)continue;
@@ -369,14 +430,16 @@ namespace MadeInArizona
                 var view=Camera.main.WorldToViewportPoint(vehicle.transform.position);
                 if(view.z<0 || view.x<0 || view.x>1 || view.y<0 || view.y>1)continue;
                 var point=ScreenPoint(vehicle.transform.position+Vector3.up*3);
-                Color color=ai.IsFriendly?Blue:Orange;
+                Color color=ai.IsFriendly?Blue:FactionRules.Accent(ai.Faction);
                 Bar(point.x-37,point.y-8,74,5,vehicle.Damage.Health/vehicle.Damage.MaxHealth,color);
+                if(!ai.IsFriendly)Text(point.x-110,point.y-43,220,16,FactionRules.Name(ai.Faction),9,color,true,TextAnchor.MiddleCenter);
                 Text(point.x-80,point.y-28,160,20,ai.IsFriendly?"ESCORT":names[Mathf.Clamp(ai.Archetype,0,7)],10,color,true,TextAnchor.MiddleCenter);
+                if(!ai.IsFriendly)Text(point.x-88,point.y+1,176,16,"MAY DROP: "+WeaponRules.DropHint(ai.Faction,ai.Archetype),9,Lime,true,TextAnchor.MiddleCenter);
                 if(ai.IsTelegraphingAttack) {
                     var start=ScreenPoint(vehicle.transform.position+Vector3.up*.6f);
                     var end=ScreenPoint(vehicle.transform.position+ai.TelegraphDirection*35+Vector3.up*.6f);
                     CombatLine(start,end,2,Orange);
-                    Text(point.x-110,point.y+4,220,25,ai.AttackTelegraph.ToString().ToUpperInvariant()+"  "+ai.TelegraphRemaining.ToString("0.0")+"s",13,Orange,true,TextAnchor.MiddleCenter);
+                    Text(point.x-110,point.y+20,220,25,ai.AttackTelegraph.ToString().ToUpperInvariant()+"  "+ai.TelegraphRemaining.ToString("0.0")+"s",13,Orange,true,TextAnchor.MiddleCenter);
                 }
             }
             if(Time.time-CombatFeedback.LastHitTime<.16f) {
@@ -411,7 +474,7 @@ namespace MadeInArizona
             foreach(var vehicle in VehicleController.Active) {
                 if(!vehicle||vehicle.IsPlayer||vehicle.Damage.IsDead)continue;
                 var ai=vehicle.GetComponent<EnemyAI>();if(!ai)continue;
-                var dot=map(vehicle.transform.position);Rect(dot.x-3,dot.y-3,6,6,ai.IsFriendly?Blue:Orange);
+                var dot=map(vehicle.transform.position);Rect(dot.x-3,dot.y-3,6,6,ai.IsFriendly?Blue:FactionRules.Accent(ai.Faction));
             }
             Vector2 pp = map(player), op = map(objective);
             Rect(op.x - 5, op.y - 5, 10, 10, Orange); Rect(pp.x - 4, pp.y - 4, 8, 8, Lime);
@@ -501,8 +564,8 @@ namespace MadeInArizona
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 2) {
-                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB belt-fed / RMB rockets / Q shotgun\nSpace handbrake / Shift boost / R field repair / E interact / Esc pause", 18);
-                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim & fire. LT rockets, RT shotgun.\nRB boost, LB repair, B handbrake, A interact, Start pause.", 18, Muted);
+                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space handbrake / Shift boost / R repair / Esc pause", 18);
+                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, LB repair, B handbrake, A interact, Start pause.", 18, Muted);
                 Tag(x + 35, y + 368, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
                     float bx = x + 35 + i % 4 * 215, by = y + 401 + i / 4 * 59;

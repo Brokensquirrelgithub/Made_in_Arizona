@@ -15,8 +15,7 @@ MonoBehaviour:
   id: headers
   displayName: Equal-length headers
   category: Exhaust
-  description: Scavenging improves power 9%; underhood heat costs 5% cooling. +5
-    kg.
+  description: 'Scavenging improves power 9%; nitro recovery -5%. +5 kg.'
   contentOrder: 1
   cost: 240
   unlockMission: 0

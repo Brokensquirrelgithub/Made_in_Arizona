@@ -15,8 +15,7 @@ MonoBehaviour:
   id: nitrous
   displayName: Purge-first nitrous kit
   category: Induction
-  description: +25% power, +12% torque, -20% cooling, +20 kg. Constant combat tune;
-    replaces other forced induction.
+  description: '+25% power, +12% torque, -20% nitro recovery, +20 kg.'
   contentOrder: 23
   cost: 690
   unlockMission: 4

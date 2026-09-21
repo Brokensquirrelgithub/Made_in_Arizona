@@ -4,7 +4,7 @@ namespace MadeInArizona
 {
     public static class SpawnManager
     {
-        public static VehicleController Spawn(Vector3 position, int archetype, VehicleController target)
+        public static VehicleController Spawn(Vector3 position, int archetype, VehicleController target, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             ContentCatalog.EnsureLoaded();
             if (ContentCatalog.Vehicles.Length == 0) return null;
@@ -18,8 +18,10 @@ namespace MadeInArizona
             stats.maxSpeed *= type == 0 ? 1.05f : type == 7 ? .62f : .8f;
             stats.horsepower *= type == 7 ? 2.8f : 1;
             stats.torque *= type == 7 ? 3 : 1;
+            if (faction == EnemyFaction.SnowbirdConvoy) { stats.maxSpeed *= .76f; stats.maxHealth *= 1.25f; }
+            if (faction == EnemyFaction.CarOtaku) { stats.maxSpeed *= 1.3f; stats.horsepower *= 1.25f; stats.maxHealth *= .85f; }
             if (type == 7) { stats.mass *= 2.6f; stats.trackWidth *= 1.8f; stats.wheelbase *= 1.8f; stats.springStiffness *= 2.6f; stats.damping *= 2.6f; stats.turnSpeed = 38; }
-            var go = new GameObject(type == 7 ? "Sonoran HOA Mobile Command" : "Foreclosure fleet · " + type);
+            var go = new GameObject(FactionRules.Name(faction) + (type == 7 ? " mobile command" : " · " + type));
             if (GameManager.Instance != null && GameManager.Instance.World != null) go.transform.SetParent(GameManager.Instance.World.transform);
             go.transform.position = position + Vector3.up * .2f;
             if (target != null)
@@ -28,8 +30,9 @@ namespace MadeInArizona
                 if (facing.sqrMagnitude > .01f) go.transform.rotation = Quaternion.LookRotation(facing);
             }
             var controller = go.AddComponent<VehicleController>();
-            controller.Initialize(definition, stats, false);
-            var ai = go.AddComponent<EnemyAI>(); ai.Initialize(target, type);
+            controller.Initialize(definition, stats, false, faction);
+            controller.Weapons.ConfigureEnemyPrimary(FactionRules.PrimaryWeapon(faction, type));
+            var ai = go.AddComponent<EnemyAI>(); ai.Initialize(target, type, faction);
             if (type == 7)
             {
                 controller.Visual.localScale = Vector3.one * 1.8f;

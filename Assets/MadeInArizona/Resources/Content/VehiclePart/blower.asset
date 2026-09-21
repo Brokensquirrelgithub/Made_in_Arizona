@@ -15,8 +15,7 @@ MonoBehaviour:
   id: blower
   displayName: Roots blower with honest belt
   category: Induction
-  description: +32% power, +38% torque; +68 kg and 18% less cooling. Larger RWD vehicles
-    only.
+  description: '+32% power, +38% torque; +68 kg and 18% less nitro recovery. Larger RWD vehicles only.'
   contentOrder: 4
   cost: 950
   unlockMission: 4

@@ -14,12 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: invoice
   displayName: Past-Due Rocket
-  description: Single high-explosive notice. Blast can trigger propane and ammunition
-    chain reactions.
+  description: 'A rare high-explosive notice. Huge blast, only a few shots.'
   contentOrder: 1
   damage: 100
   fireRate: 0.9
   speed: 44
   blastRadius: 8
-  heat: 18
   projectileColor: {r: 1, g: 0.35, b: 0.08, a: 1}

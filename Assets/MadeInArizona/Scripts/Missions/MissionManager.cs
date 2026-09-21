@@ -45,7 +45,7 @@ namespace MadeInArizona
             if(!trialDefinition)trialDefinition=ScriptableObject.CreateInstance<MissionDefinition>();
             trialDefinition.id="combat_trial";trialDefinition.title="Vehicle Combat Trial";trialDefinition.region="117° Proving Ground";
             trialDefinition.mode=MissionMode.Recovery;trialDefinition.enemyCount=6;trialDefinition.timeLimit=180;
-            trialDefinition.opening="MARA: Two waves, six hostile vehicles. Keep moving. Machine gun at range, shotgun up close, rockets into a cluster. Watch the warning lines.";
+            trialDefinition.opening="MARA: Six crews on the range. First: corporate guns, HOA traps, and scavenger rushes. Watch their colors and warning lines.";
             trialDefinition.closing="Trial complete. Your build can handle a disagreement.";
             trialDefinition.optionalKind=OptionalKind.Health;trialDefinition.optionalThreshold=.5f;
             Begin(trialDefinition,-1);SetObjective("WAVE 1 / 2 • destroy three hostile vehicles",Point(0));
@@ -54,7 +54,7 @@ namespace MadeInArizona
         {
             if(Stage==0 && Kills>=3) {
                 SetStage(1);Spawn(new Vector3(-27,1,18),2);Spawn(new Vector3(27,1,22),3);Spawn(new Vector3(0,1,32),4);
-                DialogueSystem.Instance?.Say("MARA","Heavy rammer, sniper, rocket carrier. The warning lines show where they are committing their attacks.",7);
+                DialogueSystem.Instance?.Say("MARA","Second wave: open-house sharks, snowbird roadblocks, and neon tuner cars. Grab their drops and keep moving.",7);
             }
             Progress=Kills/6f;
             if(Kills>=6){Objective="TRIAL COMPLETE • 6 / 6 hostile vehicles destroyed";Finish();return;}
@@ -307,7 +307,7 @@ namespace MadeInArizona
         {
             if(GeneratedWorld.Active){position=TerrainPoint(position);position.y+=1;}
             var target = escort && !escort.Damage.IsDead && archetype % 2 == 0 ? escort : Game.Player;
-            var vehicle=SpawnManager.Spawn(position,archetype,target);
+            var vehicle=SpawnManager.Spawn(position,archetype,target,FactionRules.ForMission(missionIndex,archetype,Mathf.Max(wave,Stage)));
             if(vehicle)vehicle.transform.SetParent(Game.World.transform);return vehicle;
         }
         void SpawnWave(int count,Vector3 center)
@@ -318,7 +318,7 @@ namespace MadeInArizona
                 Vector3 p=center+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*(18+(i%3)*5);
                 if(GeneratedWorld.Active==null){p.x=Mathf.Clamp(p.x,-86,86);p.z=Mathf.Clamp(p.z,-64,126);p.y=1.2f;}
                 else p=TerrainPoint(p)+Vector3.up;
-                Spawn(p,missionIndex<2?i%2:(i+wave+missionIndex)%7);
+                Spawn(p,missionIndex<0?i:missionIndex<2?i%2:(i+wave+missionIndex)%7);
             }
         }
         public void RegisterKill()

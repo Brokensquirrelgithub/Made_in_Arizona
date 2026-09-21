@@ -15,8 +15,7 @@ MonoBehaviour:
   id: turbo
   displayName: Wastegated three-pot turbo
   category: Induction
-  description: +48% power and 32% torque; cooling -23%, +34 kg. Thimble only. Fit
-    a radiator before chasing boost.
+  description: '+48% power and 32% torque; nitro recovery -23%, +34 kg. Thimble only.'
   contentOrder: 3
   cost: 760
   unlockMission: 2

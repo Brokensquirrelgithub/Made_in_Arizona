@@ -15,8 +15,7 @@ MonoBehaviour:
   id: radiator
   displayName: Three-row aluminum radiator
   category: Cooling
-  description: +42% cooling, +12 kg. Horsepower is only useful while coolant stays
-    inside.
+  description: '+42% nitro recovery, +12 kg. Keeps boost plumbing ready for another sprint.'
   contentOrder: 6
   cost: 260
   unlockMission: 0

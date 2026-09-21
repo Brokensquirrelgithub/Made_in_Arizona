@@ -6,7 +6,7 @@ namespace MadeInArizona
     /// <summary>Original mechanically readable vehicle models, generated without imported vehicle artwork.</summary>
     public static class VehicleVisual
     {
-        public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy)
+        public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             Transform root=Group("Original procedural vehicle model",parent,Vector3.zero);
             string id=definition.id ?? "thimble";
@@ -15,7 +15,7 @@ namespace MadeInArizona
             float width=definition.trackWidth+.06f, length=definition.wheelbase+1.12f;
             float lift=Mathf.Clamp(definition.rideHeight-.56f,0,.45f);
             float sill=.49f+lift, cabHeight=van?1.28f:jeep?.97f:.74f;
-            Color paint=enemy?new Color(.59f,.17f,.105f):definition.color;
+            Color paint=enemy?FactionRules.Paint(faction):definition.color;
             Color glass=new Color(.11f,.25f,.30f), metal=new Color(.32f,.34f,.32f), rubber=new Color(.035f,.041f,.039f);
             Box("Boxed ladder frame",root,new Vector3(0,.3f+lift*.3f,0),new Vector3(width*.73f,.2f,length*.9f),Ink);
             for(int axle=-1;axle<=1;axle+=2)
@@ -34,6 +34,7 @@ namespace MadeInArizona
                 Shape("Headlight",root,jeep?PrimitiveType.Sphere:PrimitiveType.Cube,new Vector3(side*width*.35f,sill+.17f,length*.515f),new Vector3(width*.19f,.2f,.07f),new Color(1,.81f,.42f),false,0,.8f,2.6f);
                 Box("Tail light",root,new Vector3(side*width*.39f,sill+.05f,-length*.508f),new Vector3(.16f,.22f,.05f),new Color(.95f,.035f,.025f),false,1.4f);
                 Box("Door armor",root,new Vector3(side*(width*.508f),sill+.14f,-.2f),new Vector3(.055f,.37f,length*.3f),Color.Lerp(paint,Ink,.18f));
+                if(enemy) Box("Faction stripe",root,new Vector3(side*width*.54f,sill+.23f,-.2f),new Vector3(.025f,.095f,length*.3f),FactionRules.Accent(faction),false,1.1f);
                 Box("Door handle",root,new Vector3(side*width*.542f,sill+.42f,-.35f),new Vector3(.05f,.04f,.18f),metal);
                 Box("Mirror stem",root,new Vector3(side*width*.56f,sill+.76f,length*.15f),new Vector3(.22f,.035f,.04f),Ink);
                 Box("Wing mirror",root,new Vector3(side*width*.64f,sill+.79f,length*.15f),new Vector3(.12f,.14f,.2f),paint);
@@ -104,8 +105,24 @@ namespace MadeInArizona
             }
             if(trophy||monster) for(int side=-1;side<=1;side+=2) Beam("Bed cage",root,new Vector3(side*width*.43f,sill+.35f,-length*.44f),new Vector3(side*width*.36f,roofY,-length*.08f),.075f,monster?Cream:Ink);
             if(monster) { Box("Salvaged hood armor",root,new Vector3(.12f,sill+.48f,length*.31f),new Vector3(width*.64f,.14f,length*.26f),new Color(.20f,.49f,.43f)); Box("Questionable plow",root,new Vector3(0,sill-.08f,length*.6f),new Vector3(width*1.3f,.65f,.16f),Rust); }
-            Text(enemy?"HOA":"AZ • 173",root,new Vector3(0,sill-.085f,-length*.55f),.115f,Cream);
+            if(enemy && faction==EnemyFaction.OpenHouseRealty)
+            {
+                Box("Open house roof sign",root,new Vector3(0,roofY+.33f,cabZ-.28f),new Vector3(width*.68f,.46f,.08f),FactionRules.Accent(faction));
+                Text("OPEN HOUSE",root,new Vector3(0,roofY+.35f,cabZ-.33f),.13f,Ink);
+            }
+            if(enemy && faction==EnemyFaction.SnowbirdConvoy)
+            {
+                Box("Snowbird roof luggage",root,new Vector3(0,roofY+.23f,cabZ-.33f),new Vector3(width*.65f,.32f,.72f),Cream);
+                Box("Snowbird luggage strap",root,new Vector3(0,roofY+.41f,cabZ-.33f),new Vector3(width*.1f,.04f,.78f),FactionRules.Accent(faction));
+            }
+            if(enemy && faction==EnemyFaction.CarOtaku)
+            {
+                Box("Otaku rear wing",root,new Vector3(0,roofY+.08f,-length*.49f),new Vector3(width*1.08f,.08f,.31f),FactionRules.Accent(faction),false,1.7f);
+                for(int side=-1;side<=1;side+=2) Box("Otaku wing mount",root,new Vector3(side*width*.32f,roofY-.1f,-length*.49f),new Vector3(.07f,.4f,.08f),Ink);
+            }
+            Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,new Vector3(0,sill-.085f,-length*.55f),.115f,Cream);
             Transform turret=BuildTurret(root,new Vector3(0,roofY+.14f,cabZ+.1f),enemy);
+            if(enemy) Box("Faction turret beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.1f,.08f,.12f),FactionRules.Accent(faction),false,2);
             if(!enemy) Box("Turquoise friend beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.10f,.08f,.12f),Turquoise,false,3);
             return root;
         }

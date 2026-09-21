@@ -63,6 +63,13 @@ namespace MadeInArizona
                 Rect(p.x-3,p.y-3,6,6,town?Cream:pin.requiredTier>WorldExploration.CurrentTier?Orange:Blue);
                 if(full)Text(p.x+7,p.y-9,170,22,pin.label,12,town?Cream:Blue,true);
             }
+            foreach(var vehicle in VehicleController.Active)
+            {
+                if(!vehicle||vehicle.IsPlayer||vehicle.Damage.IsDead)continue;
+                var ai=vehicle.GetComponent<EnemyAI>();if(!ai)continue;
+                var p=WorldMapPoint(vehicle.transform.position,area);
+                if(area.Contains(p))Rect(p.x-3,p.y-3,6,6,ai.IsFriendly?Blue:FactionRules.Accent(ai.Faction));
+            }
             if(game.Player){var p=WorldMapPoint(game.Player.transform.position,area);Rect(p.x-5,p.y-5,10,10,Lime);}
             if(game.Mission!=null){var p=WorldMapPoint(game.Mission.ObjectivePosition,area);Rect(p.x-4,p.y-4,8,8,Orange);}
             if(mapWaypoint.HasValue){var p=WorldMapPoint(mapWaypoint.Value,area);Text(p.x-8,p.y-13,24,25,"+",22,Blue,true);}

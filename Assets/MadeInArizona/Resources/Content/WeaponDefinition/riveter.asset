@@ -14,12 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: riveter
   displayName: Belt-fed Riveter
-  description: A roof-mounted 7.62 argument. Keep firing to build heat; release to
-    cool.
+  description: 'Reliable mid-range automatic fire. Garage weapon; unlimited ammunition.'
   contentOrder: 0
   damage: 12
   fireRate: 11
   speed: 90
   blastRadius: 0
-  heat: 3
   projectileColor: {r: 1, g: 0.79, b: 0.2, a: 1}

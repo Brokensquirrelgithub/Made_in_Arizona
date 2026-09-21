@@ -4,21 +4,24 @@ namespace MadeInArizona
 {
     public sealed class WeaponSystem : MonoBehaviour
     {
-        public float Heat { get; private set; }
-        public bool Overheated { get; private set; }
-        public float RocketCooldown => Mathf.Clamp01((secondaryAt - Time.time) / 1.7f);
-        public float ShotgunCooldown => Mathf.Clamp01((tertiaryAt - Time.time) / .85f);
-        public int PrimaryIndex = 0;
+        public WeaponDefinition GarageWeapon { get; private set; }
+        public WeaponDefinition FieldWeapon { get; private set; }
+        public int FieldAmmo { get; private set; }
+        public float GarageCooldown => GarageWeapon ? Mathf.Clamp01((garageAt - Time.time) * Mathf.Max(.1f, GarageWeapon.fireRate)) : 0;
+        public float FieldCooldown => FieldWeapon ? Mathf.Clamp01((fieldAt - Time.time) * Mathf.Max(.1f, FieldWeapon.fireRate)) : 0;
         VehicleController owner;
         Transform turret, muzzleTransform;
         Light muzzleFlash;
         Vector3 turretRestPosition;
-        float primaryAt, secondaryAt, tertiaryAt, primaryFiredAt;
-        float recoil, recoilVelocity;
         Vector3 aimDirection = Vector3.forward;
+        float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity;
+
         public void Initialize(VehicleController vehicle)
         {
             owner = vehicle;
+            GarageWeapon = WeaponRules.Find(vehicle.IsPlayer ? GameManager.Instance?.Save?.selectedWeapon : "riveter") ?? WeaponRules.Find("riveter");
+            if (!WeaponRules.GarageWeapon(GarageWeapon.id)) GarageWeapon = WeaponRules.Find("riveter");
+            FieldWeapon = null; FieldAmmo = 0; garageAt = fieldAt = 0;
             turret = VehicleController.FindChild(vehicle.Visual, "Turret");
             muzzleTransform = VehicleController.FindChild(vehicle.Visual, "Muzzle");
             if (turret != null) turretRestPosition = turret.localPosition;
@@ -26,102 +29,117 @@ namespace MadeInArizona
             {
                 muzzleFlash = muzzleTransform.GetComponent<Light>();
                 if (muzzleFlash == null) muzzleFlash = muzzleTransform.gameObject.AddComponent<Light>();
-                muzzleFlash.type = LightType.Point;
-                muzzleFlash.range = 7;
-                muzzleFlash.intensity = 0;
-                muzzleFlash.shadows = LightShadows.None;
-                muzzleFlash.color = new Color(1, .66f, .22f);
+                muzzleFlash.type = LightType.Point; muzzleFlash.range = 7;
+                muzzleFlash.intensity = 0; muzzleFlash.shadows = LightShadows.None;
             }
         }
         void Update()
         {
             if (muzzleFlash != null) muzzleFlash.intensity = Mathf.MoveTowards(muzzleFlash.intensity, 0, Time.deltaTime * 95);
             if (owner == null || owner.Damage.IsDead) return;
-            // Riveter heat is accumulated per round. Cooling only begins after the trigger is released.
-            if (Time.time - primaryFiredAt > .13f)
-                Heat = Mathf.Max(0, Heat - Time.deltaTime * (Overheated ? .43f : .3f) * Mathf.Max(.4f, owner.Stats.cooling));
-            if (Overheated && Heat < .25f) Overheated = false;
             if (turret != null && aimDirection.sqrMagnitude > .1f)
             {
-                Quaternion desired = Quaternion.LookRotation(aimDirection, Vector3.up);
-                turret.rotation = Quaternion.Slerp(turret.rotation, desired, Time.deltaTime * 25);
+                turret.rotation = Quaternion.Slerp(turret.rotation, Quaternion.LookRotation(aimDirection, Vector3.up), Time.deltaTime * 25);
                 recoil = Mathf.SmoothDamp(recoil, 0, ref recoilVelocity, .075f, 20, Time.deltaTime);
                 turret.localPosition = turretRestPosition - Vector3.forward * recoil;
             }
         }
         public void AimAt(Vector3 direction)
         {
-            if(!GeneratedWorld.Active)direction.y = 0;
+            if (!GeneratedWorld.Active) direction.y = 0;
             if (direction.sqrMagnitude > .001f) aimDirection = direction.normalized;
+        }
+        public void EquipField(WeaponDefinition weapon, int ammo)
+        {
+            if (!owner || !owner.IsPlayer || !weapon || WeaponRules.GarageWeapon(weapon.id)) return;
+            FieldWeapon = weapon; FieldAmmo = Mathf.Max(1, ammo); fieldAt = 0;
+            GameManager.Instance?.Notify("FIELD WEAPON • " + weapon.displayName + " / " + FieldAmmo + " rounds");
+        }
+        public void ConfigureEnemyPrimary(string id)
+        {
+            if (owner != null && !owner.IsPlayer)
+                GarageWeapon = WeaponRules.Find(id) ?? WeaponRules.Find("riveter");
         }
         public void FirePrimary(Vector3 direction)
         {
-            if (!CanFire() || Time.time < primaryAt || Overheated) return;
-            ContentCatalog.EnsureLoaded();
-            if (ContentCatalog.Weapons.Length == 0) return;
-            var weapon = ContentCatalog.Weapons[Mathf.Clamp(PrimaryIndex, 0, ContentCatalog.Weapons.Length - 1)];
-            primaryAt = Time.time + 1f / Mathf.Clamp(weapon.fireRate, 1, 25);
-            primaryFiredAt = Time.time;
-            AimAt(direction);
-            float configuredHeat = weapon.heat > 1 ? weapon.heat * .01f : weapon.heat;
-            Heat = Mathf.Clamp01(Heat + Mathf.Clamp(configuredHeat * .48f, .01f, .1f));
-            if (Heat >= 1)
-            {
-                Overheated = true;
-                if (owner.IsPlayer) GameManager.Instance?.Notify("RIVETER OVERHEATED • RELEASE TO COOL");
-            }
-            float inaccuracy = Mathf.Lerp(.75f, 2.8f, Heat * Heat);
-            Vector3 aim = Quaternion.AngleAxis(Random.Range(-inaccuracy, inaccuracy), Vector3.up) * aimDirection;
-            Vector3 muzzle = Muzzle(aim);
-            float damage = weapon.damage * (owner.IsPlayer ? WorldExploration.PlayerWeaponMultiplier(0) : .65f);
-            ProjectileSystem.Fire(muzzle, aim, Mathf.Max(75, weapon.speed), damage, weapon.blastRadius, owner.gameObject, weapon.projectileColor, weapon.blastRadius > .1f ? ExplosionKind.Grenade : ExplosionKind.Ammunition, 1.4f);
-            ExplosionSystem.Burst(muzzle, new Color(1, .77f, .32f), 3, 1);
-            Flash(new Color(1, .68f, .24f), 6.5f, .055f);
-            AudioManager.Instance?.PlayShot(muzzle, 0);
+            if (!CanFire() || Time.time < garageAt || !GarageWeapon) return;
+            garageAt = Time.time + 1f / Mathf.Max(.1f, GarageWeapon.fireRate);
+            Fire(GarageWeapon, direction);
         }
         public void FireSecondary(Vector3 direction)
         {
-            if (!CanFire() || Time.time < secondaryAt) return;
-            secondaryAt = Time.time + (owner.IsPlayer ? 1.7f : 3.3f);
+            if (!CanFire()) return;
+            if (!owner.IsPlayer) { FireEnemyRocket(direction); return; }
+            if (!FieldWeapon || FieldAmmo <= 0 || Time.time < fieldAt) return;
+            var weapon = FieldWeapon;
+            fieldAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
+            Fire(weapon, direction);
+            if (--FieldAmmo == 0) { FieldWeapon = null; GameManager.Instance?.Notify("FIELD WEAPON EMPTY • FIND ANOTHER DROP"); }
+        }
+        void FireEnemyRocket(Vector3 direction)
+        {
+            if (Time.time < enemyRocketAt) return;
+            enemyRocketAt = Time.time + 3.3f;
             AimAt(direction);
             Vector3 muzzle = Muzzle(aimDirection);
-            ProjectileSystem.Fire(muzzle, aimDirection, 49, owner.IsPlayer ? 110*WorldExploration.PlayerWeaponMultiplier(1) : 62, owner.IsPlayer?6*WorldExploration.PlayerRocketRadiusMultiplier():6, owner.gameObject, new Color(1, .35f, .08f), ExplosionKind.Rocket, 2.7f);
+            ProjectileSystem.Fire(muzzle, aimDirection, 49, 62, 6, owner.gameObject, new Color(1, .35f, .08f), ExplosionKind.Rocket, 2.7f);
             ExplosionSystem.Burst(muzzle, new Color(1, .5f, .1f), 8, 2);
             Flash(new Color(1, .3f, .06f), 13, .2f);
             AudioManager.Instance?.PlayShot(muzzle, 1);
-            if (owner.IsPlayer) CameraController.Instance?.Shake(.12f);
         }
-        public void FireTertiary(Vector3 direction)
+        void Fire(WeaponDefinition weapon, Vector3 direction)
         {
-            if (!CanFire() || Time.time < tertiaryAt) return;
-            tertiaryAt = Time.time + .85f;
             AimAt(direction);
             Vector3 muzzle = Muzzle(aimDirection);
-            for (int i = 0; i < 8; i++)
+            float multiplier = !owner.IsPlayer ? (weapon.id == "boomstick" || weapon.id == "sweeper" ? .3f : weapon.id == "minigun" ? .48f : .65f) : weapon.id == "riveter" ? WorldExploration.PlayerWeaponMultiplier(0) :
+                weapon.id == "invoice" ? WorldExploration.PlayerWeaponMultiplier(1) :
+                weapon.id == "sweeper" ? WorldExploration.PlayerWeaponMultiplier(2) : 1;
+            float damage = weapon.damage * multiplier;
+            if (weapon.id == "mines")
+                FieldOrdnance.PlaceMine(owner, weapon, damage);
+            else if (weapon.id == "grenade" || weapon.id == "mortar")
+                FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage);
+            else if (weapon.id == "sweeper" || weapon.id == "boomstick")
             {
-                float fan = (i - 3.5f) * 3.7f + Random.Range(-.85f, .85f);
-                Vector3 spread = Quaternion.AngleAxis(fan, Vector3.up) * aimDirection;
-                ProjectileSystem.Fire(muzzle, spread, 96 + Random.Range(-8, 8), owner.IsPlayer ? 16*WorldExploration.PlayerWeaponMultiplier(2) : 10, 0, owner.gameObject, new Color(.4f, .94f, 1), ExplosionKind.Ammunition, .42f);
+                int pellets = weapon.id == "boomstick" ? 12 : 8;
+                for (int i = 0; i < pellets; i++)
+                {
+                    Vector3 spread = Quaternion.AngleAxis((i - (pellets - 1) * .5f) * (weapon.id == "boomstick" ? 3.2f : 3.7f) + Random.Range(-.85f, .85f), Vector3.up) * aimDirection;
+                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, weapon.id == "boomstick" ? .33f : .42f);
+                }
             }
-            ExplosionSystem.Burst(muzzle, new Color(.3f, .9f, 1), 13, 2);
-            Flash(new Color(.3f, .9f, 1), 10, .15f);
-            AudioManager.Instance?.PlayShot(muzzle, 2);
-            if (owner.IsPlayer) CameraController.Instance?.Shake(.1f);
+            else if (weapon.id == "cluster")
+            {
+                for (int i = -1; i <= 1; i++)
+                {
+                    Vector3 spread = Quaternion.AngleAxis(i * 8, Vector3.up) * aimDirection;
+                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, weapon.blastRadius, owner.gameObject, weapon.projectileColor, ExplosionKind.Rocket, 2.6f);
+                }
+            }
+            else
+            {
+                float spread = weapon.id == "minigun" ? Random.Range(-4f, 4f) : weapon.id == "sniper" ? 0 : Random.Range(-.7f, .7f);
+                Vector3 shot = Quaternion.AngleAxis(spread, Vector3.up) * aimDirection;
+                float radius = weapon.id == "invoice" && owner.IsPlayer ? weapon.blastRadius * WorldExploration.PlayerRocketRadiusMultiplier() : weapon.blastRadius;
+                ProjectileSystem.Fire(muzzle, shot, weapon.speed, damage, radius, owner.gameObject, weapon.projectileColor,
+                    weapon.blastRadius > 0 ? ExplosionKind.Rocket : ExplosionKind.Ammunition,
+                    weapon.id == "sniper" ? 3 : weapon.id == "minigun" ? .65f : 1.5f);
+            }
+            ExplosionSystem.Burst(muzzle, weapon.projectileColor, weapon.id == "mines" ? 2 : 4, 1);
+            Flash(weapon.projectileColor, weapon.id == "mortar" ? 14 : 7, weapon.id == "minigun" ? .035f : .09f);
+            AudioManager.Instance?.PlayShot(muzzle, weapon.blastRadius > 0 ? 1 : weapon.id == "sweeper" || weapon.id == "boomstick" ? 2 : 0);
+            if (owner.IsPlayer && weapon.blastRadius > 0) CameraController.Instance?.Shake(.1f);
         }
         Vector3 Muzzle(Vector3 direction)
         {
-            // Keep collision at body height so horizontal fire still catches compact vehicles and props.
-            if (muzzleTransform != null)
-                return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);
-            // Fallback for vehicles assembled without the standard visual hierarchy.
+            if (muzzleTransform != null) return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);
             return transform.position + Vector3.up * .85f + direction * 2.4f;
         }
         void Flash(Color color, float intensity, float kick)
         {
             recoil = Mathf.Min(.28f, recoil + kick);
             if (muzzleFlash == null) return;
-            muzzleFlash.color = color;
-            muzzleFlash.intensity = intensity;
+            muzzleFlash.color = color; muzzleFlash.intensity = intensity;
         }
         bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying;
     }

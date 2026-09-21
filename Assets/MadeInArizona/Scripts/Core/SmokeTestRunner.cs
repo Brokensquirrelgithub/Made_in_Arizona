@@ -63,10 +63,8 @@ namespace MadeInArizona
             target.transform.localScale = Vector3.one * 2;
             var targetDamage = target.AddComponent<DestructionSystem>(); targetDamage.Configure(4, ExplosionKind.Propane, true, 30);
             game.Player.Weapons.FirePrimary(Vector3.forward);
-            game.Player.Weapons.FireSecondary(Vector3.forward);
-            game.Player.Weapons.FireTertiary(Vector3.forward);
             yield return new WaitForSecondsRealtime(.4f);
-            Check("weapons initialize", game.Player.Weapons != null);
+            Check("garage weapon initializes and field slot starts empty", game.Player.Weapons != null && game.Player.Weapons.GarageWeapon != null && game.Player.Weapons.FieldWeapon == null);
             Check("swept projectile destroys target", !target || targetDamage.IsDestroyed);
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) {
                 var point=game.Player.transform.position+Vector3.forward*8+Vector3.right*5;
@@ -78,14 +76,27 @@ namespace MadeInArizona
             }
             var pad = InputSystem.AddDevice<Gamepad>();
             var padStart = game.Player.transform.position;
-            InputSystem.QueueStateEvent(pad, new GamepadState { leftStick = Vector2.up, rightStick = Vector2.right });
+            InputSystem.QueueStateEvent(pad, new GamepadState { leftStick = Vector2.up, rightStick = Vector2.right, rightTrigger = 1 });
             yield return new WaitForSecondsRealtime(.8f);
-            Check("gamepad movement and twin-stick fire", InputManager.Instance.UsingGamepad && InputManager.Instance.Primary && Vector3.Distance(padStart, game.Player.transform.position) > .4f);
+            Check("gamepad movement and right-trigger fire", InputManager.Instance.UsingGamepad && InputManager.Instance.Primary && Vector3.Distance(padStart, game.Player.transform.position) > .4f);
             InputSystem.QueueStateEvent(pad, new GamepadState());
             InputSystem.RemoveDevice(pad);
             float health = game.Player.Damage.Health;
             game.Player.Damage.ApplyDamage(40, game.Player.transform.position + Vector3.forward, null);
             Check("localized damage", game.Player.Damage.Health < health);
+            float damagedHealth=game.Player.Damage.Health;
+            CombatPickup.Create(PickupKind.Health,game.Player.transform.position,null,25);
+            yield return new WaitForSecondsRealtime(.5f);
+            Check("driving over enemy repair restores chassis",game.Player.Damage.Health>damagedHealth);
+            CombatPickup.Create(PickupKind.Weapon,game.Player.transform.position,WeaponRules.Find("grenade"),2);
+            yield return new WaitForSecondsRealtime(.5f);
+            Check("empty LT slot equips a driven-over weapon",game.Player.Weapons.FieldWeapon&&game.Player.Weapons.FieldWeapon.id=="grenade"&&game.Player.Weapons.FieldAmmo==2);
+            CombatPickup.Create(PickupKind.Weapon,game.Player.transform.position,WeaponRules.Find("invoice"),3);
+            yield return new WaitForSecondsRealtime(.4f);
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.F));
+            yield return null;
+            Check("F swaps a held field weapon",game.Player.Weapons.FieldWeapon&&game.Player.Weapons.FieldWeapon.id=="invoice");
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());
             game.Player.Repair(200);
             Check("field repair", game.Player.Damage.Health > health - 40);
             game.Pause(); Check("pause freezes simulation", Time.timeScale == 0 && game.State == GameState.Paused);
@@ -342,15 +353,22 @@ namespace MadeInArizona
             DevTuning.Current.playerHealth=10;
             game.StartCombatTrial();yield return new WaitForSecondsRealtime(.6f);
             Check("combat trial starts without campaign unlock",game.IsCombatTrial&&game.State==GameState.Playing);
+            var factions=new HashSet<EnemyFaction>();bool factionLoadouts=true;
+            foreach(var ai in FindObjectsByType<EnemyAI>())
+            {
+                factions.Add(ai.Faction);
+                var weapon=ai.GetComponent<VehicleController>().Weapons.GarageWeapon;
+                factionLoadouts &= weapon && weapon.id==FactionRules.PrimaryWeapon(ai.Faction,ai.Archetype);
+            }
+            Check("combat trial opens with three factions and their weapon sets",factions.Count==3&&factionLoadouts);
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)){ai.enabled=false;ai.GetComponent<VehicleController>().SetAIInput(Vector2.zero,Vector3.forward,false);}
-            float heatDeadline=Time.time+9;
-            while(Time.time<heatDeadline&&!game.Player.Weapons.Overheated){game.Player.Weapons.FirePrimary(Vector3.back);yield return null;}
-            Check("sustained vehicle gun overheats",game.Player.Weapons.Overheated);
-            yield return new WaitForSecondsRealtime(2.6f);
-            Check("vehicle gun recovers after cooling",!game.Player.Weapons.Overheated&&game.Player.Weapons.Heat<.3f);
+            Check("field weapon starts empty in combat",game.Player.Weapons.FieldWeapon==null);
+            game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
+            Check("enemy rocket drop fits LT with limited ammo",game.Player.Weapons.FieldWeapon!=null&&game.Player.Weapons.FieldAmmo==4);
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))ai.enabled=true;
             float fightStart=Time.time,deadline=Time.time+70;bool attacked=false,captured=false,warned=false;
             while(Time.time<deadline&&game.IsPlaying) {
+                foreach(var ai in FindObjectsByType<EnemyAI>())factions.Add(ai.Faction);
                 var player=game.Player;
                 if(player.Damage.LastDamageTime>=fightStart && player.Damage.LastDamageSource && player.Damage.LastDamageSource.GetComponentInParent<EnemyAI>())attacked=true;
                 // Keep the integration driver alive so it can exercise both real combat waves.
@@ -365,9 +383,8 @@ namespace MadeInArizona
                     float distance=Mathf.Sqrt(nearest);
                     Vector3 aim=target.transform.position+target.Body.linearVelocity*(distance/110f)-player.transform.position;
                     player.Weapons.FirePrimary(aim.normalized);
-                    if(distance<20)player.Weapons.FireTertiary(aim.normalized);
                     Vector3 rocketAim=target.transform.position+target.Body.linearVelocity*(distance/49f*.65f)-player.transform.position;
-                    if(distance>9)player.Weapons.FireSecondary(rocketAim.normalized);
+                    if(distance>9 && player.Weapons.FieldWeapon)player.Weapons.FireSecondary(rocketAim.normalized);
                     Vector3 movement=target.transform.position-player.transform.position;
                     Key key=distance>20?(Mathf.Abs(movement.x)>Mathf.Abs(movement.z)?(movement.x>0?Key.D:Key.A):(movement.z>0?Key.W:Key.S)):
                         (Mathf.Repeat(Time.time-fightStart,8)<4?Key.A:Key.D);
@@ -381,6 +398,7 @@ namespace MadeInArizona
                 yield return null;
             }
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+            Check("combat trial fields all six faction crews",factions.Count==FactionRules.Count);
             Check("enemy vehicle weapons damage player",attacked);
             Check("real projectiles defeat both vehicle waves",game.State==GameState.Won&&game.Mission.Kills>=6);
             Check("vehicle hits and kills confirm",CombatFeedback.LastHitTime>=fightStart&&CombatFeedback.LastKillTime>=fightStart);

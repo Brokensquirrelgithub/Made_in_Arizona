@@ -15,8 +15,7 @@ MonoBehaviour:
   id: intercooler
   displayName: Front-mount intercooler
   category: Charge cooling
-  description: +7% power, +20% effective cooling, +18 kg. Useful even when the marketing
-    sticker is missing.
+  description: '+7% power, +20% nitro recovery, +18 kg.'
   contentOrder: 5
   cost: 460
   unlockMission: 2

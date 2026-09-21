@@ -6,7 +6,7 @@ namespace MadeInArizona
     {
         public string id, displayName; [TextArea] public string description;
         public int contentOrder;
-        public float damage, fireRate, speed, blastRadius, heat;
+        public float damage, fireRate, speed, blastRadius;
         public Color projectileColor = Color.yellow;
     }
 }

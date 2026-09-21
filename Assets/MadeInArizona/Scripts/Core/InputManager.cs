@@ -14,16 +14,16 @@ namespace MadeInArizona
         public float AimElevation {get;private set;}
         public bool Primary { get; private set; }
         public bool Secondary { get; private set; }
-        public bool Tertiary { get; private set; }
         public bool Handbrake { get; private set; }
         public bool Boost { get; private set; }
         public bool Repair { get; private set; }
         public bool Interact { get; private set; }
+        public bool SwapPressed { get; private set; }
         public bool PausePressed { get; private set; }
         public bool UsingGamepad { get; private set; }
         public bool Rebinding => rebind != null;
         InputActionMap map;
-        InputAction move, aim, pointer, primary, secondary, tertiary, brake, boost, repair, interact, pause;
+        InputAction move, aim, pointer, primary, secondary, brake, boost, repair, interact, swap, pause;
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
 
@@ -38,13 +38,13 @@ namespace MadeInArizona
             move.AddBinding("<Gamepad>/leftStick").WithProcessor("stickDeadzone(min=0.14,max=0.95)");
             aim = map.AddAction("Aim", InputActionType.Value, "<Gamepad>/rightStick", expectedControlLayout: "Vector2");
             pointer = map.AddAction("Pointer", InputActionType.Value, "<Mouse>/position", expectedControlLayout: "Vector2");
-            primary = Button("Primary", "<Mouse>/leftButton", "<Gamepad>/rightStickPress");
+            primary = Button("Primary", "<Mouse>/leftButton", "<Gamepad>/rightTrigger");
             secondary = Button("Secondary", "<Mouse>/rightButton", "<Gamepad>/leftTrigger");
-            tertiary = Button("Tertiary", "<Keyboard>/q", "<Gamepad>/rightTrigger");
             brake = Button("Handbrake", "<Keyboard>/space", "<Gamepad>/buttonEast");
             boost = Button("Boost", "<Keyboard>/leftShift", "<Gamepad>/rightShoulder");
             repair = Button("Repair", "<Keyboard>/r", "<Gamepad>/leftShoulder");
             interact = Button("Interact", "<Keyboard>/e", "<Gamepad>/buttonSouth");
+            swap = Button("Swap", "<Keyboard>/f", "<Gamepad>/buttonNorth");
             pause = Button("Pause", "<Keyboard>/escape", "<Gamepad>/start");
             Actions.AddActionMap(map);
             map.Enable();
@@ -76,7 +76,7 @@ namespace MadeInArizona
         void ClearGameplay()
         {
             Move = Vector2.zero;
-            Primary = Secondary = Tertiary = Handbrake = Boost = Repair = Interact = false;
+            Primary = Secondary = Handbrake = Boost = Repair = Interact = SwapPressed = false;
         }
 
         void Update()
@@ -130,10 +130,11 @@ namespace MadeInArizona
                 }
                 Aim = Vector2.Lerp(Aim, corrected, .35f).normalized;
             }
-            Primary = primary.IsPressed() || (UsingGamepad && stickAim.sqrMagnitude > .12f);
-            Secondary = secondary.IsPressed(); Tertiary = tertiary.IsPressed();
+            Primary = primary.IsPressed();
+            Secondary = secondary.IsPressed();
             Handbrake = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
             Interact = interact.WasPressedThisFrame();
+            SwapPressed = swap.WasPressedThisFrame();
         }
 
         public string BindingLabel(string actionName, int bindingIndex = 0)

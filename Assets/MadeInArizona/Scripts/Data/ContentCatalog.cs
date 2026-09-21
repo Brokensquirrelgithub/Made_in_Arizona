@@ -56,14 +56,14 @@ namespace MadeInArizona
         {
             Parts = new[] {
                 Part("intake","Sealed desert airbox","Intake","Keeps the filter out of the fan wash. +6% power; +3 kg. A real seal beats a chrome hot-air cone.",180,0,3,1.06f),
-                Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9%; underhood heat costs 5% cooling. +5 kg.",240,0,5,1.09f,1,.95f),
+                Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9%; nitro recovery -5%. +5 kg.",240,0,5,1.09f,1,.95f),
                 Part("cam","Mild tow cam","Camshaft","More usable torque, 8% power and 12% torque. Lumpy idle remains a personality flaw. +2 kg.",350,1,2,1.08f),
-                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; cooling -23%, +34 kg. Thimble only. Fit a radiator before chasing boost.",760,2,34,1.48f,1,.77f),
-                Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and 18% less cooling. Larger RWD vehicles only.",950,4,68,1.32f,1,.82f),
-                Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +20% effective cooling, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f,1,1.2f),
-                Part("radiator","Three-row aluminum radiator","Cooling","+42% cooling, +12 kg. Horsepower is only useful while coolant stays inside.",260,0,12,1,1,1.42f),
-                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; cooling -6%.",540,3,4,1.16f,1,.94f),
-                Part("swap","1.8L salvage-yard engine swap","Engine","Thimble or Juniper: +70% power, +55% torque; +96 kg, cooling -16%. Mounts are included, optimism is not.",1700,6,96,1.7f,1,.84f),
+                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; nitro recovery -23%, +34 kg. Thimble only.",760,2,34,1.48f,1,.77f),
+                Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and 18% less nitro recovery. Larger RWD vehicles only.",950,4,68,1.32f,1,.82f),
+                Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +20% nitro recovery, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f,1,1.2f),
+                Part("radiator","Three-row aluminum radiator","Cooling","+42% nitro recovery, +12 kg. Keeps the boost plumbing ready for another sprint.",260,0,12,1,1,1.42f),
+                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; nitro recovery -6%.",540,3,4,1.16f,1,.94f),
+                Part("swap","1.8L salvage-yard engine swap","Engine","Thimble or Juniper: +70% power, +55% torque; +96 kg, nitro recovery -16%. Mounts included.",1700,6,96,1.7f,1,.84f),
                 Part("lsd","Helical limited-slip carrier","Differential","Shares useful torque across the axle. +7% grip, +8 kg. Retains civilized corner exits.",380,0,8,1,1.07f),
                 Part("locker","Selectable trail locker","Differential","AWD rigs: locked axles, +15% grip, -12% turn response and +16 kg. The pavement will notice.",440,1,16,1,1.15f),
                 Part("welded","Welded spare differential","Differential","+10% grip, -18% turn response. Costs $90; the tire bill arrives separately.",90,0,3,1,1.1f),
@@ -77,8 +77,8 @@ namespace MadeInArizona
                 Part("used","Four almost matching used tires","Tires","Only $35. -12% grip and -7% damping, -8 kg. Customer states the wobble is seasonal.",35,0,-8,1,.88f),
                 Part("cage","Triangulated cage and skid plates","Armor","+160 chassis health, +95 kg. Protects occupants and underbody; slows every acceleration.",560,1,95,1,1,1,160),
                 Part("bumpers","Salvaged steel bumpers","Armor","+95 chassis health for +72 kg. Includes an extremely confident tow rating.",220,0,72,1,1,1,95),
-                Part("boards","Recovery boards and tool roll","Utility","+45 health, +8% cooling, +24 kg. Tools are less cinematic than fire, but considerably cheaper.",290,0,24,1,1,1.08f,45),
-                Part("nitrous","Purge-first nitrous kit","Induction","+25% power, +12% torque, -20% cooling, +20 kg. Constant combat tune; replaces other forced induction.",690,4,20,1.25f,1,.8f)
+                Part("boards","Recovery boards and tool roll","Utility","+45 health, +8% nitro recovery, +24 kg. Tools are less cinematic than fire.",290,0,24,1,1,1.08f,45),
+                Part("nitrous","Purge-first nitrous kit","Induction","+25% power, +12% torque, -20% nitro recovery, +20 kg. Replaces other forced induction.",690,4,20,1.25f,1,.8f)
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             Find("cam").torqueMultiplier = 1.12f;
@@ -112,9 +112,21 @@ namespace MadeInArizona
         { var d = Create<DriverDefinition>(id); d.contentOrder=i; d.id=id; d.displayName=name; d.biography=bio; d.perk=perk; d.line=line; d.color=color; d.repairMultiplier=repair; d.powerMultiplier=power; d.gripMultiplier=grip; return d; }
         static void BuildWeapons()
         {
-            Weapons = new[] { Weapon(0,"riveter","Belt-fed Riveter","A roof-mounted 7.62 argument. Keep firing to build heat; release to cool.",12,11,90,0,3,new Color(1,.79f,.2f)), Weapon(1,"invoice","Past-Due Rocket","Single high-explosive notice. Blast can trigger propane and ammunition chain reactions.",100,.9f,44,8,18,new Color(1,.35f,.08f)), Weapon(2,"sweeper","Shop-floor Sweeper","A close-range eight-pellet shotgun. Excellent at turning fences into shorter fences.",9,1.7f,70,0,11,new Color(.3f,1,1)) };
+            Weapons = new[] {
+                Weapon(0,"riveter","Belt-fed Riveter","Reliable mid-range automatic fire. Garage weapon; unlimited ammunition.",12,11,90,0,new Color(1,.79f,.2f)),
+                Weapon(1,"invoice","Past-Due Rocket","A rare high-explosive notice. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f)),
+                Weapon(2,"sweeper","Shop-floor Sweeper","Garage shotgun. Eight close-range pellets; clear a path through a crowd.",10,1.7f,96,0,new Color(.3f,1,1)),
+                Weapon(3,"carbine","Surveyor Carbine","Garage precision rifle. Accurate sustained fire at medium range.",24,4.2f,135,0,new Color(.85f,1,.55f)),
+                Weapon(4,"grenade","Mailbox Grenadier","Arcing demolition rounds for clustered cars and barricades.",65,1.3f,43,5,new Color(1,.65f,.18f)),
+                Weapon(5,"mortar","HOA Mortar","A slow long-range shell with a very rude landing.",145,.55f,42,10,new Color(1,.24f,.18f)),
+                Weapon(6,"mines","Lien Mines","Drop charges behind the car; punish pursuers and narrow roads.",105,1.2f,0,6,new Color(1,.48f,.1f)),
+                Weapon(7,"minigun","Circular Saw Minigun","A short-range storm of scrap. Chase a target and hold the line.",8,20,105,0,new Color(1,.92f,.32f)),
+                Weapon(8,"sniper","Long Receipt","An uncommon accurate precision shot for distant weak points.",155,.65f,210,0,new Color(.45f,.95f,1)),
+                Weapon(9,"cluster","Tax Audit","Uncommon cluster launcher. The paperwork is explosive and limited.",75,.7f,54,5,new Color(1,.18f,.65f)),
+                Weapon(10,"boomstick","Double-Owed Boomstick","Field shotgun. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1))
+            };
         }
-        static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,float heat,Color color)
-        { var w=Create<WeaponDefinition>(id); w.contentOrder=i; w.id=id; w.displayName=name; w.description=desc; w.damage=damage; w.fireRate=rate; w.speed=speed; w.blastRadius=radius; w.heat=heat; w.projectileColor=color; return w; }
+        static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color)
+        { var w=Create<WeaponDefinition>(id); w.contentOrder=i; w.id=id; w.displayName=name; w.description=desc; w.damage=damage; w.fireRate=rate; w.speed=speed; w.blastRadius=radius; w.projectileColor=color; return w; }
     }
 }
