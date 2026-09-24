@@ -18,12 +18,13 @@ MonoBehaviour:
   briefing: Stop Sunsprawl CEO Delia Bascule's mobile subscription headquarters.
     Disable its external systems, survive the final security response and recover
     the original invoice for the residents.
-  opening: 'Bascule: We made Arizona''s discomfort investable. Mara: You bought an
-    invalid debt for one hundred seventy-three dollars and built a tank around it.'
-  midpoint: 'Bascule: This vehicle has executive cooling priority! Mara: Then I strongly
-    recommend protecting its radiator.'
-  closing: 'Mara: Grid returned. Debts voided. Original invoice paid. Suzuki gets
-    the employee parking space. We are keeping the one hundred seventy-three dollars.'
+  opening: 'Bascule: We made Arizona''s discomfort investable.|Stallion: You built
+    a tank around a bad receipt.'
+  midpoint: 'Bascule: This vehicle has executive cooling priority!|Stallion: Should''ve
+    protected the radiator.'
+  closing: 'Johnny: Grid returned. Debts voided. Original invoice paid. Suzuki gets
+    the employee parking space.|Stallion: And the one hundred seventy-three dollars?|Johnny:
+    Shop supplies.'
   optionalObjective: Finish with at least 50% chassis health
   contentOrder: 14
   reward: 5000

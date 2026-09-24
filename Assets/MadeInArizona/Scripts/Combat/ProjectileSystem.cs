@@ -139,7 +139,7 @@ namespace MadeInArizona
         {
             closest = default;
             if (distance < .0001f) return false;
-            int count = Physics.SphereCastNonAlloc(origin, round.radius > .1f ? .18f : .075f, direction, hits, distance, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.SphereCastNonAlloc(origin, round.radius > .1f ? .18f : .075f, direction, hits, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = float.MaxValue;
             for (int h = 0; h < count; h++)
             {

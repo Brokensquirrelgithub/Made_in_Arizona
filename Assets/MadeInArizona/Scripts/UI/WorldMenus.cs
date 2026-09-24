@@ -19,7 +19,7 @@ namespace MadeInArizona
             Rect(0,0,width,height,new Color(.025f,.04f,.045f,.85f));
             float x=width*.08f,y=height*.13f;
             Text(x,y,800,75,"MADE IN ARIZONA",54,Cream,true);
-            Text(x,y+83,690,70,"A good dog. A questionable car. An entire state of bad decisions.",24,Muted);
+            Text(x,y+83,690,70,"A repair shop. A new field mechanic. An entire state of bad decisions.",24,Muted);
             float panelW=Mathf.Min(740,width-x-40);
             Rect(x,y+179,panelW,440,Ink);
             Text(x+25,y+201,panelW-50,30,"SEEDED CAMPAIGN WORLD",21,Orange,true);

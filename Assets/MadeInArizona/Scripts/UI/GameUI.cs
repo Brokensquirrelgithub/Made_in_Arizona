@@ -16,24 +16,21 @@ namespace MadeInArizona
         static readonly Color Lime = new Color(.80f, .90f, .42f);
         static readonly Color Blue = new Color(.30f, .83f, .87f);
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
-        readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "DRIVERS", "SUZUKI" };
+        readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Repair", "Interact", "Pause" };
-        readonly int[] garageWeapons = { 0, 2, 3 };
-        int station, selectedPart, selectedWeapon, selectedDriver, settingsPage, menuFocus;
+        readonly int[] garageWeapons = { 0, 2, 3, 11, 12 };
+        int station, selectedPart, selectedWeapon, settingsPage, menuFocus;
         bool settings;
         float width, height, smoothedFps = 60;
         Vector2 listScroll, detailScroll;
-        Texture2D[] portraits;
         GameManager game => GameManager.Instance;
 
         void Start()
         {
-            portraits = new Texture2D[5];
-            for (int i = 0; i < portraits.Length; i++) portraits[i] = MakePortrait(i);
             game.StateChanged += ResetFocus;
         }
-        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; foreach (var p in portraits ?? Array.Empty<Texture2D>()) if (p) Destroy(p); }
+        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; }
         void ResetFocus()
         {
             worldSeed=null; worldMap=false; devMenu=false; settings=false; menuFocus=0;
@@ -79,9 +76,8 @@ namespace MadeInArizona
                     if (station == 0) game.SelectedMission = Mathf.Clamp(game.SelectedMission + change, 0, game.Save.unlockedMission);
                     if (station == 1) { int v = Mathf.Clamp(game.Save.selectedVehicle + change, 0, ContentCatalog.Vehicles.Length - 1); if (GarageManager.SelectVehicle(v, game.Save)) game.RefreshGarageVehicle(); }
                     if (station == 2) { selectedPart = Mathf.Clamp(selectedPart + change, 0, ContentCatalog.Parts.Length - 1); listScroll.y = Mathf.Max(0, (selectedPart - 3) * 81); }
-                    if (station == 3) selectedWeapon = Mathf.Clamp(selectedWeapon + change, 0, garageWeapons.Length - 1);
-                    if (station == 4) selectedDriver = Mathf.Clamp(selectedDriver + change, 0, ContentCatalog.Drivers.Length - 1);
-                    if (station == 5) { game.Save.dogCosmetic = Mathf.Clamp(game.Save.dogCosmetic + change, 0, 3); game.ReturnToGarage(); station = 5; }
+                    if (station == 3) { selectedWeapon = Mathf.Clamp(selectedWeapon + change, 0, garageWeapons.Length - 1); listScroll.y = Mathf.Max(0, (selectedWeapon - 2) * 91); }
+                    if (station == 4) { game.Save.dogCosmetic = Mathf.Clamp(game.Save.dogCosmetic + change, 0, 3); game.ReturnToGarage(); station = 4; }
                 }
                 if (pad.buttonSouth.wasPressedThisFrame) ConfirmSelection();
             }
@@ -94,7 +90,6 @@ namespace MadeInArizona
             if (station == 0) game.StartMission(game.SelectedMission);
             if (station == 2) BuyOrInstall(ContentCatalog.Parts[selectedPart]);
             if (station == 3) SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
-            if (station == 4) { game.Save.selectedDriver = selectedDriver; game.RefreshGarageVehicle(); }
         }
 
         GUIStyle Style(int size, Color color, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
@@ -156,7 +151,7 @@ namespace MadeInArizona
             Rect(0, 0, width, 92, Ink);
             Rect(30, 22, 4, 44, Orange);
             Text(48, 17, 420, 35, "MADE IN ARIZONA", 29, Cream, true);
-            Tag(49, 56, "117° AUTO CARE   /   TECHNICALLY INFORMED STUPIDITY", Orange);
+            Tag(49, 56, "117° AUTO CARE   /   REPAIRS BY SUPERIOR FIREPOWER", Orange);
             Text(width - 520, 28, 240, 30, "$ " + game.Save.money.ToString("N0"), 25, Lime, true, TextAnchor.MiddleRight);
             Text(width - 250, 31, 215, 30, game.Save.salvage + " SCRAP    •    REP " + game.Save.reputation, 14, Muted, true, TextAnchor.MiddleRight);
             for (int i = 0; i < stations.Length; i++) {
@@ -168,8 +163,7 @@ namespace MadeInArizona
             if (station == 1) DrawVehicles(top, panelHeight);
             if (station == 2) DrawParts(top, panelHeight);
             if (station == 3) DrawWeapons(top, panelHeight);
-            if (station == 4) DrawDrivers(top, panelHeight);
-            if (station == 5) DrawDog(top, panelHeight);
+            if (station == 4) DrawDog(top, panelHeight);
             Rect(0, height - 62, width, 62, Ink);
             Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB / RB  STATION     D-PAD  SELECT     A  CONFIRM     Y  SETTINGS" : "TAB  CHANGE STATION     ENTER  CONFIRM     F1  SETTINGS", 12, Muted, true);
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
@@ -196,14 +190,14 @@ namespace MadeInArizona
             var stats = GarageManager.StatsFor(ContentCatalog.Vehicles[game.Save.selectedVehicle], game.Save);
             Rect(right, top + 100, 328, 91, Ink);
             Text(right + 20, top + 116, 285, 26, Mathf.RoundToInt(stats.horsepower) + " HP     " + Mathf.RoundToInt(stats.mass) + " KG     " + stats.drivetrain, 19, Cream, true);
-            Text(right + 20, top + 151, 285, 24, "The warranty left before you arrived.", 14, Muted);
+            Text(right + 20, top + 151, 285, 24, "STALLION • FIELD MECHANIC   /   JOHNNY • DISPATCH", 12, Muted, true);
             Rect(right,top+207,328,130,Ink);
             Text(right+20,top+220,290,36,"TWO WAVES. SIX HOSTILE VEHICLES.",13,Cream,true);
             if(Button(right+20,top+262,288,56,"COMBAT TRIAL  /  F2 · X",true))game.StartCombatTrial();
             float trayX = left + w + 24, trayW = width - trayX - 32;
             Rect(trayX, top + panelHeight - 175, trayW, 175, Ink);
             Tag(trayX + 20, top + panelHeight - 155, "THE ROAD TO UNLIMITED LIABILITY", Orange);
-            Text(trayX + 20, top + panelHeight - 120, trayW - 40, 38, "ACT " + (game.SelectedMission / 3 + 1) + "  /  " + new[] { "CUSTOMER DECLINED", "A PATTERN OF NONPAYMENT", "EVERYTHING IS FINANCED", "UNINCORPORATED WARFARE", "THE FINAL NOTICE" }[game.SelectedMission / 3], 18, Cream, true);
+            Text(trayX + 20, top + panelHeight - 120, trayW - 40, 38, "ACT " + (game.SelectedMission / 3 + 1) + "  /  " + new[] { "FIRST DAY, FINAL NOTICE", "A PATTERN OF NONPAYMENT", "EVERYTHING IS FINANCED", "UNINCORPORATED WARFARE", "THE FINAL NOTICE" }[game.SelectedMission / 3], 18, Cream, true);
             for (int i = 0; i < ContentCatalog.Missions.Length; i++) {
                 float bWidth = Mathf.Min(44, (trayW - 40) / 15 - 5);
                 bool completed = game.Save.completedMissions.Contains(i);
@@ -294,46 +288,26 @@ namespace MadeInArizona
         {
             Rect(32, top, 500, panelHeight, Ink);
             Tag(56, top + 20, "RT / GARAGE WEAPON • SPEND SCRAP TO OWN", Orange);
+            listScroll = GUI.BeginScrollView(new Rect(48, top + 57, 465, panelHeight - 75), listScroll, new Rect(0, 0, 433, garageWeapons.Length * 91));
             for (int i = 0; i < garageWeapons.Length; i++)
             {
                 var weapon = ContentCatalog.Weapons[garageWeapons[i]];
                 string status = game.Save.selectedWeapon == weapon.id ? "FITTED" :
                     game.Save.ownedWeapons.Contains(weapon.id) ? "OWNED" : WeaponRules.ScrapCost(weapon.id) + " SCRAP";
-                if (Button(56, top + 65 + i * 91, 450, 74, weapon.displayName + "\n" + status, selectedWeapon == i)) selectedWeapon = i;
+                if (Button(0, i * 91, 430, 74, weapon.displayName + "\n" + status, selectedWeapon == i)) selectedWeapon = i;
             }
-            Text(56, top + 370, 440, 100, "Enemy weapons live in the LT slot. Destroy the right vehicle, drive over its drop, and press Y / F to swap when carrying one.", 18, Muted);
+            GUI.EndScrollView();
             var selected = ContentCatalog.Weapons[garageWeapons[selectedWeapon]];
             float x = width - 535;
             Rect(x, top, 503, panelHeight, Ink);
             Tag(x + 24, top + 24, "GARAGE LOADOUT / RIGHT TRIGGER", Lime);
             Text(x + 24, top + 64, 455, 75, selected.displayName.ToUpperInvariant(), 31, Cream, true);
             Text(x + 24, top + 157, 455, 115, selected.description, 20, Cream);
-            Text(x + 24, top + 292, 455, 45, selected.damage + " DAMAGE    •    " + selected.fireRate.ToString("0.0") + " ROUNDS/SEC", 17, Muted);
+            Text(x + 24, top + 292, 455, 45, selected.damage + " DAMAGE / HIT    •    " + selected.fireRate.ToString("0.0") + " SHOTS/SEC", 17, Muted);
+            Text(x + 24, top + 365, 455, 90, "LT holds enemy weapon drops. Drive over one to equip it; press Y / F to swap when carrying one.", 17, Muted);
             bool owned = game.Save.ownedWeapons.Contains(selected.id);
             string label = game.Save.selectedWeapon == selected.id ? "FITTED TO RT" : owned ? "EQUIP ON RT" : "BUY & EQUIP / " + WeaponRules.ScrapCost(selected.id) + " SCRAP";
             if (Button(x + 24, top + panelHeight - 88, 455, 56, label, true)) SelectGarageWeapon(selected);
-        }
-
-        void DrawDrivers(float top, float panelHeight)
-        {
-            Rect(32, top, 495, panelHeight, Ink);
-            Tag(56, top + 20, "AUTHORIZED OPERATORS / LOOSE DEFINITION", Orange);
-            for (int i = 0; i < ContentCatalog.Drivers.Length; i++) {
-                var d = ContentCatalog.Drivers[i]; float y = top + 66 + i * 98;
-                GUI.DrawTexture(new Rect(56, y, 72, 72), portraits[i]);
-                if (Button(144, y, 357, 72, d.displayName + "\n" + d.perk, selectedDriver == i)) selectedDriver = i;
-            }
-            var driver = ContentCatalog.Drivers[selectedDriver];
-            float x = width - 535;
-            Rect(x, top, 503, panelHeight, Ink);
-            GUI.DrawTexture(new Rect(x + 28, top + 28, 128, 128), portraits[selectedDriver]);
-            Tag(x + 179, top + 38, "PERSONNEL FILE", Orange);
-            Text(x + 179, top + 76, 294, 76, driver.displayName.ToUpperInvariant(), 30, Cream, true);
-            Rule(x + 28, top + 182, 447);
-            Text(x + 28, top + 211, 447, 150, driver.biography, 22);
-            Tag(x + 28, top + 393, "SHOP SPECIALTY", Lime);
-            Text(x + 28, top + 425, 447, 85, driver.perk, 24, Cream, true);
-            if (Button(x + 28, top + panelHeight - 83, 447, 55, game.Save.selectedDriver == selectedDriver ? "ON THE CLOCK" : "PUT THEM IN THE DRIVER’S SEAT", true)) { game.Save.selectedDriver = selectedDriver; game.RefreshGarageVehicle(); }
         }
 
         void DrawDog(float top, float panelHeight)
@@ -349,7 +323,7 @@ namespace MadeInArizona
             Rect(x, top, 448, 399, Ink);
             Tag(x + 25, top + 23, "COMPLETELY NECESSARY EQUIPMENT", Orange);
             string[] looks = { "FACTORY DOG", "SAFETY INSPECTOR", "DESERT DOGGLES", "RECOVERY CAPTAIN" };
-            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) { game.Save.dogCosmetic = i; game.ReturnToGarage(); station = 5; }
+            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) { game.Save.dogCosmetic = i; game.ReturnToGarage(); station = 4; }
         }
 
         void DrawHUD()
@@ -635,24 +609,5 @@ namespace MadeInArizona
             InputManager.Instance.StartRebind(action, binding, () => game.Notify("Binding saved."));
         }
 
-        Texture2D MakePortrait(int variant)
-        {
-            const int n = 48; var texture = new Texture2D(n, n, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, name = "Original pixel portrait " + variant };
-            Color[] colors = new Color[n * n]; var bg = new[] { new Color(.18f, .33f, .33f), new Color(.45f, .28f, .18f), new Color(.32f, .24f, .44f), new Color(.25f, .32f, .17f), new Color(.46f, .20f, .30f) }[variant];
-            Color skin = new[] { new Color(.72f, .46f, .3f), new Color(.8f, .59f, .4f), new Color(.58f, .35f, .24f), new Color(.87f, .63f, .43f), new Color(.68f, .42f, .29f) }[variant];
-            for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
-                Color c = bg * (y % 4 == 0 ? .93f : 1f); c.a = 1;
-                if (y < 17 && x > 7 && x < 41) c = variant == 0 ? Orange : variant == 4 ? Blue : Lime * .6f;
-                if (y > 13 && y < 21 && x > 19 && x < 29) c = skin * .8f;
-                if (y >= 20 && y < 39 && x >= 14 && x <= 33 && !(y < 23 && (x < 17 || x > 30))) c = skin;
-                if (y >= 35 && y < 42 && x >= 12 && x <= 35) c = variant == 0 ? Ink : variant == 1 ? new Color(.66f, .52f, .31f) : variant == 4 ? new Color(.83f, .17f, .45f) : Ink;
-                if (y >= 29 && y <= 31 && ((x >= 18 && x <= 20) || (x >= 28 && x <= 30))) c = Ink;
-                if (y == 25 && x >= 22 && x <= 26) c = skin * .5f;
-                if (variant == 2 && y >= 29 && y <= 32 && x >= 16 && x <= 32) c = Blue;
-                if (variant == 3 && y > 20 && y < 26 && x > 16 && x < 32) c = new Color(.26f, .21f, .18f);
-                colors[y * n + x] = c;
-            }
-            texture.SetPixels(colors); texture.Apply(); return texture;
-        }
     }
 }

@@ -11,13 +11,13 @@ namespace MadeInArizona
     public sealed class ExplosionSystem : MonoBehaviour
     {
         struct Blast { public Vector3 point; public float radius, damage; public GameObject source; public ExplosionKind kind; }
-        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float until, solidUntil; public Vector3 scale; }
+        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float born, until; public Vector3 scale; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
         sealed class Burn { public Vector3 point;public Color flame;public float until,radius,next;public Light light; }
         readonly List<Burn> burns=new List<Burn>();
         readonly List<Light> burnLights=new List<Light>();
-        sealed class Scorch { public Transform t; public float until; }
+        sealed class Scorch { public Transform t; public Renderer renderer; public float born, fadeAt, until; public Color color; public Vector3 scale; }
         static ExplosionSystem instance;
         readonly Queue<Blast> queued = new Queue<Blast>();
         readonly Collider[] overlaps = new Collider[384];
@@ -32,12 +32,21 @@ namespace MadeInArizona
         readonly List<Scorch> scorches = new List<Scorch>();
         ParticleSystem fire, smoke, sparks;
         Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, waveMaterial, scorchMaterial;
-        Texture2D softTexture;
+        Texture2D softTexture, scorchTexture;
         MaterialPropertyBlock block;
         int quality;
         int DebrisLimit => quality == 0 ? 45 : quality == 1 ? 100 : quality == 2 ? 220 : 640;
         public int ActiveDebris => fragments.Count;
         public int QueuedExplosions => queued.Count;
+
+        public static void IgnoreVehicleCollisions(VehicleController vehicle)
+        {
+            if (instance == null || vehicle == null) return;
+            var colliders = vehicle.GetComponentsInChildren<Collider>();
+            foreach (var fragment in instance.fragments)
+                foreach (var collider in colliders)
+                    if (collider.enabled) Physics.IgnoreCollision(fragment.collider, collider, true);
+        }
 
         static ExplosionSystem Get()
         {
@@ -59,6 +68,22 @@ namespace MadeInArizona
                 pixels[y * 32 + x] = new Color(1, 1, 1, Mathf.Pow(Mathf.Clamp01(1 - distance), 1.5f));
             }
             softTexture.SetPixels(pixels); softTexture.Apply(false, true);
+            scorchTexture = new Texture2D(128, 128, TextureFormat.RGBA32, true) { name = "Irregular explosion soot", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear };
+            var soot = new Color[128 * 128];
+            for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++)
+            {
+                Vector2 uv = new Vector2((x - 63.5f) / 63.5f, (y - 63.5f) / 63.5f);
+                float angle = Mathf.Atan2(uv.y, uv.x);
+                float distance = uv.magnitude;
+                float coarse = Mathf.PerlinNoise(x * .057f + 11.7f, y * .057f + 4.3f);
+                float fine = Mathf.PerlinNoise(x * .19f + 37.1f, y * .19f + 19.8f);
+                float raggedEdge = .78f + (coarse - .5f) * .25f + Mathf.Sin(angle * 7 + coarse * 5) * .035f;
+                float core = 1 - Mathf.SmoothStep(.05f, raggedEdge, distance);
+                float blastRing = Mathf.Exp(-Mathf.Pow((distance - .45f - (coarse - .5f) * .08f) * 8.5f, 2));
+                float alpha = Mathf.Clamp01((core * (.46f + coarse * .40f) + blastRing * .28f) * Mathf.Lerp(.72f, 1.12f, fine));
+                soot[y * 128 + x] = new Color(.20f + coarse * .08f, .12f + coarse * .035f, .065f, alpha);
+            }
+            scorchTexture.SetPixels(soot); scorchTexture.Apply(true, true);
             var particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Universal Render Pipeline/Unlit");
             particleMaterial = new Material(particleShader) { name = "Soft desert particles", renderQueue = 3000, enableInstancing = true };
             particleMaterial.SetTexture("_BaseMap", softTexture); particleMaterial.SetTexture("_MainTex", softTexture);
@@ -72,6 +97,7 @@ namespace MadeInArizona
             debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
             debrisMaterial.SetFloat("_Smoothness", .22f);
             scorchMaterial = new Material(particleMaterial) { name = "Explosion scorch" };
+            scorchMaterial.SetTexture("_BaseMap", scorchTexture); scorchMaterial.SetTexture("_MainTex", scorchTexture);
             scorchMaterial.SetColor("_BaseColor", new Color(.12f, .07f, .045f, .68f));
             smokeMaterial=SixWayMaterial("Smoke",0,2.4f);
             // HDR flame values deliberately clear the post-process bloom threshold during a blast.
@@ -160,16 +186,18 @@ namespace MadeInArizona
             int count = Mathf.Min(12, queued.Count);
             // New chain reactions wait until the next frame, making the propagation readable.
             for (int i = 0; i < count; i++) Perform(queued.Dequeue());
+            var camera = Camera.main;
             for (int i = fragments.Count - 1; i >= 0; i--)
             {
                 var f = fragments[i];
-                if (Time.time > f.solidUntil && !f.body.isKinematic)
-                {
-                    f.body.linearVelocity = Vector3.zero; f.body.angularVelocity = Vector3.zero;
-                    f.body.isKinematic = true; f.collider.enabled = false;
-                }
                 if (Time.time > f.until - 1) f.t.localScale = f.scale * Mathf.Clamp01(f.until - Time.time);
-                if (Time.time > f.until || f.t.position.y < -4) RetireFragment(i);
+                bool offscreen = false;
+                if (camera != null && Time.time > f.born + .35f)
+                {
+                    Vector3 viewport = camera.WorldToViewportPoint(f.t.position);
+                    offscreen = viewport.z < 0 || viewport.x < -.15f || viewport.x > 1.15f || viewport.y < -.15f || viewport.y > 1.15f;
+                }
+                if (Time.time > f.until || f.t.position.y < -4 || offscreen) RetireFragment(i);
             }
             foreach (var flash in flashes)
             {
@@ -187,7 +215,15 @@ namespace MadeInArizona
                 wave.line.startColor = wave.line.endColor = wave.color * (1 - t);
                 if (Time.time > wave.until) wave.line.enabled = false;
             }
-            foreach (var scorch in scorches) if (scorch.t.gameObject.activeSelf && Time.time > scorch.until) scorch.t.gameObject.SetActive(false);
+            foreach (var scorch in scorches)
+            {
+                if (!scorch.t.gameObject.activeSelf) continue;
+                if (Time.time >= scorch.until) { scorch.t.gameObject.SetActive(false); continue; }
+                float fade = Time.time < scorch.fadeAt ? 1 : Mathf.InverseLerp(scorch.until, scorch.fadeAt, Time.time);
+                scorch.t.localScale = scorch.scale * Mathf.Lerp(1, 1.035f, Mathf.InverseLerp(scorch.born, scorch.until, Time.time));
+                block.SetColor("_BaseColor", new Color(scorch.color.r, scorch.color.g, scorch.color.b, scorch.color.a * fade));
+                scorch.renderer.SetPropertyBlock(block);
+            }
         }
         void Perform(Blast blast)
         {
@@ -242,8 +278,11 @@ namespace MadeInArizona
                 float distance = Vector3.Distance(player.transform.position, blast.point);
                 CameraController.Instance?.Shake(Mathf.Clamp01(radius / Mathf.Max(5, distance)) * .75f);
             }
+            foreach (var fragment in fragments)
+                if (!fragment.body.isKinematic && (fragment.t.position - blast.point).sqrMagnitude < radius * radius)
+                    fragment.body.AddExplosionForce(radius * 22, blast.point, radius, radius * .18f, ForceMode.Impulse);
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
-            int count = Physics.OverlapSphereNonAlloc(blast.point, radius, overlaps, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.OverlapSphereNonAlloc(blast.point, radius, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
             {
                 var collider = overlaps[i]; if (collider == null) continue;
@@ -277,19 +316,23 @@ namespace MadeInArizona
                 if (fragmentPool.Count > 0) f = fragmentPool.Pop();
                 else
                 {
-                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube); go.name = "Pooled debris"; go.transform.SetParent(transform);
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube); go.name = "Pooled debris"; go.layer = 2; go.transform.SetParent(transform);
                     var rb = go.AddComponent<Rigidbody>(); rb.mass = 4; rb.linearDamping = .2f; rb.angularDamping = .2f;
                     rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
                     var renderer = go.GetComponent<Renderer>(); renderer.sharedMaterial = debrisMaterial; renderer.shadowCastingMode = quality > 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
                     f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer };
                 }
                 f.view.SetActive(true); f.collider.enabled = true; f.body.isKinematic = false;
+                foreach (var vehicle in VehicleController.Active)
+                    if (vehicle != null)
+                        foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
+                            if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, true);
                 f.scale = new Vector3(Random.Range(.1f, .45f), Random.Range(.07f, .24f), Random.Range(.15f, .7f));
                 f.t.localScale = f.scale;
                 f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * .3f, Random.rotation);
                 Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + 2;
                 f.body.linearVelocity = velocity; f.body.angularVelocity = Random.insideUnitSphere * 18;
-                f.solidUntil = Time.time + 1.8f; f.until = Time.time + 4 + quality * 2 + Random.value * 2;
+                f.born = Time.time; f.until = Time.time + 2.8f + Random.value * 1.4f;
                 block.SetColor("_BaseColor", color * Random.Range(.75f, 1.3f)); f.renderer.SetPropertyBlock(block);
                 fragments.Add(f);
             }
@@ -358,12 +401,26 @@ namespace MadeInArizona
             {
                 var go = GameObject.CreatePrimitive(PrimitiveType.Quad); go.name = "Pooled blast scorch"; go.transform.SetParent(transform);
                 Destroy(go.GetComponent<Collider>()); var renderer = go.GetComponent<Renderer>(); renderer.sharedMaterial = scorchMaterial;
-                renderer.shadowCastingMode = ShadowCastingMode.Off;
-                scorch = new Scorch { t = go.transform }; scorches.Add(scorch);
+                renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = true;
+                scorch = new Scorch { t = go.transform, renderer = renderer }; scorches.Add(scorch);
             }
             if (scorch == null) return;
-            scorch.t.gameObject.SetActive(true); scorch.t.SetPositionAndRotation(new Vector3(point.x, .028f + Random.value * .003f, point.z), Quaternion.Euler(90, 0, Random.Range(0, 360)));
-            scorch.t.localScale = Vector3.one * radius * 2; scorch.until = Time.time + 25 + quality * 10;
+            Vector3 position = point, normal = Vector3.up;
+            float castHeight = Mathf.Max(4, radius + 2);
+            if (Physics.Raycast(point + Vector3.up * castHeight, Vector3.down, out RaycastHit ground, castHeight * 2 + 8, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                position = ground.point; normal = ground.normal;
+            }
+            Vector3 tangent = Vector3.ProjectOnPlane(Random.value < .5f ? Vector3.forward : Vector3.right, normal).normalized;
+            if (tangent.sqrMagnitude < .2f) tangent = Vector3.Cross(normal, Vector3.right).normalized;
+            Quaternion rotation = Quaternion.LookRotation(-normal, tangent) * Quaternion.AngleAxis(Random.Range(0, 360), Vector3.forward);
+            float width = radius * Random.Range(1.75f, 2.35f), depth = radius * Random.Range(1.5f, 2.15f);
+            scorch.t.gameObject.SetActive(true);
+            scorch.t.SetPositionAndRotation(position + normal * (.022f + Random.value * .006f), rotation);
+            scorch.scale = new Vector3(width, depth, 1); scorch.t.localScale = scorch.scale;
+            scorch.born = Time.time; scorch.until = Time.time + Random.Range(58, 76) + quality * 10; scorch.fadeAt = scorch.until - Random.Range(14, 22);
+            scorch.color = Color.Lerp(new Color(.10f, .055f, .025f, .78f), new Color(.17f, .105f, .055f, .64f), Random.value);
+            block.SetColor("_BaseColor", scorch.color); scorch.renderer.SetPropertyBlock(block);
         }
         void OnDestroy()
         {
@@ -374,6 +431,7 @@ namespace MadeInArizona
             if (debrisMaterial != null) Destroy(debrisMaterial);
             if (scorchMaterial != null) Destroy(scorchMaterial);
             if (softTexture != null) Destroy(softTexture);
+            if (scorchTexture != null) Destroy(scorchTexture);
         }
     }
 }

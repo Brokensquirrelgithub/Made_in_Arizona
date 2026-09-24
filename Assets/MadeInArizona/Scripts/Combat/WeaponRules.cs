@@ -5,8 +5,8 @@ namespace MadeInArizona
     /// <summary>Loadout and drop rules are keyed by weapon ID so authored weapon assets can still tune damage.</summary>
     public static class WeaponRules
     {
-        public static bool GarageWeapon(string id) => id == "riveter" || id == "sweeper" || id == "carbine";
-        public static int ScrapCost(string id) => id == "sweeper" ? 12 : id == "carbine" ? 20 : 0;
+        public static bool GarageWeapon(string id) => id == "riveter" || id == "sweeper" || id == "carbine" || id == "shredder" || id == "pothole";
+        public static int ScrapCost(string id) => id == "sweeper" ? 12 : id == "carbine" ? 20 : id == "shredder" ? 14 : id == "pothole" ? 18 : 0;
         public static int PickupAmmo(string id)
         {
             switch (id)

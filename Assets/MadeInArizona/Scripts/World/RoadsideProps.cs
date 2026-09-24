@@ -22,7 +22,9 @@ namespace MadeInArizona
         public static Transform Rock(Transform parent,Vector3 pos,Vector3 scale,float hue=0)
         {
             var g=Shape("Faceted sandstone",parent,PrimitiveType.Sphere,pos,scale,new Color(.47f+hue,.26f+hue*.6f,.17f+hue*.3f),true).transform;
-            g.localRotation=Quaternion.Euler(13,scale.x*28,24); return g;
+            g.localRotation=Quaternion.Euler(13,scale.x*28,24);
+            MakeBreakable(g,Mathf.Clamp(12+scale.magnitude*3,16,30),false,ExplosionKind.Ammunition,3);
+            return g;
         }
         public static Transform Propane(Transform parent,Vector3 pos, bool large = false)
         {
@@ -84,7 +86,8 @@ namespace MadeInArizona
         public static Transform Building(Transform parent,Vector3 pos,string name,Color wall,float width=15,float depth=11,float height=5)
         {
             Transform g=Group(name,parent,pos);
-            Box("Stucco shell",g,new Vector3(0,height*.5f,0),new Vector3(width,height,depth),wall,true);
+            var shell=Box("Stucco shell",g,new Vector3(0,height*.5f,0),new Vector3(width,height,depth),wall,true);
+            ApplyWall(shell,wall,Mathf.Abs(Mathf.RoundToInt(wall.r*17+wall.g*11+wall.b*7))%WallTextureSet.TextureCount,new Vector3(width,height,depth));
             Box("Flat roof",g,new Vector3(0,height+.12f,0),new Vector3(width+.6f,.35f,depth+.6f),Cream);
             Box("Roof lip",g,new Vector3(0,height+.48f,-depth*.5f),new Vector3(width+.7f,.6f,.32f),Rust);
             Box("Shopfront window",g,new Vector3(-width*.21f,1.8f,-depth*.5f-.04f),new Vector3(width*.31f,2.4f,.08f),new Color(.12f,.28f,.31f));

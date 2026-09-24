@@ -53,9 +53,9 @@ The streamed wilderness uses the Pandazole Nature pack with batched conifers, br
 
 ## Included
 
-- Garage and a complete four-stage opening mission, with replay, scoring, optional salvage and extraction.
+- Garage and a complete four-stage opening mission that introduces Johnny's repair shop, Stallion's first field job and Suzuki's unusual command of paperwork, with replay, scoring, optional salvage and extraction.
 - Fifteen original campaign jobs across recovery, demolition, convoy escort, racing/escape, defense, collection/rescue and component-based bosses. Campaign sorties use the same seeded regional layout, with mission-specific objectives.
-- Eight distinct vehicles, five drivers with perks and portraits, mechanical parts with compatibility and tradeoffs, drivetrain/differential changes, final-drive and ride-height tuning.
+- Eight distinct vehicles, a fixed protagonist named Stallion, mechanical parts with compatibility and tradeoffs, drivetrain/differential changes, final-drive and ride-height tuning.
 - Nine terrain types, localized component damage, garage and limited-ammo field weapons, enemy supply drops, tactical enemy archetypes, destructible structures/props, nine explosion profiles, bounded debris and projectile pools.
 - Suzuki the white husky with four cosmetics, discoveries, achievements, a Wonton Destruction food truck, original procedural music and sound effects.
 - HDR bloom, normal-mapped surfaces, fur backlighting, garage light shafts, blast heat shimmer, animated six-way-lit smoke/fire using Unity’s free fluid samples, lingering embers, and layered engine/exhaust sound.

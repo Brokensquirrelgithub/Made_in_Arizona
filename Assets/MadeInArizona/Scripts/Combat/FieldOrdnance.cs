@@ -21,7 +21,7 @@ namespace MadeInArizona
         public static void PlaceMine(VehicleController owner, WeaponDefinition weapon, float damage, Vector3? dropPosition = null)
         {
             Vector3 position = dropPosition ?? owner.transform.position - owner.transform.forward * 3.3f + Vector3.up * .4f;
-            if (Physics.Raycast(position + Vector3.up * 6, Vector3.down, out var hit, 15, ~0, QueryTriggerInteraction.Ignore))
+            if (Physics.Raycast(position + Vector3.up * 6, Vector3.down, out var hit, 15, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 position = hit.point + Vector3.up * .25f;
             var charge = Create("Road mine • " + weapon.displayName, position, weapon.projectileColor);
             charge.owner = owner; charge.mine = true; charge.damage = damage; charge.radius = weapon.blastRadius;
@@ -60,7 +60,7 @@ namespace MadeInArizona
                 return;
             }
             Vector3 step = velocity * Time.deltaTime;
-            int count = Physics.SphereCastNonAlloc(transform.position, .22f, step.normalized, hits, step.magnitude, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.SphereCastNonAlloc(transform.position, .22f, step.normalized, hits, step.magnitude, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = float.MaxValue;
             bool impact = false;
             for (int i = 0; i < count; i++)

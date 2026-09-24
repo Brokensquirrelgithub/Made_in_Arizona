@@ -37,7 +37,7 @@ namespace MadeInArizona
             foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
             GameManager.Instance?.Mission?.RegisterDestruction(score, bounds.center);
             float scale = Mathf.Clamp(bounds.size.magnitude, 1, 12);
-            ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.RoundToInt(4 + scale), color);
+            ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color);
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);
             if (Explosive)
             {

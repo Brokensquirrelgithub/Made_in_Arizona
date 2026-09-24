@@ -46,6 +46,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             Check("mission startup", game.State == GameState.Playing && game.Mission.Stage == 0);
             Check("destructible scene", FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None).Length > 30);
+            if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDebrisReview")>=0) { yield return ReviewDebris();FinishResults();yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaVfxReview")>=0) { yield return ReviewEffects();yield break; }
             Capture("02-mission");
             yield return new WaitForSecondsRealtime(.35f);
@@ -161,6 +162,8 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             var world=GeneratedWorld.Active;
             Check("generated campaign starts from menu",world&&game.IsPlaying&&world.Towns.Count>=2);
+            var groundTextures=GroundTextureSet.Load();
+            Check("licensed ground textures and height maps linked",groundTextures&&groundTextures.Diffuse(1)&&groundTextures.Height(1));
             var nature=PandazoleNatureCatalog.Load();
             Check("Pandazole nature meshes and atlas packaged",nature&&nature.atlas&&nature.pines.Length>0&&nature.rocks.Length>0&&nature.grasses.Length>0);
             yield return TestNatureModelReview();
@@ -222,6 +225,7 @@ namespace MadeInArizona
             Camera.main.transform.position=forest+new Vector3(14,10,-17);Camera.main.transform.LookAt(forest+Vector3.up*3);
             yield return new WaitForSecondsRealtime(1f);Capture("22-forest-detail");yield return new WaitForSecondsRealtime(.35f);
             camera.enabled=true;ui.enabled=true;camera.Snap();
+            yield return ReviewGroundTextureTransitions();
             var ecology=GeneratedWorld.Active.GetComponent<LivingWorldDetail>();
             Check("dense streamed ecology generates plants and stones",ecology&&ecology.PlantClumps>500&&ecology.Stones>80&&ecology.Trees>20);
             Check("ecology streaming stays within bounded tile budget",ecology&&ecology.LoadedTiles<=121);
@@ -260,6 +264,23 @@ namespace MadeInArizona
             camera.transform.position=new Vector3(0,245,-45);camera.transform.LookAt(Vector3.up*200);camera.orthographic=true;camera.orthographicSize=27;
             yield return new WaitForSecondsRealtime(.4f);Capture("28-nature-model-review");yield return new WaitForSecondsRealtime(.4f);
             Destroy(root);Destroy(material);controller.enabled=true;ui.enabled=true;controller.Snap();GameManager.Instance.Resume();
+        }
+        IEnumerator ReviewGroundTextureTransitions()
+        {
+            var world=GeneratedWorld.Active;var controller=CameraController.Instance;var camera=Camera.main;var ui=GameManager.Instance.GetComponent<GameUI>();
+            if(!world||!controller||!camera)yield break;
+            bool oldOrtho=camera.orthographic;float oldFov=camera.fieldOfView;bool oldUi=ui.enabled;
+            controller.enabled=false;ui.enabled=false;camera.orthographic=false;camera.fieldOfView=52;
+            Vector3 ext=world.WorldBounds.extents;
+            Vector3[] sites={new Vector3(ext.x*.20f,0,-ext.z*.18f),new Vector3(-ext.x*.18f,0,ext.z*.58f)};
+            string[] names={"32-lowland-texture-transition","33-highland-texture-transition"};
+            for(int i=0;i<sites.Length;i++)
+            {
+                Vector3 focus=sites[i];focus.y=GeneratedWorld.HeightAt(focus);
+                camera.transform.position=focus+new Vector3(20,12,-23);camera.transform.LookAt(focus+Vector3.up*.45f);
+                yield return new WaitForSecondsRealtime(1f);Capture(names[i]);yield return new WaitForSecondsRealtime(.35f);
+            }
+            camera.orthographic=oldOrtho;camera.fieldOfView=oldFov;controller.enabled=true;ui.enabled=oldUi;controller.Snap();
         }
         IEnumerator TestPresentationControls()
         {
@@ -524,6 +545,32 @@ namespace MadeInArizona
                 game.ReturnToGarage();
                 yield return new WaitForSecondsRealtime(.1f);
             }
+        }
+        IEnumerator ReviewDebris()
+        {
+            var game=GameManager.Instance;var player=game.Player;
+            Vector3 center=player.transform.position+Vector3.forward*9;
+            if(Physics.Raycast(center+Vector3.up*12,Vector3.down,out var ground,30,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))center.y=ground.point.y;
+            var focus=new GameObject("Debris screenshot focus");focus.transform.position=Vector3.Lerp(player.transform.position,center,.68f);
+            var camera=CameraController.Instance;camera.Target=focus.transform;camera.Snap();
+            var ui=game.GetComponent<GameUI>();ui.enabled=false;
+            for(int i=-2;i<=2;i++)
+            {
+                Vector3 p=center+new Vector3(i*2.15f,0,Mathf.Abs(i)*.7f);
+                RoadsideProps.Crate(game.World.transform,p,.82f+Mathf.Abs(i)*.07f);
+                if(i%2==0)RoadsideProps.Rock(game.World.transform,p+new Vector3(.8f,0,1.25f),new Vector3(1.25f,.8f,1.05f));
+            }
+            yield return new WaitForSecondsRealtime(.35f);
+            ExplosionSystem.Detonate(center+Vector3.up*.8f,9,110,player.gameObject,ExplosionKind.Grenade);
+            yield return new WaitForSecondsRealtime(.12f);
+            Capture("29-debris-particles-action");
+            yield return new WaitForSecondsRealtime(.9f);
+            Capture("30-debris-particles-falling");
+            Check("debris review generated fragments",FindFirstObjectByType<ExplosionSystem>()?.ActiveDebris>0);
+            yield return new WaitForSecondsRealtime(5.2f);
+            Capture("31-lingering-soot-mark");
+            yield return new WaitForSecondsRealtime(.35f);
+            ui.enabled=true;camera.Target=player.transform;Destroy(focus);
         }
         void DestroyHostiles()
         {

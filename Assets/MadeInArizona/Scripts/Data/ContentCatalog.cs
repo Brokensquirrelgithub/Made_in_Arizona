@@ -101,11 +101,7 @@ namespace MadeInArizona
         static void BuildDrivers()
         {
             Drivers = new[] {
-                Driver(0,"mara","Mara Vale","A master mechanic whose shop inherited a forklift and several enemies. Keeps every work order because somebody has to.","Precision service: repairs restore 25% more; power +3%.","A torque spec is not a suggestion. Neither is the invoice.",new Color(.18f,.76f,.7f),1.25f,1.03f,1),
-                Driver(1,"ellis","Ellis Wash","A surveyor who knows every dry wash by its old name. Speaks quietly when the sky stops being blue.","Desert reading: traction +12%.","That is a road. It simply hasn't been approved yet.",new Color(.95f,.64f,.23f),1,1,1.12f),
-                Driver(2,"bea","Bea Voss","An ECU tuner with an oscilloscope, a rescue tow strap and a complicated relationship with compressor maps.","Calibrated trouble: power +13%; repairs restore 10% less.","The boost target is a hypothesis. We are collecting evidence.",new Color(.75f,.36f,.91f),.9f,1.13f,1),
-                Driver(3,"silt","Silt Mercer","Prepared for sinkholes, tax audits and magnetic pole reversal. Actually did need the spare fan belt yesterday.","Packed spares: repairs restore 40% more; traction +3%.","I packed a contingency for the contingency catching fire.",new Color(.63f,.69f,.36f),1.4f,1,1.03f),
-                Driver(4,"nova","Nova Hertz","A mobile sound engineer defending the desert's last unlicensed all-ages rave. Wears hearing protection, unlike management.","On the beat: power +6%; traction +6%.","That transformer is clipping. Also it is on fire.",new Color(.97f,.34f,.6f),1,1.06f,1.06f)
+                Driver(0,"stallion","Stallion","The new runner at 117° Auto Care. Thirty-something, immaculate Afro, sunglasses in all weather. He speaks rarely and solves mechanical problems with decisive engineering.","Field mechanic: repairs restore 25% more; power +3%.","What needs fixing?",new Color(.18f,.76f,.7f),1.25f,1.03f,1)
             };
         }
         static DriverDefinition Driver(int i,string id,string name,string bio,string perk,string line,Color color,float repair,float power,float grip)
@@ -123,7 +119,9 @@ namespace MadeInArizona
                 Weapon(7,"minigun","Circular Saw Minigun","A short-range storm of scrap. Chase a target and hold the line.",8,20,105,0,new Color(1,.92f,.32f)),
                 Weapon(8,"sniper","Long Receipt","An uncommon accurate precision shot for distant weak points.",155,.65f,210,0,new Color(.45f,.95f,1)),
                 Weapon(9,"cluster","Tax Audit","Uncommon cluster launcher. The paperwork is explosive and limited.",75,.7f,54,5,new Color(1,.18f,.65f)),
-                Weapon(10,"boomstick","Double-Owed Boomstick","Field shotgun. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1))
+                Weapon(10,"boomstick","Double-Owed Boomstick","Field shotgun. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1)),
+                Weapon(11,"shredder","Receipt Shredder","Garage weapon. Three light blades fan out; track close targets to land the full volley.",7,5,88,0,new Color(.95f,.84f,.48f)),
+                Weapon(12,"pothole","Pothole Popper","Garage weapon. Lob a small charge over obstacles; slow reload and modest blast.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f))
             };
         }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color)

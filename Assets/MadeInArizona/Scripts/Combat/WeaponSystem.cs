@@ -97,7 +97,7 @@ namespace MadeInArizona
             float damage = weapon.damage * multiplier;
             if (weapon.id == "mines")
                 FieldOrdnance.PlaceMine(owner, weapon, damage);
-            else if (weapon.id == "grenade" || weapon.id == "mortar")
+            else if (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole")
                 FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage);
             else if (weapon.id == "sweeper" || weapon.id == "boomstick")
             {
@@ -106,6 +106,14 @@ namespace MadeInArizona
                 {
                     Vector3 spread = Quaternion.AngleAxis((i - (pellets - 1) * .5f) * (weapon.id == "boomstick" ? 3.2f : 3.7f) + Random.Range(-.85f, .85f), Vector3.up) * aimDirection;
                     ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, weapon.id == "boomstick" ? .33f : .42f);
+                }
+            }
+            else if (weapon.id == "shredder")
+            {
+                for (int i = -1; i <= 1; i++)
+                {
+                    Vector3 spread = Quaternion.AngleAxis(i * 9 + Random.Range(-1f, 1f), Vector3.up) * aimDirection;
+                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, 1.15f);
                 }
             }
             else if (weapon.id == "cluster")

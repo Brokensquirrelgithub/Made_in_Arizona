@@ -27,6 +27,69 @@ namespace MadeInArizona
             Materials[key] = result;
             return result;
         }
+        public static Material GroundMaterial(Color color, int textureIndex = 0)
+        {
+            string key = "ground/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + textureIndex;
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            result = new Material(shader) { name = "MIA_Ground_" + textureIndex, enableInstancing = true };
+            result.color = color; if (result.HasProperty("_BaseColor")) result.SetColor("_BaseColor", color);
+            result.SetFloat("_Metallic", 0); result.SetFloat("_Smoothness", .12f);
+            var set = GroundTextureSet.Load();
+            Texture2D diffuse = set ? set.Diffuse(textureIndex) : null;
+            Texture2D normal = set ? set.Normal(textureIndex) : null;
+            Texture2D occlusion = set ? set.Occlusion(textureIndex) : null;
+            result.SetTexture("_BaseMap", diffuse ? diffuse : SurfaceAlbedo());
+            result.SetTexture("_BumpMap", normal ? normal : SurfaceNormal()); result.SetFloat("_BumpScale", normal ? .7f : .42f); result.EnableKeyword("_NORMALMAP");
+            if (occlusion) { result.SetTexture("_OcclusionMap", occlusion); result.SetFloat("_OcclusionStrength", .62f); result.EnableKeyword("_OCCLUSIONMAP"); }
+            Materials[key] = result; return result;
+        }
+        public static Material WallMaterial(Color color, int textureIndex = 0)
+        {
+            string key = "wall/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + textureIndex;
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            result = new Material(shader) { name = "MIA_Wall_" + textureIndex, enableInstancing = true };
+            result.color = color; if (result.HasProperty("_BaseColor")) result.SetColor("_BaseColor", color);
+            result.SetFloat("_Smoothness", .18f);
+            var set = WallTextureSet.Load();
+            Texture2D diffuse = set ? set.Diffuse(textureIndex) : null;
+            Texture2D normal = set ? set.Normal(textureIndex) : null;
+            Texture2D occlusion = set ? set.Occlusion(textureIndex) : null;
+            Texture2D metallic = set ? set.Metallic(textureIndex) : null;
+            result.SetTexture("_BaseMap", diffuse ? diffuse : SurfaceAlbedo());
+            result.SetTexture("_BumpMap", normal ? normal : SurfaceNormal()); result.SetFloat("_BumpScale", normal ? .76f : .34f); result.EnableKeyword("_NORMALMAP");
+            if (occlusion) { result.SetTexture("_OcclusionMap", occlusion); result.SetFloat("_OcclusionStrength", .72f); result.EnableKeyword("_OCCLUSIONMAP"); }
+            if (metallic) { result.SetTexture("_MetallicGlossMap", metallic); result.SetFloat("_Metallic", .08f); result.EnableKeyword("_METALLICSPECGLOSSMAP"); }
+            Materials[key] = result; return result;
+        }
+        public static void ApplyWall(GameObject go, Color color, int textureIndex, Vector3 size)
+        {
+            if (!go) return;
+            var renderer = go.GetComponent<Renderer>(); if (!renderer) return;
+            renderer.sharedMaterial = WallMaterial(color, textureIndex);
+            float horizontal = Mathf.Max(size.x, size.z);
+            var block = new MaterialPropertyBlock(); block.SetVector("_BaseMap_ST", new Vector4(Mathf.Max(1, horizontal / 3.5f), Mathf.Max(1, size.y / 3.5f), 0, 0));
+            renderer.SetPropertyBlock(block);
+        }
+        public static void ConfigureBiomeTerrain(Material material)
+        {
+            if (!material) return;
+            material.SetTexture("_BumpMap", SurfaceNormal());
+            var set = GroundTextureSet.Load();
+            if (!set) return;
+            int[] picks = { 1, 4, 8, 12 };
+            int linked = 0;
+            for (int i = 0; i < picks.Length; i++)
+            {
+                var diffuse = set.Diffuse(picks[i]); var normal = set.Normal(picks[i]); var ao = set.Occlusion(picks[i]); var height = set.Height(picks[i]);
+                if (diffuse) { material.SetTexture("_GroundDiffuse" + i, diffuse); linked++; }
+                if (normal) material.SetTexture("_GroundNormal" + i, normal);
+                if (ao) material.SetTexture("_GroundAO" + i, ao);
+                if (height) material.SetTexture("_GroundHeight" + i, height);
+            }
+            material.SetFloat("_UseGroundTextures", linked == picks.Length ? 1 : 0);
+        }
         static Texture2D albedo;
         static Texture2D SurfaceAlbedo()
         {
@@ -79,7 +142,7 @@ namespace MadeInArizona
             GameObject go = GameObject.CreatePrimitive(type); go.name = name;
             go.transform.SetParent(parent, false); go.transform.localPosition = pos; go.transform.localScale = size;
             go.GetComponent<Renderer>().sharedMaterial = Material(color, metal, smooth, glow);
-            if(size.x>40 && size.z>40) { var block=new MaterialPropertyBlock();block.SetVector("_BaseMap_ST",new Vector4(size.x/3,size.z/3,0,0));go.GetComponent<Renderer>().SetPropertyBlock(block); }
+            if(size.x>40 && size.z>40) { go.GetComponent<Renderer>().sharedMaterial=GroundMaterial(color,Mathf.Abs(Mathf.RoundToInt(color.r*13+color.g*7+color.b*5))%GroundTextureSet.TextureCount);var block=new MaterialPropertyBlock();block.SetVector("_BaseMap_ST",new Vector4(size.x/5,size.z/5,0,0));go.GetComponent<Renderer>().SetPropertyBlock(block); }
             Collider collider = go.GetComponent<Collider>();
             if (collider && !solid) { collider.enabled = false; if (Application.isPlaying) Object.Destroy(collider); else Object.DestroyImmediate(collider); }
             return go;

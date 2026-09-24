@@ -45,8 +45,8 @@ namespace MadeInArizona
             Box("Arena asphalt",arena,new Vector3(0,-.25f,0),new Vector3(108,.5f,92),new Color(.19f,.20f,.19f),true);
             AddSurface(new Rect(-54,-46,108,92),SurfaceKind.Asphalt);
             for(int side=-1;side<=1;side+=2) {
-                Box("Concrete perimeter",arena,new Vector3(side*54,1,0),new Vector3(1,2,93),Cream,true);
-                Box("Concrete perimeter",arena,new Vector3(0,1,side*46),new Vector3(108,2,1),Cream,true);
+                var sideWall=Box("Concrete perimeter",arena,new Vector3(side*54,1,0),new Vector3(1,2,93),Cream,true);ApplyWall(sideWall,Cream,17,new Vector3(1,2,93));
+                var endWall=Box("Concrete perimeter",arena,new Vector3(0,1,side*46),new Vector3(108,2,1),Cream,true);ApplyWall(endWall,Cream,17,new Vector3(108,2,1));
                 for(int n=-3;n<=3;n++)Box("Hazard stripe",arena,new Vector3(n*13,.015f,side*41),new Vector3(5,.02f,.35f),Orange);
                 for(int n=0;n<3;n++) {
                     Vector3 pos=new Vector3(side*(17+n*9),0,n*13-12);
@@ -68,9 +68,9 @@ namespace MadeInArizona
             Box("Concrete floor",shop,new Vector3(0,.012f,1),new Vector3(24,.03f,23),new Color(.36f,.37f,.32f));
             for(int x=-3;x<=3;x++) Box("Expansion joint",shop,new Vector3(x*3.4f,.032f,1),new Vector3(.025f,.015f,23),new Color(.22f,.24f,.21f));
             for(int z=-3;z<=3;z++) Box("Expansion joint",shop,new Vector3(0,.033f,z*3.5f+1),new Vector3(24,.015f,.025f),new Color(.22f,.24f,.21f));
-            Box("Back wall",shop,new Vector3(0,3.7f,12.1f),new Vector3(25,7.4f,.4f),new Color(.29f,.34f,.32f),true);
-            Box("Left wall",shop,new Vector3(-12.35f,2.7f,1),new Vector3(.3f,5.4f,22),new Color(.29f,.34f,.32f),true);
-            Box("Right low wall",shop,new Vector3(12.35f,.7f,1),new Vector3(.3f,1.4f,22),new Color(.36f,.32f,.24f),true);
+            Color shopWall=new Color(.29f,.34f,.32f);var backWall=Box("Back wall",shop,new Vector3(0,3.7f,12.1f),new Vector3(25,7.4f,.4f),shopWall,true);ApplyWall(backWall,shopWall,13,new Vector3(25,7.4f,.4f));
+            var leftWall=Box("Left wall",shop,new Vector3(-12.35f,2.7f,1),new Vector3(.3f,5.4f,22),shopWall,true);ApplyWall(leftWall,shopWall,13,new Vector3(.3f,5.4f,22));
+            Color lowWallColor=new Color(.36f,.32f,.24f);var rightWall=Box("Right low wall",shop,new Vector3(12.35f,.7f,1),new Vector3(.3f,1.4f,22),lowWallColor,true);ApplyWall(rightWall,lowWallColor,16,new Vector3(.3f,1.4f,22));
             for(int x=-2;x<=2;x++)
             {
                 Box("Steel portal column",shop,new Vector3(x*5.9f,3.8f,11.7f),new Vector3(.19f,7.6f,.3f),Rust);
@@ -225,8 +225,8 @@ namespace MadeInArizona
             // Flat overlays receive scene shadows but never cast shadows onto the ground
             // millimetres below them. Distinct heights keep intersecting routes out of the same depth plane.
             float height=(asphalt?.045f:0f)+layer;
-            GroundOverlay("Road shoulder",root,new Vector3(0,height-.012f,0),width+3,distance,new Color(.44f,.35f,.24f));
-            GroundOverlay("Road surface",root,new Vector3(0,height,0),width,distance,asphalt?new Color(.16f,.185f,.18f):new Color(.59f,.40f,.25f));
+            GroundOverlay("Road shoulder",root,new Vector3(0,height-.012f,0),width+3,distance,new Color(.44f,.35f,.24f),7);
+            GroundOverlay("Road surface",root,new Vector3(0,height,0),width,distance,asphalt?new Color(.16f,.185f,.18f):new Color(.59f,.40f,.25f),asphalt?10:3);
             if(!asphalt) return;
             for(int side=-1;side<=1;side+=2)
             {
@@ -253,7 +253,7 @@ namespace MadeInArizona
                 crack.transform.localRotation=Quaternion.Euler(0,R(-35,35),0);
             }
         }
-        static GameObject GroundOverlay(string name,Transform parent,Vector3 center,float width,float length,Color color)
+        static GameObject GroundOverlay(string name,Transform parent,Vector3 center,float width,float length,Color color,int groundTexture=-1)
         {
             var vertices=new[]{new Vector3(-width*.5f,0,-length*.5f),new Vector3(-width*.5f,0,length*.5f),new Vector3(width*.5f,0,length*.5f),new Vector3(width*.5f,0,-length*.5f)};
             var go=MeshObject(name,parent,vertices,new[]{0,1,2,0,2,3},color);
@@ -261,6 +261,7 @@ namespace MadeInArizona
             var mesh=go.GetComponent<MeshFilter>().sharedMesh;
             mesh.uv=new[]{Vector2.zero,new Vector2(0,length/3),new Vector2(width/3,length/3),new Vector2(width/3,0)};
             mesh.RecalculateTangents();
+            if(groundTexture>=0)go.GetComponent<Renderer>().sharedMaterial=GroundMaterial(color,groundTexture);
             go.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             return go;
         }
@@ -277,6 +278,7 @@ namespace MadeInArizona
             var go=MeshObject(name,transform,vertices,triangles,color);
             go.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             if(kind==SurfaceKind.Water||kind==SurfaceKind.Oil) go.GetComponent<Renderer>().sharedMaterial=Material(color,.28f,.78f);
+            else go.GetComponent<Renderer>().sharedMaterial=GroundMaterial(color,kind==SurfaceKind.Sand?3:kind==SurfaceKind.Gravel?8:kind==SurfaceKind.Mud?5:kind==SurfaceKind.Rocks?12:kind==SurfaceKind.Debris?10:1);
             AddSurface(new Rect(center.x-size.x*.44f,center.z-size.y*.44f,size.x*.88f,size.y*.88f),kind);
             if(kind==SurfaceKind.Water) for(int i=0;i<12;i++) Box("Wash ripples",transform,center+new Vector3(R(-size.x*.4f,size.x*.4f),.09f,R(-size.y*.4f,size.y*.4f)),new Vector3(R(.8f,2.8f),.014f,.045f),new Color(.55f,.62f,.51f));
         }
@@ -379,7 +381,7 @@ namespace MadeInArizona
                     Box("Barrier foot",barrier,new Vector3(0,.18f,0),new Vector3(1.25f,.36f,3.3f),new Color(.53f,.51f,.42f));
                     Box("Jersey barrier",barrier,new Vector3(0,.62f,0),new Vector3(.72f,.88f,3.2f),new Color(.65f,.61f,.48f));
                     Box("Violation stripe",barrier,new Vector3(side*.38f,.76f,0),new Vector3(.04f,.23f,3),Orange);
-                    BoundsCollider(barrier,new Vector3(0,.5f,0),new Vector3(1.3f,1.15f,3.3f)); MakeBreakable(barrier,100,false,ExplosionKind.Electrical,25);
+                    BoundsCollider(barrier,new Vector3(0,.5f,0),new Vector3(1.3f,1.15f,3.3f)); MakeBreakable(barrier,32,false,ExplosionKind.Electrical,25);
                 }
             }
             RoadsideProps.Propane(transform,new Vector3(-25,0,65),true);

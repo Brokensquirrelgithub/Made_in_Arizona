@@ -18,11 +18,11 @@ MonoBehaviour:
   briefing: Disable the mining foreman's landship. Shoot its exposed cooling, weapon
     and generator pods to weaken the machine, then destroy the chassis and recover
     its control key.
-  opening: 'Ellis: That haul truck is wearing the cooling plant. Mara: Good. I was
+  opening: 'Ellis: That haul truck is wearing the cooling plant.|Johnny: Good. I was
     worried this would be a normal-sized radiator job.'
-  midpoint: 'Mara: Hit the external pods. Weapon power, cooling and generator are
+  midpoint: 'Johnny: Hit the external pods. Weapon power, cooling and generator are
     separate systems. Somebody left the service access exposed.'
-  closing: 'Mara: We shut it down. The corporate app still says the technician is
+  closing: 'Johnny: We shut it down. The corporate app still says the technician is
     arriving between eight and five.'
   optionalObjective: Keep at least 45% chassis health
   contentOrder: 10

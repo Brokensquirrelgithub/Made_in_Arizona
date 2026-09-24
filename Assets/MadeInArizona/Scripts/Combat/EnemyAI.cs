@@ -252,7 +252,7 @@ namespace MadeInArizona
         {
             if (Time.time <= hazardAt) return;
             hazardAt = Time.time + .35f; avoidance = Vector3.zero;
-            int count = Physics.OverlapSphereNonAlloc(transform.position, 7, hazards, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.OverlapSphereNonAlloc(transform.position, 7, hazards, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
             {
                 var prop = hazards[i].GetComponentInParent<DestructionSystem>();
@@ -293,7 +293,7 @@ namespace MadeInArizona
         bool Blocked(Vector3 direction, out Vector3 normal)
         {
             normal = Vector3.zero;
-            int count = Physics.SphereCastNonAlloc(transform.position + Vector3.up * .8f, .8f, direction, hits, Mathf.Clamp(vehicle.SpeedKph / 10, 4, 10), ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.SphereCastNonAlloc(transform.position + Vector3.up * .8f, .8f, direction, hits, Mathf.Clamp(vehicle.SpeedKph / 10, 4, 10), Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = float.MaxValue;
             for (int i = 0; i < count; i++)
             {
@@ -311,7 +311,7 @@ namespace MadeInArizona
         bool HasLineOfFire(VehicleController target, Vector3 direction, float distance)
         {
             if (target == null || distance < .01f) return false;
-            int count = Physics.RaycastNonAlloc(transform.position + Vector3.up * .85f, direction.normalized, hits, distance + .8f, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.RaycastNonAlloc(transform.position + Vector3.up * .85f, direction.normalized, hits, distance + .8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = float.MaxValue; RaycastHit first = default;
             for (int i = 0; i < count; i++)
             {

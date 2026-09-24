@@ -17,7 +17,7 @@ MonoBehaviour:
   region: Juniper Switchbacks
   briefing: Drive the tiny Thimble through four mountain checkpoints before the financing
     beacon expires. Your selected compatible upgrades carry over.
-  opening: 'Ellis: The narrow gate only admits the hatchback. Mara: Of course the
+  opening: 'Ellis: The narrow gate only admits the hatchback.|Johnny: Of course the
     road to the radio tower was designed by someone with a golf cart.'
   midpoint: 'Bea: Second gear, steady throttle. You do not need boost here. Please
     record that I said this voluntarily.'

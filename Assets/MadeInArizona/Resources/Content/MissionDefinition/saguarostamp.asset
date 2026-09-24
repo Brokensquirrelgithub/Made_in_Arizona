@@ -18,11 +18,11 @@ MonoBehaviour:
   briefing: Recover an illegally seized truck from corporate bounty crews. Break
     their interception waves, retrieve the title archive and return to the extraction
     point.
-  opening: 'Rick: Absolutely clean title. Three of them, actually. Mara: Rick, that
+  opening: 'Rick: Absolutely clean title. Three of them, actually.|Johnny: Rick, that
     is the precise opposite of reassuring.'
-  midpoint: 'Mara: Every title routes debt to a company named Shade Optional Holdings.
+  midpoint: 'Johnny: Every title routes debt to a company named Shade Optional Holdings.
     The same signature is on our original $173 work order.'
-  closing: 'Rick: So the title is clean now? Mara: The title is evidence, Rick. Please
+  closing: 'Rick: So the title is clean now?|Johnny: The title is evidence, Rick. Please
     stop laminating evidence.'
   optionalObjective: Finish in under 280 seconds
   contentOrder: 9

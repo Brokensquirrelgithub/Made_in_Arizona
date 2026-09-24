@@ -55,6 +55,14 @@ namespace MadeInArizona
             Release(keyboard);
             check("small breakable retains driving momentum", breakableDamage == null && player.transform.position.z > origin.z + 6f && player.Body.linearVelocity.z > 10f);
 
+            var rock = RoadsideProps.Rock(arena.transform, origin + Vector3.right * 8, Vector3.one * 1.5f);
+            var rockDamage = rock.GetComponent<DestructionSystem>();
+            rockDamage.ApplyDamage(50, rock.position, player.gameObject);
+            check("roadside rocks break under weapon damage", rockDamage.IsDestroyed && !rock.GetComponent<Collider>().enabled);
+            ExplosionSystem.ScatterDebris(origin + Vector3.up * 2, 3, 4, Color.gray);
+            var debris = GameObject.Find("Pooled debris");
+            check("debris cannot push cars or affect suspension casts", debris != null && debris.layer == 2 && Physics.GetIgnoreCollision(debris.GetComponent<Collider>(), player.GetComponent<Collider>()));
+
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = "Handling regression wall";
             wall.transform.SetParent(arena.transform);

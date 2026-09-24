@@ -68,6 +68,7 @@ namespace MadeInArizona
             Weapons = GetComponent<WeaponSystem>();
             if (Weapons == null) Weapons = gameObject.AddComponent<WeaponSystem>();
             Weapons.Initialize(this);
+            ExplosionSystem.IgnoreVehicleCollisions(this);
             initialized = true;
         }
         public static Transform FindChild(Transform parent, string childName)
@@ -227,7 +228,7 @@ namespace MadeInArizona
             for (int i = 0; i < 4; i++)
             {
                 Vector3 origin = transform.TransformPoint(suspensionPoints[i]);
-                int count = Physics.RaycastNonAlloc(origin, Vector3.down, groundHits, restLength + travel, ~0, QueryTriggerInteraction.Ignore);
+                int count = Physics.RaycastNonAlloc(origin, Vector3.down, groundHits, restLength + travel, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue;
                 for (int h = 0; h < count; h++)
                 {

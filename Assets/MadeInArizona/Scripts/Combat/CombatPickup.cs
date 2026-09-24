@@ -52,7 +52,7 @@ namespace MadeInArizona
             go.name = kind == PickupKind.Weapon ? "Field weapon • " + weapon.displayName : kind + " pickup";
             Destroy(go.GetComponent<Collider>());
             if (GameManager.Instance != null && GameManager.Instance.World != null) go.transform.SetParent(GameManager.Instance.World.transform);
-            if (Physics.Raycast(position + Vector3.up * 6, Vector3.down, out var hit, 16, ~0, QueryTriggerInteraction.Ignore))
+            if (Physics.Raycast(position + Vector3.up * 6, Vector3.down, out var hit, 16, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 position.y = hit.point.y;
             go.transform.position = position + Vector3.up * .8f;
             go.transform.localScale = kind == PickupKind.Weapon ? new Vector3(1.2f, .35f, .65f) : new Vector3(.8f, .25f, .8f);

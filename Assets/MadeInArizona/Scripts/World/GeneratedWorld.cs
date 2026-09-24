@@ -28,7 +28,7 @@ namespace MadeInArizona
         {
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,2,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
-            desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));desert.SetTexture("_BumpMap",WorldArt.SurfaceNormal());high=Material(new Color(.42f,.34f,.23f));rock=Material(new Color(.39f,.22f,.16f));asphalt=Material(new Color(.10f,.12f,.115f),0,.18f);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
+            desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
             Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildEcology();BuildPins();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));}
@@ -63,7 +63,7 @@ namespace MadeInArizona
             for(int n=0;n<Towns.Count;n++){Vector3 c=Towns[n];c.y=HeightInternal(c.x,c.z);Towns[n]=c;Transform town=Group(n==0?"Starter town • 117 Junction":"Route town "+(n+1),transform,Vector3.zero);Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true).GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;int buildings=n==0?7:4+n%3;
                 for(int i=0;i<buildings;i++){float side=i%2==0?-1:1;Vector3 p=c+new Vector3(side*(18+R(0,5)),0,(i/2-1)*14);p.y=HeightInternal(p.x,p.z);Building(town,p,R(7,12),R(7,13),i+n);}
                 for(int k=0;k<10;k++){Vector3 q=c+new Vector3(k%2==0?-30:30,0,-22+(k/2)*10);q.y=HeightAt(q);if(k%3==0)RoadsideProps.Barrel(town,q,Rust,true);else RoadsideProps.Crate(town,q,1.2f);}
-                Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));RoadsideProps.Cactus(town,c+new Vector3(27,0,-18),1.4f,false);
+                Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));RoadsideProps.Cactus(town,c+new Vector3(27,0,-18),1.4f);
             }
             BuildTownDetail();
         }
@@ -71,7 +71,7 @@ namespace MadeInArizona
         {
             var p=Group("Town blueprint / business "+i,parent,at);float h=R(3.2f,5.4f);
             Color c=i%3==0?new Color(.61f,.27f,.15f):i%3==1?new Color(.30f,.42f,.39f):new Color(.72f,.60f,.40f);
-            Box("Stucco roadside business",p,Vector3.up*h*.5f,new Vector3(w,h,d),c,true);
+            var shell=Box("Stucco roadside business",p,Vector3.up*h*.5f,new Vector3(w,h,d),c,true);ApplyWall(shell,c,(i*5+8)%WallTextureSet.TextureCount,new Vector3(w,h,d));
             Box("Sun bleached roof",p,Vector3.up*(h+.14f),new Vector3(w+1,.28f,d+1),Cream);
             Box("Dark storefront",p,new Vector3(0,h*.48f,-d*.505f),new Vector3(w*.55f,h*.56f,.08f),Ink);
             Box("Shade awning",p,new Vector3(0,h*.78f,-d*.58f),new Vector3(w*.7f,.16f,1.1f),i%2==0?Orange:Turquoise);

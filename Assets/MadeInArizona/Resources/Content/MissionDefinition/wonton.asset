@@ -17,11 +17,11 @@ MonoBehaviour:
   region: Last Exit Service Plaza
   briefing: Demolish Sunsprawl's automated impound plaza. Their catering truck contains
     the warrant printer. Inspect the food stalls for a completely unnecessary distinction.
-  opening: 'Silt: Your written plan says wonton destruction. Mara: Typo. Nova: The
+  opening: 'Silt: Your written plan says wonton destruction.|Johnny: Typo.|Nova: The
     catering truck has already been highlighted.'
-  midpoint: 'Ivo: This dumpling expresses notes of contractual overreach. Mara: Please
+  midpoint: 'Ivo: This dumpling expresses notes of contractual overreach.|Johnny: Please
     move away from the propane before reviewing dinner.'
-  closing: 'Mara: Impound records recovered. We have also become the first garage
+  closing: 'Johnny: Impound records recovered. We have also become the first garage
     with a catering-related incident plaque.'
   optionalObjective: Cause 35 pieces of collateral damage
   contentOrder: 11

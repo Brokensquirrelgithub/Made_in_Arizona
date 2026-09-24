@@ -13,18 +13,21 @@ MonoBehaviour:
   m_Name: invoice
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
   id: invoice
-  title: 1. Customer Declined Service
-  region: Cinder Flats
-  briefing: Recover a runaway customer's vehicle. Follow the collection truck into
-    Half-Price Horizon Salvage, clear its armed friends, recover the finance ledger
-    and return to the shop.
-  opening: 'Mara: Customer states the repair was optional. The front wheel was attached
-    with a hose clamp. Follow his collection truck; we need the registration.'
-  midpoint: 'Mara: These aren''t repossession orders. Sunsprawl is buying cooling
-    infrastructure, roads and everyone''s vehicle debt. Take that ledger.'
-  closing: 'Mara: We survived a private-security junkyard to collect one hundred
-    seventy-three dollars. Including shop supplies.'
-  optionalObjective: Cause 8 pieces of collateral damage
+  title: 1. First Day, Final Notice
+  region: 117° Auto Care / Cinder Flats
+  briefing: 'Stallion''s first work order at 117° Auto Care: recover the shop''s stolen
+    loaner. Follow it to Half-Price Horizon Salvage, clear the collection crew, recover
+    the finance ledger and bring the paperwork home.'
+  opening: 'Johnny: Morning, Stallion. Welcome to 117° Auto Care. We fix cars.|Stallion:
+    And when the problem isn''t the car?|Johnny: Then you take the shop car and fix
+    the situation. Our loaner just left without paying. Bring back the registration.'
+  midpoint: 'Johnny: That''s no customer ledger. Sunsprawl is buying cooling plants,
+    roads and vehicle debt. A bad alternator we can replace. A business model like
+    that needs removing.'
+  closing: 'Johnny: First day complete. Customer owes one hundred seventy-three dollars,
+    a wheel bearing and one apology.|Stallion: Put it on the invoice.|Johnny: Suzuki
+    already filed it under ''unlikely.'''
+  optionalObjective: 'Demonstrate the shop warranty: cause 8 pieces of collateral damage'
   contentOrder: 0
   reward: 700
   enemyCount: 4

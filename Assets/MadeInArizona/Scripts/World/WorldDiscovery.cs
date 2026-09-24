@@ -10,7 +10,7 @@ namespace MadeInArizona
             if (!game || !game.IsPlaying || game.Save.achievements.Contains("wonton-destruction")) return;
             game.Save.achievements.Add("wonton-destruction");
             game.Notify("WONTON DESTRUCTION • An unfortunate day for the lunch special.");
-            DialogueSystem.Instance.Say("MARA", "The insurance form has a separate box for dumplings. It does now.");
+            DialogueSystem.Instance.Say("JOHNNY", "The insurance form has a separate box for dumplings. It does now.");
             SaveSystem.Save(game.Save);
         }
     }

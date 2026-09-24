@@ -99,7 +99,7 @@ namespace MadeInArizona
             {
                 var ray = Camera.main.ScreenPointToRay(pointer.ReadValue<Vector2>());
                 var plane = new Plane(Vector3.up, player.transform.position + Vector3.up * .5f);
-                if(GeneratedWorld.Active && Physics.Raycast(ray,out var terrainHit,600,~0,QueryTriggerInteraction.Ignore) && terrainHit.collider.GetComponentInParent<VehicleController>()!=player)
+                if(GeneratedWorld.Active && Physics.Raycast(ray,out var terrainHit,600,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore) && terrainHit.collider.GetComponentInParent<VehicleController>()!=player)
                 {
                     var targetVehicle=terrainHit.collider.GetComponentInParent<VehicleController>();
                     Vector3 target=targetVehicle?targetVehicle.transform.position+Vector3.up*.85f:terrainHit.point;

@@ -17,11 +17,11 @@ MonoBehaviour:
   region: Half-Price Horizon Salvage
   briefing: Suzuki has discovered three locked data caches while searching for a
     missing socket. Reach each cache, interact to open it, then extract.
-  opening: 'Mara: Suzuki brought me a ten-millimeter socket and the security director''s
+  opening: 'Johnny: Suzuki brought me a ten-millimeter socket and the security director''s
     access fob. She is being promoted to accounts receivable.'
   midpoint: 'Bea: The fob opens the cooling-grid control network. Suzuki has also
     opened someone''s lunch. Both are time-sensitive.'
-  closing: 'Mara: We know their plan now. They will meter shade, cooling and road
+  closing: 'Johnny: We know their plan now. They will meter shade, cooling and road
     access as one subscription. Suzuki has requested a biscuit.'
   optionalObjective: Recover 2 roadside salvage caches
   contentOrder: 4

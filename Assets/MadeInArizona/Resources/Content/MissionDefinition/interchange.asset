@@ -18,11 +18,11 @@ MonoBehaviour:
   briefing: Protect a mobile evidence server across the unfinished interchange. Sunsprawl
     is deploying trucks from both shoulders. The server must reach all three transfer
     points.
-  opening: 'Mara: The interchange has thirty lanes and no exit to the hospital. Their
+  opening: 'Johnny: The interchange has thirty lanes and no exit to the hospital. Their
     planning document calls this a retention strategy.'
-  midpoint: 'Silt: I brought spare network cable. Mara: How much? Silt: Enough to
+  midpoint: 'Silt: I brought spare network cable.|Johnny: How much?|Silt: Enough to
     make the freeway someone''s problem.'
-  closing: 'Mara: The server is safe. We left the median in better condition than
+  closing: 'Johnny: The server is safe. We left the median in better condition than
     procurement did, which is not a high bar.'
   optionalObjective: Build an 8-hit destruction combo
   contentOrder: 8

@@ -236,7 +236,7 @@ namespace MadeInArizona
             if (!IsPlaying) return;
             State = GameState.Lost;
             InputManager.Instance.SetEnabled(false);
-            DialogueSystem.Instance.Say("MARA • 117° AUTO CARE", "You’re insured. Emotionally. Suzuki is fine.");
+            DialogueSystem.Instance.Say("JOHNNY • 117° AUTO CARE", "You're insured. Emotionally. Suzuki is fine. Bring back whatever still rolls.");
             StateChanged?.Invoke();
         }
 

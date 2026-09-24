@@ -26,7 +26,7 @@ namespace MadeInArizona
         public MissionDefinition Definition { get { return definition; } }
         MissionDefinition definition;
         int missionIndex, stageKills, wave, checkpoint, bestCombo, pickupCount;
-        float heldSeconds, comboTimeout, nextWaveTime, stageStarted, driverLineTime, effectiveTimeLimit;
+        float heldSeconds, comboTimeout, nextWaveTime, stageStarted, effectiveTimeLimit;
         bool ended, midwaySaid, finalStand, collecting;
         GameObject marker;
         VehicleController escort, suspect, boss;
@@ -45,7 +45,7 @@ namespace MadeInArizona
             if(!trialDefinition)trialDefinition=ScriptableObject.CreateInstance<MissionDefinition>();
             trialDefinition.id="combat_trial";trialDefinition.title="Vehicle Combat Trial";trialDefinition.region="117° Proving Ground";
             trialDefinition.mode=MissionMode.Recovery;trialDefinition.enemyCount=6;trialDefinition.timeLimit=180;
-            trialDefinition.opening="MARA: Six crews on the range. First: corporate guns, HOA traps, and scavenger rushes. Watch their colors and warning lines.";
+            trialDefinition.opening="JOHNNY: Six crews on the range. First: corporate guns, HOA traps, and scavenger rushes. Watch their colors and warning lines.";
             trialDefinition.closing="Trial complete. Your build can handle a disagreement.";
             trialDefinition.optionalKind=OptionalKind.Health;trialDefinition.optionalThreshold=.5f;
             Begin(trialDefinition,-1);SetObjective("WAVE 1 / 2 • destroy three hostile vehicles",Point(0));
@@ -54,7 +54,7 @@ namespace MadeInArizona
         {
             if(Stage==0 && Kills>=3) {
                 SetStage(1);Spawn(new Vector3(-27,1,18),2);Spawn(new Vector3(27,1,22),3);Spawn(new Vector3(0,1,32),4);
-                DialogueSystem.Instance?.Say("MARA","Second wave: open-house sharks, snowbird roadblocks, and neon tuner cars. Grab their drops and keep moving.",7);
+                DialogueSystem.Instance?.Say("JOHNNY","Second wave: open-house sharks, snowbird roadblocks, and neon tuner cars. Grab their drops and keep moving.",7);
             }
             Progress=Kills/6f;
             if(Kills>=6){Objective="TRIAL COMPLETE • 6 / 6 hostile vehicles destroyed";Finish();return;}
@@ -79,7 +79,7 @@ namespace MadeInArizona
             }
             AwardedMoney=0;AwardedSalvage=0;heldSeconds=0;checkpoint=0;wave=0;stageKills=0;bestCombo=0;pickupCount=0;
             ended=false;midwaySaid=false;finalStand=false;collecting=false;OptionalComplete=false;LastAward="";Debrief="";
-            nextWaveTime=14;stageStarted=0;driverLineTime=20;escort=null;suspect=null;boss=null;
+            nextWaveTime=14;stageStarted=0;escort=null;suspect=null;boss=null;
             if(marker)Destroy(marker);cacheMarkers.Clear();cachePositions.Clear();
             DialogueSystem.Instance?.SayLine(mission.opening,14);
             if(index>=0)AddCaches();
@@ -91,7 +91,7 @@ namespace MadeInArizona
                     suspect.Stats.maxSpeed=55;suspect.Stats.horsepower*=.65f;
                     var ai=suspect.GetComponent<EnemyAI>();if(ai){ai.UseDestination=true;ai.Destination=Point(1);}
                 }
-                SetObjective("Pursue the collection truck to Half-Price Horizon Salvage",Point(0));
+                SetObjective("Pursue the stolen shop loaner to Half-Price Horizon Salvage",Point(0));
                 return;
             }
             switch(mission.mode)
@@ -129,8 +129,6 @@ namespace MadeInArizona
             if(Remaining<=0) { Fail("The job window expired. Retry from the garage with a different build.");return; }
             if(Game.Player.Damage.IsDead)return;
             CheckCaches();UpdateOptional(false);
-            if(!midwaySaid&&Elapsed>driverLineTime&&Stage==0&&DialogueSystem.Instance!=null&&!DialogueSystem.Instance.Active)
-            { driverLineTime=float.MaxValue;var driver=ContentCatalog.Drivers[Game.Save.selectedDriver];DialogueSystem.Instance.Say(driver.displayName.ToUpperInvariant(),driver.line,7); }
             if(missionIndex<0)TickCombatTrial();
             else if(missionIndex==0)TickFirstMission();
             else switch(definition.mode)
@@ -155,7 +153,7 @@ namespace MadeInArizona
                 {
                     SetStage(1);stageKills=Kills;SpawnWave(3,Point(1));
                     if(suspect&&!suspect.Damage.IsDead){var ai=suspect.GetComponent<EnemyAI>();if(ai)ai.UseDestination=false;}
-                    DialogueSystem.Instance?.Say("MARA","He hired a collection crew to avoid paying us. Follow the gold ring into the yard. Propane tanks are an unusually persuasive negotiating tool.",12);
+                    DialogueSystem.Instance?.SayLine("Johnny: There's our loaner. Customer replaced the wheel nut with a hose clamp.|Stallion: I'll correct the workmanship.|Johnny: Clear the yard first. Propane tanks are persuasive shop tools.",12);
                     SetObjective("Clear the junkyard crew • 0 / 3 hostile vehicles",Point(1));
                 }
                 Progress=.1f;
@@ -173,7 +171,7 @@ namespace MadeInArizona
                 if(InteractAt(Point(1)))
                 {
                     Score+=600;SetStage(3);SpawnWave(2,Point(0));
-                    DialogueSystem.Instance?.Say("MARA","Ledger secured. Back to the shop. They just dispatched another truck over an invoice smaller than a set of brake pads.",10);
+                    DialogueSystem.Instance?.SayLine("Stallion: Ledger secured.|Johnny: Bring it home. Somebody sent armed trucks over an invoice smaller than a set of brake pads.",10);
                     SetObjective("Return the ledger to 117° Auto Care • reach extraction",Game.World.ExtractionPoint);
                 }
             }
@@ -281,7 +279,7 @@ namespace MadeInArizona
                 {
                     ObjectivePosition=boss.transform.position;float health=boss.Damage.Health/boss.Damage.MaxHealth;
                     Objective="COMMAND VEHICLE • "+Mathf.CeilToInt(health*100)+"% • target exposed pods";Progress=.25f+(1-health)*.55f;
-                    if(health<.5f&&!finalStand){finalStand=true;SpawnWave(Mathf.Max(3,definition.enemyCount/4),Point(2));DialogueSystem.Instance?.Say("MARA","Cooling pressure is dropping. They called for reinforcements. Keep moving and finish the machine.",8);}
+                    if(health<.5f&&!finalStand){finalStand=true;SpawnWave(Mathf.Max(3,definition.enemyCount/4),Point(2));DialogueSystem.Instance?.Say("JOHNNY","Cooling pressure is dropping. They called for reinforcements. Keep moving and finish the machine.",8);}
                 }
                 else {Score+=2000;SetStage(2);SetObjective("Command key recovered • reach extraction",Game.World.ExtractionPoint);}
             }
@@ -375,7 +373,7 @@ namespace MadeInArizona
                 if(!cacheMarkers[i]||!Near(cachePositions[i],5))continue;
                 Destroy(cacheMarkers[i]);cacheMarkers[i]=null;
                 RegisterPickup((i==0?"plate:":i==1?"workorder:":"salvage:")+definition.id+"-"+i);
-                if(i==0)DialogueSystem.Instance?.Say("MARA","Suzuki marked a salvage cache. Her inspection rate remains one biscuit per discovery.",6);
+                if(i==0)DialogueSystem.Instance?.Say("JOHNNY","Suzuki marked a salvage cache. Her inspection rate remains one biscuit per discovery.",6);
             }
         }
         void UpdateOptional(bool final)

@@ -18,12 +18,12 @@ MonoBehaviour:
   briefing: Escort a dispensary's evidence van through three interception points.
     The cargo is financial records. Protect the van and stay near it to keep the
     driver moving.
-  opening: 'Ivo: Our new release has notes of limestone after rain. Mara: Your van
+  opening: 'Ivo: Our new release has notes of limestone after rain.|Johnny: Your van
     has notes of rocket in radiator. Follow us, slowly.'
   midpoint: 'Ivo: Sunsprawl wanted our customer data as collateral. We sell aroma
-    descriptions, Mara. Some of those descriptions are private.'
-  closing: 'Ivo: A triumphant finish with subtle hints of unpaid municipal bonds.
-    Mara: Please let a bank describe a bank for once.'
+    descriptions, Johnny. Some of those descriptions are private.'
+  closing: 'Ivo: A triumphant finish with subtle hints of unpaid municipal bonds.|Johnny:
+    Please let a bank describe a bank for once.'
   optionalObjective: Destroy at least 8 hostile vehicles
   contentOrder: 3
   reward: 1150

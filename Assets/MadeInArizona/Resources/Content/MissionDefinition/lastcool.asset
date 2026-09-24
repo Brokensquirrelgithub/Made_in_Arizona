@@ -17,11 +17,11 @@ MonoBehaviour:
   region: Sunsprawl Service Core
   briefing: Defend the community cooling controls while the original debt claim is
     challenged. Hold the marked broadcast zone through three heavy response waves.
-  opening: 'Mara: People need the cooling on. We hold this station while the residents
+  opening: 'Johnny: People need the cooling on. We hold this station while the residents
     file the injunction. Nobody leaves anyone outside.'
   midpoint: 'Silt: Their emergency shutdown requires a second signature. Suzuki put
     a paw on the scanner. The system accepted director-level approval.'
-  closing: 'Mara: Cooling restored. Their network now lists Suzuki as interim compliance
+  closing: 'Johnny: Cooling restored. Their network now lists Suzuki as interim compliance
     officer. We are not correcting that.'
   optionalObjective: Destroy at least 16 hostile vehicles
   contentOrder: 13

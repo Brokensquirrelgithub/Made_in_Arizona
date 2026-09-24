@@ -18,11 +18,11 @@ MonoBehaviour:
   briefing: Customer states the AC works only downhill. Recover three components
     from an illegal mobile HVAC conversion before the finance patrol confiscates
     the evidence.
-  opening: 'Mara: There is a window air conditioner strapped to the roof. Its extension
+  opening: 'Johnny: There is a window air conditioner strapped to the roof. Its extension
     cord goes into the alternator. We are going to need three different tools.'
   midpoint: 'Bea: He used the condenser as a spoiler. It makes measurable downforce.
     Unfortunately the measurement is one.'
-  closing: 'Mara: We restored the factory AC. The customer says it lacks the old
+  closing: 'Johnny: We restored the factory AC. The customer says it lacks the old
     system''s sense of occasion.'
   optionalObjective: Finish with at least 65% chassis health
   contentOrder: 1
