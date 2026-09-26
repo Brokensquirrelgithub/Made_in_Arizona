@@ -10,6 +10,8 @@ namespace MadeInArizona
     public sealed class LivingWorldDetail : MonoBehaviour
     {
         const float Tile=32;
+        /// <summary>Scattered rocks: 30% fewer than the original density, each about 20% larger.</summary>
+        public const float RockCountScale=.7f,RockSizeScale=1.2f;
         const int Radius=4;
         readonly Dictionary<Vector2Int,GameObject> tiles=new Dictionary<Vector2Int,GameObject>();
         readonly List<Vector2Int> remove=new List<Vector2Int>();
@@ -101,7 +103,8 @@ namespace MadeInArizona
                 Color grass=forest?new Color(.28f,.39f,.12f):bank?new Color(.36f,.48f,.19f):new Color(.57f,.48f,.23f);
                 if(i%13==0)
                 {
-                    float s=Next(random,.12f,.55f);if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,local,s,random,StoneColor(forest,random)))mesh.Rock(local,new Vector3(s,s*.6f,s*.8f),StoneColor(forest,random),random);Stones++;
+                    if(Next(random,0,1)>RockCountScale)continue;
+                    float s=Next(random,.12f,.55f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,local,s,random,StoneColor(forest,random)))mesh.Rock(local,new Vector3(s,s*.6f,s*.8f),StoneColor(forest,random),random);Stones++;
                 }
                 else if(i%41==0)
                 {
@@ -126,11 +129,12 @@ namespace MadeInArizona
                 bool bank=config.riverWidth>0&&GeneratedWorld.Active.DistanceToRiver(world)<config.riverWidth+17;
                 if(i<5)
                 {
-                    float s=Next(random,.6f,2.6f);Color c=StoneColor(forest,random);
-                    if(s>1.2f) BreakableRock(root,p-Vector3.up*.16f,s,c,random);
+                    if(Next(random,0,1)>RockCountScale){DetailInstances++;continue;}
+                    float baseSize=Next(random,.6f,2.6f),s=baseSize*RockSizeScale;Color c=StoneColor(forest,random);
+                    if(baseSize>1.2f) BreakableRock(root,p-Vector3.up*.16f,s,c,random);
                     else if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,p-Vector3.up*.16f,s,random,c))mesh.Rock(p-Vector3.up*.16f,new Vector3(s,s*.72f,s*.82f),c,random);
                     Stones++;
-                    for(int j=0;j<4;j++){Vector3 q=p+new Vector3(Next(random,-s,s),.03f,Next(random,-s,s));float qSize=Next(random,.12f,.4f);if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,q,qSize,random,c))mesh.Rock(q,Vector3.one*qSize,c,random);}
+                    for(int j=0;j<4;j++){Vector3 q=p+new Vector3(Next(random,-s,s),.03f,Next(random,-s,s));float qSize=Next(random,.12f,.4f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,q,qSize,random,c))mesh.Rock(q,Vector3.one*qSize,c,random);}
                 }
                 else if(density>0&&forest&&patch>.28f&&i%2==0)
                 {

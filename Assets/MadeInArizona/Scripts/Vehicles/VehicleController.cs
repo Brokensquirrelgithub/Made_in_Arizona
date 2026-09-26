@@ -39,6 +39,7 @@ namespace MadeInArizona
         readonly RaycastHit[] groundHits = new RaycastHit[12];
         float[] gears = { 3.5f, 2.25f, 1.55f, 1.12f, .86f, .68f };
         bool initialized;
+        const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
 
         void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
         void OnDisable() { Active.Remove(this); }
@@ -182,6 +183,9 @@ namespace MadeInArizona
                 float wheelForce = Stats.torque * torqueCurve * ratio / .34f;
                 float powerForce = Mathf.Max(40, Stats.horsepower) * 745.7f / Mathf.Max(7, speed);
                 float acceleration = Mathf.Clamp(Mathf.Min(wheelForce, powerForce) / Body.mass * 2.65f, 3.2f, 27);
+                // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel
+                // responsive and controllable without raising top speed.
+                acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
                 acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * drivetrain;
                 if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;

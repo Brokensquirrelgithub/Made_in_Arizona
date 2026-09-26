@@ -7,22 +7,25 @@ namespace MadeInArizona
     {
         public static bool GarageWeapon(string id) => id == "riveter" || id == "sweeper" || id == "carbine" || id == "shredder" || id == "pothole";
         public static int ScrapCost(string id) => id == "sweeper" ? 12 : id == "carbine" ? 20 : id == "shredder" ? 14 : id == "pothole" ? 18 : 0;
-        /// <summary>Enemy drops carry three magazines' worth of the base loadout below.</summary>
-        public const int DropAmmoMultiplier = 3;
-        public static int PickupAmmo(string id) => BaseAmmo(id) * DropAmmoMultiplier;
-        static int BaseAmmo(string id)
+        /// <summary>
+        /// Rounds in one enemy drop and the most a player can carry, roughly Halo's limits with a little extra:
+        /// a drop is about half a full load, so two matching drops fill the weapon.
+        /// </summary>
+        public static int PickupAmmo(string id) => AmmoLimits(id).x;
+        public static int MaxAmmo(string id) => AmmoLimits(id).y;
+        static Vector2Int AmmoLimits(string id)
         {
             switch (id)
             {
-                case "invoice": return 4;
-                case "grenade": return 10;
-                case "mortar": return 3;
-                case "mines": return 6;
-                case "minigun": return 120;
-                case "sniper": return 5;
-                case "cluster": return 3;
-                case "boomstick": return 14;
-                default: return 0;
+                case "boomstick": return new Vector2Int(12, 24);  // shotgun
+                case "minigun": return new Vector2Int(100, 200);  // 20 rounds/s: ten seconds of fire
+                case "sniper": return new Vector2Int(6, 14);
+                case "invoice": return new Vector2Int(4, 8);      // rocket launcher
+                case "grenade": return new Vector2Int(6, 12);
+                case "mines": return new Vector2Int(4, 8);
+                case "mortar": return new Vector2Int(3, 6);
+                case "cluster": return new Vector2Int(3, 6);
+                default: return new Vector2Int(0, 0);
             }
         }
         public static WeaponDefinition Find(string id)

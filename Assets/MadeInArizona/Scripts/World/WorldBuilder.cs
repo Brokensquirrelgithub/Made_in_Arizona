@@ -434,11 +434,12 @@ namespace MadeInArizona
                 if(mountain&&i%2==0) Pine(p,R(3,8));
                 else RoadsideProps.Cactus(transform,p,R(.65f,1.45f));
             }
-            for(int i=0;i<65;i++)
+            // Rock density and size: 30% fewer, 20% larger (RockCountScale / RockSizeScale).
+            for(int i=0;i<Mathf.RoundToInt(65*LivingWorldDetail.RockCountScale);i++)
             {
                 Vector3 p=new Vector3(R(-112,112),0,R(-90,142));
                 if(!OpenSceneryPosition(p)) continue;
-                RoadsideProps.Rock(transform,p+Vector3.up*.24f,new Vector3(R(.8f,2.6f),R(.6f,1.3f),R(.9f,2.4f)),R(-.04f,.07f));
+                RoadsideProps.Rock(transform,p+Vector3.up*.24f,new Vector3(R(.8f,2.6f),R(.6f,1.3f),R(.9f,2.4f))*LivingWorldDetail.RockSizeScale,R(-.04f,.07f));
             }
             for(int side=-1;side<=1;side+=2) for(int i=0;i<8;i++) Mesa(new Vector3(side*R(132,160),-2,-96+i*36),R(13,26),R(10,30),new Color(.52f,.28f,.18f));
             for(int i=0;i<9;i++) Mesa(new Vector3(-130+i*33,-2,R(170,186)),R(18,30),R(20,43),new Color(.48f,.27f,.20f));

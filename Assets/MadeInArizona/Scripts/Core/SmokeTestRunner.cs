@@ -433,7 +433,10 @@ namespace MadeInArizona
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)){ai.enabled=false;ai.GetComponent<VehicleController>().SetAIInput(Vector2.zero,Vector3.forward,false);}
             Check("field weapon starts empty in combat",game.Player.Weapons.FieldWeapon==null);
             game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
-            Check("enemy rocket drop fits LT with tripled limited ammo",game.Player.Weapons.FieldWeapon!=null&&game.Player.Weapons.FieldAmmo==12);
+            Check("enemy rocket drop fits LT with limited ammo",game.Player.Weapons.FieldWeapon!=null&&game.Player.Weapons.FieldAmmo==WeaponRules.PickupAmmo("invoice"));
+            game.Player.Weapons.AddFieldAmmo(99);
+            Check("field ammo is capped per weapon",game.Player.Weapons.FieldAmmo==WeaponRules.MaxAmmo("invoice"));
+            game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))ai.enabled=true;
             float fightStart=Time.time,deadline=Time.time+70;bool attacked=false,captured=false,warned=false;
             while(Time.time<deadline&&game.IsPlaying) {

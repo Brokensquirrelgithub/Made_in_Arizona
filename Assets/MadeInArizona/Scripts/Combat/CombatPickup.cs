@@ -26,7 +26,7 @@ namespace MadeInArizona
             CombatPickup closest = null; float nearest = 16;
             foreach (var pickup in active)
             {
-                if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.IsAmmoFor(player)) continue;
+                if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.SameAsHeld(player)) continue;
                 Vector3 delta = pickup.transform.position - player.transform.position; delta.y = 0;
                 if (delta.sqrMagnitude < nearest) { nearest = delta.sqrMagnitude; closest = pickup; }
             }
@@ -68,8 +68,11 @@ namespace MadeInArizona
             pickup.basePosition = go.transform.position; pickup.availableAt = Time.time + .35f;
             return pickup;
         }
-        bool IsAmmoFor(VehicleController player) =>
+        bool SameAsHeld(VehicleController player) =>
             Kind == PickupKind.Weapon && Weapon && player && player.Weapons && player.Weapons.FieldWeapon && player.Weapons.FieldWeapon.id == Weapon.id;
+        bool IsAmmoFor(VehicleController player) =>
+            Kind == PickupKind.Weapon && Weapon && player && player.Weapons && player.Weapons.FieldWeapon && player.Weapons.FieldWeapon.id == Weapon.id &&
+            player.Weapons.FieldAmmo < WeaponRules.MaxAmmo(Weapon.id); // a full weapon leaves matching drops on the ground
         /// <summary>Pulls a matching weapon drop toward the player, accelerating, and merges it on arrival.</summary>
         bool MagnetToAmmo(VehicleController player)
         {
@@ -100,6 +103,7 @@ namespace MadeInArizona
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
             if (IsAmmoFor(game.Player)) { MagnetToAmmo(game.Player); return; }
+            if (SameAsHeld(game.Player)) { magnetSpeed = 0; return; } // full: leave it for later
             magnetSpeed = 0;
             Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
             // Only supplies follow the car. Keep weapons anchored for deliberate field-slot swaps.
