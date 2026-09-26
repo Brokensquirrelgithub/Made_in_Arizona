@@ -117,6 +117,7 @@ namespace MadeInArizona
             if (pipeline) {
                 pipeline.renderScale = new[] { .75f, .9f, 1f, 1f }[s.quality];
                 pipeline.shadowDistance = QualitySettings.shadowDistance;
+                CameraController.RefreshDepthEffects(); // re-adds the camera's backed-off distance
                 pipeline.msaaSampleCount = s.quality < 2 ? 1 : 4;
                 pipeline.mainLightShadowmapResolution = s.quality == 3 ? 4096 : 2048;
                 pipeline.maxAdditionalLightsCount = s.quality == 0 ? 0 : s.quality == 3 ? 8 : 4;

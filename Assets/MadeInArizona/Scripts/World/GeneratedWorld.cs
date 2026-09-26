@@ -307,7 +307,7 @@ namespace MadeInArizona
             }
         }
         void Tree(Transform p,Vector3 a,float h){Cylinder("Cottonwood trunk",p,a+Vector3.up*h*.35f,h*.08f,h*.7f,new Color(.27f,.18f,.1f));Shape("Cottonwood crown",p,PrimitiveType.Sphere,a+Vector3.up*h*.78f,new Vector3(h*.62f,h*.42f,h*.62f),new Color(.25f,.43f,.18f));}void Mesa(Vector3 p,float s,bool crag){Transform g=Group(crag?"Northern crag":"Layered mesa",Detail(p),p);for(int i=0;i<(crag?3:4);i++){float k=1-i/(float)((crag?3:4)+1);Cylinder("Eroded rock tier",g,new Vector3(0,i*s*.16f,0),s*k,s*.22f,i%2==0?new Color(.49f,.26f,.17f):new Color(.58f,.31f,.19f));}}
-        void Update(){if(details.Count==0||!Camera.main)return;Vector3 p=Camera.main.transform.position;float cs=size/Chunks,distance=Mathf.Max(360,size*.34f),sq=distance*distance;for(int i=0;i<details.Count;i++){Transform d=details[i];if(!d)continue;int x=i%Chunks,z=i/Chunks;Vector3 center=new Vector3(-half+(x+.5f)*cs,0,-half+(z+.5f)*cs);bool show=(center-p).sqrMagnitude<sq;if(d.gameObject.activeSelf!=show)d.gameObject.SetActive(show);}}
+        void Update(){if(details.Count==0||!Camera.main)return;Vector3 p=CameraController.HasFocus?CameraController.FocusPoint:Camera.main.transform.position;float cs=size/Chunks,distance=Mathf.Max(360,size*.34f),sq=distance*distance;for(int i=0;i<details.Count;i++){Transform d=details[i];if(!d)continue;int x=i%Chunks,z=i/Chunks;Vector3 center=new Vector3(-half+(x+.5f)*cs,0,-half+(z+.5f)*cs);bool show=(center-p).sqrMagnitude<sq;if(d.gameObject.activeSelf!=show)d.gameObject.SetActive(show);}}
         void OnDisable(){if(Active==this)Active=null;}void OnDestroy(){if(MapTexture)Destroy(MapTexture);if(desert)Destroy(desert);if(water)Destroy(water);if(townScenery)Destroy(townScenery);}
     }
 }

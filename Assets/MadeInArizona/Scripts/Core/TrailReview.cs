@@ -94,6 +94,23 @@ namespace MadeInArizona
                 Render(cam, Path.Combine(directory, "cliff-" + c + "-oblique.png"));
                 cam.orthographic = ortho; camera.enabled = true;
             }
+            // Zoomed-out gameplay camera over forest and cliff bases: tall trees and higher ground at the bottom
+            // of the screen must render whole (not sliced open by the near plane).
+            float zoom = DevTuning.Current.cameraZoom; DevTuning.Current.cameraZoom = 40;
+            var zoomShots = new System.Collections.Generic.List<Vector3>();
+            Vector3 forestSpot = new Vector3(world.WorldBounds.size.x * .12f, 0, world.WorldBounds.size.x * .5f * .75f);
+            zoomShots.Add(world.NearestPatrolRoad(forestSpot) + new Vector3(55, 0, 30));
+            foreach (var cliff in world.FindCliffs(3)) zoomShots.Add(cliff.position + new Vector3(cliff.downhill.x, 0, cliff.downhill.y) * 12);
+            for (int z = 0; z < zoomShots.Count; z++)
+            {
+                Vector3 p = zoomShots[z]; p.y = GeneratedWorld.HeightAt(p);
+                game.Player.Body.position = p + new Vector3(90, 3, 90);
+                focus.transform.position = p; camera.Snap();
+                for (int f = 0; f < 90; f++) yield return null;
+                Render(Camera.main, Path.Combine(directory, "zoomout-" + z + ".png"));
+                Debug.Log($"MIA_CAMERA zoomout-{z} orthoSize={Camera.main.orthographicSize:F1} depthOffset={CameraController.DepthOffset:F1} distance={Vector3.Distance(Camera.main.transform.position, p):F1}");
+            }
+            DevTuning.Current.cameraZoom = zoom; camera.Snap();
             yield return Reachability(check);
             Debug.Log("MIA_TRAIL_REVIEW " + directory);
         }

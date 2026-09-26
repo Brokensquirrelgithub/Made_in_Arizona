@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace MadeInArizona
 {
@@ -7,9 +9,28 @@ namespace MadeInArizona
         public static CameraController Instance { get; private set; }
         public Transform Target;
         Camera view;
+        Transform listener;
         Vector3 velocity;
+        float appliedShadowOffset = -1, appliedDofOffset = -1;
+        /// <summary>The point the camera frames (the car in play). Streaming and culling centre on this, not the lens.</summary>
+        public static Vector3 FocusPoint { get; private set; }
+        public static bool HasFocus { get; private set; }
+        /// <summary>
+        /// How far the gameplay camera sits behind its original 40 m framing distance. An orthographic view is unchanged
+        /// by moving along its axis, so the lens backs off until tall trees and higher elevation levels at the bottom of
+        /// the screen are no longer cut by the near plane. Depth-based effects (blur, shadow range) add this offset.
+        /// </summary>
+        public static float DepthOffset { get; private set; }
+        const float Headroom = 42f; // two elevation levels (2 x 13 m) plus a tall pine above the car
         float shake, dynamicZoom = 1, dynamicZoomVelocity, dynamicZoomHoldUntil;
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
+        void Start()
+        {
+            // The lens now backs away from the car, so hearing moves to a separate listener at the original framing distance.
+            foreach (var existing in GetComponents<AudioListener>()) DestroyImmediate(existing);
+            listener = new GameObject("Gameplay audio listener", typeof(AudioListener)).transform;
+            listener.SetPositionAndRotation(transform.position, transform.rotation);
+        }
         public void Shake(float amount) { shake = Mathf.Min(1.5f, shake + amount); }
         public void Snap() { velocity = Vector3.zero; dynamicZoom = 1; dynamicZoomVelocity = 0; Position(true); }
         void LateUpdate() { Position(false); }
@@ -20,11 +41,10 @@ namespace MadeInArizona
             var offset = garage ? new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
             // Offset the garage composition so the car sits to the right of the mission board.
             var focus = Target.position + (garage ? new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
+            FocusPoint = focus; HasFocus = true;
             var desired = focus + offset;
             if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+9);
-            transform.position = snap ? desired : Vector3.SmoothDamp(transform.position, desired, ref velocity, garage ? .22f : .13f, Mathf.Infinity, Time.unscaledDeltaTime);
             var rotation = Quaternion.LookRotation((focus-desired).normalized, Vector3.up);
-            transform.rotation = rotation;
             view.orthographic = true;
             float zoom = Mathf.Clamp(DevTuning.Current.cameraZoom, 8f, 40f);
             float size = garage ? 10f * zoom / 21f : zoom;
@@ -33,9 +53,42 @@ namespace MadeInArizona
             UpdateDynamicZoom(garage, snap, focus, rotation, size);
             size *= dynamicZoom;
             view.orthographicSize = snap ? size : Mathf.Lerp(view.orthographicSize, size, Time.unscaledDeltaTime * 8);
+            // Back the lens off far enough that the bottom screen edge clears Headroom metres above the car.
+            Vector3 forward = rotation * Vector3.forward;
+            float extra = 0;
+            if (!garage)
+            {
+                float sinPitch = Mathf.Max(.2f, -forward.y), cosPitch = Mathf.Sqrt(1 - sinPitch * sinPitch);
+                float needed = (Mathf.Max(size, view.orthographicSize) * cosPitch + Headroom) / sinPitch + 3;
+                extra = Mathf.Max(0, needed - Vector3.Distance(focus, desired));
+            }
+            DepthOffset = extra;
+            desired -= forward * extra;
+            transform.position = snap ? desired : Vector3.SmoothDamp(transform.position, desired, ref velocity, garage ? .22f : .13f, Mathf.Infinity, Time.unscaledDeltaTime);
+            transform.rotation = rotation;
+            view.farClipPlane = 450 + extra;
+            if (listener) listener.SetPositionAndRotation(transform.position + forward * extra, rotation);
+            ApplyDepthOffset(extra);
             shake = Mathf.MoveTowards(shake, 0, Time.unscaledDeltaTime * 2.5f);
             if (!garage && shake > 0) transform.position += Random.insideUnitSphere * shake * GameManager.Instance.Save.settings.shake * Mathf.Clamp(DevTuning.Current.shake, 0f, 3f) * .35f;
         }
+
+        /// <summary>Keeps the far-depth blur range and the shadow range measured from the car, not from the backed-off lens.</summary>
+        void ApplyDepthOffset(float extra)
+        {
+            if (Mathf.Abs(extra - appliedDofOffset) > .05f)
+            {
+                appliedDofOffset = extra;
+                Shader.SetGlobalVector("_ArizonaOrthoDofParams", DevVisuals.OrthoDof + new Vector4(extra, extra, 0, 0));
+            }
+            if (Mathf.Abs(extra - appliedShadowOffset) > 1f && GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline && QualitySettings.shadowDistance > 0)
+            {
+                appliedShadowOffset = extra;
+                pipeline.shadowDistance = QualitySettings.shadowDistance + extra;
+            }
+        }
+        /// <summary>Forces the next frame to re-apply depth-based settings (after quality or visual changes reset them).</summary>
+        public static void RefreshDepthEffects() { if (Instance) { Instance.appliedDofOffset = -1; Instance.appliedShadowOffset = -1; } }
 
         /// <summary>
         /// Pulls the orthographic view back while a hostile sits near the screen edge, then eases back in.

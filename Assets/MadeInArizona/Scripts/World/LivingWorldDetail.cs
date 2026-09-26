@@ -39,7 +39,7 @@ namespace MadeInArizona
             if(!GeneratedWorld.Active||!Camera.main||config==null)return;
             var player=GameManager.Instance?GameManager.Instance.Player:null;
             if(player)Shader.SetGlobalVector("_SceneryVehicle",new Vector4(player.transform.position.x,player.transform.position.y,player.transform.position.z,1));
-            Vector3 p=Camera.main.transform.position;
+            Vector3 p=CameraController.HasFocus?CameraController.FocusPoint:Camera.main.transform.position;
             var center=new Vector2Int(Mathf.FloorToInt(p.x/Tile),Mathf.FloorToInt(p.z/Tile));
             FrameTimingProbe.Clock.Restart();
             if(center!=lastCenter)

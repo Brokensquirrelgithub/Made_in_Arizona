@@ -8,6 +8,8 @@ namespace MadeInArizona
     /// <summary>Applies the developer-facing presentation controls to URP's live render state.</summary>
     public static class DevVisuals
     {
+        /// <summary>Far-blur eye-depth range (start, full, radius) for the original 40 m camera framing.</summary>
+        public static Vector4 OrthoDof = new Vector4(43f, 64f, 0f, 0f);
         static readonly Color DefaultAmbientSky = new Color(.70f, .80f, .92f);
         static readonly Color DefaultAmbientEquator = new Color(.68f, .59f, .45f);
         static readonly Color DefaultAmbientGround = new Color(.44f, .35f, .25f);
@@ -68,7 +70,10 @@ namespace MadeInArizona
             depthOfField.active = false;
             depthOfField.mode.Override(DepthOfFieldMode.Off);
             float focus = Mathf.SmoothStep(0f, 1f, dof);
-            Shader.SetGlobalVector("_ArizonaOrthoDofParams", new Vector4(43f, 64f, Mathf.Lerp(0f, 3.2f, focus), 0f));
+            // Eye-depth range for the original 40 m framing; CameraController adds its backed-off distance.
+            OrthoDof = new Vector4(43f, 64f, Mathf.Lerp(0f, 3.2f, focus), 0f);
+            Shader.SetGlobalVector("_ArizonaOrthoDofParams", OrthoDof + new Vector4(CameraController.DepthOffset, CameraController.DepthOffset, 0, 0));
+            CameraController.RefreshDepthEffects();
 
             var vignette = GetOrAdd<Vignette>(profile);
             vignette.active = tuning.vignette > 0f;
