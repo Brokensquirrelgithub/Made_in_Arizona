@@ -29,7 +29,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,2,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildEcology();BuildPins();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));}
         void BakeRoutes()
@@ -58,18 +58,58 @@ namespace MadeInArizona
             Ribbon("Salt River",l,r,water,roads,false);
             for(int i=2;i<count-2;i+=30)for(int side=-1;side<=1;side+=2){Vector3 p=(l[i]+r[i])*.5f;p.x+=side*(riverWidth+R(4,10));p.z+=R(-6,6);p.y=HeightInternal(p.x,p.z);Tree(Detail(p),p,R(5,9));}
         }
+        /// <summary>Player spawn and extraction offsets from the starter town, kept clear of buildings.</summary>
+        public static readonly Vector3 HomeSpawnOffset=new Vector3(-8,0,-12),HomeExtractionOffset=new Vector3(12,0,-10);
+        // Asphalt half-width of the widest route, its gravel shoulder and a margin for awnings and bumpers.
+        const float RoadKeepOut=7+2.6f+1.2f;
+        readonly List<Quaternion> townFrames=new List<Quaternion>();static readonly float[] LotShift={0,5,-5};readonly List<List<Vector4>> townLots=new List<List<Vector4>>();
         void BuildTowns()
         {
-            for(int n=0;n<Towns.Count;n++){Vector3 c=Towns[n];c.y=HeightInternal(c.x,c.z);Towns[n]=c;Transform town=Group(n==0?"Starter town • 117 Junction":"Route town "+(n+1),transform,Vector3.zero);Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true).GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;int buildings=n==0?7:4+n%3;
-                for(int i=0;i<buildings;i++){float side=i%2==0?-1:1;Vector3 p=c+new Vector3(side*(18+R(0,5)),0,(i/2-1)*14);p.y=HeightInternal(p.x,p.z);Building(town,p,R(7,12),R(7,13),i+n);}
-                for(int k=0;k<10;k++){Vector3 q=c+new Vector3(k%2==0?-30:30,0,-22+(k/2)*10);q.y=HeightAt(q);if(k%3==0)RoadsideProps.Barrel(town,q,Rust,true);else RoadsideProps.Crate(town,q,1.2f);}
-                Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));RoadsideProps.Cactus(town,c+new Vector3(27,0,-18),1.4f);
+            for(int n=0;n<Towns.Count;n++){Vector3 c=Towns[n];c.y=HeightInternal(c.x,c.z);Towns[n]=c;Transform town=Group(n==0?"Starter town • 117 Junction":"Route town "+(n+1),transform,Vector3.zero);
+                // The main street follows a road leaving this town, so storefronts line the road instead of sitting in it.
+                Vector2 street=StreetDirection(XZ(c));Quaternion frame=Quaternion.LookRotation(new Vector3(street.x,0,street.y),Vector3.up);townFrames.Add(frame);
+                var pad=Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true);pad.transform.localRotation=frame;pad.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;int buildings=n==0?7:4+n%3;var lots=new List<Vector4>();townLots.Add(lots);
+                for(int i=0;i<buildings;i++){float side=i%2==0?-1:1,w=R(7,12),d=R(7,13),offset=18+R(0,5);Quaternion facing=frame*Quaternion.Euler(0,side*90,0);
+                    // Other routes cross town at their own angles; step lots back from them, or leave the lot empty.
+                    for(int attempt=0;attempt<9;attempt++){float lx=side*(offset+attempt/3*6),lz=(i/2-1)*14+LotShift[attempt%3];
+                        if(LotTaken(lots,lx,lz,w,d))continue;
+                        Vector3 p=c+frame*new Vector3(lx,0,lz);if(!LotClear(p,facing,w,d,n))continue;lots.Add(new Vector4(lx,d,lz,w));p.y=HeightInternal(p.x,p.z);Building(town,p,facing,w,d,i+n);break;}}
+                for(int k=0;k<10;k++){float px=k%2==0?-30:30,pz=-22+(k/2)*10;Vector3 q=c+frame*new Vector3(px,0,pz);if(RoadDistance(XZ(q))<RoadKeepOut||LotTaken(lots,px,pz,1.5f,1.5f))continue;q.y=HeightAt(q);if(k%3==0)RoadsideProps.Barrel(town,q,Rust,true);else RoadsideProps.Crate(town,q,1.2f);}
+                Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));Vector3 cactus=c+frame*new Vector3(27,0,-18);if(RoadDistance(XZ(cactus))>=RoadKeepOut&&!LotTaken(lots,27,-18,1.5f,1.5f))RoadsideProps.Cactus(town,cactus,1.4f);
             }
             BuildTownDetail();
         }
-        void Building(Transform parent,Vector3 at,float w,float d,int i)
+        /// <summary>Heading of the first route leaving a town, measured a short way out so the curve is respected.</summary>
+        Vector2 StreetDirection(Vector2 town)
         {
-            var p=Group("Town blueprint / business "+i,parent,at);float h=R(3.2f,5.4f);
+            foreach(var route in routes)
+            {
+                if((route.a-town).sqrMagnitude<1){Vector2 d=RoutePoint(route,.04f)-route.a;if(d.sqrMagnitude>.01f)return d.normalized;}
+                if((route.b-town).sqrMagnitude<1){Vector2 d=RoutePoint(route,.96f)-route.b;if(d.sqrMagnitude>.01f)return d.normalized;}
+            }
+            return Vector2.up;
+        }
+        /// <summary>Frame-local lot overlap. Lots store (x, depth, z, width): width runs along the street, depth away from it.</summary>
+        static bool LotTaken(List<Vector4> lots,float x,float z,float w,float d)=>lots.Exists(l=>Mathf.Abs(l.z-z)<(l.w+w)*.5f+1&&Mathf.Abs(l.x-x)<(l.y+d)*.5f+1);
+        /// <summary>True when a building footprint, including its front awning, stays off every road and spawn point.</summary>
+        bool LotClear(Vector3 at,Quaternion facing,float w,float d,int town)
+        {
+            for(int x=0;x<=2;x++)for(int z=0;z<=2;z++)
+            {
+                Vector3 local=new Vector3((x-1)*w*.5f,0,Mathf.Lerp(-d*.5f-1.2f,d*.5f,z*.5f));
+                Vector3 p=at+facing*local;
+                if(RoadDistance(XZ(p))<RoadKeepOut)return false;
+            }
+            if(town==0)foreach(Vector3 keep in new[]{HomeSpawnOffset,HomeExtractionOffset})
+            {
+                Vector3 local=Quaternion.Inverse(facing)*(Towns[0]+keep-at);
+                if(Mathf.Abs(local.x)<w*.5f+5&&local.z>-d*.5f-6&&local.z<d*.5f+5)return false;
+            }
+            return true;
+        }
+        void Building(Transform parent,Vector3 at,Quaternion facing,float w,float d,int i)
+        {
+            var p=Group("Town blueprint / business "+i,parent,at);p.localRotation=facing;float h=R(3.2f,5.4f);
             Color c=i%3==0?new Color(.61f,.27f,.15f):i%3==1?new Color(.30f,.42f,.39f):new Color(.72f,.60f,.40f);
             var shell=Box("Stucco roadside business",p,Vector3.up*h*.5f,new Vector3(w,h,d),c,true);ApplyWall(shell,c,(i*5+8)%WallTextureSet.TextureCount,new Vector3(w,h,d));
             Box("Sun bleached roof",p,Vector3.up*(h+.14f),new Vector3(w+1,.28f,d+1),Cream);
@@ -86,6 +126,8 @@ namespace MadeInArizona
         public float SceneryClearance(Vector3 p)
         {
             float c=Mathf.Min(RoadDistance(XZ(p))-9,TownDistance(XZ(p))-38);
+            // Grass may brush a trail edge; larger plants (clearance 3) stand a few metres back.
+            c=Mathf.Min(c,TrailEdgeDistance(XZ(p))+.3f);
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
             return c;
         }
@@ -110,6 +152,7 @@ namespace MadeInArizona
                 Vector3 p=new Vector3(Mathf.Lerp(-half,half,x/(float)(res-1)),0,Mathf.Lerp(-half,half,y/(float)(res-1)));
                 Color c=BiomeColor(p)*Mathf.Lerp(.65f,1.2f,Mathf.InverseLerp(-amp*.3f,amp,RawHeight(p.x,p.z)));c.a=1;
                 if(riverWidth>0&&Mathf.Abs(p.x-RiverX(p.z))<riverWidth)c=new Color(.05f,.48f,.57f);
+                if(TrailEdgeDistance(XZ(p))<2)c=Color.Lerp(c,new Color(.72f,.55f,.36f),.75f);
                 if(RoadDistance(XZ(p))<7)c=new Color(.86f,.68f,.38f);
                 if(!Contains(p))c=Color.clear;px[y*res+x]=c;
             }
@@ -129,6 +172,7 @@ namespace MadeInArizona
             if(!Active)return SurfaceKind.Dirt;
             if(Active.RoadDistance(XZ(p))<9 || Active.TownDistance(XZ(p))<34)return SurfaceKind.Asphalt;
             if(Active.riverWidth>0&&Mathf.Abs(p.x-Active.RiverX(p.z))<Active.riverWidth)return SurfaceKind.Water;
+            if(Active.TrailEdgeDistance(XZ(p))<0)return SurfaceKind.Dirt;
             float n=Mathf.InverseLerp(-Active.half,Active.half,p.z);
             return n<Active.cfg.biomeThresholds.lowland?SurfaceKind.Sand:n>Active.cfg.biomeThresholds.highland?SurfaceKind.Rocks:SurfaceKind.Dirt;
         }
@@ -138,7 +182,10 @@ namespace MadeInArizona
             float river=Mathf.Abs(x-RiverX(z));
             if(riverWidth>0&&river<riverWidth*2.2f)h=Mathf.Lerp(RawHeight(RiverX(z),z)-4.5f,h,Mathf.SmoothStep(0,1,river/(riverWidth*2.2f)));
             float roadHeight;float rd=NearestRoad(p,out roadHeight);
-            if(rd<18)h=Mathf.Lerp(roadHeight,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(7,18,rd)));
+            // Terrain is linear between grid vertices, so any triangle touching the road must be fully graded
+            // or its raised corners poke through the asphalt. Grade the road, shoulders and one cell diagonal.
+            float graded=RoadKeepOut+size/(Chunks*Cells)*1.42f,blend=graded+Mathf.Max(11,size/(Chunks*Cells)*1.5f);
+            if(rd<blend)h=Mathf.Lerp(roadHeight,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(graded,blend,rd)));
             float td=TownDistance(p);
             if(td<65)h=Mathf.Lerp(Towns[TownIndex(p)].y,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(45,65,td)));
             return h;

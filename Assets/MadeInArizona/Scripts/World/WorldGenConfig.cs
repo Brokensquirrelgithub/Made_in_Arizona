@@ -18,6 +18,7 @@ namespace MadeInArizona
         public float terrainHeight = 65f;
         public float vegetation = 1f;
         public float riverWidth = 10f;
+        public float trailDensity = 1f;
         public BiomeThresholds biomeThresholds = new BiomeThresholds();
         public List<WorldPin> pins = new List<WorldPin>();
 
@@ -53,6 +54,11 @@ namespace MadeInArizona
             if (!Finite(riverWidth) || riverWidth < 0f || riverWidth > 30f)
             {
                 error = "riverWidth must be finite, non-negative, and no more than 30 metres.";
+                return false;
+            }
+            if (!Finite(trailDensity) || trailDensity < 0f || trailDensity > 3f)
+            {
+                error = "trailDensity must be a finite value from 0 to 3.";
                 return false;
             }
             if (biomeThresholds == null)

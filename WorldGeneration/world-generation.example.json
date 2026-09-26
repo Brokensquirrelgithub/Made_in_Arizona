@@ -6,6 +6,7 @@
   "terrainHeight": 65.0,
   "vegetation": 1.0,
   "riverWidth": 10.0,
+  "trailDensity": 1.0,
   "biomeThresholds": { "lowland": 0.28, "scrub": 0.52, "highland": 0.76 },
   "pins": []
 }

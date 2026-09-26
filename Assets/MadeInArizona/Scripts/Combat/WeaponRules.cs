@@ -7,7 +7,10 @@ namespace MadeInArizona
     {
         public static bool GarageWeapon(string id) => id == "riveter" || id == "sweeper" || id == "carbine" || id == "shredder" || id == "pothole";
         public static int ScrapCost(string id) => id == "sweeper" ? 12 : id == "carbine" ? 20 : id == "shredder" ? 14 : id == "pothole" ? 18 : 0;
-        public static int PickupAmmo(string id)
+        /// <summary>Enemy drops carry three magazines' worth of the base loadout below.</summary>
+        public const int DropAmmoMultiplier = 3;
+        public static int PickupAmmo(string id) => BaseAmmo(id) * DropAmmoMultiplier;
+        static int BaseAmmo(string id)
         {
             switch (id)
             {

@@ -30,6 +30,7 @@ namespace MadeInArizona
         bool ended, midwaySaid, finalStand, collecting;
         GameObject marker;
         VehicleController escort, suspect, boss;
+        const float EscortSpeedMultiplier=3;
         readonly List<GameObject> cacheMarkers=new List<GameObject>();
         readonly List<Vector3> cachePositions=new List<Vector3>();
         GameManager Game { get { return GameManager.Instance; } }
@@ -105,7 +106,8 @@ namespace MadeInArizona
                     escort=Spawn(Game.World.PlayerSpawn+new Vector3(5,0,12),2);
                     if(escort)
                     {
-                        escort.Damage.Repair(10000);escort.Stats.maxSpeed=42;escort.Stats.horsepower*=.65f;
+                        // Three times the van's former 50 km/h pace, with the power to reach it.
+                        escort.Damage.Repair(10000);escort.Stats.maxSpeed=50*EscortSpeedMultiplier;escort.Stats.horsepower*=.65f*EscortSpeedMultiplier;escort.Stats.torque*=EscortSpeedMultiplier;
                         var ai=escort.GetComponent<EnemyAI>();if(ai){ai.IsFriendly=true;escort.Damage.ApplyHealthTuning();ai.UseDestination=true;ai.Destination=Point(0);}
                     }
                     SetObjective("Escort the evidence van • stay within 32 m",Point(0));SpawnWave(3,Point(0));break;

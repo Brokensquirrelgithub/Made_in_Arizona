@@ -17,6 +17,8 @@ namespace MadeInArizona
         public float LastDamageTime { get; private set; } = float.NegativeInfinity;
         public Vector3 LastDamagePoint { get; private set; }
         public GameObject LastDamageSource { get; private set; }
+        /// <summary>Share of maximum health removed by the most recent hit, for player hurt feedback.</summary>
+        public float LastDamageFraction { get; private set; }
 
         public void Initialize(VehicleController owner, float health)
         {
@@ -69,6 +71,12 @@ namespace MadeInArizona
             {
                 Transmission = Mathf.Max(0, Transmission - componentDamage * .9f);
                 Engine = Mathf.Max(0, Engine - componentDamage * .4f);
+            }
+            LastDamageFraction=(previousHealth-Health)/Mathf.Max(1,MaxHealth);
+            if (vehicle.IsPlayer)
+            {
+                AudioManager.Instance?.PlayHurt(LastDamageFraction);
+                CameraController.Instance?.Shake(Mathf.Clamp(.06f+LastDamageFraction*3f,.06f,.6f));
             }
             if (Health <= 0) Die(source);
             CombatFeedback.ReportHit(vehicle,previousHealth-Health,hitPoint,source,IsDead);

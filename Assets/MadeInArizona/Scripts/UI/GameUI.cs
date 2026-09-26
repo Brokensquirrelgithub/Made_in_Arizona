@@ -59,7 +59,7 @@ namespace MadeInArizona
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
                 if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
                 if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 7 : settingsPage == 1 ? 6 : 14;
+                int rowCount = settingsPage == 0 ? 8 : settingsPage == 1 ? 6 : 14;
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -341,8 +341,9 @@ namespace MadeInArizona
             Bar(objX + 20, 149, 416, 4, game.Mission.Progress, Lime);
             Rect(28, height - 194, 365, 166, Ink);
             Text(48, height - 177, 330, 26, game.CurrentVehicle.displayName.ToUpperInvariant(), 16, Cream, true);
-            Bar(48, height - 134, 240, 10, p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth), p.Damage.Health / p.Damage.MaxHealth > .3f ? Lime : Orange);
-            Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", 14, Cream, true);
+            DrawHealthBar(p, 48, height - 136, 240, 14);
+            bool critical = p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth) < CriticalHealth;
+            Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
             Text(48, height - 78, 320, 30, p.SpeedKph.ToString("000") + " KM/H     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
@@ -361,7 +362,7 @@ namespace MadeInArizona
                 Text(410, height - 180, 530, 27, p.Weapons.FieldWeapon ?
                     (padControls ? "Y" : "F") + " SWAP FOR " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
                     "DRIVE OVER " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() + " TO EQUIP", 16, Lime, true);
-            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    LB REPAIR    B BRAKE    Y SWAP" : "SHIFT BOOST    R REPAIR    SPACE BRAKE    F SWAP", 12, Cream, true);
+            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    LB REPAIR    B DRIFT    Y SWAP" : "SHIFT BOOST    R REPAIR    SPACE DRIFT    F SWAP", 12, Cream, true);
             if (game.Mission.Combo > 1) Text(28, 136, 320, 43, "×" + game.Mission.Combo + "  INSURANCE EVENT", 23, Orange, true);
             Text(28, 185, 320, 30, game.Mission.Score.ToString("N0") + "  DAMAGE CLAIM", 17, Cream, true);
             DrawMinimap(width - 216, height - 228, 188);
@@ -423,9 +424,7 @@ namespace MadeInArizona
                 CombatLine(point+new Vector2(9,-9),point+new Vector2(3,-3),3,Lime);
             }
             if(Time.time-CombatFeedback.LastKillTime<1.1f)Text(width*.5f-160,180,320,35,"HOSTILE VEHICLE DISABLED",19,Lime,true,TextAnchor.MiddleCenter);
-            if(Time.time-game.Player.Damage.LastDamageTime<.35f) {
-                Color hurt=new Color(1,.16f,.04f,.3f);Rect(0,0,width,5,hurt);Rect(0,height-5,width,5,hurt);Rect(0,0,5,height,hurt);Rect(width-5,0,5,height,hurt);
-            }
+            DrawDamageFeedback(game.Player);
             if(InputManager.Instance.UsingGamepad) {
                 Vector2 aim=InputManager.Instance.Aim;
                 Vector2 point=ScreenPoint(game.Player.transform.position+new Vector3(aim.x,0,aim.y)*14+Vector3.up*.8f);
@@ -528,6 +527,7 @@ namespace MadeInArizona
                 SettingLabel(x, y + 466, "CAMERA SHAKE", 4); s.shake = Slider(x + 465, y + 466, 426, s.shake, 0, 1);
                 SettingLabel(x, y + 519, "INTERFACE SCALE", 5); s.uiScale = Slider(x + 465, y + 519, 426, s.uiScale, .85f, 1.2f);
                 SettingLabel(x, y + 572, "SUBTITLES", 6); if (Button(x + 465, y + 567, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
+                SettingLabel(x, y + 625, "DYNAMIC CAMERA ZOOM", 7); if (Button(x + 465, y + 620, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
             }
             if (settingsPage == 1) {
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
@@ -537,15 +537,15 @@ namespace MadeInArizona
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 2) {
-                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space handbrake / Shift boost / R repair / Esc pause", 18);
-                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, LB repair, B handbrake, A interact, Start pause.", 18, Muted);
+                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / R repair / Esc pause", 18);
+                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, LB repair, B drift, A interact, Start pause.", 18, Muted);
                 Tag(x + 35, y + 368, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
                     float bx = x + 35 + i % 4 * 215, by = y + 401 + i / 4 * 59;
                     string action = i < 4 ? "Move" : actions[i];
                     int binding = i < 4 ? i + 1 : 0;
                     if (InputManager.Instance.UsingGamepad) binding = InputManager.Instance.Actions.FindAction(action).bindings.Count - 1;
-                    if (Button(bx, by, 202, 45, actions[i].ToUpperInvariant() + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 2)) BeginControlRebind(i);
+                    if (Button(bx, by, 202, 45, (action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant()) + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 2)) BeginControlRebind(i);
                 }
                 SettingLabel(x, y + 602, "AIM ASSIST", 0);
                 if (Button(x + 465, y + 597, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
@@ -586,6 +586,7 @@ namespace MadeInArizona
                 if (menuFocus == 4) s.shake = Mathf.Clamp01(s.shake + .1f * direction);
                 if (menuFocus == 5) s.uiScale = Mathf.Clamp(s.uiScale + .05f * direction, .85f, 1.2f);
                 if (menuFocus == 6) s.subtitles = !s.subtitles;
+                if (menuFocus == 7) s.dynamicZoom = !s.dynamicZoom;
             } else if (settingsPage == 1) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);

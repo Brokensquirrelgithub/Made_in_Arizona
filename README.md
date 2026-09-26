@@ -12,7 +12,7 @@ From the main menu, choose a **seed** and **map width (0.8–3.2 km)**, then cli
 
 For immediate vehicle combat, choose **Combat Trial** in Dispatch or press **F2** / gamepad **X** from the garage. Fight two waves of three vehicles using your selected build. The trial has its own replay and does not award money or advance the campaign.
 
-Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-colored Courtesy Compliance controls roads with mines and mortars; green Road Scavengers rush with shotguns and miniguns. Coral Open House Realty circles you like a persistent agent, zoning with mines and rockets. Pale blue Snowbird Convoys are slower, tougher rolling roadblocks with mines and shotguns. Purple Car Otaku Club cars make fast flanking passes with miniguns, rams, and precision shots. The combat trial introduces three factions in each wave; missions, hideouts, and road patrols use their own mixes. Each crew has its own weapon drops. Warning lines show committed special attacks; move across the line to dodge. Destroyed enemies sometimes drop repair, nitro, scrap, or a weapon. Drive over supplies to collect them. Drive over a weapon to equip an empty field slot, or press **F / Y** nearby to swap your current field weapon. Enemy labels hint at the field weapons they may drop. Stronger and stranger weapons have limited ammunition. Green hit marks confirm damage and a banner confirms a disabled hostile vehicle.
+Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-colored Courtesy Compliance controls roads with mines and mortars; green Road Scavengers rush with shotguns and miniguns. Coral Open House Realty circles you like a persistent agent, zoning with mines and rockets. Pale blue Snowbird Convoys are slower, tougher rolling roadblocks with mines and shotguns. Purple Car Otaku Club cars make fast flanking passes with miniguns, rams, and precision shots. The combat trial introduces three factions in each wave; missions, hideouts, and road patrols use their own mixes. Each crew has its own weapon drops. Warning lines show committed special attacks; move across the line to dodge. Destroyed enemies sometimes drop repair, nitro, scrap, or a weapon. Drive over supplies to collect them. Every destroyed hostile drops a weapon from its crew, carrying three magazines of ammunition. Drive over a weapon to equip an empty field slot, or press **F / Y** nearby to swap your current field weapon; a drop of the weapon you already carry is pulled to your car and added to your ammo. Hostiles left off screen close the gap quickly, then fight at normal pace once visible. Enemy labels hint at the field weapons they may drop. Stronger and stranger weapons have limited ammunition. Green hit marks confirm damage and a banner confirms a disabled hostile vehicle.
 
 ## Controls
 
@@ -23,7 +23,7 @@ Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-c
 | Garage weapon | Left mouse | Right trigger |
 | Field weapon pickup | Right mouse | Left trigger |
 | Swap field weapon | F near a drop | Y near a drop |
-| Handbrake | Space | B |
+| Drift | Space | B |
 | Boost | Left Shift | Right shoulder |
 | Field repair | R | Left shoulder |
 | Recover marked objective | E | A |
@@ -33,11 +33,11 @@ Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-c
 | Garage station | Tab | LB / RB |
 | Garage selection / confirm | Mouse / Enter | D-pad / A |
 
-The car turns toward your movement input while the turret aims independently. At low speed, hold a direction behind the car to engage reverse and back away from a wall; push ahead to return to forward drive. Release movement to brake; use the handbrake to rotate. Field repair and boost recharge, while larger enemy supply drops pull toward the car from within 12 metres. Weapon drops stay anchored for deliberate pickup and swapping. Buy garage weapons with scrap and choose one for the right trigger. The left trigger is reserved for enemy weapon drops. Suzuki is always safe.
+The car turns toward your movement input while the turret aims independently. At low speed, hold a direction behind the car to engage reverse and back away from a wall; push ahead to return to forward drive. Release movement to brake; hold drift while steering to flick the tail out and slide through corners without scrubbing much speed (tune it under Dev Tuning → Drift). Field repair and boost recharge, while enemy drops let you recover in the middle of a fight; supply drops pull toward the car from within 12 metres. Weapon drops stay anchored for deliberate pickup and swapping. Buy garage weapons with scrap and choose one for the right trigger. The left trigger is reserved for enemy weapon drops. Suzuki is always safe.
 
 ## Generated world
 
-The wilderness now uses dense streamed grass, shrubs, branching trees, stones, boulders, flowers and deadwood, with wind and small bird flocks. Roads have smooth curves, gravel shoulders and worn markings; towns have detailed storefronts and lot clutter.
+The wilderness now uses dense streamed grass, shrubs, branching trees, stones, boulders, flowers and deadwood, with wind and small bird flocks. Roads have smooth curves, gravel shoulders and worn markings; a web of dirt roads, two-track trails and footpaths of varying width winds between them, linking every point of interest. Towns have storefronts lining their main street and lot clutter.
 
 Towns are charted; off-road secrets reveal as you approach. Press **E** near specialty salvage. Open **M** to place a waypoint and craft weapon improvements using recovered alloy, circuits and propellant. Northern hideouts are stronger; drivetrain, suspension and weapon upgrades help with difficult terrain and fights.
 
@@ -59,7 +59,7 @@ The streamed wilderness uses the Pandazole Nature pack with batched conifers, br
 - Nine terrain types, localized component damage, garage and limited-ammo field weapons, enemy supply drops, tactical enemy archetypes, destructible structures/props, nine explosion profiles, bounded debris and projectile pools.
 - Suzuki the white husky with four cosmetics, discoveries, achievements, a Wonton Destruction food truck, a 14-track supplied soundtrack, imported weapon recordings and synthesized engine/interface effects.
 - HDR bloom, normal-mapped surfaces, fur backlighting, garage light shafts, blast heat shimmer, animated six-way-lit smoke/fire using Unity’s free fluid samples, lingering embers, and layered engine/exhaust sound.
-- Saved progression/settings, keyboard/controller rebinding, audio sliders, subtitles, aim assist, difficulty, shake/UI scale, window/resolution controls and four graphics presets including **Arizona Summer**.
+- Saved progression/settings, keyboard/controller rebinding, audio sliders, subtitles, aim assist, dynamic camera zoom (Settings → Display; pulls back when a hostile nears the screen edge), difficulty, shake/UI scale, window/resolution controls and four graphics presets including **Arizona Summer**.
 
 ## Scope and development
 

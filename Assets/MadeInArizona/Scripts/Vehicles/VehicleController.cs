@@ -21,6 +21,10 @@ namespace MadeInArizona
         public float DriftAmount { get; private set; }
         public bool Grounded { get; private set; }
         public int Gear { get; private set; } = 1;
+        /// <summary>0–1 blend of the player's drift handling; eases out over the tuned recovery time.</summary>
+        public float DriftBlend { get; private set; }
+        /// <summary>AI pace multiplier on acceleration and top speed, raised by EnemyAI to catch up from off screen.</summary>
+        public float Pace { get; set; } = 1;
         Vector2 aiMove;
         Vector3 aiAim = Vector3.forward;
         bool aiFire;
@@ -28,6 +32,8 @@ namespace MadeInArizona
         Vector3 preCollisionVelocity;
         float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown;
         int driveDirection = 1;
+        bool wasDrifting;
+        float paceSettleUntil;
         Transform[] wheels;
         readonly Vector3[] suspensionPoints = new Vector3[4];
         readonly RaycastHit[] groundHits = new RaycastHit[12];
@@ -123,7 +129,8 @@ namespace MadeInArizona
                 Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; return;
             }
             Vector2 input = IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
-            bool braking = IsPlayer && InputManager.Instance != null && InputManager.Instance.Handbrake;
+            bool drifting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Drift;
+            var tuning = DevTuning.Current;
             bool boosting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Boost && BoostCharge > .03f && input.sqrMagnitude > .1f;
             Throttle = Mathf.MoveTowards(Throttle, input.magnitude, Time.fixedDeltaTime * 6);
             Grounded = SupportSuspension();
@@ -131,6 +138,9 @@ namespace MadeInArizona
             float forwardSpeed = Vector3.Dot(planar, transform.forward);
             float lateralSpeed = Vector3.Dot(planar, transform.right);
             float speed = planar.magnitude;
+            // Drift engages quickly and hands grip back over the tuned recovery time so exits feel controllable.
+            DriftBlend = drifting && speed > 3 ? Mathf.MoveTowards(DriftBlend, 1, Time.fixedDeltaTime / .08f)
+                : Mathf.MoveTowards(DriftBlend, 0, Time.fixedDeltaTime / Mathf.Max(.05f, tuning.driftRecovery));
             SurfaceKind surface = WorldBuilder.SurfaceAt(transform.position);
             float surfaceGrip = SurfaceGrip(surface);
             float wheelGrip = Mathf.Lerp(.5f, 1f, Damage.Wheels);
@@ -151,12 +161,15 @@ namespace MadeInArizona
                 float lockPenalty = Stats.differential == Differential.Locked ? .84f : 1;
                 float turnRate = Mathf.Clamp(Stats.turnSpeed, 35, 240) * LowSpeedTurnMultiplier(speed) * handling * lockPenalty;
                 if (IsPlayer) turnRate *= DevTuning.Current.steering;
-                if (braking) turnRate *= 1.4f;
+                turnRate *= Mathf.Lerp(1, Mathf.Max(1, tuning.driftYaw), DriftBlend);
                 float yaw = steering * turnRate * Mathf.Deg2Rad;
+                // Pressing drift while steering flicks the tail out, like a handbrake entry without losing speed.
+                if (drifting && !wasDrifting && Grounded && speed > 6 && Mathf.Abs(steering) > .15f)
+                    Body.AddTorque(Vector3.up * Mathf.Sign(steering) * tuning.driftKick * Mathf.Deg2Rad, ForceMode.VelocityChange);
                 float steeringResponse = Mathf.Lerp(12, 8, Mathf.Clamp01(speed / 8));
                 if (Grounded) Body.AddTorque(Vector3.up * (yaw - Body.angularVelocity.y) * steeringResponse, ForceMode.Acceleration);
                 float alignment = Mathf.Clamp01((180 - Mathf.Abs(angle)) / 110);
-                float targetThrottle = Throttle * Mathf.Lerp(.2f, 1, alignment);
+                float targetThrottle = Throttle * Mathf.Lerp(.2f, 1, alignment) * Mathf.Lerp(1, tuning.driftThrottle, DriftBlend);
                 float wheelRPM = Mathf.Abs(forwardSpeed) / (2 * Mathf.PI * .34f) * 60;
                 if (driveDirection < 0) Gear = 1;
                 float ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
@@ -172,9 +185,10 @@ namespace MadeInArizona
                 acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * drivetrain;
                 if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
+                if (!IsPlayer) acceleration *= Pace;
                 if (boosting) { acceleration *= 1.65f; BoostCharge -= Time.fixedDeltaTime * .22f; }
                 else BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .075f * Mathf.Max(.25f, Stats.cooling));
-                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1);
+                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
                 float directionalAcceleration = driveDirection < 0 ? acceleration * .78f : acceleration;
@@ -191,13 +205,21 @@ namespace MadeInArizona
             }
             if (Grounded)
             {
-                float lateralDamping = braking ? .85f : Mathf.Clamp(grip * 5.5f, 1.5f, 12);
+                float lateralDamping = Mathf.Lerp(Mathf.Clamp(grip * 5.5f, 1.5f, 12), tuning.driftGrip, DriftBlend);
                 if (Stats.drivetrain == Drivetrain.RWD && Throttle > .8f && speed < 15) lateralDamping *= .8f;
                 Body.AddForce(-transform.right * lateralSpeed * lateralDamping, ForceMode.Acceleration);
-                if (braking) Body.AddForce(-planar * 2.4f, ForceMode.Acceleration);
+                if (DriftBlend > 0 && speed > 1) Body.AddForce(-planar / speed * tuning.driftSpeedLoss * DriftBlend, ForceMode.Acceleration);
+                // After a catch-up burst ends, AI settles back to its normal top speed instead of coasting in fast.
+                if (!IsPlayer && Pace > 1.01f) paceSettleUntil = Time.time + 2.5f;
+                if (!IsPlayer && Time.time < paceSettleUntil)
+                {
+                    float cap = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Pace * 1.05f;
+                    if (speed > cap) Body.AddForce(-planar / speed * Mathf.Min(10, (speed - cap) * 1.5f), ForceMode.Acceleration);
+                }
                 if (surface == SurfaceKind.Water || surface == SurfaceKind.Mud) Body.AddForce(-planar * .65f, ForceMode.Acceleration);
             }
             DriftAmount = Mathf.Clamp01(Mathf.Abs(lateralSpeed) / 12);
+            wasDrifting = drifting;
             if(GeneratedWorld.Active)
             {
                 if(!GeneratedWorld.Contains(transform.position) || transform.position.y<GeneratedWorld.HeightAt(transform.position)-12)

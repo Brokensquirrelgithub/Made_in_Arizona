@@ -113,7 +113,7 @@ namespace MadeInArizona
                 Weapon(1,"invoice","Past-Due Rocket","A rare high-explosive notice. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f)),
                 Weapon(2,"sweeper","Shop-floor Sweeper","Garage shotgun. Eight close-range pellets; clear a path through a crowd.",10,1.7f,96,0,new Color(.3f,1,1)),
                 Weapon(3,"carbine","Surveyor Carbine","Garage precision rifle. Accurate sustained fire at medium range.",24,4.2f,135,0,new Color(.85f,1,.55f)),
-                Weapon(4,"grenade","Mailbox Grenadier","Arcing demolition rounds for clustered cars and barricades.",65,1.3f,43,5,new Color(1,.65f,.18f)),
+                Weapon(4,"grenade","Mailbox Grenadier","Arcing demolition rounds for clustered cars and barricades.",195,1.3f,43,10,new Color(1,.65f,.18f)),
                 Weapon(5,"mortar","HOA Mortar","A slow long-range shell with a very rude landing.",145,.55f,42,10,new Color(1,.24f,.18f)),
                 Weapon(6,"mines","Lien Mines","Drop charges behind the car; punish pursuers and narrow roads.",105,1.2f,0,6,new Color(1,.48f,.1f)),
                 Weapon(7,"minigun","Circular Saw Minigun","A short-range storm of scrap. Chase a target and hold the line.",8,20,105,0,new Color(1,.92f,.32f)),

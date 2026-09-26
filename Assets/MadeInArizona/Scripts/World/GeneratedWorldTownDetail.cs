@@ -66,21 +66,23 @@ namespace MadeInArizona
 
         void AddTownEdgeClutter(SceneryMesh mesh,Vector3 townCenter,int townIndex,System.Random random)
         {
-            // Side and rear lots stay outside the storefront/road corridor around local z=0.
+            // Side and rear lots sit behind the storefronts in the town's street frame, and skip any road crossing them.
+            Quaternion frame=townIndex<townFrames.Count?townFrames[townIndex]:Quaternion.identity;
             for(int side=-1;side<=1;side+=2)
             {
                 float x=side*(34+LivingWorldDetail.Next(random,0,4));
                 for(int panel=0;panel<3;panel++)
                 {
-                    float z=-18+panel*7;Vector3 a=TownLocalGround(townCenter,new Vector3(x,0,z));
+                    float z=-18+panel*7;
+                    if(!TownLot(townIndex,townCenter,frame,new Vector3(x,0,z),out Vector3 a)||!TownLot(townIndex,townCenter,frame,new Vector3(x,0,z+6),out _))continue;
                     mesh.Tube(a,a+Vector3.up*1.15f,.055f,.045f,new Color(.35f,.28f,.20f),5);
-                    for(int rail=0;rail<2;rail++)mesh.Tube(a+Vector3.up*(.35f+rail*.52f),a+new Vector3(0,.35f+rail*.52f,6),.035f,.035f,new Color(.42f,.31f,.21f),5);
+                    for(int rail=0;rail<2;rail++)mesh.Tube(a+Vector3.up*(.35f+rail*.52f),a+frame*new Vector3(0,.35f+rail*.52f,6),.035f,.035f,new Color(.42f,.31f,.21f),5);
                 }
-                Vector3 garden=TownLocalGround(townCenter,new Vector3(x-side*2.5f,0,13));
+                if(!TownLot(townIndex,townCenter,frame,new Vector3(x-side*2.5f,0,13),out Vector3 garden))continue;
                 for(int k=0;k<7;k++)mesh.Rock(garden+new Vector3(LivingWorldDetail.Next(random,-2.2f,2.2f),0,LivingWorldDetail.Next(random,-1.6f,1.6f)),Vector3.one*LivingWorldDetail.Next(random,.18f,.48f),new Color(.52f,.34f,.22f),random);
                 if(side>0||townIndex%2==0)mesh.Cactus(garden+new Vector3(0,0,.3f),LivingWorldDetail.Next(random,1.5f,2.5f),random);
             }
-            Vector3 dump=TownLocalGround(townCenter,new Vector3(townIndex%2==0?-31:31,0,27));
+            if(!TownLot(townIndex,townCenter,frame,new Vector3(townIndex%2==0?-31:31,0,27),out Vector3 dump))return;
             // Pallets, cans and scrap are one colored mesh, clustered at a back-lot fence rather than scattered in traffic.
             for(int slat=0;slat<6;slat++)TownBox(mesh,dump+new Vector3((slat-2.5f)*.32f,.06f,0),new Vector3(.25f,.12f,1.25f),new Color(.40f,.27f,.15f));
             mesh.Tube(dump+new Vector3(2,.06f,.2f),dump+new Vector3(2.4f,.55f,.65f),.15f,.11f,new Color(.37f,.31f,.25f),7);
@@ -88,9 +90,12 @@ namespace MadeInArizona
             TownBox(mesh,dump+new Vector3(-1.8f,.38f,.25f),new Vector3(.85f,.76f,.72f),new Color(.28f,.34f,.31f));
         }
 
-        Vector3 TownLocalGround(Vector3 townCenter,Vector3 offset)
+        /// <summary>Grounded world point for a lot offset in the town's street frame; false when a road or building occupies it.</summary>
+        bool TownLot(int townIndex,Vector3 townCenter,Quaternion frame,Vector3 offset,out Vector3 point)
         {
-            Vector3 point=townCenter+offset;point.y=HeightAt(point)+.025f;return point;
+            point=townCenter+frame*offset;point.y=HeightAt(point)+.025f;
+            if(townIndex<townLots.Count&&LotTaken(townLots[townIndex],offset.x,offset.z,2,2))return false;
+            return RoadDistance(XZ(point))>=RoadKeepOut-2;
         }
 
         static void TownBox(SceneryMesh mesh,Vector3 c,Vector3 s,Color color)
