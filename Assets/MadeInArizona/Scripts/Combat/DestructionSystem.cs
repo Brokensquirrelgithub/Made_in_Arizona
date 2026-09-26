@@ -35,7 +35,10 @@ namespace MadeInArizona
                 if (material != null && material.HasProperty("_BaseColor")) color = material.GetColor("_BaseColor");
             }
             foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
-            GameManager.Instance?.Mission?.RegisterDestruction(score, bounds.center);
+            // Hostiles plough through scenery too; only the player's (or unattributed) destruction earns score.
+            var sourceCar = source ? source.GetComponentInParent<VehicleController>() : null;
+            bool hostileCaused = sourceCar && !sourceCar.IsPlayer;
+            if (!hostileCaused) GameManager.Instance?.Mission?.RegisterDestruction(score, bounds.center);
             float scale = Mathf.Clamp(bounds.size.magnitude, 1, 12);
             ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color);
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);
@@ -44,7 +47,7 @@ namespace MadeInArizona
                 float radius = Kind == ExplosionKind.FuelTank ? 12 : Kind == ExplosionKind.Massive ? 22 : Kind == ExplosionKind.Propane ? 8 : Kind == ExplosionKind.Electrical ? 7 : 6;
                 ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind);
             }
-            GetComponent<WorldDiscovery>()?.OnDestroyed(source);
+            if (!hostileCaused) GetComponent<WorldDiscovery>()?.OnDestroyed(source);
             Destroy(gameObject, .05f);
         }
         public bool TryDestroyFromVehicle(float amount, Vector3 hitPoint, GameObject source, out bool smallProp)

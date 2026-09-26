@@ -262,7 +262,7 @@ namespace MadeInArizona
                 Color dust = surface == SurfaceKind.Water ? new Color(.38f, .65f, .7f, .5f) : new Color(.7f, .49f, .28f, .4f);
                 if (surface != SurfaceKind.Asphalt || DriftAmount > .18f) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
-            if (IsPlayer) SweepScenery(speed);
+            SweepScenery(speed);
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
@@ -358,8 +358,8 @@ namespace MadeInArizona
             var other = collision.collider.GetComponentInParent<VehicleDamage>();
             // VehicleDamage refuses non-explosive damage between vehicles on the same side, so crews never ram-kill each other.
             if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3), point, gameObject);
-            // The player is never hurt by landing on, scraping or bottoming out against the ground.
-            if (!(IsPlayer && IsGroundContact(collision, other, prop))) Damage.ApplyDamage(Mathf.Max(0, force - 11) * .5f, point, collision.gameObject);
+            // No vehicle is hurt by landing on, scraping or bottoming out against the ground.
+            if (!IsGroundContact(collision, other, prop)) Damage.ApplyDamage(Mathf.Max(0, force - 11) * .5f, point, collision.gameObject);
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);
             if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(force / 28) * .25f);
         }
@@ -373,7 +373,7 @@ namespace MadeInArizona
             return collision.contactCount > 0;
         }
 
-        // ---- Scenery sweep (player only) ----
+        // ---- Scenery sweep (every vehicle; hostiles get the same small-obstacle rules as the player) ----
         // Props smaller than half the car are driven straight through (and knocked apart); props between half and
         // the full car length break away without costing speed while the car is moving briskly. Anything as large
         // as the car stays solid and uses ordinary collision.

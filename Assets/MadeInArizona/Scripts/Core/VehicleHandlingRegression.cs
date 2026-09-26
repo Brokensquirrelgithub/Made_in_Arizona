@@ -55,6 +55,32 @@ namespace MadeInArizona
             Release(keyboard);
             check("small breakable retains driving momentum", breakableDamage == null && player.transform.position.z > origin.z + 6f && player.Body.linearVelocity.z > 10f);
 
+            // Hostiles use the same small-obstacle rules: they drive through without damage, and earn the player no score.
+            var shrub = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            shrub.name = "Handling regression enemy-lane breakable";
+            shrub.transform.SetParent(arena.transform);
+            shrub.transform.position = origin + new Vector3(-9, .05f, -3);
+            shrub.transform.localScale = new Vector3(1, 1.1f, 1);
+            var shrubDamage = shrub.AddComponent<DestructionSystem>();
+            shrubDamage.Configure(1, ExplosionKind.Gasoline, false, 25);
+            var enemy = SpawnManager.Spawn(origin + new Vector3(-9, .6f, -12), 0, player);
+            var enemyAI = enemy ? enemy.GetComponent<EnemyAI>() : null;
+            if (enemyAI) enemyAI.enabled = false;
+            int destroyedBefore = game.Mission.DestructionCount;
+            if (enemy)
+            {
+                enemy.transform.rotation = Quaternion.identity;
+                yield return new WaitForFixedUpdate();
+                float enemyHealth = enemy.Damage.Health;
+                enemy.Body.linearVelocity = Vector3.forward * 14f;
+                enemy.SetAIInput(Vector2.up, Vector3.forward, false);
+                yield return new WaitForSeconds(.8f);
+                check("hostile drives through small scenery without damage", shrubDamage == null && enemy.transform.position.z > origin.z - 3 && Mathf.Approximately(enemy.Damage.Health, enemyHealth));
+                check("hostile-smashed scenery earns the player no score", game.Mission.DestructionCount == destroyedBefore);
+                UnityEngine.Object.Destroy(enemy.gameObject);
+            }
+            else check("hostile spawns for scenery regression", false);
+
             var rock = RoadsideProps.Rock(arena.transform, origin + Vector3.right * 8, Vector3.one * 1.5f);
             var rockDamage = rock.GetComponent<DestructionSystem>();
             rockDamage.ApplyDamage(50, rock.position, player.gameObject);
