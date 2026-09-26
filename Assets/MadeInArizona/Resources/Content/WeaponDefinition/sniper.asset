@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: sniper
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: sniper
-  displayName: Long Receipt
-  description: An uncommon accurate precision shot for distant weak points.
+  displayName: '.50 Cal Weed Whacker'
+  description: 'A trimmer motor spinning up a fifty-calibre slug. One accurate, brutal shot.'
+  role: 'LONG-RANGE PRECISION'
+  strength: 'Enormous single hits from across the map.'
+  weakness: 'Slow to cycle; nearly useless against a swarm on your bumper.'
   contentOrder: 8
   damage: 155
   fireRate: 0.65

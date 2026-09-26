@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: mortar
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: mortar
-  displayName: HOA Mortar
-  description: A slow long-range shell with a very rude landing.
+  displayName: 'Propane-Tank Mortar'
+  description: 'A propane tank with the bottom cut off and a very rude landing.'
+  role: 'LONG-RANGE ARTILLERY'
+  strength: 'Hits from beyond the enemy''s reach.'
+  weakness: 'Long flight time; useless up close; three rounds a drop.'
   contentOrder: 5
   damage: 145
   fireRate: 0.55

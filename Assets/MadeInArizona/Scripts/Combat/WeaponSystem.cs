@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MadeInArizona
@@ -105,63 +106,156 @@ namespace MadeInArizona
                 weapon.id == "invoice" ? WorldExploration.PlayerWeaponMultiplier(1) :
                 weapon.id == "sweeper" ? WorldExploration.PlayerWeaponMultiplier(2) : 1;
             float damage = weapon.damage * multiplier;
-            if (weapon.id == "mines")
-                FieldOrdnance.PlaceMine(owner, weapon, damage);
-            else if (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole")
-                FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage, 0,
-                    owner.IsPlayer ? AcquireLobTarget(aimDirection, weapon) : null);
-            else if (weapon.id == "sweeper" || weapon.id == "boomstick")
+            GameObject source = owner.gameObject;
+            Color color = weapon.projectileColor;
+            switch (weapon.id)
             {
-                int pellets = weapon.id == "boomstick" ? 12 : 8;
-                for (int i = 0; i < pellets; i++)
+                case "mines": FieldOrdnance.PlaceMine(owner, weapon, damage); break;
+                case "grenade": case "mortar": case "pothole": case "sprinkler": case "shopvac":
+                    FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage, 0, owner.IsPlayer ? AcquireLobTarget(aimDirection, weapon) : null);
+                    break;
+                case "sweeper": case "boomstick":
+                    Pellets(weapon, muzzle, damage, weapon.id == "boomstick" ? 12 : 8, weapon.id == "boomstick" ? 3.2f : 3.7f, weapon.id == "boomstick" ? .33f : .42f, false);
+                    break;
+                case "firecracker": Pellets(weapon, muzzle, damage * .4f, 9, 4.2f, .45f, true); break;
+                case "shredder":
+                    for (int i = -1; i <= 1; i++)
+                        ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(i * 9 + Random.Range(-1f, 1f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.15f,
+                            new ShotFx { pierce = 1 });
+                    break;
+                case "cluster":
+                    for (int i = -1; i <= 1; i++)
+                        ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(i * 8, Vector3.up) * aimDirection, weapon.speed, damage, weapon.blastRadius, source, color, ExplosionKind.Rocket, 2.6f);
+                    break;
+                case "needler":
+                    ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(Random.Range(-3f, 3f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.6f,
+                        new ShotFx { homing = AcquireTarget(aimDirection, 75, 32), turnRate = 170, effect = ShotEffect.Spine, power = 110, effectRadius = 4.5f });
+                    break;
+                case "zapper":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Electrical, .6f,
+                        new ShotFx { effect = ShotEffect.Stall, duration = 1.1f, chain = 2, castRadius = .3f });
+                    break;
+                case "torch":
+                    ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(Random.Range(-7f, 7f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, .42f,
+                        new ShotFx { effect = ShotEffect.Burn, power = 28, duration = 3, flame = true, castRadius = .35f });
+                    break;
+                case "railgun": Railgun(weapon, muzzle, damage); break;
+                case "deathray": DeathRay(weapon, muzzle, damage); break;
+                case "aircannon":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, .5f,
+                        new ShotFx { effect = ShotEffect.Knockback, power = 15, castRadius = .9f });
+                    ExplosionSystem.Burst(muzzle + aimDirection, new Color(.85f, .85f, .8f, .55f), 8, 6);
+                    break;
+                case "pinata":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, weapon.blastRadius, source, color, ExplosionKind.Rocket, 2.2f,
+                        new ShotFx { bomblets = 7, bombletDamage = 28, bombletRadius = 3.2f });
+                    break;
+                case "crossbow":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.1f,
+                        new ShotFx { effect = ShotEffect.Sticky, duration = 1.1f, power = 130, effectRadius = weapon.blastRadius });
+                    break;
+                case "bowling": FieldOrdnance.Roll(owner, muzzle, aimDirection, weapon, damage); break;
+                case "boomerang":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.7f,
+                        new ShotFx { boomerang = true, returnAfter = .55f, castRadius = .45f });
+                    break;
+                case "harpoon":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1,
+                        new ShotFx { effect = ShotEffect.Harpoon, power = 17, duration = .6f, castRadius = .25f });
+                    break;
+                case "sentry": FieldOrdnance.DeploySentry(owner, weapon, damage); break;
+                case "gokart": FieldOrdnance.LaunchGoKart(owner, weapon, damage); break;
+                default:
                 {
-                    Vector3 spread = Quaternion.AngleAxis((i - (pellets - 1) * .5f) * (weapon.id == "boomstick" ? 3.2f : 3.7f) + Random.Range(-.85f, .85f), Vector3.up) * aimDirection;
-                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, weapon.id == "boomstick" ? .33f : .42f);
+                    float spread = weapon.id == "minigun" ? Random.Range(-4f, 4f) : weapon.id == "sniper" ? 0 : Random.Range(-.7f, .7f);
+                    Vector3 shot = Quaternion.AngleAxis(spread, Vector3.up) * aimDirection;
+                    float radius = weapon.id == "invoice" && owner.IsPlayer ? weapon.blastRadius * WorldExploration.PlayerRocketRadiusMultiplier() : weapon.blastRadius;
+                    ProjectileSystem.Fire(muzzle, shot, weapon.speed, damage, radius, source, color,
+                        weapon.blastRadius > 0 ? ExplosionKind.Rocket : ExplosionKind.Ammunition,
+                        weapon.id == "sniper" ? 3 : weapon.id == "minigun" ? .65f : 1.5f);
+                    break;
                 }
             }
-            else if (weapon.id == "shredder")
-            {
-                for (int i = -1; i <= 1; i++)
-                {
-                    Vector3 spread = Quaternion.AngleAxis(i * 9 + Random.Range(-1f, 1f), Vector3.up) * aimDirection;
-                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, 1.15f);
-                }
-            }
-            else if (weapon.id == "cluster")
-            {
-                for (int i = -1; i <= 1; i++)
-                {
-                    Vector3 spread = Quaternion.AngleAxis(i * 8, Vector3.up) * aimDirection;
-                    ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, weapon.blastRadius, owner.gameObject, weapon.projectileColor, ExplosionKind.Rocket, 2.6f);
-                }
-            }
-            else
-            {
-                float spread = weapon.id == "minigun" ? Random.Range(-4f, 4f) : weapon.id == "sniper" ? 0 : Random.Range(-.7f, .7f);
-                Vector3 shot = Quaternion.AngleAxis(spread, Vector3.up) * aimDirection;
-                float radius = weapon.id == "invoice" && owner.IsPlayer ? weapon.blastRadius * WorldExploration.PlayerRocketRadiusMultiplier() : weapon.blastRadius;
-                ProjectileSystem.Fire(muzzle, shot, weapon.speed, damage, radius, owner.gameObject, weapon.projectileColor,
-                    weapon.blastRadius > 0 ? ExplosionKind.Rocket : ExplosionKind.Ammunition,
-                    weapon.id == "sniper" ? 3 : weapon.id == "minigun" ? .65f : 1.5f);
-            }
-            ExplosionSystem.Burst(muzzle, weapon.projectileColor, weapon.id == "mines" ? 2 : 4, 1);
-            Flash(weapon.projectileColor, weapon.id == "mortar" ? 14 : 7, weapon.id == "minigun" ? .035f : .09f);
+            bool quiet = weapon.id == "mines" || weapon.id == "sentry" || weapon.id == "gokart" || weapon.id == "deathray" || weapon.id == "torch";
+            ExplosionSystem.Burst(muzzle, color, quiet ? 2 : 4, 1);
+            Flash(color, weapon.id == "mortar" || weapon.id == "railgun" ? 14 : 7, weapon.id == "minigun" || weapon.id == "deathray" || weapon.id == "torch" ? .035f : weapon.id == "railgun" ? .2f : .09f);
             AudioManager.Instance?.PlayShot(muzzle, weapon);
-            if (owner.IsPlayer && weapon.blastRadius > 0) CameraController.Instance?.Shake(.1f);
+            if (owner.IsPlayer && (weapon.blastRadius > 0 || weapon.id == "railgun")) CameraController.Instance?.Shake(weapon.id == "railgun" ? .2f : .1f);
         }
+        void Pellets(WeaponDefinition weapon, Vector3 muzzle, float damage, int pellets, float spacing, float lifetime, bool firecrackers)
+        {
+            for (int i = 0; i < pellets; i++)
+            {
+                Vector3 spread = Quaternion.AngleAxis((i - (pellets - 1) * .5f) * spacing + Random.Range(-.85f, .85f), Vector3.up) * aimDirection;
+                ProjectileSystem.Fire(muzzle, spread, weapon.speed, damage, 0, owner.gameObject, weapon.projectileColor, ExplosionKind.Ammunition, lifetime,
+                    firecrackers ? new ShotFx { effect = ShotEffect.Pop, power = weapon.damage, effectRadius = weapon.blastRadius } : null);
+            }
+        }
+        /// <summary>Arc-welder railgun: an instant bolt that damages every hostile car on the line.</summary>
+        void Railgun(WeaponDefinition weapon, Vector3 muzzle, float damage)
+        {
+            Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, 140, owner.gameObject, true, damage * .5f, scanHits);
+            foreach (var hit in scanHits)
+            {
+                hit.collider.GetComponentInParent<VehicleDamage>()?.ApplyDamage(damage, hit.point, owner.gameObject);
+                ExplosionSystem.Burst(hit.point, weapon.projectileColor, 16, 6);
+            }
+            WeaponFx.Beam(muzzle, end, weapon.projectileColor, .32f, .35f);
+            WeaponFx.Lightning(muzzle, end, Color.white, .12f);
+            ExplosionSystem.Burst(end, weapon.projectileColor, 10, 4);
+        }
+        /// <summary>
+        /// Satellite-dish death ray: a short-range beam whose damage builds from 1× to 4× over two seconds of
+        /// continuous contact with the same car.
+        /// </summary>
+        void DeathRay(WeaponDefinition weapon, Vector3 muzzle, float damage)
+        {
+            Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, 48, owner.gameObject, false, damage * 2, scanHits);
+            VehicleController target = scanHits.Count > 0 ? scanHits[0].collider.GetComponentInParent<VehicleController>() : null;
+            float gap = Time.time - rayLastShot; rayLastShot = Time.time;
+            rayHeat = target && target == rayTarget && gap < .3f ? Mathf.Min(1, rayHeat + gap / 2) : 0;
+            rayTarget = target;
+            if (target)
+            {
+                var hit = scanHits[0];
+                target.Damage.ApplyDamage(damage * Mathf.Lerp(1, 4, rayHeat * rayHeat), hit.point, owner.gameObject);
+                ExplosionSystem.Burst(hit.point, Color.Lerp(weapon.projectileColor, new Color(1, .4f, .1f), rayHeat), 2 + Mathf.RoundToInt(rayHeat * 5), 2 + rayHeat * 3);
+            }
+            WeaponFx.Beam(muzzle, end, Color.Lerp(weapon.projectileColor, new Color(1, .45f, .15f), rayHeat), Mathf.Lerp(.08f, .3f, rayHeat), .1f);
+        }
+        readonly List<RaycastHit> scanHits = new List<RaycastHit>();
+        VehicleController rayTarget; float rayHeat, rayLastShot;
         Vector3 Muzzle(Vector3 direction)
         {
             if (muzzleTransform != null) return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);
             return transform.position + Vector3.up * .85f + direction * 2.4f;
         }
-        static bool Lobbed(WeaponDefinition weapon) => weapon && (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole");
+        static bool Lobbed(WeaponDefinition weapon) => weapon && (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole" || weapon.id == "sprinkler" || weapon.id == "shopvac");
+        static bool LobbedGarage(WeaponDefinition weapon) => Lobbed(weapon) && WeaponRules.GarageWeapon(weapon.id);
+        /// <summary>Nearest hostile inside the aim cone, for homing spines.</summary>
+        VehicleController AcquireTarget(Vector3 direction, float range, float cone)
+        {
+            if (!owner || !owner.IsPlayer) return null;
+            Vector3 flatAim = Vector3.ProjectOnPlane(direction, Vector3.up);
+            if (flatAim.sqrMagnitude < .01f) flatAim = Vector3.ProjectOnPlane(owner.transform.forward, Vector3.up);
+            flatAim.Normalize();
+            VehicleController best = null; float bestScore = float.MaxValue;
+            foreach (var candidate in VehicleController.Active)
+            {
+                if (!ValidLobTarget(candidate, flatAim, range, cone)) continue;
+                Vector3 delta = Vector3.ProjectOnPlane(candidate.transform.position - owner.transform.position, Vector3.up);
+                float score = Vector3.Angle(flatAim, delta) / cone * 1.45f + delta.magnitude / range;
+                if (score < bestScore) { bestScore = score; best = candidate; }
+            }
+            return best;
+        }
         VehicleController AcquireLobTarget(Vector3 direction, WeaponDefinition weapon)
         {
             if (!owner || !owner.IsPlayer || !Lobbed(weapon)) return null;
             Vector3 flatAim = Vector3.ProjectOnPlane(direction, Vector3.up);
             if (flatAim.sqrMagnitude < .01f) flatAim = Vector3.ProjectOnPlane(owner.transform.forward, Vector3.up);
             flatAim.Normalize();
-            float range = weapon.id == "mortar" ? 125 : weapon.id == "grenade" ? 72 : 58;
+            float range = weapon.id == "mortar" ? 125 : weapon.id == "grenade" || weapon.id == "sprinkler" || weapon.id == "shopvac" ? 72 : 58;
             float cone = weapon.id == "mortar" ? 42 : 34;
             if (ValidLobTarget(lobTarget, flatAim, range * 1.15f, cone + 14) && Time.time <= lobTargetUntil) return lobTarget;
             VehicleController best = null; float bestScore = float.MaxValue;
@@ -187,19 +281,20 @@ namespace MadeInArizona
         }
         void UpdateLobMarker()
         {
-            if (!owner || !owner.IsPlayer || !Lobbed(FieldWeapon)) { SetLobMarker(false); lobTarget = null; return; }
-            var target = AcquireLobTarget(aimDirection, FieldWeapon);
+            var lobbed = Lobbed(FieldWeapon) ? FieldWeapon : LobbedGarage(GarageWeapon) ? GarageWeapon : null;
+            if (!owner || !owner.IsPlayer || !lobbed) { SetLobMarker(false); lobTarget = null; return; }
+            var target = AcquireLobTarget(aimDirection, lobbed);
             if (!target) { SetLobMarker(false); return; }
-            Vector3 point = FieldOrdnance.PredictLandingPoint(target, Muzzle(aimDirection), FieldWeapon);
+            Vector3 point = FieldOrdnance.PredictLandingPoint(target, Muzzle(aimDirection), lobbed);
             EnsureLobMarker();
             lobMarker.enabled = true;
-            float ring = Mathf.Clamp(FieldWeapon.blastRadius * .42f, 1.8f, 4.2f);
+            float ring = Mathf.Clamp(lobbed.blastRadius * .42f, 1.8f, 4.2f);
             for (int i = 0; i < lobMarker.positionCount; i++)
             {
                 float a = i / (float)lobMarker.positionCount * Mathf.PI * 2;
                 lobMarker.SetPosition(i, point + new Vector3(Mathf.Cos(a) * ring, .22f, Mathf.Sin(a) * ring));
             }
-            Color color = FieldWeapon.projectileColor;
+            Color color = lobbed.projectileColor;
             lobMarker.startColor = new Color(color.r, color.g, color.b, .92f);
             lobMarker.endColor = lobMarker.startColor;
         }
@@ -221,7 +316,7 @@ namespace MadeInArizona
             if (muzzleFlash == null) return;
             muzzleFlash.color = color; muzzleFlash.intensity = intensity;
         }
-        bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying;
+        bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying && !VehicleAfflictions.Stalled(owner);
         void OnDestroy() { if (lobMarkerMaterial) Destroy(lobMarkerMaterial); }
     }
 }

@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: minigun
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: minigun
-  displayName: Circular Saw Minigun
-  description: A short-range storm of scrap. Chase a target and hold the line.
+  displayName: 'Lawnmower Gatling'
+  description: 'Six barrels spun by a pull-start mower engine. A short-range storm of scrap.'
+  role: 'SUPPRESSION'
+  strength: 'Overwhelming close-range damage while you hold the line.'
+  weakness: 'Wild spread and a hungry belt: ammunition drains fast.'
   contentOrder: 7
   damage: 8
   fireRate: 20

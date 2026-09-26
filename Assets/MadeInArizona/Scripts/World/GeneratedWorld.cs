@@ -15,7 +15,9 @@ namespace MadeInArizona
         public int Seed=>seed;
         const int Chunks=8,Cells=48;
         static readonly Vector2[] Outline={new Vector2(-.47f,.49f),new Vector2(.45f,.49f),new Vector2(.49f,.18f),new Vector2(.48f,-.48f),new Vector2(-.08f,-.48f),new Vector2(-.47f,-.18f),new Vector2(-.43f,.08f),new Vector2(-.50f,.12f)};
-        static readonly Vector2[] TownPlan={new Vector2(-.06f,-.25f),new Vector2(.20f,-.04f),new Vector2(-.20f,.09f),new Vector2(.10f,.27f),new Vector2(-.28f,.31f),new Vector2(.30f,.34f)};
+        // Normalised town sites inside the outline; the first MinTowns are always used.
+        static readonly Vector2[] TownPlan={new Vector2(-.06f,-.25f),new Vector2(.20f,-.04f),new Vector2(-.20f,.09f),new Vector2(.10f,.27f),new Vector2(-.28f,.31f),new Vector2(.30f,.34f),new Vector2(.38f,-.03f),new Vector2(.24f,-.33f),new Vector2(-.31f,-.09f),new Vector2(.02f,.43f)};
+        public static int MaxTowns=>TownPlan.Length;
         WorldGenConfig cfg;System.Random rng;int seed,townCount,poiCount;float size,half,amp,riverWidth;
         readonly List<Route> routes=new List<Route>();readonly List<Transform> details=new List<Transform>();readonly Dictionary<long,SurfaceKind> surfaceCache=new Dictionary<long,SurfaceKind>();
         float[,] heights;
@@ -26,20 +28,56 @@ namespace MadeInArizona
 
         public void Configure(WorldGenConfig config,Transform parent)
         {
-            cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,2,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
+            cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
             Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
-        void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));
+        void Plan()
+        {
+            for(int i=0;i<townCount;i++)
+            {
+                Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));
+                // Keep jittered towns apart so their pads, lots and graded aprons never merge.
+                for(int pass=0;pass<4;pass++)foreach(var other in Towns){Vector2 o=XZ(other)/size,d=n-o;if(d.magnitude<.15f)n=o+(d.sqrMagnitude>1e-6f?d.normalized:Vector2.right)*.15f;}
+                if(!InOutline(n))n=TownPlan[i];
+                Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);
+            }
+            PlanRoutes();
             // Elevation levels depend on the planned towns and routes (cliffs keep clear of both), so heights follow.
-            PrepareElevation();for(int i=0;i<Towns.Count;i++){Vector3 t=Towns[i];t.y=RawHeight(t.x,t.z);Towns[i]=t;}}
+            PrepareElevation();for(int i=0;i<Towns.Count;i++){Vector3 t=Towns[i];t.y=RawHeight(t.x,t.z);Towns[i]=t;}
+        }
+        /// <summary>
+        /// Highways form a minimum spanning tree over the towns (short, non-crossing links that reach every town),
+        /// plus the classic starter links 0-1, 0-2 and 1-3 so the opening jobs keep direct roads.
+        /// </summary>
+        void PlanRoutes()
+        {
+            var linked=new HashSet<long>();
+            var inTree=new List<int>{0};
+            while(inTree.Count<Towns.Count)
+            {
+                int bestA=-1,bestB=-1;float best=float.MaxValue;
+                foreach(int a in inTree)for(int b=0;b<Towns.Count;b++){if(inTree.Contains(b))continue;float d=(XZ(Towns[a])-XZ(Towns[b])).sqrMagnitude;if(d<best){best=d;bestA=a;bestB=b;}}
+                if(bestB<0)break;Link(linked,bestA,bestB,14);inTree.Add(bestB);
+            }
+            Link(linked,0,1,14);Link(linked,0,2,11);Link(linked,1,3,10);
+        }
+        void Link(HashSet<long> linked,int a,int b,float width)
+        {
+            if(a==b||a>=Towns.Count||b>=Towns.Count)return;
+            long key=a<b?(long)a<<32|(uint)b:(long)b<<32|(uint)a;
+            if(linked.Add(key))routes.Add(new Route(XZ(Towns[a]),XZ(Towns[b]),width));
+        }
+        // Road queries only need exact answers near a road: grading, scenery clearance and surfaces all use short radii.
+        readonly SegmentGrid roadIndex=new SegmentGrid(32,64);
         void BakeRoutes()
         {
             foreach(var route in routes)for(int i=0;i<64;i++)
             {
                 Vector2 a=RoutePoint(route,i/64f),b=RoutePoint(route,(i+1)/64f);
-                segments.Add(new Segment{a=a,b=b,ha=RawHeight(a.x,a.y),hb=RawHeight(b.x,b.y)});
+                var segment=new Segment{a=a,b=b,ha=RawHeight(a.x,a.y),hb=RawHeight(b.x,b.y)};
+                segments.Add(segment);roadIndex.Add(segment.a,segment.b,segment.ha,segment.hb);
             }
         }
         void BuildTerrain()
@@ -47,6 +85,10 @@ namespace MadeInArizona
             terrainRoot=Group("Chunked terrain",transform,Vector3.zero);props=Group("Streamed ecology",transform,Vector3.zero);roads=Group("Road and river network",transform,Vector3.zero);float cs=size/Chunks;int grid=Chunks*Cells;float step=size/grid;heights=new float[grid+1,grid+1];
             for(int z=0;z<=grid;z++)for(int x=0;x<=grid;x++)heights[x,z]=HeightInternal(-half+x*step,-half+z*step);
             EnsureReachable(step);
+            // The terrain shader tints by altitude so the elevation levels read from the top-down camera.
+            float low=float.MaxValue,top=float.MinValue;
+            for(int z=0;z<=grid;z+=2)for(int x=0;x<=grid;x+=2){if(!InsideVertex(x,z,step))continue;low=Mathf.Min(low,heights[x,z]);top=Mathf.Max(top,heights[x,z]);}
+            if(low<top)Shader.SetGlobalVector("_ElevationRange",new Vector4(low,top,1,0));
             for(int cz=0;cz<Chunks;cz++)for(int cx=0;cx<Chunks;cx++){float x0=-half+cx*cs,z0=-half+cz*cs;var v=new Vector3[(Cells+1)*(Cells+1)];var uv=new Vector2[v.Length];
                 for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){float wx=x0+x*cs/Cells,wz=z0+z*cs/Cells;int k=z*(Cells+1)+x;v[k]=new Vector3(wx,heights[cx*Cells+x,cz*Cells+z],wz);uv[k]=new Vector2(wx/12,wz/12);}
                 var tri=new List<int>();for(int z=0;z<Cells;z++)for(int x=0;x<Cells;x++){int a=z*(Cells+1)+x,b=a+1,c=a+Cells+1,d=c+1;if(Contains((v[a]+v[c]+v[b])/3)){tri.Add(a);tri.Add(c);tri.Add(b);}if(Contains((v[b]+v[c]+v[d])/3)){tri.Add(b);tri.Add(c);tri.Add(d);}}
@@ -176,7 +218,11 @@ namespace MadeInArizona
             for(int y=0;y<res;y++)for(int x=0;x<res;x++)
             {
                 Vector3 p=new Vector3(Mathf.Lerp(-half,half,x/(float)(res-1)),0,Mathf.Lerp(-half,half,y/(float)(res-1)));
-                Color c=BiomeColor(p)*Mathf.Lerp(.65f,1.2f,Mathf.InverseLerp(-amp*.3f,amp,RawHeight(p.x,p.z)));c.a=1;
+                float h=SampleHeight(p),e=size/(res-1);
+                Vector3 normal=new Vector3(h-SampleHeight(p+Vector3.right*e),e,h-SampleHeight(p+Vector3.forward*e)).normalized;
+                // Hillshade from the north-west makes level ramps and cliffs visible on the map.
+                float shade=Mathf.Lerp(.55f,1.25f,Mathf.Clamp01(Vector3.Dot(normal,new Vector3(-.5f,.7f,.5f).normalized)));
+                Color c=BiomeColor(p)*Mathf.Lerp(.72f,1.18f,Mathf.InverseLerp(-amp*.3f,amp,h))*shade;c.a=1;
                 if(riverWidth>0&&Mathf.Abs(p.x-RiverX(p.z))<riverWidth)c=new Color(.05f,.48f,.57f);
                 if(TrailEdgeDistance(XZ(p))<2)c=Color.Lerp(c,new Color(.72f,.55f,.36f),.75f);
                 if(RoadDistance(XZ(p))<7)c=new Color(.86f,.68f,.38f);
@@ -228,20 +274,9 @@ namespace MadeInArizona
         }
         float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+seed*.01f)*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
         Vector2 RoutePoint(Route r,float u){Vector2 p=Vector2.Lerp(r.a,r.b,u),d=(r.b-r.a).normalized,n=new Vector2(-d.y,d.x);return p+n*Mathf.Sin(u*Mathf.PI*2+(r.a.x+r.b.y)*.01f)*size*.016f*Mathf.Sin(u*Mathf.PI);}
-        float RoadDistance(Vector2 p){float h;return NearestRoad(p,out h);}
-        float RouteHeight(Vector2 p){float h;NearestRoad(p,out h);return h;}
-        float NearestRoad(Vector2 p,out float height)
-        {
-            float best=float.MaxValue;height=0;
-            foreach(var segment in segments)
-            {
-                Vector2 d=segment.b-segment.a;
-                float u=Mathf.Clamp01(Vector2.Dot(p-segment.a,d)/Mathf.Max(.01f,d.sqrMagnitude));
-                float sq=(segment.a+d*u-p).sqrMagnitude;
-                if(sq<best){best=sq;height=Mathf.Lerp(segment.ha,segment.hb,u);}
-            }
-            return Mathf.Sqrt(best);
-        }
+        /// <summary>Distance to the nearest road centre line; anything beyond 64 m reads as 65 m (every caller tests a shorter radius).</summary>
+        float RoadDistance(Vector2 p)=>roadIndex.Distance(p);
+        float NearestRoad(Vector2 p,out float height)=>roadIndex.Nearest(p,out height);
         float TownDistance(Vector2 p){float d=float.MaxValue;foreach(var t in Towns)d=Mathf.Min(d,Vector2.Distance(p,XZ(t)));return d;}int TownIndex(Vector2 p){int best=0;float d=float.MaxValue;for(int i=0;i<Towns.Count;i++){float n=(p-XZ(Towns[i])).sqrMagnitude;if(n<d){d=n;best=i;}}return best;}
         bool InOutline(Vector2 p){bool inside=false;for(int i=0,j=Outline.Length-1;i<Outline.Length;j=i++){Vector2 a=Outline[i],b=Outline[j];if((a.y>p.y)!=(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
         Vector3 RandomPoint()=>new Vector3(R(-half*.94f,half*.94f),0,R(-half*.92f,half*.94f));float R(float a,float b)=>Mathf.Lerp(a,b,(float)rng.NextDouble());static Vector2 XZ(Vector3 p)=>new Vector2(p.x,p.z);Transform Detail(Vector3 p){float cs=size/Chunks;int x=Mathf.Clamp(Mathf.FloorToInt((p.x+half)/cs),0,Chunks-1),z=Mathf.Clamp(Mathf.FloorToInt((p.z+half)/cs),0,Chunks-1);return details[z*Chunks+x];}

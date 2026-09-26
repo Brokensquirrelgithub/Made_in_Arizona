@@ -92,7 +92,7 @@ namespace MadeInArizona
                 if(suspect)
                 {
                     suspect.Stats.maxSpeed=55;suspect.Stats.horsepower*=.65f;
-                    var ai=suspect.GetComponent<EnemyAI>();if(ai){ai.UseDestination=true;ai.Destination=Point(1);}
+                    var ai=suspect.GetComponent<EnemyAI>();if(ai){ai.UseDestination=true;ai.FollowRoads=true;ai.Destination=Point(1);}
                 }
                 SetObjective("Pursue the stolen shop loaner to Half-Price Horizon Salvage",Point(0));
                 return;
@@ -103,12 +103,20 @@ namespace MadeInArizona
                     SpawnWave(Mathf.Max(3,mission.enemyCount/2),Point(0));
                     SetObjective("Break the repossession crew: destroy "+SpawnManager.EnemyCount(Mathf.Max(3,mission.enemyCount/2))+" vehicles",Point(0));break;
                 case MissionMode.Convoy:
-                    escort=Spawn(Game.World.PlayerSpawn+new Vector3(5,0,12),2);
+                    escort=Spawn(EscortStart(),2);
                     if(escort)
                     {
                         // Three times the van's former 50 km/h pace, with the power to reach it.
                         escort.Damage.Repair(10000);escort.Stats.maxSpeed=50*EscortSpeedMultiplier;escort.Stats.horsepower*=.65f*EscortSpeedMultiplier;escort.Stats.torque*=EscortSpeedMultiplier;
-                        var ai=escort.GetComponent<EnemyAI>();if(ai){ai.IsFriendly=true;escort.Damage.ApplyHealthTuning();ai.UseDestination=true;ai.Destination=Point(0);}
+                        // The van turns round rather than reversing, and follows the roads (never up a cliff) to each drop.
+                        escort.AutoReverse=false;
+                        var ai=escort.GetComponent<EnemyAI>();
+                        if(ai)
+                        {
+                            ai.IsFriendly=true;escort.Damage.ApplyHealthTuning();ai.UseDestination=true;ai.FollowRoads=true;ai.Destination=Point(0);
+                            ai.PlanRoute();Quaternion facing=Quaternion.LookRotation(ai.RouteHeading(),Vector3.up);
+                            escort.transform.rotation=facing;escort.Body.rotation=facing;
+                        }
                     }
                     SetObjective("Escort the evidence van • stay within 32 m",Point(0));SpawnWave(3,Point(0));break;
                 case MissionMode.Defense:
@@ -221,7 +229,7 @@ namespace MadeInArizona
             if(Stage==0)
             {
                 var ai=escort.GetComponent<EnemyAI>();bool close=Vector3.Distance(PlayerPosition,escort.transform.position)<32;
-                if(ai){ai.UseDestination=true;ai.Destination=close?Point(checkpoint):escort.transform.position;}
+                if(ai){ai.UseDestination=true;ai.Destination=Point(checkpoint);ai.HoldPosition=!close;}
                 ObjectivePosition=escort.transform.position;
                 Objective=(close?"ESCORT MOVING":"REGROUP WITH THE EVIDENCE VAN")+" • transfer "+(checkpoint+1)+" / 3 • hull "+Mathf.RoundToInt(EscortHealth*100)+"%";
                 Progress=checkpoint/3f*.8f;
@@ -229,7 +237,7 @@ namespace MadeInArizona
                 {
                     checkpoint++;Score+=350;AudioManager.Instance?.PlayUI();
                     if(checkpoint<3){SpawnWave(Mathf.Max(3,definition.enemyCount/3),Point(checkpoint));Midpoint();}
-                    else{SetStage(1);if(ai)ai.Destination=escort.transform.position;SetObjective("Evidence transferred • player return to extraction",Game.World.ExtractionPoint);}
+                    else{SetStage(1);if(ai)ai.HoldPosition=true;SetObjective("Evidence transferred • player return to extraction",Game.World.ExtractionPoint);}
                 }
             }
             else {Progress=.9f;TryExtract();}
@@ -308,6 +316,14 @@ namespace MadeInArizona
             marker=Game.World.CreateMarker(point,new Color(1,.76f,.15f),"OBJECTIVE");
         }
         void Midpoint(){if(midwaySaid)return;midwaySaid=true;DialogueSystem.Instance?.SayLine(definition.midpoint,13);}
+        /// <summary>The escort van starts on the road beside the starter town rather than in a lot or ditch.</summary>
+        Vector3 EscortStart()
+        {
+            Vector3 start=Game.World.PlayerSpawn+new Vector3(5,0,12);
+            var world=GeneratedWorld.Active;
+            if(world){Vector3 road=world.NearestPatrolRoad(start);if(Vector3.Distance(road,start)<40)start=road;}
+            return start;
+        }
         VehicleController Spawn(Vector3 position,int archetype)
         {
             if(GeneratedWorld.Active){position=TerrainPoint(position);position.y+=1;}

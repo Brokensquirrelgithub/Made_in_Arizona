@@ -150,6 +150,32 @@ namespace MadeInArizona
             var system = Get();
             if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind });
         }
+        /// <summary>
+        /// A small, immediate blast (firecracker pellets): sparks, a puff of flame and explosive damage to every car
+        /// and prop in <paramref name="radius"/>, without the flash, scorch, debris and chain queue of a full detonation.
+        /// </summary>
+        public static void Pop(Vector3 position, float radius, float damage, GameObject source, Color color)
+        {
+            var system = Get();
+            radius = Mathf.Clamp(radius, .5f, 4);
+            Burst(position, color * 1.6f, 10, radius * 2.2f);
+            Burst(position, new Color(.4f, .36f, .3f, .55f), 3, radius);
+            system.Emit(system.fire, position, Vector3.up, new Color(2, 1.1f, .35f), radius * 1.1f, .45f);
+            system.damagedVehicles.Clear(); system.damagedProps.Clear();
+            int count = Physics.OverlapSphereNonAlloc(position, radius, system.overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                var collider = system.overlaps[i]; if (collider == null) continue;
+                float falloff = Mathf.Lerp(.35f, 1, 1 - Mathf.Clamp01(Vector3.Distance(collider.bounds.ClosestPoint(position), position) / radius));
+                var vehicle = collider.GetComponentInParent<VehicleDamage>();
+                if (vehicle != null && system.damagedVehicles.Add(vehicle))
+                    vehicle.ApplyDamage(damage * falloff * (source != null && vehicle.gameObject == source ? .18f : 1), position, source, true);
+                var prop = collider.GetComponentInParent<DestructionSystem>();
+                if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source);
+            }
+            if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .06f; AudioManager.Instance?.PlayExplosion(position, 1.5f, ExplosionKind.Ammunition); }
+        }
+        float popSoundAt;
         public static void Burst(Vector3 position, Color color, int count, float speed)
         {
             var system = Get();
@@ -292,12 +318,12 @@ namespace MadeInArizona
                     ? collider.bounds.ClosestPoint(blast.point) : collider.ClosestPoint(blast.point);
                 float falloff = Mathf.Lerp(.15f, 1, 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / radius));
                 var weakpoint = collider.GetComponentInParent<BossWeakPoint>();
-                if (weakpoint != null && damagedPoints.Add(weakpoint)) weakpoint.ApplyDamage(blast.damage * falloff * .6f, point, blast.source);
+                if (weakpoint != null && damagedPoints.Add(weakpoint)) weakpoint.ApplyDamage(blast.damage * falloff * .6f, point, blast.source, true);
                 var vehicle = collider.GetComponentInParent<VehicleDamage>();
                 if (vehicle != null && damagedVehicles.Add(vehicle))
                 {
                     float self = blast.source != null && vehicle.gameObject == blast.source ? .18f : 1;
-                    vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source);
+                    vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source, true);
                 }
                 var prop = collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source);

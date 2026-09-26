@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: riveter
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: riveter
-  displayName: Belt-fed Riveter
-  description: 'Reliable mid-range automatic fire. Garage weapon; unlimited ammunition.'
+  displayName: 'Chain-Fed Nail Gun'
+  description: 'A framing nailer welded to a bicycle chain that feeds nails as fast as the pedals turn. Garage weapon; unlimited ammunition.'
+  role: 'ALL-ROUNDER AUTOMATIC'
+  strength: 'Steady damage at any sensible range and it never runs dry.'
+  weakness: 'Low damage per nail; the chain spreads its aim at long range.'
   contentOrder: 0
   damage: 12
   fireRate: 11

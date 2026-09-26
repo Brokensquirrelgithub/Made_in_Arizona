@@ -41,7 +41,8 @@ namespace MadeInArizona
             bool scrap = boss || Random.value < .65f;
             Vector3 origin = vehicle.transform.position;
             if (health) Create(PickupKind.Health, origin + new Vector3(-2, 0, -1), null, boss ? 120 : 55);
-            if (nitro) Create(PickupKind.Nitro, origin + new Vector3(2, 0, -1), null, boss ? 75 : 38);
+            // Percent of the (tripled) nitro tank; pickups are the only way to refill it.
+            if (nitro) Create(PickupKind.Nitro, origin + new Vector3(2, 0, -1), null, boss ? 50 : 18);
             if (scrap) Create(PickupKind.Scrap, origin + new Vector3(0, 0, 2), null, boss ? 8 : Random.Range(1, 4));
             // Every hostile drops a weapon from its crew's arsenal.
             var drop = WeaponRules.Find(WeaponRules.EnemyDrop(faction, archetype));
@@ -137,7 +138,7 @@ namespace MadeInArizona
             else if (Kind == PickupKind.Nitro)
             {
                 if (game.Player.BoostCharge >= .99f) return;
-                game.Player.RefillNitro(Amount * .01f); game.Notify("NITRO PICKUP • +" + Amount + "%");
+                game.Player.RefillNitro(Amount * .01f); game.Notify("N2O PICKUP • tank " + Mathf.RoundToInt(game.Player.BoostCharge * 100) + "%");
             }
             else
             {

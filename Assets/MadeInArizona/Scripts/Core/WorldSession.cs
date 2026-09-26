@@ -23,6 +23,20 @@ namespace MadeInArizona
             if(!WorldConfigStore.Save(WorldConfig)){Notify(WorldConfigStore.LastError);return;}
             StartCoroutine(GenerateCampaign(0));
         }
+        /// <summary>
+        /// Rolls a new seed and rebuilds the generated world. During a sortie the current job restarts on the new
+        /// map; garage progression, completed jobs and discoveries are kept.
+        /// </summary>
+        public void RegenerateWorld()
+        {
+            if(State==GameState.Generating)return;
+            int seed=UnityEngine.Random.Range(1,int.MaxValue);
+            bool inWorld=GeneratedWorld.Active&&(State==GameState.Playing||State==GameState.Paused)&&!IsCombatTrial;
+            if(!inWorld){StartCampaign(seed,WorldConfig.size);return;}
+            WorldConfig.seed=seed;
+            if(!WorldConfigStore.Save(WorldConfig)){Notify(WorldConfigStore.LastError);return;}
+            StartCoroutine(GenerateCampaign(SelectedMission));
+        }
         IEnumerator GenerateCampaign(int mission)
         {
             State=GameState.Generating;InputManager.Instance.SetEnabled(false);Time.timeScale=1;

@@ -11,8 +11,10 @@ namespace MadeInArizona
     [Serializable]
     public sealed class WorldGenConfig
     {
+        /// <summary>Every generated Arizona has at least this many towns; older configs asking for fewer are raised.</summary>
+        public const int MinTowns = 7, MaxTowns = 10;
         public int seed = 117;
-        public int townCount = 4;
+        public int townCount = MinTowns;
         public int poiCount = 18;
         public float size = 1600f;
         public float terrainHeight = 65f;
@@ -31,9 +33,9 @@ namespace MadeInArizona
                 return false;
             }
 
-            if (townCount < 2 || townCount > 6)
+            if (townCount < MinTowns || townCount > MaxTowns)
             {
-                error = "townCount must be between 2 and 6.";
+                error = "townCount must be between " + MinTowns + " and " + MaxTowns + ".";
                 return false;
             }
             if (poiCount < 4 || poiCount > 40)

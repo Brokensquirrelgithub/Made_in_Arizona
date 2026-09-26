@@ -41,16 +41,22 @@ namespace MadeInArizona
                 return DevTuning.Current.enemyHealth*(ai&&ai.IsFriendly?1f:SpawnManager.EnemyHealthMultiplier);
             }
         }
-        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source)
+        /// <summary>
+        /// Friendly fire: rounds, rams and burns never hurt a vehicle on the attacker's own side (hostile crews on each
+        /// other, or the player and the escort). Explosions hurt everyone, so pass <paramref name="explosive"/> for blasts.
+        /// </summary>
+        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false)
         {
             if (IsDead || amount <= 0 || vehicle == null) return;
+            var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
+            if (!explosive && attacker && attacker != vehicle && VehicleController.Allied(attacker, vehicle)) return;
             if (vehicle.IsPlayer && GameManager.Instance != null && GameManager.Instance.Save != null)
             {
                 int difficulty = GameManager.Instance.Save.settings.difficulty;
                 amount *= difficulty == 0 ? .55f : difficulty == 2 ? 1.2f : .85f;
             }
             if(vehicle.IsPlayer)amount*=DevTuning.Current.incomingDamage;
-            else if(source && source.GetComponentInParent<VehicleController>() is VehicleController attacker && attacker.IsPlayer) amount*=DevTuning.Current.playerDamage;
+            else if(attacker && attacker.IsPlayer) amount*=DevTuning.Current.playerDamage;
             if(amount<=0)return;
             float previousHealth=Health;
             LastDamageTime=Time.time;LastDamagePoint=hitPoint;LastDamageSource=source;
@@ -80,6 +86,38 @@ namespace MadeInArizona
             }
             if (Health <= 0) Die(source);
             CombatFeedback.ReportHit(vehicle,previousHealth-Health,hitPoint,source,IsDead);
+        }
+        /// <summary>
+        /// A destroyed car keeps its smoking shell but stops being an obstacle: it no longer collides with other
+        /// vehicles, and moves to the Ignore Raycast layer so shots, suspension, AI sight and blasts pass through it.
+        /// It still rests on the ground.
+        /// </summary>
+        void BecomeWreck()
+        {
+            foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = WreckLayer;
+            var own = GetComponentsInChildren<Collider>();
+            foreach (var other in VehicleController.Active)
+            {
+                if (!other || other == vehicle) continue;
+                foreach (var theirs in other.GetComponentsInChildren<Collider>())
+                    foreach (var mine in own) Physics.IgnoreCollision(mine, theirs, true);
+            }
+            // Weak points and other child colliders are decoration now; only the body keeps the shell on the ground.
+            var body = GetComponent<Collider>();
+            foreach (var mine in own) if (mine != body) mine.enabled = false;
+        }
+        public const int WreckLayer = 2;
+        /// <summary>New vehicles ignore wrecks that are still burning out.</summary>
+        public static void IgnoreWrecks(VehicleController vehicle)
+        {
+            if (!vehicle) return;
+            var colliders = vehicle.GetComponentsInChildren<Collider>();
+            foreach (var other in VehicleController.Active)
+            {
+                if (!other || other == vehicle || other.Damage == null || !other.Damage.IsDead) continue;
+                foreach (var wreck in other.GetComponentsInChildren<Collider>())
+                    foreach (var mine in colliders) Physics.IgnoreCollision(mine, wreck, true);
+            }
         }
         public void DamageComponent(string component, float amount)
         {
@@ -133,13 +171,17 @@ namespace MadeInArizona
                 foreach (var renderer in vehicle.Visual.GetComponentsInChildren<Renderer>())
                 {
                     var block = new MaterialPropertyBlock(); block.SetColor("_BaseColor", new Color(.13f, .11f, .1f));
-                    block.SetColor("_Color", new Color(.13f, .11f, .1f)); renderer.SetPropertyBlock(block);
+                    block.SetColor("_Color", new Color(.13f, .11f, .1f));
+                    // Burnt paint loses its clear coat and gloss.
+                    block.SetFloat("_ClearCoat", 0); block.SetFloat("_Smoothness", .12f); block.SetFloat("_Metallic", .05f);
+                    renderer.SetPropertyBlock(block);
                 }
             }
+            BecomeWreck();
             if (vehicle.IsPlayer) GameManager.Instance?.FailMission();
             else
             {
-                // Salvage is credited by MissionManager; a wreck stays briefly as physical cover.
+                // Salvage is credited by MissionManager; the wreck is visual only and burns out shortly.
                 Destroy(gameObject, 3.5f);
             }
         }

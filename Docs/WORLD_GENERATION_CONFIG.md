@@ -5,7 +5,7 @@
 ```json
 {
   "seed": 117,
-  "townCount": 4,
+  "townCount": 7,
   "poiCount": 18,
   "size": 1600.0,
   "terrainHeight": 65.0,
@@ -21,7 +21,7 @@
 }
 ```
 
-`seed` is saved as part of the file, so a chosen seed reproduces the same generated layout. `size` is measured in world units and must be finite from 800 through 3200. `townCount` accepts 2–6 and `poiCount` accepts 4–40. `terrainHeight` accepts 0–150, `vegetation` 0–4 (density multiplier), `riverWidth` 0–30 metres, and `trailDensity` 0–3. Biome threshold values must be ordered from 0 through 1.
+`seed` is saved as part of the file, so a chosen seed reproduces the same generated layout. `size` is measured in world units and must be finite from 800 through 3200. `townCount` accepts 7–10 (older files asking for fewer towns are raised to 7) and `poiCount` accepts 4–40. `terrainHeight` accepts 0–150, `vegetation` 0–4 (density multiplier), `riverWidth` 0–30 metres, and `trailDensity` 0–3. Biome threshold values must be ordered from 0 through 1.
 
 `pins` is optional and contains hand-authored map markers. Every pin needs an `id`; the other available fields are `label`, `kind`, `position` (`x`, `y`, and `z`), `requiredTier`, and `discovered`.
 

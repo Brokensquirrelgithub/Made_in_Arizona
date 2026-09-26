@@ -11,7 +11,8 @@ namespace MadeInArizona
     public sealed partial class GeneratedWorld
     {
         const float LevelLow = .42f, LevelHigh = .60f, MaxDriveGrade = .65f; // tan(33°)
-        readonly List<Vector2> routeLineA = new List<Vector2>(), routeLineB = new List<Vector2>();
+        // Planned route centre lines (before road segments are baked), for keeping cliffs away from roads.
+        readonly SegmentGrid routeLines = new SegmentGrid(48, 92);
         readonly List<Vector3> rampOpenings = new List<Vector3>(); // xz centre, radius
         float levelHeight;
         public int RampOpenings => rampOpenings.Count;
@@ -20,10 +21,11 @@ namespace MadeInArizona
         /// <summary>Called once towns and routes are planned, before any height is sampled for them.</summary>
         void PrepareElevation()
         {
-            levelHeight = Mathf.Clamp(amp * .13f, 0, 14);
-            routeLineA.Clear(); routeLineB.Clear();
+            // Tall enough to read from the top-down camera: about 13 m per level at the default terrain height.
+            levelHeight = Mathf.Clamp(amp * .2f, 0, 20);
+            routeLines.Clear();
             foreach (var route in routes)
-                for (int i = 0; i < 48; i++) { routeLineA.Add(RoutePoint(route, i / 48f)); routeLineB.Add(RoutePoint(route, (i + 1) / 48f)); }
+                for (int i = 0; i < 48; i++) routeLines.Add(RoutePoint(route, i / 48f), RoutePoint(route, (i + 1) / 48f));
         }
 
         float LevelField(float nx, float nz) => Noise(nx * 2.1f + 31, nz * 2.1f - 17) * .72f + Noise(nx * 5.3f - 4, nz * 5.3f + 9) * .28f;
@@ -37,11 +39,11 @@ namespace MadeInArizona
             // Field gradient in normalised units; the floor keeps rises around local maxima gentle instead of popping up.
             float gx = (LevelField(nx + e, nz) - LevelField(nx - e, nz)) / (2 * e), gz = (LevelField(nx, nz + e) - LevelField(nx, nz - e)) / (2 * e);
             float gradient = Mathf.Sqrt(gx * gx + gz * gz), metres = size / Mathf.Max(gradient, .6f);
-            float cliff = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.56f, .64f, Noise(nx * 9 + 71, nz * 9 - 23)));
+            float cliff = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.5f, .6f, Noise(nx * 9 + 71, nz * 9 - 23)));
             // Only well-defined boundaries become cliffs: flat saddles and small rises stay ramps (no mesas).
             cliff *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.8f, 1.4f, gradient));
             if (cliff > 0) cliff *= CliffAllowance(new Vector2(x, z));
-            float ramp = Mathf.Max(18, levelHeight * 2.4f), wall = 1.2f;
+            float ramp = Mathf.Max(16, levelHeight * 2f), wall = 1.2f;
             float halfLength = Mathf.Lerp(ramp, wall, cliff);
             return levelHeight * (Step((t - LevelLow) * metres, halfLength) + Step((t - LevelHigh) * metres, halfLength));
         }
@@ -53,14 +55,7 @@ namespace MadeInArizona
         {
             float allow = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(140, 200, TownDistance(p)));
             if (allow <= 0) return 0;
-            float road = float.MaxValue;
-            for (int i = 0; i < routeLineA.Count; i++)
-            {
-                Vector2 a = routeLineA[i], d = routeLineB[i] - a;
-                float u = Mathf.Clamp01(Vector2.Dot(p - a, d) / Mathf.Max(.01f, d.sqrMagnitude));
-                road = Mathf.Min(road, (a + d * u - p).sqrMagnitude);
-            }
-            allow *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(45, 90, Mathf.Sqrt(road)));
+            allow *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(45, 90, routeLines.Distance(p)));
             if (riverWidth > 0) allow *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(riverWidth * 2.2f + 40, riverWidth * 2.2f + 90, Mathf.Abs(p.x - RiverX(p.y))));
             foreach (var opening in rampOpenings)
                 allow *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(opening.z, opening.z + 25, Vector2.Distance(p, new Vector2(opening.x, opening.y))));

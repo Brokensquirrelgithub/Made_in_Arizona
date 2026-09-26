@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: invoice
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: invoice
-  displayName: Past-Due Rocket
-  description: 'A rare high-explosive notice. Huge blast, only a few shots.'
+  displayName: 'Tailpipe Bazooka'
+  description: 'A muffler, a road flare and far too much black powder. Huge blast, only a few shots.'
+  role: 'HEAVY ANTI-VEHICLE'
+  strength: 'Deletes a car or a cluster of them in one blast.'
+  weakness: 'Slow rockets that fast cars can dodge, and very little ammunition.'
   contentOrder: 1
   damage: 100
   fireRate: 0.9

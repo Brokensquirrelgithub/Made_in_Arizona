@@ -100,7 +100,7 @@ namespace MadeInArizona.Editor
                     shaders.DeleteArrayElementAtIndex(i);
                 }
             }
-            var include = new[] { "Sprites/Default", "MadeInArizona/HeatHaze", "MadeInArizona/Scattering", "MadeInArizona/LightShaft", "MadeInArizona/SixWaySmoke", "MadeInArizona/BiomeTerrain", "MadeInArizona/FlowRiver", "MadeInArizona/LivingScenery", "MadeInArizona/OrthographicDepthBlur", "MadeInArizona/TrailBlend", "Hidden/MadeInArizona/GroundPack" };
+            var include = new[] { "Sprites/Default", "MadeInArizona/HeatHaze", "MadeInArizona/Scattering", "MadeInArizona/LightShaft", "MadeInArizona/SixWaySmoke", "MadeInArizona/BiomeTerrain", "MadeInArizona/FlowRiver", "MadeInArizona/LivingScenery", "MadeInArizona/OrthographicDepthBlur", "MadeInArizona/TrailBlend", "MadeInArizona/CarPaint", "Hidden/MadeInArizona/GroundPack" };
             foreach (string shaderName in include) {
                 var shader = Shader.Find(shaderName); if (!shader) continue;
                 bool exists = false; for (int i = 0; i < shaders.arraySize; i++) if (shaders.GetArrayElementAtIndex(i).objectReferenceValue == shader) exists = true;

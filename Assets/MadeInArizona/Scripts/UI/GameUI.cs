@@ -19,7 +19,22 @@ namespace MadeInArizona
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Repair", "Interact", "Pause" };
-        readonly int[] garageWeapons = { 0, 2, 3, 11, 12 };
+        int[] garageWeaponIndices;
+        /// <summary>Catalog indices of every scrap weapon, core roles first and then the oddballs.</summary>
+        int[] garageWeapons
+        {
+            get
+            {
+                if (garageWeaponIndices != null) return garageWeaponIndices;
+                var list = new List<int>();
+                foreach (string id in WeaponRules.GarageIds)
+                {
+                    int index = Array.FindIndex(ContentCatalog.Weapons, w => w && w.id == id);
+                    if (index >= 0) list.Add(index);
+                }
+                return garageWeaponIndices = list.ToArray();
+            }
+        }
         int station, selectedPart, selectedWeapon, settingsPage, menuFocus;
         bool settings;
         float width, height, smoothedFps = 60;
@@ -294,17 +309,23 @@ namespace MadeInArizona
                 var weapon = ContentCatalog.Weapons[garageWeapons[i]];
                 string status = game.Save.selectedWeapon == weapon.id ? "FITTED" :
                     game.Save.ownedWeapons.Contains(weapon.id) ? "OWNED" : WeaponRules.ScrapCost(weapon.id) + " SCRAP";
+                if (WeaponRules.Oddball(weapon.id)) status += "   •   ODDBALL";
                 if (Button(0, i * 91, 430, 74, weapon.displayName + "\n" + status, selectedWeapon == i)) selectedWeapon = i;
             }
             GUI.EndScrollView();
-            var selected = ContentCatalog.Weapons[garageWeapons[selectedWeapon]];
+            var selected = ContentCatalog.Weapons[garageWeapons[Mathf.Clamp(selectedWeapon, 0, garageWeapons.Length - 1)]];
             float x = width - 535;
             Rect(x, top, 503, panelHeight, Ink);
             Tag(x + 24, top + 24, "GARAGE LOADOUT / RIGHT TRIGGER", Lime);
-            Text(x + 24, top + 64, 455, 75, selected.displayName.ToUpperInvariant(), 31, Cream, true);
-            Text(x + 24, top + 157, 455, 115, selected.description, 20, Cream);
-            Text(x + 24, top + 292, 455, 45, selected.damage + " DAMAGE / HIT    •    " + selected.fireRate.ToString("0.0") + " SHOTS/SEC", 17, Muted);
-            Text(x + 24, top + 365, 455, 90, "LT holds enemy weapon drops. Drive over one to equip it; press Y / F to swap when carrying one.", 17, Muted);
+            Text(x + 24, top + 56, 455, 70, selected.displayName.ToUpperInvariant(), 29, Cream, true);
+            Tag(x + 24, top + 124, (WeaponRules.Oddball(selected.id) ? "ODDBALL  •  " : "") + (selected.role ?? ""), Orange);
+            Text(x + 24, top + 152, 455, 92, selected.description, 17, Cream);
+            Text(x + 24, top + 250, 455, 22, "STRENGTH", 13, Lime, true);
+            Text(x + 24, top + 272, 455, 50, selected.strength ?? "", 16, Cream);
+            Text(x + 24, top + 326, 455, 22, "WEAKNESS", 13, Orange, true);
+            Text(x + 24, top + 348, 455, 50, selected.weakness ?? "", 16, Cream);
+            Text(x + 24, top + 406, 455, 30, selected.damage + " DAMAGE / HIT    •    " + selected.fireRate.ToString("0.0") + " SHOTS/SEC", 15, Muted);
+            Text(x + 24, top + 440, 455, 70, "LT holds enemy weapon drops. Drive over one to equip it; press Y / F to swap when carrying one.", 15, Muted);
             bool owned = game.Save.ownedWeapons.Contains(selected.id);
             string label = game.Save.selectedWeapon == selected.id ? "FITTED TO RT" : owned ? "EQUIP ON RT" : "BUY & EQUIP / " + WeaponRules.ScrapCost(selected.id) + " SCRAP";
             if (Button(x + 24, top + panelHeight - 88, 455, 56, label, true)) SelectGarageWeapon(selected);
@@ -351,7 +372,7 @@ namespace MadeInArizona
             bool padControls = InputManager.Instance.UsingGamepad;
             Rect(weaponsX, height - 104, 210, 76, Ink);
             Tag(weaponsX + 12, height - 90, padControls ? "RT  /  GARAGE" : "LMB  /  GARAGE", Lime);
-            Text(weaponsX + 12, height - 63, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "RIVETER", 13, Cream, true);
+            Text(weaponsX + 12, height - 63, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "NAIL GUN", 13, Cream, true);
             Bar(weaponsX + 12, height - 34, 186, 4, 1 - p.Weapons.GarageCooldown, Lime);
             Rect(weaponsX + 220, height - 104, 210, 76, Ink);
             Tag(weaponsX + 232, height - 90, padControls ? "LT  /  FIELD" : "RMB  /  FIELD", Orange);
@@ -477,8 +498,8 @@ namespace MadeInArizona
         void DrawPause()
         {
             Rect(0, 0, width, height, new Color(.02f, .04f, .045f, .74f));
-            float x = (width - 500) / 2, y = (height - 620) / 2;
-            Rect(x, y, 500, 620, Ink); Tag(x + 40, y + 33, "ENGINE IDLING / WORLD ON HOLD", Orange);
+            float x = (width - 500) / 2, y = (height - 690) / 2;
+            Rect(x, y, 500, 690, Ink); Tag(x + 40, y + 33, "ENGINE IDLING / WORLD ON HOLD", Orange);
             Text(x + 40, y + 75, 420, 77, "SERVICE BREAK", 41, Cream, true);
             if (Button(x + 40, y + 176, 420, 56, "BACK TO THE PROBLEM  /  A", true)) game.Resume();
             if (Button(x + 40, y + 249, 420, 49, "SETTINGS  /  Y")) { settings = true; menuFocus = 0; }
@@ -486,6 +507,8 @@ namespace MadeInArizona
             if(Button(x+40,y+380,420,49,"ARIZONA MAP / M",false,GeneratedWorld.Active!=null))OpenWorldMap();
             if(Button(x+40,y+445,420,49,"MAIN MENU"))game.ShowMainMenu();
             if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE  /  B")) game.ReturnToGarage();
+            if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED", false, GeneratedWorld.Active != null && !game.IsCombatTrial)) game.RegenerateWorld();
+            Text(x + 40, y + 630, 420, 40, "Restarts this job on a freshly generated Arizona. Progress is kept.", 13, Muted);
         }
 
         void DrawDebrief()

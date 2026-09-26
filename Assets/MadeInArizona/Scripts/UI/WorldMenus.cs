@@ -33,8 +33,9 @@ namespace MadeInArizona
             Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);
             if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid))game.StartCampaign(seed,Mathf.Round(worldSize/50)*50);
-            if(Button(x+25,y+512,310,48,"GARAGE / SAVED PROGRESSION"))game.ReturnToGarage();
-            if(Button(x+355,y+512,panelW-380,48,"QUIT"))Application.Quit();
+            if(Button(x+25,y+512,220,48,"GARAGE / SAVED"))game.ReturnToGarage();
+            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP")){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
+            if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
             Text(x+25,y+575,panelW-50,38,"Starting a world preserves garage upgrades and completed jobs.",13,Muted);
             Text(x,height-65,width-x-40,40,"JSON world editing: "+WorldConfigStore.Path,12,Muted);
             if(WorldConfigStore.LastError!=null)Text(x,height-105,width-x-40,35,WorldConfigStore.LastError,14,Orange);
@@ -86,6 +87,7 @@ namespace MadeInArizona
             Rect(0,0,width,height,new Color(.035f,.055f,.06f,1));
             Text(30,20,width-320,45,"ARIZONA • SEED "+game.WorldConfig.seed,29,Cream,true);
             if(Button(width-260,20,230,42,"CLOSE MAP / M",true)){worldMap=false;game.Resume();}
+            if(Button(width-520,20,245,42,"REGENERATE MAP")){worldMap=false;game.RegenerateWorld();}
             float size=Mathf.Min(height-150,width-490);
             var area=new Rect(35,92,size*.9f,size);
             RenderWorldMap(area,true);

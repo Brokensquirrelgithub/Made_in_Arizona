@@ -16,11 +16,13 @@ namespace MadeInArizona
         {
             owner = vehicle; ComponentName = componentName; Health = health; shell = GetComponent<Renderer>();
         }
-        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source)
+        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false)
         {
             if (Disabled || owner == null || owner.Damage.IsDead) return;
+            var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
+            if (!explosive && attacker && attacker != owner && VehicleController.Allied(attacker, owner)) return;
             Health -= amount;
-            owner.Damage.ApplyDamage(amount * .45f, hitPoint, source);
+            owner.Damage.ApplyDamage(amount * .45f, hitPoint, source, explosive);
             ExplosionSystem.Burst(hitPoint, new Color(.3f, 1, 1), 5, 3);
             if (Health > 0) return;
             Disabled = true;
@@ -34,7 +36,7 @@ namespace MadeInArizona
             ExplosionSystem.Detonate(transform.position, 3, 0, source, ComponentName == "Radiator" ? ExplosionKind.Propane : ExplosionKind.Electrical);
             GameManager.Instance?.Notify("COMMAND RIG: " + ComponentName.ToUpperInvariant() + " DISABLED");
             // A disabled exposed component also strips a chunk of structural armor.
-            owner.Damage.ApplyDamage(owner.Damage.MaxHealth * .08f, hitPoint, source);
+            owner.Damage.ApplyDamage(owner.Damage.MaxHealth * .08f, hitPoint, source, explosive);
         }
         void Update()
         {

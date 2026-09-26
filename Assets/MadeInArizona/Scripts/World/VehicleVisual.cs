@@ -23,8 +23,8 @@ namespace MadeInArizona
                 var axleObj=Cylinder("Solid axle housing",root,new Vector3(0,.34f,axle*definition.wheelbase*.5f),.07f,width+.2f,metal); axleObj.transform.localRotation=Quaternion.Euler(0,0,90);
                 Shape("Differential pumpkin",root,PrimitiveType.Sphere,new Vector3(0,.34f,axle*definition.wheelbase*.5f),new Vector3(.32f,.24f,.31f),Ink);
             }
-            Box("Painted lower body",root,new Vector3(0,sill,0),new Vector3(width,.44f,length),paint);
-            Box("Hood",root,new Vector3(0,sill+.34f,length*.31f),new Vector3(width*.98f,.23f,length*.33f),paint);
+            PaintBox("Painted lower body",root,new Vector3(0,sill,0),new Vector3(width,.44f,length),paint);
+            PaintBox("Hood",root,new Vector3(0,sill+.34f,length*.31f),new Vector3(width*.98f,.23f,length*.33f),paint);
             Box("Front bumper",root,new Vector3(0,sill-.08f,length*.52f),new Vector3(width+.16f,.2f,.19f),Ink);
             Box("Rear bumper",root,new Vector3(0,sill-.1f,-length*.52f),new Vector3(width+.16f,.18f,.19f),Ink);
             Box("Radiator grille",root,new Vector3(0,sill+.16f,length*.506f),new Vector3(width*.52f,.25f,.04f),Ink);
@@ -33,15 +33,15 @@ namespace MadeInArizona
             {
                 Shape("Headlight",root,jeep?PrimitiveType.Sphere:PrimitiveType.Cube,new Vector3(side*width*.35f,sill+.17f,length*.515f),new Vector3(width*.19f,.2f,.07f),new Color(1,.81f,.42f),false,0,.8f,2.6f);
                 Box("Tail light",root,new Vector3(side*width*.39f,sill+.05f,-length*.508f),new Vector3(.16f,.22f,.05f),new Color(.95f,.035f,.025f),false,1.4f);
-                Box("Door armor",root,new Vector3(side*(width*.508f),sill+.14f,-.2f),new Vector3(.055f,.37f,length*.3f),Color.Lerp(paint,Ink,.18f));
+                PaintBox("Door armor",root,new Vector3(side*(width*.508f),sill+.14f,-.2f),new Vector3(.055f,.37f,length*.3f),Color.Lerp(paint,Ink,.18f));
                 if(enemy) Box("Faction stripe",root,new Vector3(side*width*.54f,sill+.23f,-.2f),new Vector3(.025f,.095f,length*.3f),FactionRules.Accent(faction),false,1.1f);
                 Box("Door handle",root,new Vector3(side*width*.542f,sill+.42f,-.35f),new Vector3(.05f,.04f,.18f),metal);
                 Box("Mirror stem",root,new Vector3(side*width*.56f,sill+.76f,length*.15f),new Vector3(.22f,.035f,.04f),Ink);
-                Box("Wing mirror",root,new Vector3(side*width*.64f,sill+.79f,length*.15f),new Vector3(.12f,.14f,.2f),paint);
+                PaintBox("Wing mirror",root,new Vector3(side*width*.64f,sill+.79f,length*.15f),new Vector3(.12f,.14f,.2f),paint);
                 for(int ax=-1;ax<=1;ax+=2)
                 {
                     float z=ax*definition.wheelbase*.5f;
-                    Box("Squared fender flare",root,new Vector3(side*width*.50f,sill+.12f,z),new Vector3(.23f,.12f,.9f),jeep||trophy||monster?Ink:paint);
+                    PaintBox("Squared fender flare",root,new Vector3(side*width*.50f,sill+.12f,z),new Vector3(.23f,.12f,.9f),jeep||trophy||monster?Ink:paint);
                     Beam("Suspension damper",root,new Vector3(side*width*.38f,.34f,z+.15f),new Vector3(side*width*.42f,sill+.28f,z-.15f),.044f,Orange);
                     Transform wheel=Group(ax>0?(side<0?"Wheel_FL":"Wheel_FR"):(side<0?"Wheel_RL":"Wheel_RR"),root,new Vector3(side*(definition.trackWidth*.5f+.06f),.36f+lift*.3f,z));
                     float radius=tiny?.35f:buggy?.4f:trophy||monster?.52f:.43f;
@@ -57,13 +57,13 @@ namespace MadeInArizona
             float cabZ=pickup?length*.065f:-length*.1f;
             if(!buggy)
             {
-                Box("Cab glass volume",root,new Vector3(0,sill+.42f+cabHeight*.5f,cabZ),new Vector3(width*.91f,cabHeight,cabLength),glass);
-                Box("Roof panel",root,new Vector3(0,roofY,cabZ-.055f),new Vector3(width*.95f,.13f,cabLength+.08f),jeep?Cream:paint);
+                Painted(Box("Cab glass volume",root,new Vector3(0,sill+.42f+cabHeight*.5f,cabZ),new Vector3(width*.91f,cabHeight,cabLength),glass),glass,0);
+                PaintBox("Roof panel",root,new Vector3(0,roofY,cabZ-.055f),new Vector3(width*.95f,.13f,cabLength+.08f),jeep?Cream:paint);
                 for(int side=-1;side<=1;side+=2)
                 {
-                    for(int edge=-1;edge<=1;edge+=2) Box("Window pillar",root,new Vector3(side*width*.46f,sill+.44f+cabHeight*.5f,cabZ+edge*cabLength*.49f),new Vector3(.08f,cabHeight,.08f),paint);
-                    Box("Center pillar",root,new Vector3(side*width*.465f,sill+.45f+cabHeight*.5f,cabZ-.07f),new Vector3(.065f,cabHeight,.1f),paint);
-                    Box("Window sill",root,new Vector3(side*width*.475f,sill+.48f,cabZ),new Vector3(.065f,.08f,cabLength),paint);
+                    for(int edge=-1;edge<=1;edge+=2) PaintBox("Window pillar",root,new Vector3(side*width*.46f,sill+.44f+cabHeight*.5f,cabZ+edge*cabLength*.49f),new Vector3(.08f,cabHeight,.08f),paint);
+                    PaintBox("Center pillar",root,new Vector3(side*width*.465f,sill+.45f+cabHeight*.5f,cabZ-.07f),new Vector3(.065f,cabHeight,.1f),paint);
+                    PaintBox("Window sill",root,new Vector3(side*width*.475f,sill+.48f,cabZ),new Vector3(.065f,.08f,cabLength),paint);
                 }
                 Box("Windshield divider",root,new Vector3(0,sill+.46f+cabHeight*.5f,cabZ+cabLength*.505f),new Vector3(.043f,cabHeight,.022f),Ink);
                 Beam("Windshield wiper",root,new Vector3(-width*.33f,sill+.5f,cabZ+cabLength*.51f),new Vector3(-width*.07f,sill+.67f,cabZ+cabLength*.51f),.012f,Ink);
@@ -73,19 +73,19 @@ namespace MadeInArizona
                 roofY=sill+1.28f;
                 for(int side=-1;side<=1;side+=2)
                 {
-                    Beam("Front cage tube",root,new Vector3(side*width*.46f,sill,length*.28f),new Vector3(side*width*.39f,roofY,length*.10f),.055f,paint);
-                    Beam("Rear cage tube",root,new Vector3(side*width*.46f,sill,-length*.36f),new Vector3(side*width*.39f,roofY,-length*.25f),.055f,paint);
-                    Beam("Roof cage tube",root,new Vector3(side*width*.39f,roofY,length*.10f),new Vector3(side*width*.39f,roofY,-length*.25f),.055f,paint);
+                    PaintBeam("Front cage tube",root,new Vector3(side*width*.46f,sill,length*.28f),new Vector3(side*width*.39f,roofY,length*.10f),.055f,paint);
+                    PaintBeam("Rear cage tube",root,new Vector3(side*width*.46f,sill,-length*.36f),new Vector3(side*width*.39f,roofY,-length*.25f),.055f,paint);
+                    PaintBeam("Roof cage tube",root,new Vector3(side*width*.39f,roofY,length*.10f),new Vector3(side*width*.39f,roofY,-length*.25f),.055f,paint);
                     Box("Bucket seat",root,new Vector3(side*.37f,sill+.55f,-.15f),new Vector3(.43f,.75f,.25f),Ink);
                 }
-                Beam("Cross brace",root,new Vector3(-width*.39f,roofY,-length*.25f),new Vector3(width*.39f,roofY,-length*.25f),.055f,paint);
+                PaintBeam("Cross brace",root,new Vector3(-width*.39f,roofY,-length*.25f),new Vector3(width*.39f,roofY,-length*.25f),.055f,paint);
                 Box("Sun roof",root,new Vector3(0,roofY+.03f,-length*.07f),new Vector3(width*.85f,.06f,length*.4f),Ink);
             }
             if(pickup)
             {
                 Box("Pickup bed floor",root,new Vector3(0,sill+.25f,-length*.32f),new Vector3(width*.87f,.05f,length*.32f),Ink);
-                for(int side=-1;side<=1;side+=2) Box("Bed rail",root,new Vector3(side*width*.46f,sill+.42f,-length*.34f),new Vector3(.16f,.35f,length*.32f),paint);
-                Box("Tailgate",root,new Vector3(0,sill+.41f,-length*.485f),new Vector3(width,.35f,.1f),paint);
+                for(int side=-1;side<=1;side+=2) PaintBox("Bed rail",root,new Vector3(side*width*.46f,sill+.42f,-length*.34f),new Vector3(.16f,.35f,length*.32f),paint);
+                PaintBox("Tailgate",root,new Vector3(0,sill+.41f,-length*.485f),new Vector3(width,.35f,.1f),paint);
                 var spare=Cylinder("Spare in bed",root,new Vector3(0,sill+.39f,-length*.34f),.5f,.25f,Ink);
                 if(diesel) for(int side=-1;side<=1;side+=2) { Cylinder("Diesel stack",root,new Vector3(side*width*.38f,roofY*.65f,-length*.19f),.09f,roofY*.9f,metal); Cylinder("Stack opening",root,new Vector3(side*width*.38f,roofY*1.103f,-length*.19f),.075f,.018f,Ink); }
             }
@@ -126,6 +126,14 @@ namespace MadeInArizona
             if(!enemy) Box("Turquoise friend beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.10f,.08f,.12f),Turquoise,false,3);
             return root;
         }
+
+        /// <summary>Painted body panels use the glossy clear-coat material; glass gets a mirror finish.</summary>
+        static GameObject Painted(GameObject part,Color color,float metallic=.35f)
+        {
+            part.GetComponent<Renderer>().sharedMaterial=CarPaint(color,metallic);return part;
+        }
+        static GameObject PaintBox(string name,Transform parent,Vector3 pos,Vector3 size,Color color)=>Painted(Box(name,parent,pos,size,color),color);
+        static GameObject PaintBeam(string name,Transform parent,Vector3 a,Vector3 b,float radius,Color color)=>Painted(Beam(name,parent,a,b,radius,color),color);
 
         public static Transform BuildTurret(Transform parent,Vector3 position,bool enemy=false)
         {

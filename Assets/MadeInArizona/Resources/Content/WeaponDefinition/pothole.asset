@@ -13,9 +13,11 @@ MonoBehaviour:
   m_Name: pothole
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: pothole
-  displayName: Pothole Popper
-  description: Garage weapon. Lob a small charge over obstacles; slow reload and
-    modest blast.
+  displayName: 'Tennis-Ball Mortar'
+  description: 'A welded stack of beer cans lobbing charges that bounce once before they go off.'
+  role: 'INDIRECT FIRE'
+  strength: 'Arcs over cover and bounces into hiding spots.'
+  weakness: 'Small blast and slow shells; hopeless against fast movers.'
   contentOrder: 12
   damage: 32
   fireRate: 0.85

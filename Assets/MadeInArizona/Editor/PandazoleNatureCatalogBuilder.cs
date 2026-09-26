@@ -33,7 +33,7 @@ namespace MadeInArizona.Editor
         static Mesh[] Find(string pattern,int limit)
         {
             var paths=AssetDatabase.FindAssets("t:Model",new[]{Pack+"/Models"}).Select(AssetDatabase.GUIDToAssetPath)
-                .Where(p=>Match(Path.GetFileNameWithoutExtension(p).ToLowerInvariant(),pattern.ToLowerInvariant())).OrderBy(p=>p).Take(limit).ToArray();
+                .Where(p=>Match(Path.GetFileNameWithoutExtension(p).ToLowerInvariant(),pattern.ToLowerInvariant())&&!PandazoleNatureCatalog.IsExcluded(Path.GetFileNameWithoutExtension(p))).OrderBy(p=>p).Take(limit).ToArray();
             foreach(string path in paths)if(AssetImporter.GetAtPath(path) is ModelImporter importer&&!importer.isReadable){importer.isReadable=true;importer.SaveAndReimport();}
             // A model can contain separate trunk and canopy MeshFilters. Catalog complete
             // models, otherwise runtime height normalization scales each loose part as a tree.
