@@ -12,9 +12,14 @@ namespace MadeInArizona
         VehicleController owner;
         Transform turret, muzzleTransform;
         Light muzzleFlash;
+        LineRenderer lobMarker;
+        Material lobMarkerMaterial;
+        VehicleController lobTarget;
         Vector3 turretRestPosition;
         Vector3 aimDirection = Vector3.forward;
-        float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity;
+        float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity, lobTargetUntil;
+
+        public VehicleController AssistedTarget => lobTarget;
 
         public void Initialize(VehicleController vehicle)
         {
@@ -48,6 +53,7 @@ namespace MadeInArizona
         {
             if (!GeneratedWorld.Active) direction.y = 0;
             if (direction.sqrMagnitude > .001f) aimDirection = direction.normalized;
+            UpdateLobMarker();
         }
         public void EquipField(WeaponDefinition weapon, int ammo)
         {
@@ -98,7 +104,8 @@ namespace MadeInArizona
             if (weapon.id == "mines")
                 FieldOrdnance.PlaceMine(owner, weapon, damage);
             else if (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole")
-                FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage);
+                FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage, 0,
+                    owner.IsPlayer ? AcquireLobTarget(aimDirection, weapon) : null);
             else if (weapon.id == "sweeper" || weapon.id == "boomstick")
             {
                 int pellets = weapon.id == "boomstick" ? 12 : 8;
@@ -143,6 +150,67 @@ namespace MadeInArizona
             if (muzzleTransform != null) return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);
             return transform.position + Vector3.up * .85f + direction * 2.4f;
         }
+        static bool Lobbed(WeaponDefinition weapon) => weapon && (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole");
+        VehicleController AcquireLobTarget(Vector3 direction, WeaponDefinition weapon)
+        {
+            if (!owner || !owner.IsPlayer || !Lobbed(weapon)) return null;
+            Vector3 flatAim = Vector3.ProjectOnPlane(direction, Vector3.up);
+            if (flatAim.sqrMagnitude < .01f) flatAim = Vector3.ProjectOnPlane(owner.transform.forward, Vector3.up);
+            flatAim.Normalize();
+            float range = weapon.id == "mortar" ? 125 : weapon.id == "grenade" ? 72 : 58;
+            float cone = weapon.id == "mortar" ? 42 : 34;
+            if (ValidLobTarget(lobTarget, flatAim, range * 1.15f, cone + 14) && Time.time <= lobTargetUntil) return lobTarget;
+            VehicleController best = null; float bestScore = float.MaxValue;
+            foreach (var candidate in VehicleController.Active)
+            {
+                if (!ValidLobTarget(candidate, flatAim, range, cone)) continue;
+                Vector3 delta = Vector3.ProjectOnPlane(candidate.transform.position - owner.transform.position, Vector3.up);
+                float angle = Vector3.Angle(flatAim, delta);
+                float score = angle / cone * 1.45f + delta.magnitude / range;
+                if (candidate == lobTarget) score -= .24f;
+                if (score < bestScore) { bestScore = score; best = candidate; }
+            }
+            lobTarget = best; lobTargetUntil = Time.time + .72f;
+            return best;
+        }
+        bool ValidLobTarget(VehicleController candidate, Vector3 flatAim, float range, float cone)
+        {
+            if (!candidate || candidate == owner || candidate.Damage == null || candidate.Damage.IsDead) return false;
+            var ai = candidate.GetComponent<EnemyAI>();
+            if (candidate.IsPlayer || ai == null || ai.IsFriendly) return false;
+            Vector3 delta = Vector3.ProjectOnPlane(candidate.transform.position - owner.transform.position, Vector3.up);
+            return delta.sqrMagnitude > 4 && delta.sqrMagnitude <= range * range && Vector3.Angle(flatAim, delta) <= cone;
+        }
+        void UpdateLobMarker()
+        {
+            if (!owner || !owner.IsPlayer || !Lobbed(FieldWeapon)) { SetLobMarker(false); lobTarget = null; return; }
+            var target = AcquireLobTarget(aimDirection, FieldWeapon);
+            if (!target) { SetLobMarker(false); return; }
+            Vector3 point = FieldOrdnance.PredictLandingPoint(target, Muzzle(aimDirection), FieldWeapon);
+            EnsureLobMarker();
+            lobMarker.enabled = true;
+            float ring = Mathf.Clamp(FieldWeapon.blastRadius * .42f, 1.8f, 4.2f);
+            for (int i = 0; i < lobMarker.positionCount; i++)
+            {
+                float a = i / (float)lobMarker.positionCount * Mathf.PI * 2;
+                lobMarker.SetPosition(i, point + new Vector3(Mathf.Cos(a) * ring, .22f, Mathf.Sin(a) * ring));
+            }
+            Color color = FieldWeapon.projectileColor;
+            lobMarker.startColor = new Color(color.r, color.g, color.b, .92f);
+            lobMarker.endColor = lobMarker.startColor;
+        }
+        void EnsureLobMarker()
+        {
+            if (lobMarker) return;
+            var marker = new GameObject("Ballistic assisted landing ring"); marker.transform.SetParent(transform, false);
+            lobMarker = marker.AddComponent<LineRenderer>(); lobMarker.useWorldSpace = true; lobMarker.loop = true;
+            lobMarker.positionCount = 32; lobMarker.widthMultiplier = .13f; lobMarker.numCornerVertices = 2;
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            lobMarkerMaterial = new Material(shader) { name = "Ballistic lock ring" };
+            lobMarkerMaterial.color = Color.white; lobMarker.sharedMaterial = lobMarkerMaterial;
+            lobMarker.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; lobMarker.receiveShadows = false;
+        }
+        void SetLobMarker(bool enabled) { if (lobMarker) lobMarker.enabled = enabled; }
         void Flash(Color color, float intensity, float kick)
         {
             recoil = Mathf.Min(.28f, recoil + kick);
@@ -150,5 +218,6 @@ namespace MadeInArizona
             muzzleFlash.color = color; muzzleFlash.intensity = intensity;
         }
         bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying;
+        void OnDestroy() { if (lobMarkerMaterial) Destroy(lobMarkerMaterial); }
     }
 }

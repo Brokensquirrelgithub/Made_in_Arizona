@@ -46,6 +46,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             Check("mission startup", game.State == GameState.Playing && game.Mission.Stage == 0);
             Check("destructible scene", FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None).Length > 30);
+            if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaTargetingTest")>=0) { yield return TestLobTargeting();FinishResults();yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDebrisReview")>=0) { yield return ReviewDebris();FinishResults();yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaVfxReview")>=0) { yield return ReviewEffects();yield break; }
             Capture("02-mission");
@@ -137,6 +138,27 @@ namespace MadeInArizona
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCampaignTest") >= 0) yield return TestCampaign(keyboard);
             InputSystem.RemoveDevice(keyboard);
             FinishResults();
+        }
+        IEnumerator TestLobTargeting()
+        {
+            var game=GameManager.Instance;var player=game.Player;
+            foreach(var vehicle in new List<VehicleController>(VehicleController.Active))if(vehicle&&vehicle!=player)Destroy(vehicle.gameObject);
+            yield return null;
+            Vector3 aim=Vector3.forward;
+            var probe=SpawnManager.Spawn(player.transform.position+aim*24,0,player);
+            probe.Body.isKinematic=true;probe.GetComponent<EnemyAI>().enabled=false;
+            player.enabled=false;
+            float health=probe.Damage.Health;
+            player.Weapons.EquipField(WeaponRules.Find("grenade"),2);
+            player.Weapons.AimAt(aim);yield return null;
+            Check("lobbed weapon soft-lock selects enemy in aim cone",player.Weapons.AssistedTarget==probe);
+            Capture("34-ballistic-lock-ring");yield return new WaitForSecondsRealtime(.2f);
+            player.Weapons.FireSecondary(aim);
+            yield return new WaitForSecondsRealtime(.72f);Capture("35-assisted-grenade-impact");
+            yield return new WaitForSecondsRealtime(1.1f);
+            Check("assisted grenade reaches predicted enemy position",!probe||probe.Damage.IsDead||probe.Damage.Health<health);
+            if(probe)Destroy(probe.gameObject);
+            player.enabled=true;
         }
         void FinishResults()
         {
