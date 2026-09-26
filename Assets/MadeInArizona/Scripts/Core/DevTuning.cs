@@ -9,6 +9,7 @@ namespace MadeInArizona
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
         public float bloom=1.15f, exposure=.3f, contrast=15f, saturation=10f, chromatic=.08f, motionBlur=.12f, depthOfField=0f, vignette=.2f;
         public float haze=.002f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.45f;
+        public float dynamicZoomOut=1.45f, dynamicZoomMargin=.16f;
         static readonly DevTuning defaults=new DevTuning();
         public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
         public void Clamp()
@@ -45,6 +46,8 @@ namespace MadeInArizona
             new DevControl("COMBAT","playerDamage","Player weapon damage",.1f,5),
             new DevControl("COMBAT","incomingDamage","Damage received by player",0,3),
             new DevControl("CAMERA","cameraZoom","Camera distance / orthographic size",13,32),
+            new DevControl("CAMERA","dynamicZoomOut","Dynamic zoom maximum pull-back",1,2.2f),
+            new DevControl("CAMERA","dynamicZoomMargin","Dynamic zoom screen-edge margin",.05f,.35f),
             new DevControl("CAMERA","shake","Camera shake multiplier",0,3),
             new DevControl("CAMERA","motionBlur","Camera motion blur",0,1),
             new DevControl("CAMERA","chromatic","Chromatic aberration",0,1),

@@ -13,29 +13,91 @@ namespace MadeInArizona
         static float SoftLimit(float sample){return (float)Math.Tanh(sample);}
         static AudioClip Clip(string name,float[] samples)
         {var clip=AudioClip.Create(name,samples.Length,1,Rate,false);clip.SetData(samples,0);return clip;}
-        public static AudioClip Engine()
+        /// <summary>Firing rates of the engine bank. Each loop holds a whole number of four-stroke V8 cycles.</summary>
+        public static readonly float[] EngineLayerHz={48,104,200};
+        // Cross-plane V8 firing order 1-8-4-3-6-5-7-2 alternates banks L R R L R L R L. The listener sits
+        // nearer the left pipe, so the uneven bank pulses create the cycle-rate lope heard as "burble" and growl.
+        static readonly float[] BankPulse={1,.62f,.62f,1,.62f,1,.62f,1};
+        /// <summary>
+        /// One RPM layer of the engine bank, built the way recorded car audio is: a loop captured at a fixed
+        /// firing rate under load (on) or on overrun (off). The game crossfades neighbouring layers by RPM,
+        /// so each clip is only pitch-shifted a little and its exhaust resonances stay put.
+        /// </summary>
+        public static AudioClip EngineLayer(int layer,bool onLoad)
         {
-            var samples=new float[Rate];uint seed=1703;
+            float firing=EngineLayerHz[Mathf.Clamp(layer,0,EngineLayerHz.Length-1)],cycleHz=firing/8;
+            int length=Rate*2,cycles=Mathf.RoundToInt(cycleHz*2),tail=Mathf.RoundToInt(Rate*.09f);
+            var samples=new float[length];uint seed=(uint)(5101+layer*977+(onLoad?0:31));
+            for(int c=0;c<cycles;c++)for(int k=0;k<8;k++)
+            {
+                // Real combustion is never perfectly even: small timing and strength variation adds roughness.
+                float start=(c+(k+Noise(ref seed)*.035f)/8)/cycleHz;
+                float strength=BankPulse[k]*(1+Noise(ref seed)*.12f)*(onLoad?1:.72f);
+                // Jitter can nudge the very first pulse before zero; wrap it to the loop end like every other tail.
+                int first=((Mathf.RoundToInt(start*Rate)%length)+length)%length;
+                for(int j=0;j<tail;j++)
+                {
+                    float t=j/(float)Rate,n=Noise(ref seed);
+                    // A sharp pressure front followed by fixed exhaust-system resonances.
+                    float front=Mathf.Exp(-t*260)*(1-Mathf.Exp(-t*2400))*1.4f;
+                    float body=Wave(68*t)*Mathf.Exp(-t*34);
+                    float pipe=Wave(185*t+.08f)*Mathf.Exp(-t*52)*.62f;
+                    float rasp=Wave(540*t)*Mathf.Exp(-t*120)*(onLoad?.34f:.14f);
+                    float crackle=n*Mathf.Exp(-t*170)*(onLoad?.42f:.2f);
+                    samples[(first+j)%length]+=strength*(front+body+pipe+rasp+crackle);
+                }
+            }
+            float mean=0;foreach(float v in samples)mean+=v;mean/=length;
+            float low=0,energy=0;
+            // Two passes around the loop settle the filter state so the wrap point is seamless.
+            float smoothing=onLoad?.62f:.3f;
+            for(int pass=0;pass<2;pass++)for(int i=0;i<length;i++){low=Mathf.Lerp(low,samples[i]-mean,smoothing);if(pass==1)samples[i]=low;}
+            foreach(float v in samples)energy+=v*v;
+            float scale=1/Mathf.Sqrt(Mathf.Max(1e-6f,energy/length));
+            // Saturation is where "growl" lives: it adds dense harmonics above each firing pulse, more under load.
+            float drive=onLoad?.95f:.5f;
+            for(int i=0;i<length;i++)samples[i]=SoftLimit(samples[i]*scale*drive)*(onLoad?.78f:.72f);
+            return Clip("Original • V8 bank "+firing+"Hz "+(onLoad?"on load":"overrun"),samples);
+        }
+        /// <summary>A single unburnt-fuel overrun pop for crackle after lifting off the throttle.</summary>
+        public static AudioClip Backfire()
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.16f)];uint seed=6071;float low=0;
             for(int i=0;i<samples.Length;i++)
             {
-                float t=i/(float)Rate;
-                float firing=.46f*Wave(t*82)+.20f*Wave(t*164)+.10f*Wave(t*246)+.045f*Noise(ref seed);
-                // A restrained crank-order layer gives the engine weight on small speakers
-                // and subwoofers without turning the firing texture into a drone.
-                float body=.16f*Wave(t*41)+.055f*Wave(t*61.5f);
-                samples[i]=SoftLimit((firing+body)*(.8f+.2f*Wave(t*41)));
+                float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.3f);
+                samples[i]=SoftLimit((n*Mathf.Exp(-t*140)*.9f+low*Mathf.Exp(-t*60)*.9f+Wave(120*t-80*t*t)*Mathf.Exp(-t*45)*.7f)*1.4f)*Mathf.Min(1,t*2000);
             }
-            return Clip("Original • three-cylinder firing loop",samples);
+            return Clip("Original • overrun pop",samples);
         }
-        public static AudioClip Exhaust()
+        /// <summary>The player's hull taking a hit: body thump, inharmonic panel ring and a crunch of bending metal.</summary>
+        public static AudioClip Hurt(int variant)
         {
-            var samples=new float[Rate];uint seed=3080;float low=0;
-            for(int i=0;i<samples.Length;i++) {
-                float t=i/(float)Rate;low=Mathf.Lerp(low,Noise(ref seed),.13f);
-                float pulse=Mathf.Pow(.5f+.5f*Wave(t*64),5);
-                samples[i]=(float)Math.Tanh((Wave(t*32)*.36f+Wave(t*64)*.24f+Wave(t*128)*.12f+low*pulse*.8f)*1.6f)*.7f;
+            var samples=new float[Mathf.RoundToInt(Rate*.55f)];uint seed=(uint)(7207+variant*613);float low=0,band=0;
+            float spread=1+variant*.07f;
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.08f);band=Mathf.Lerp(band,n-low,.5f);
+                float thump=Wave((95-70*Mathf.Min(1,t*9))*t)*Mathf.Exp(-t*16)*.95f;
+                float panel=(Wave(417*spread*t)*.45f+Wave(1093*spread*t)*.28f+Wave(1777*spread*t)*.2f+Wave(2631*spread*t)*.12f)*Mathf.Exp(-t*11);
+                float crunch=band*Mathf.Exp(-t*26)*(1+.6f*Wave(37*t))*1.1f;
+                float rattle=n*Mathf.Exp(-Mathf.Abs(t-.09f)*80)*.25f;
+                samples[i]=SoftLimit((thump+panel*.55f+crunch+rattle)*1.25f)*Mathf.Min(1,t*900);
             }
-            return Clip("Original • loaded exhaust pulse",samples);
+            return Clip("Original • hull impact "+variant,samples);
+        }
+        /// <summary>A two-beat low heartbeat loop layered in while the player's vehicle is critically damaged.</summary>
+        public static AudioClip Heartbeat()
+        {
+            var samples=new float[Rate];
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,lub=t,dub=t-.27f;
+                float s=Wave(52*lub-30*lub*lub)*Mathf.Exp(-lub*20)*Mathf.Min(1,lub*400);
+                if(dub>0)s+=Wave(60*dub-30*dub*dub)*Mathf.Exp(-dub*24)*Mathf.Min(1,dub*400)*.72f;
+                samples[i]=SoftLimit(s*1.2f)*.85f;
+            }
+            return Clip("Original • critical damage heartbeat",samples);
         }
         public static AudioClip Mechanical(bool release)
         {

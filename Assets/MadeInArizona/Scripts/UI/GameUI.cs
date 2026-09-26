@@ -59,7 +59,7 @@ namespace MadeInArizona
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
                 if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
                 if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 7 : settingsPage == 1 ? 6 : 14;
+                int rowCount = settingsPage == 0 ? 8 : settingsPage == 1 ? 6 : 14;
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -341,8 +341,9 @@ namespace MadeInArizona
             Bar(objX + 20, 149, 416, 4, game.Mission.Progress, Lime);
             Rect(28, height - 194, 365, 166, Ink);
             Text(48, height - 177, 330, 26, game.CurrentVehicle.displayName.ToUpperInvariant(), 16, Cream, true);
-            Bar(48, height - 134, 240, 10, p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth), p.Damage.Health / p.Damage.MaxHealth > .3f ? Lime : Orange);
-            Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", 14, Cream, true);
+            DrawHealthBar(p, 48, height - 136, 240, 14);
+            bool critical = p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth) < CriticalHealth;
+            Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
             Text(48, height - 78, 320, 30, p.SpeedKph.ToString("000") + " KM/H     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
@@ -424,9 +425,7 @@ namespace MadeInArizona
                 CombatLine(point+new Vector2(9,-9),point+new Vector2(3,-3),3,Lime);
             }
             if(Time.time-CombatFeedback.LastKillTime<1.1f)Text(width*.5f-160,180,320,35,"HOSTILE VEHICLE DISABLED",19,Lime,true,TextAnchor.MiddleCenter);
-            if(Time.time-game.Player.Damage.LastDamageTime<.35f) {
-                Color hurt=new Color(1,.16f,.04f,.3f);Rect(0,0,width,5,hurt);Rect(0,height-5,width,5,hurt);Rect(0,0,5,height,hurt);Rect(width-5,0,5,height,hurt);
-            }
+            DrawDamageFeedback(game.Player);
             if(InputManager.Instance.UsingGamepad) {
                 Vector2 aim=InputManager.Instance.Aim;
                 Vector2 point=ScreenPoint(game.Player.transform.position+new Vector3(aim.x,0,aim.y)*14+Vector3.up*.8f);
@@ -529,6 +528,7 @@ namespace MadeInArizona
                 SettingLabel(x, y + 466, "CAMERA SHAKE", 4); s.shake = Slider(x + 465, y + 466, 426, s.shake, 0, 1);
                 SettingLabel(x, y + 519, "INTERFACE SCALE", 5); s.uiScale = Slider(x + 465, y + 519, 426, s.uiScale, .85f, 1.2f);
                 SettingLabel(x, y + 572, "SUBTITLES", 6); if (Button(x + 465, y + 567, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
+                SettingLabel(x, y + 625, "DYNAMIC CAMERA ZOOM", 7); if (Button(x + 465, y + 620, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
             }
             if (settingsPage == 1) {
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
@@ -587,6 +587,7 @@ namespace MadeInArizona
                 if (menuFocus == 4) s.shake = Mathf.Clamp01(s.shake + .1f * direction);
                 if (menuFocus == 5) s.uiScale = Mathf.Clamp(s.uiScale + .05f * direction, .85f, 1.2f);
                 if (menuFocus == 6) s.subtitles = !s.subtitles;
+                if (menuFocus == 7) s.dynamicZoom = !s.dynamicZoom;
             } else if (settingsPage == 1) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);

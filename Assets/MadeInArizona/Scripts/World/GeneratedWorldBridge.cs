@@ -9,8 +9,8 @@ namespace MadeInArizona
             var world=new GameObject("Generated Arizona").AddComponent<GeneratedWorld>();
             world.Configure(config,transform);
             Vector3 home=world.Towns.Count>0?world.Towns[0]:Vector3.zero;
-            PlayerSpawn=Ground(home+new Vector3(-8,0,-12),1.05f);
-            ExtractionPoint=Ground(home+new Vector3(12,0,-10),.15f);
+            PlayerSpawn=Ground(home+GeneratedWorld.HomeSpawnOffset,1.05f);
+            ExtractionPoint=Ground(home+GeneratedWorld.HomeExtractionOffset,.15f);
             ObjectiveLabel="ARIZONA OPEN ROAD / "+(missionIndex+1).ToString("00");
             // Keep the first mission beats close; later beats invite longer trips.
             for(int i=1;i<world.Towns.Count && ObjectivePoints.Count<3;i++) ObjectivePoints.Add(Ground(world.Towns[i],.15f));
