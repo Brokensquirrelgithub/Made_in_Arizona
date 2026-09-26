@@ -137,7 +137,7 @@ namespace MadeInArizona
                     float h=Next(random,7,15);BreakableTree(root,p,h,true,random);Trees++;
                     // Ground litter under the canopy, in irregular patches rather than uniform distribution.
                     for(int j=0;j<28;j++){Vector3 q=p+new Vector3(Next(random,-2.8f,2.8f),0,Next(random,-2.8f,2.8f));q.y=GeneratedWorld.HeightAt(q+origin);mesh.Leaf(q,.18f,Next(random,0,6.28f),new Color(.35f,.24f,.12f),0);}
-                    if(i%6==0)mesh.Tube(p+new Vector3(1,.24f,1),p+new Vector3(3,.5f,5),.23f,.16f,new Color(.27f,.19f,.11f),8);
+                    if(i%6==0){float heading=Next(random,0,Mathf.PI*2),length=Next(random,3.2f,6.5f),offset=Next(random,1.2f,2.6f);Vector3 dir=new Vector3(Mathf.Cos(heading),0,Mathf.Sin(heading));Vector3 start=p+new Vector3(Mathf.Sin(heading),0,-Mathf.Cos(heading))*offset;Vector3 finish=start+dir*length;start.y=GeneratedWorld.HeightAt(start+origin)-origin.y+.22f;finish.y=GeneratedWorld.HeightAt(finish+origin)-origin.y+.18f+Next(random,0,.25f);mesh.Tube(start,finish,Next(random,.18f,.27f),Next(random,.11f,.17f),new Color(.27f,.19f,.11f)*Next(random,.85f,1.1f),8);}
                 }
                 else if(density>0&&bank&&i%3==0)
                 {float h=Next(random,5,10);BreakableTree(root,p,h,false,random);Trees++;}

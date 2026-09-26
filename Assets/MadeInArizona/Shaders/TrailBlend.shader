@@ -87,7 +87,10 @@ Shader "MadeInArizona/TrailBlend"
                 // 3. Surface wear inside the trail.
                 float3 soil=SAMPLE_TEXTURE2D(_Diffuse,sampler_Diffuse,soilUV).rgb;
                 float soilLuma=max(.06,dot(soil,float3(.299,.587,.114)));
+                // A second, larger-scale sample and broad mottling break up tiling across wide areas such as town aprons.
+                float broadLuma=dot(SAMPLE_TEXTURE2D(_Diffuse,sampler_Diffuse,p*.047+float2(.37,.61)).rgb,float3(.299,.587,.114));
                 float3 albedo=_Tint.rgb*clamp(lerp(soilLuma.xxx,soil,.35)/.45,.55,1.5)*lerp(.9,1.08,Fbm(p*.21));
+                albedo*=clamp(broadLuma/.42,.8,1.2)*lerp(.86,1.1,Fbm(p*.06+float2(17,-3)));
                 float gauge=min(.85,halfWidth*.62);
                 float rutWave=Noise(float2(along*.35,i.uv.x>0?3:9))*.14;
                 float rut=exp(-pow((across-gauge-rutWave)/.3,2))*_Ruts;

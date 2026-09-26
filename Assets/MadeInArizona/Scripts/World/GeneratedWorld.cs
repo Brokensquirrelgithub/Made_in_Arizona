@@ -68,7 +68,7 @@ namespace MadeInArizona
             for(int n=0;n<Towns.Count;n++){Vector3 c=Towns[n];c.y=HeightInternal(c.x,c.z);Towns[n]=c;Transform town=Group(n==0?"Starter town • 117 Junction":"Route town "+(n+1),transform,Vector3.zero);
                 // The main street follows a road leaving this town, so storefronts line the road instead of sitting in it.
                 Vector2 street=StreetDirection(XZ(c));Quaternion frame=Quaternion.LookRotation(new Vector3(street.x,0,street.y),Vector3.up);townFrames.Add(frame);
-                var pad=Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true);pad.transform.localRotation=frame;pad.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;int buildings=n==0?7:4+n%3;var lots=new List<Vector4>();townLots.Add(lots);
+                var pad=Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true);pad.transform.localRotation=frame;pad.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;TownApron(town,c,frame,pad.GetComponent<Renderer>());int buildings=n==0?7:4+n%3;var lots=new List<Vector4>();townLots.Add(lots);
                 for(int i=0;i<buildings;i++){float side=i%2==0?-1:1,w=R(7,12),d=R(7,13),offset=18+R(0,5);Quaternion facing=frame*Quaternion.Euler(0,side*90,0);
                     // Other routes cross town at their own angles; step lots back from them, or leave the lot empty.
                     for(int attempt=0;attempt<9;attempt++){float lx=side*(offset+attempt/3*6),lz=(i/2-1)*14+LotShift[attempt%3];
@@ -79,6 +79,19 @@ namespace MadeInArizona
             }
             BuildTownDetail();
         }
+        /// <summary>Feathered compacted-earth apron replacing the pad's rectangular edge; the pad keeps its collider.</summary>
+        void TownApron(Transform town,Vector3 c,Quaternion frame,Renderer pad)
+        {
+            var blend=Shader.Find("MadeInArizona/TrailBlend");if(!blend)return;
+            if(townApron==null)townApron=TrailMaterial(blend,new Color(.49f,.38f,.26f),7,.35f,0,0);
+            // The centreline runs down the main street; ends are extended past the shader's rounded tip taper.
+            const float halfWidth=29,halfLength=24+29*.35f;Vector3 forward=frame*Vector3.forward;
+            int rows=Mathf.CeilToInt(halfLength*2/2)+1;var line=new Vector2[rows];
+            for(int i=0;i<rows;i++)line[i]=XZ(c+forward*Mathf.Lerp(-halfLength,halfLength,i/(float)(rows-1)));
+            SoilStrip("Town ground apron",line,halfWidth,2.4f,0,townApron,.025f,town);
+            pad.enabled=false;
+        }
+        Material townApron;
         /// <summary>Heading of the first route leaving a town, measured a short way out so the curve is respected.</summary>
         Vector2 StreetDirection(Vector2 town)
         {

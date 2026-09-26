@@ -163,34 +163,48 @@ namespace MadeInArizona
             for (int t = 0; t < trails.Count; t++)
             {
                 var trail = trails[t];
-                // The ribbon extends past the trail edge so the shader can feather it into the terrain.
-                // Extension covers the shader's widest noise reach (edge lobes, clumps and dust spill, ~2.8 x feather), so nothing is clipped.
-                float halfWidth = trail.width * .5f, feather = Mathf.Clamp(trail.width * .22f, .7f, 1.4f);
-                float outer = halfWidth + (blend ? feather * 2.9f + .6f : 0);
-                int rows = trail.points.Length, columns = Mathf.Clamp(Mathf.CeilToInt(outer * 2 / 1.2f) + 1, 4, 12);
+                var material = trail.dirtRoad ? dirtRoad : trail.width > 3.6f ? track : footpath;
+                // Below the asphalt (0.1 m) and above the road shoulders; a per-trail offset avoids z-fighting at crossings.
+                SoilStrip(trail.dirtRoad ? "Graded dirt road" : trail.width > 3.6f ? "Two-track trail" : "Footpath", trail.points,
+                    trail.width * .5f, Mathf.Clamp(trail.width * .22f, .7f, 1.4f), 0, material, .045f + (t % 7) * .0035f, root);
+            }
+        }
+
+        /// <summary>
+        /// Feathered soil ribbon along a centreline. The mesh extends past the core so the TrailBlend shader can dissolve
+        /// it into the terrain; its reach (edge lobes, clumps and dust spill) is about 2.8 x feather, so nothing is clipped.
+        /// Columns closer to the centre than innerSkip are omitted (used where asphalt covers the middle anyway).
+        /// </summary>
+        void SoilStrip(string name, Vector2[] points, float halfWidth, float feather, float innerSkip, Material material, float lift, Transform parent)
+        {
+            bool blend = material.shader.name == "MadeInArizona/TrailBlend";
+            float outer = halfWidth + (blend ? feather * 2.9f + .6f : 0);
+            int rows = points.Length;
+            float length = 0;
+            for (int i = 1; i < rows; i++) length += Vector2.Distance(points[i - 1], points[i]);
+            // One grid across the whole ribbon, or one per side when the centre is skipped.
+            for (int side = innerSkip > 0 ? -1 : 0; side <= (innerSkip > 0 ? 1 : 0); side += 2)
+            {
+                float from = side == 0 ? outer : side < 0 ? -innerSkip : outer, to = side == 0 ? -outer : side < 0 ? -outer : innerSkip;
+                int columns = Mathf.Clamp(Mathf.CeilToInt(Mathf.Abs(from - to) / 1.2f) + 1, 3, 64);
+                float across = Mathf.Abs(from - to) / (columns - 1) * .5f;
                 var grid = new Vector3[rows, columns];
                 var uv = new Vector4[rows * columns]; var shape = new Vector2[rows * columns];
-                // Below the asphalt (0.1 m) and above the gravel shoulders; a per-trail offset avoids z-fighting at crossings.
-                float lift = .045f + (t % 7) * .0035f, across = outer * 2 / (columns - 1) * .5f;
-                float length = 0;
-                for (int i = 1; i < rows; i++) length += Vector2.Distance(trail.points[i - 1], trail.points[i]);
                 float along = 0;
                 for (int i = 0; i < rows; i++)
                 {
-                    if (i > 0) along += Vector2.Distance(trail.points[i - 1], trail.points[i]);
-                    Vector2 tangent = (trail.points[Mathf.Min(rows - 1, i + 1)] - trail.points[Mathf.Max(0, i - 1)]).normalized;
+                    if (i > 0) along += Vector2.Distance(points[i - 1], points[i]);
+                    Vector2 tangent = (points[Mathf.Min(rows - 1, i + 1)] - points[Mathf.Max(0, i - 1)]).normalized;
                     Vector2 normal = new Vector2(-tangent.y, tangent.x);
-                    Vector2 left = trail.points[i] + normal * outer, right = trail.points[i] - normal * outer;
                     for (int j = 0; j < columns; j++)
                     {
-                        float u = j / (float)(columns - 1);
-                        grid[i, j] = TrailSurfacePoint(Vector2.Lerp(left, right, u), tangent, normal, across, .6f, lift);
-                        uv[i * columns + j] = new Vector4(Mathf.Lerp(outer, -outer, u), along, halfWidth, length);
+                        float offset = Mathf.Lerp(from, to, j / (float)(columns - 1));
+                        grid[i, j] = TrailSurfacePoint(points[i] + normal * offset, tangent, normal, across, .6f, lift);
+                        uv[i * columns + j] = new Vector4(offset, along, halfWidth, length);
                         shape[i * columns + j] = new Vector2(outer, feather);
                     }
                 }
-                var material = trail.dirtRoad ? dirtRoad : trail.width > 3.6f ? track : footpath;
-                TrailSurface(trail.dirtRoad ? "Graded dirt road" : trail.width > 3.6f ? "Two-track trail" : "Footpath", grid, uv, shape, material, root);
+                TrailSurface(name, grid, uv, shape, material, parent);
             }
         }
 

@@ -10,6 +10,8 @@ namespace MadeInArizona
         // Each edge follows the already-baked terrain rather than hovering on a center-line height.
         void BuildRoads()
         {
+            var blend=Shader.Find("MadeInArizona/TrailBlend");
+            var shoulder=TrailMaterial(blend,new Color(.50f,.41f,.30f),6,0,0,0);
             foreach(Route route in routes)
             {
                 float approximateLength=Vector2.Distance(route.a,route.b)*1.08f;
@@ -39,9 +41,17 @@ namespace MadeInArizona
                     if(i>0)distance[i]=distance[i-1]+Vector3.Distance(centers[i-1],centers[i]);
                 }
 
-                // Gravel shoulders hide the asphalt seam and make the road settle into the ground.
-                Ribbon("Gravel left shoulder",leftOuter,left,high,roads,false);
-                Ribbon("Gravel right shoulder",right,rightOuter,high,roads,false);
+                // Gravel shoulders hide the asphalt seam and dissolve into the terrain like the dirt trails.
+                if(blend)
+                {
+                    var line=new Vector2[count];for(int i=0;i<count;i++)line[i]=XZ(centers[i]);
+                    SoilStrip("Gravel shoulders",line,halfRoad+1.6f,1.2f,halfRoad-.4f,shoulder,.03f,roads);
+                }
+                else
+                {
+                    Ribbon("Gravel left shoulder",leftOuter,left,high,roads,false);
+                    Ribbon("Gravel right shoulder",right,rightOuter,high,roads,false);
+                }
                 Surface("Smooth winding county road",surface,asphalt,roads,true);
                 BuildWornCenterMarkings(centers,normals,distance);
                 BuildRoadFurniture(route,centers,normals,distance);

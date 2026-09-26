@@ -43,6 +43,22 @@ namespace MadeInArizona
                 cam.orthographic = ortho; camera.enabled = true;
             }
             check("reviewed all trail kinds", road && track && path);
+            // Road shoulder and town apron, from the gameplay camera and a low oblique view.
+            Vector3 town = world.Towns[0], roadPoint = world.NearestPatrolRoad((world.Towns[0] + world.Towns[1]) * .5f);
+            foreach (var shot in new[] { ("town", town + new Vector3(0, 0, 0)), ("town-edge", town + new Vector3(26, 0, 0)), ("road", roadPoint) })
+            {
+                Vector3 p = shot.Item2; p.y = GeneratedWorld.HeightAt(p);
+                game.Player.Body.position = p + new Vector3(60, 3, 60);
+                focus.transform.position = p; camera.Snap();
+                for (int f = 0; f < 90; f++) yield return null;
+                Render(Camera.main, Path.Combine(directory, shot.Item1 + "-gameplay.png"));
+                var cam = Camera.main; bool ortho = cam.orthographic; camera.enabled = false;
+                cam.orthographic = false; cam.fieldOfView = 50;
+                cam.transform.position = p + new Vector3(-14, 7, -16); cam.transform.LookAt(p);
+                yield return null;
+                Render(cam, Path.Combine(directory, shot.Item1 + "-oblique.png"));
+                cam.orthographic = ortho; camera.enabled = true;
+            }
             Debug.Log("MIA_TRAIL_REVIEW " + directory);
         }
 
