@@ -76,19 +76,49 @@ namespace MadeInArizona
         {
             if (!material) return;
             material.SetTexture("_BumpMap", SurfaceNormal());
+            bool ready = GroundArrays(out var albedoArray, out var normalArray);
+            if (ready) { material.SetTexture("_GroundAlbedoArray", albedoArray); material.SetTexture("_GroundNormalArray", normalArray); }
+            material.SetFloat("_UseGroundTextures", ready ? 1 : 0);
+        }
+
+        const int GroundArraySize = 512;
+        static RenderTexture groundAlbedo, groundNormal;
+        /// <summary>
+        /// Packs all Outdoor Ground Textures into two 512 px texture arrays (albedo+height, normal+AO) on the GPU.
+        /// The source maps differ in size and compression, so they are resampled by blits instead of copied.
+        /// </summary>
+        public static bool GroundArrays(out RenderTexture albedoArray, out RenderTexture normalArray)
+        {
+            albedoArray = groundAlbedo; normalArray = groundNormal;
+            if (groundAlbedo && groundNormal && groundAlbedo.IsCreated() && groundNormal.IsCreated()) return true;
             var set = GroundTextureSet.Load();
-            if (!set) return;
-            int[] picks = { 1, 4, 8, 12 };
-            int linked = 0;
-            for (int i = 0; i < picks.Length; i++)
+            var pack = Shader.Find("Hidden/MadeInArizona/GroundPack");
+            if (!set || !pack || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) return false;
+            for (int i = 0; i < GroundTextureSet.TextureCount; i++) if (!set.Diffuse(i)) return false;
+            groundAlbedo = MakeArray("Ground albedo + height array", RenderTextureReadWrite.sRGB);
+            groundNormal = MakeArray("Ground normal + AO array", RenderTextureReadWrite.Linear);
+            var material = new Material(pack);
+            for (int i = 0; i < GroundTextureSet.TextureCount; i++)
             {
-                var diffuse = set.Diffuse(picks[i]); var normal = set.Normal(picks[i]); var ao = set.Occlusion(picks[i]); var height = set.Height(picks[i]);
-                if (diffuse) { material.SetTexture("_GroundDiffuse" + i, diffuse); linked++; }
-                if (normal) material.SetTexture("_GroundNormal" + i, normal);
-                if (ao) material.SetTexture("_GroundAO" + i, ao);
-                if (height) material.SetTexture("_GroundHeight" + i, height);
+                material.SetTexture("_Second", set.Height(i) ? set.Height(i) : Texture2D.grayTexture);
+                Graphics.Blit(set.Diffuse(i), groundAlbedo, material, 0, i);
+                material.SetTexture("_Second", set.Occlusion(i) ? set.Occlusion(i) : Texture2D.whiteTexture);
+                Graphics.Blit(set.Normal(i) ? set.Normal(i) : Texture2D.normalTexture, groundNormal, material, 1, i);
             }
-            material.SetFloat("_UseGroundTextures", linked == picks.Length ? 1 : 0);
+            Object.Destroy(material);
+            groundAlbedo.GenerateMips(); groundNormal.GenerateMips();
+            albedoArray = groundAlbedo; normalArray = groundNormal;
+            return true;
+        }
+        static RenderTexture MakeArray(string name, RenderTextureReadWrite space)
+        {
+            var array = new RenderTexture(GroundArraySize, GroundArraySize, 0, RenderTextureFormat.ARGB32, space)
+            {
+                name = name, dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray, volumeDepth = GroundTextureSet.TextureCount,
+                useMipMap = true, autoGenerateMips = false, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4
+            };
+            array.Create();
+            return array;
         }
         static Texture2D albedo;
         static Texture2D SurfaceAlbedo()

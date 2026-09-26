@@ -59,6 +59,21 @@ namespace MadeInArizona
                 Render(cam, Path.Combine(directory, shot.Item1 + "-oblique.png"));
                 cam.orthographic = ortho; camera.enabled = true;
             }
+            // Ground texture collections across the biomes (south desert to northern forest), at gameplay and wide zoom.
+            float half = world.WorldBounds.size.x * .5f;
+            for (int b = 0; b < 4; b++)
+            {
+                Vector3 p = new Vector3(world.WorldBounds.size.x * .12f, 0, Mathf.Lerp(-half * .7f, half * .75f, b / 3f));
+                p = world.NearestPatrolRoad(p) + new Vector3(55, 0, 30); p.y = GeneratedWorld.HeightAt(p);
+                game.Player.Body.position = p + new Vector3(80, 3, 80);
+                focus.transform.position = p; camera.Snap();
+                for (int f = 0; f < 90; f++) yield return null;
+                Render(Camera.main, Path.Combine(directory, "biome-" + b + "-gameplay.png"));
+                camera.enabled = false; float size = Camera.main.orthographicSize; Camera.main.orthographicSize = size * 3.2f;
+                yield return null;
+                Render(Camera.main, Path.Combine(directory, "biome-" + b + "-wide.png"));
+                Camera.main.orthographicSize = size; camera.enabled = true;
+            }
             Debug.Log("MIA_TRAIL_REVIEW " + directory);
         }
 

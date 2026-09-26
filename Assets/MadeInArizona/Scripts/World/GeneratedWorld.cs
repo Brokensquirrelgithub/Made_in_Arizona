@@ -84,12 +84,22 @@ namespace MadeInArizona
         {
             var blend=Shader.Find("MadeInArizona/TrailBlend");if(!blend)return;
             if(townApron==null)townApron=TrailMaterial(blend,new Color(.49f,.38f,.26f),7,.35f,0,0);
-            // The centreline runs down the main street; ends are extended past the shader's rounded tip taper.
-            const float halfWidth=29,halfLength=24+29*.35f;Vector3 forward=frame*Vector3.forward;
-            int rows=Mathf.CeilToInt(halfLength*2/2)+1;var line=new Vector2[rows];
-            for(int i=0;i<rows;i++)line[i]=XZ(c+forward*Mathf.Lerp(-halfLength,halfLength,i/(float)(rows-1)));
-            SoilStrip("Town ground apron",line,halfWidth,2.4f,0,townApron,.025f,town);
+            // Three overlapping strips (main street, cross street, a diagonal yard) form an irregular worn area
+            // around the lots instead of a rectangle. A separate stream keeps the town layout itself unchanged.
+            var random=new System.Random(unchecked(seed*7919+Towns.IndexOf(c)*104729+17));
+            float yard=Rand(random,25,65),shift=Rand(random,-8,8);
+            ApronStrip(town,c,frame,0,Vector2.zero,24,30);
+            ApronStrip(town,c,frame,90,new Vector2(0,shift),18,34);
+            ApronStrip(town,c,frame,yard,new Vector2(Rand(random,-10,10),Rand(random,-10,10)),14,26);
             pad.enabled=false;
+        }
+        void ApronStrip(Transform town,Vector3 c,Quaternion frame,float angle,Vector2 offset,float halfWidth,float halfLength)
+        {
+            // Ends are extended past the shader's rounded tip taper so the strip keeps its intended length.
+            Quaternion rotation=frame*Quaternion.Euler(0,angle,0);Vector3 forward=rotation*Vector3.forward,center=c+frame*new Vector3(offset.x,0,offset.y);
+            float reach=halfLength+halfWidth*.35f;int rows=Mathf.CeilToInt(reach)+1;var line=new Vector2[rows];
+            for(int i=0;i<rows;i++)line[i]=XZ(center+forward*Mathf.Lerp(-reach,reach,i/(float)(rows-1)));
+            SoilStrip("Town ground apron",line,halfWidth,5f,0,townApron,.025f,town);
         }
         Material townApron;
         /// <summary>Heading of the first route leaving a town, measured a short way out so the curve is respected.</summary>

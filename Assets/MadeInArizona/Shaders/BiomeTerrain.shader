@@ -3,10 +3,8 @@ Shader "MadeInArizona/BiomeTerrain"
     Properties
     {
         _BumpMap("Fallback terrain normal",2D)="bump"{}
-        _GroundDiffuse0("Packed sand",2D)="white"{} _GroundNormal0("Packed sand normal",2D)="bump"{} _GroundAO0("Packed sand AO",2D)="white"{} _GroundHeight0("Packed sand height",2D)="gray"{}
-        _GroundDiffuse1("Packed earth",2D)="white"{} _GroundNormal1("Packed earth normal",2D)="bump"{} _GroundAO1("Packed earth AO",2D)="white"{} _GroundHeight1("Packed earth height",2D)="gray"{}
-        _GroundDiffuse2("Packed gravel",2D)="white"{} _GroundNormal2("Packed gravel normal",2D)="bump"{} _GroundAO2("Packed gravel AO",2D)="white"{} _GroundHeight2("Packed gravel height",2D)="gray"{}
-        _GroundDiffuse3("Packed rock",2D)="white"{} _GroundNormal3("Packed rock normal",2D)="bump"{} _GroundAO3("Packed rock AO",2D)="white"{} _GroundHeight3("Packed rock height",2D)="gray"{}
+        _GroundAlbedoArray("Ground albedo (RGB) + height (A) array",2DArray)=""{}
+        _GroundNormalArray("Ground normal (RG) + AO (B) array",2DArray)=""{}
         _UseGroundTextures("Use Outdoor Ground Textures",Range(0,1))=0
     }
     SubShader
@@ -30,13 +28,8 @@ Shader "MadeInArizona/BiomeTerrain"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap);
-            // Every pack map uses the same repeat/bilinear sampling state. Sharing one sampler keeps
-            // this four-layer blend under the 16-sampler limit on Metal and Direct3D 11.
-            TEXTURE2D(_GroundDiffuse0); SAMPLER(sampler_GroundDiffuse0); TEXTURE2D(_GroundNormal0); TEXTURE2D(_GroundAO0);
-            TEXTURE2D(_GroundDiffuse1); TEXTURE2D(_GroundNormal1); TEXTURE2D(_GroundAO1);
-            TEXTURE2D(_GroundDiffuse2); TEXTURE2D(_GroundNormal2); TEXTURE2D(_GroundAO2);
-            TEXTURE2D(_GroundDiffuse3); TEXTURE2D(_GroundNormal3); TEXTURE2D(_GroundAO3);
-            TEXTURE2D(_GroundHeight0); TEXTURE2D(_GroundHeight1); TEXTURE2D(_GroundHeight2); TEXTURE2D(_GroundHeight3);
+            // All fourteen Outdoor Ground Textures live in two arrays built at load (see WorldArt.GroundArrays).
+            TEXTURE2D_ARRAY(_GroundAlbedoArray); SAMPLER(sampler_GroundAlbedoArray); TEXTURE2D_ARRAY(_GroundNormalArray);
             float _UseGroundTextures;
             struct A { float4 p:POSITION; float3 n:NORMAL; float2 uv:TEXCOORD0; float4 c:COLOR; };
             struct V { float4 p:SV_POSITION; float3 world:TEXCOORD0; float3 n:TEXCOORD1; float2 uv:TEXCOORD2; float4 c:COLOR; float fog:TEXCOORD3; };
@@ -71,35 +64,67 @@ Shader "MadeInArizona/BiomeTerrain"
                 float3 gravelColor=lerp(float3(.30,.245,.18),float3(.48,.37,.25),colorVariation);
                 float3 rockColor=lerp(float3(.20,.19,.16),float3(.42,.35,.27),Fbm(p*.31))*lerp(.85,1.12,colorVariation);
                 float3 albedo=lerp(soilColor,sandColor,sand*.46);albedo=lerp(albedo,gravelColor,gravel*.68);albedo=lerp(albedo,rockColor,rock);albedo*=1-cracks*.10;albedo=lerp(albedo,gravelColor*.90,scatteredStone*.27);
-                // Licensed Outdoor Ground Textures provide recognizable grain and material breakup;
-                // the procedural palette keeps the Arizona biome colours and hides repetition.
-                float2 packUV=p*.115;
-                float3 packSand=SAMPLE_TEXTURE2D(_GroundDiffuse0,sampler_GroundDiffuse0,packUV).rgb;
-                float3 packEarth=SAMPLE_TEXTURE2D(_GroundDiffuse1,sampler_GroundDiffuse0,packUV.yx*float2(-1,1)+float2(3.2,7.1)).rgb;
-                float3 packGravel=SAMPLE_TEXTURE2D(_GroundDiffuse2,sampler_GroundDiffuse0,packUV*1.28+float2(11.3,2.7)).rgb;
-                float3 packRock=SAMPLE_TEXTURE2D(_GroundDiffuse3,sampler_GroundDiffuse0,packUV*.82+float2(5.4,13.9)).rgb;
+                // Each biome draws on its own collection of ground textures. Candidate layers are weighted by the
+                // material role (sand/earth/gravel/rock), the biome, and patch noise at ~55 m, ~16 m and ~5 m, so a biome
+                // reads as a mosaic of related grounds rather than one repeating texture. Only the three strongest
+                // layers are sampled, then blended by their height maps.
                 float rockWeight=saturate(rock),gravelWeight=saturate(gravel*(1-rockWeight)),sandWeight=saturate(sand*(1-rockWeight-gravelWeight));
                 float earthWeight=saturate(1-rockWeight-gravelWeight-sandWeight);
-                // Height-aware noise masking keeps material borders organic. Texture height makes raised
-                // pebbles and ridges win locally, while offset noise prevents broad biome bands and repetition.
+                // Noise-masked role borders stay organic instead of forming broad bands.
                 float4 baseWeights=float4(sandWeight,earthWeight,gravelWeight,rockWeight);
-                float4 packHeight=float4(
-                    SAMPLE_TEXTURE2D(_GroundHeight0,sampler_GroundDiffuse0,packUV).r,
-                    SAMPLE_TEXTURE2D(_GroundHeight1,sampler_GroundDiffuse0,packUV.yx*float2(-1,1)+float2(3.2,7.1)).r,
-                    SAMPLE_TEXTURE2D(_GroundHeight2,sampler_GroundDiffuse0,packUV*1.28+float2(11.3,2.7)).r,
-                    SAMPLE_TEXTURE2D(_GroundHeight3,sampler_GroundDiffuse0,packUV*.82+float2(5.4,13.9)).r);
                 float4 maskNoise=float4(Fbm(p*.31+float2(2,17)),Fbm(p*.34+float2(41,-9)),Fbm(p*.29+float2(-27,31)),Fbm(p*.33+float2(13,53)));
-                maskNoise=maskNoise*.72+float4(Noise(p*1.31+3),Noise(p*1.47+19),Noise(p*1.23+37),Noise(p*1.39+61))*.28;
-                float4 scores=baseWeights*lerp(.78,1.22,maskNoise)+(packHeight-.5)*baseWeights*(_UseGroundTextures*.16);
+                float4 scores=baseWeights*lerp(.78,1.22,maskNoise);
                 float peak=max(max(scores.x,scores.y),max(scores.z,scores.w));
-                float4 naturalWeights=saturate((scores-(peak-.22))/.22);
-                naturalWeights=naturalWeights*naturalWeights*(3-2*naturalWeights);
+                float4 naturalWeights=saturate((scores-(peak-.22))/.22);naturalWeights=naturalWeights*naturalWeights*(3-2*naturalWeights);
                 naturalWeights/=max(dot(naturalWeights,float4(1,1,1,1)),.0001);
                 sandWeight=naturalWeights.x;earthWeight=naturalWeights.y;gravelWeight=naturalWeights.z;rockWeight=naturalWeights.w;
-                float3 packColor=packSand*sandWeight+packEarth*earthWeight+packGravel*gravelWeight+packRock*rockWeight;
-                float packLuma=max(.06,dot(packColor,float3(.299,.587,.114)));
-                float3 textureDetail=lerp(packLuma.xxx,packColor,.28)/.48;
-                albedo*=lerp(1,clamp(textureDetail,.48,1.65),_UseGroundTextures*.72);
+                float forest=saturate(green*1.6),riverGreen=saturate(i.c.g*1.6-i.c.r*1.1-.05)*forest;
+                float highland=saturate(1-(max(i.c.r,max(i.c.g,i.c.b))-min(i.c.r,min(i.c.g,i.c.b)))*4.5)*(1-forest);
+                float desert=saturate(1-forest-highland);
+                float patchA=smoothstep(.32,.68,Fbm(p*.018+float2(41,7))),patchB=smoothstep(.30,.70,Fbm(p*.061+float2(-9,23))),patchC=smoothstep(.35,.65,Noise(p*.21+float2(5,-17)));
+                float w[14];
+                w[0]=earthWeight*(desert*(1-patchA)*patchC*.8+highland*.9)+sandWeight*forest*.3;   // brown soil
+                w[1]=sandWeight*desert*(1-patchB*.55);                                             // pale sand
+                w[2]=sandWeight*forest*.5*(1-patchA);                                             // pale ground with weeds
+                w[3]=earthWeight*forest*patchB*(1-riverGreen);                                    // weeds
+                w[4]=earthWeight*forest*(1-patchB)*patchA;                                        // moss and twigs
+                w[5]=(earthWeight+sandWeight)*riverGreen;                                         // lush grass by water
+                w[6]=gravelWeight*(1-patchB*.6)+earthWeight*desert*patchB*patchC*.35;             // gravel speckle
+                w[7]=earthWeight*desert*(1-patchA)*(1-patchC*.8)+gravelWeight*desert*patchB*.4;   // red pebble dirt
+                w[8]=gravelWeight*(forest+highland)*patchB+earthWeight*highland*patchA*.7;        // olive rocky ground
+                w[9]=earthWeight*forest*(1-patchB)*(1-patchA);                                    // dark grass tufts
+                w[10]=sandWeight*desert*patchB*.55+earthWeight*desert*patchA*(1-patchB)*.35;      // dry fibrous ground
+                w[11]=(sandWeight+earthWeight)*forest*patchC*.45;                                 // leaf and grass litter
+                w[12]=earthWeight*desert*patchA*(1-patchB*.35)+rockWeight*desert*.45;             // red cracked earth
+                w[13]=rockWeight*(1-desert*.45);                                                  // bedrock
+                // Keep the three strongest candidates.
+                int i0=0,i1=1,i2=2;float w0=-1,w1=-1,w2=-1;
+                [unroll]for(int k=0;k<14;k++)
+                {
+                    float v=w[k];
+                    if(v>w0){w2=w1;i2=i1;w1=w0;i1=i0;w0=v;i0=k;}
+                    else if(v>w1){w2=w1;i2=i1;w1=v;i1=k;}
+                    else if(v>w2){w2=v;i2=k;}
+                }
+                // Per-layer UV rotation and offset hides tiling; the same transform is used for normals.
+                float2 packUV=p*.115;
+                float2 uv0=float2(packUV.x+i0*.37,packUV.y+i0*.61),uv1=float2(-packUV.y+i1*.29,packUV.x+i1*.53),uv2=float2(packUV.y+i2*.43,-packUV.x+i2*.17);
+                float4 t0=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uv0,i0);
+                float4 t1=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uv1,i1);
+                float4 t2=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uv2,i2);
+                float3 layerScore=float3(w0,max(w1,0),max(w2,0))/max(w0,.0001)+float3(t0.a,t1.a,t2.a)*.45;
+                float layerPeak=max(layerScore.x,max(layerScore.y,layerScore.z));
+                float3 layerWeight=saturate((layerScore-(layerPeak-.28))/.28);
+                layerWeight=layerWeight*layerWeight*(3-2*layerWeight);layerWeight/=max(dot(layerWeight,1),.0001);
+                float3 packColor=t0.rgb*layerWeight.x+t1.rgb*layerWeight.y+t2.rgb*layerWeight.z;
+                float packLuma=max(.05,dot(packColor,float3(.299,.587,.114)));
+                // Keep the Arizona palette's brightness while letting each texture's own hue and pattern show.
+                float paletteLuma=max(.05,dot(albedo,float3(.299,.587,.114)));
+                float3 detailOnly=albedo*clamp(packLuma/.42,.5,1.7);
+                // Partial exposure match: each texture keeps 40% of its own brightness, so darker grounds still read.
+                float3 photo=packColor*clamp(pow(paletteLuma/packLuma,.6),.6,1.6);
+                photo=lerp(photo,photo*albedo/paletteLuma*.5+photo*.5,.4);
+                albedo=lerp(albedo,lerp(detailOnly,photo,.7),_UseGroundTextures);
                 // ddx/ddy recovers the world-space slope from one shared micro-height evaluation.
                 // It replaces four high-frequency procedural resamples per fragment.
                 float microHeight=Noise(p*2.6)*.055+Noise(p*7.0)*.018+scatteredStone*.018-cracks*.012;
@@ -109,11 +134,12 @@ Shader "MadeInArizona/BiomeTerrain"
                 float gx=(heightDx*worldDy.y-heightDy*worldDx.y)/safeDet;
                 float gz=(worldDx.x*heightDy-worldDy.x*heightDx)/safeDet;
                 float3 a=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,p*.31)),b=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,p*1.37+float2(7.1,3.7)));
-                float3 ns=UnpackNormal(SAMPLE_TEXTURE2D(_GroundNormal0,sampler_GroundDiffuse0,packUV));
-                float3 ne=UnpackNormal(SAMPLE_TEXTURE2D(_GroundNormal1,sampler_GroundDiffuse0,packUV.yx*float2(-1,1)+float2(3.2,7.1)));
-                float3 ng=UnpackNormal(SAMPLE_TEXTURE2D(_GroundNormal2,sampler_GroundDiffuse0,packUV*1.28+float2(11.3,2.7)));
-                float3 nr=UnpackNormal(SAMPLE_TEXTURE2D(_GroundNormal3,sampler_GroundDiffuse0,packUV*.82+float2(5.4,13.9)));
-                float2 packNormal=(ns.xy*sandWeight+ne.xy*earthWeight+ng.xy*gravelWeight+nr.xy*rockWeight)*_UseGroundTextures;
+                float4 n0=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uv0,i0);
+                float4 n1=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uv1,i1);
+                float4 n2=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uv2,i2);
+                // Undo each layer's UV rotation so the tangent-space normals line up in world space.
+                float2 nx0=n0.xy*2-1,nx1=n1.xy*2-1,nx2=n2.xy*2-1;
+                float2 packNormal=(nx0*layerWeight.x+float2(nx1.y,-nx1.x)*layerWeight.y+float2(-nx2.y,nx2.x)*layerWeight.z)*_UseGroundTextures;
                 float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22));
                 Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
@@ -121,7 +147,7 @@ Shader "MadeInArizona/BiomeTerrain"
                 #endif
                 float cloud=Fbm(p*.006+_Time.y*float2(.0021,.0013));
                 float cloudShade=lerp(.91,1.0,smoothstep(.38,.68,cloud));
-                float packAO=SAMPLE_TEXTURE2D(_GroundAO0,sampler_GroundDiffuse0,packUV).r*sandWeight+SAMPLE_TEXTURE2D(_GroundAO1,sampler_GroundDiffuse0,packUV.yx*float2(-1,1)+float2(3.2,7.1)).r*earthWeight+SAMPLE_TEXTURE2D(_GroundAO2,sampler_GroundDiffuse0,packUV*1.28+float2(11.3,2.7)).r*gravelWeight+SAMPLE_TEXTURE2D(_GroundAO3,sampler_GroundDiffuse0,packUV*.82+float2(5.4,13.9)).r*rockWeight;
+                float packAO=n0.b*layerWeight.x+n1.b*layerWeight.y+n2.b*layerWeight.z;
                 ao*=lerp(1,lerp(.62,1,packAO),_UseGroundTextures*.72);
                 float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade);
                 #if defined(_ADDITIONAL_LIGHTS)
