@@ -91,7 +91,7 @@ namespace MadeInArizona
             ProjectileSystem.Fire(muzzle, aimDirection, 49, 62, 6, owner.gameObject, new Color(1, .35f, .08f), ExplosionKind.Rocket, 2.7f);
             ExplosionSystem.Burst(muzzle, new Color(1, .5f, .1f), 8, 2);
             Flash(new Color(1, .3f, .06f), 13, .2f);
-            AudioManager.Instance?.PlayShot(muzzle, 1);
+            AudioManager.Instance?.PlayShot(muzzle, WeaponRules.Find("invoice"));
         }
         void Fire(WeaponDefinition weapon, Vector3 direction)
         {
@@ -142,7 +142,7 @@ namespace MadeInArizona
             }
             ExplosionSystem.Burst(muzzle, weapon.projectileColor, weapon.id == "mines" ? 2 : 4, 1);
             Flash(weapon.projectileColor, weapon.id == "mortar" ? 14 : 7, weapon.id == "minigun" ? .035f : .09f);
-            AudioManager.Instance?.PlayShot(muzzle, weapon.blastRadius > 0 ? 1 : weapon.id == "sweeper" || weapon.id == "boomstick" ? 2 : 0);
+            AudioManager.Instance?.PlayShot(muzzle, weapon);
             if (owner.IsPlayer && weapon.blastRadius > 0) CameraController.Instance?.Shake(.1f);
         }
         Vector3 Muzzle(Vector3 direction)

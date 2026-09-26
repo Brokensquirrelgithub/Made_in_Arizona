@@ -408,7 +408,6 @@ namespace MadeInArizona
                 Bar(point.x-37,point.y-8,74,5,vehicle.Damage.Health/vehicle.Damage.MaxHealth,color);
                 if(!ai.IsFriendly)Text(point.x-110,point.y-43,220,16,FactionRules.Name(ai.Faction),9,color,true,TextAnchor.MiddleCenter);
                 Text(point.x-80,point.y-28,160,20,ai.IsFriendly?"ESCORT":names[Mathf.Clamp(ai.Archetype,0,7)],10,color,true,TextAnchor.MiddleCenter);
-                if(!ai.IsFriendly)Text(point.x-88,point.y+1,176,16,"MAY DROP: "+WeaponRules.DropHint(ai.Faction,ai.Archetype),9,Lime,true,TextAnchor.MiddleCenter);
                 if(ai.IsTelegraphingAttack) {
                     var start=ScreenPoint(vehicle.transform.position+Vector3.up*.6f);
                     var end=ScreenPoint(vehicle.transform.position+ai.TelegraphDirection*35+Vector3.up*.6f);

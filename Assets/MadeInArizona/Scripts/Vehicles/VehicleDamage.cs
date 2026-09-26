@@ -20,15 +20,24 @@ namespace MadeInArizona
 
         public void Initialize(VehicleController owner, float health)
         {
-            vehicle = owner; baseHealth=health; MaxHealth = Health = health*(owner.IsPlayer?DevTuning.Current.playerHealth:DevTuning.Current.enemyHealth); IsDead = false;
+            vehicle = owner; baseHealth=health; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false;
             Engine = Radiator = Transmission = Wheels = Suspension = 1;
         }
         public void ApplyHealthTuning()
         {
             if(vehicle==null||IsDead)return;
             float fraction=Health/Mathf.Max(1,MaxHealth);
-            MaxHealth=Mathf.Max(1,baseHealth*(vehicle.IsPlayer?DevTuning.Current.playerHealth:DevTuning.Current.enemyHealth));
+            MaxHealth=Mathf.Max(1,baseHealth*HealthMultiplier);
             Health=MaxHealth*fraction;
+        }
+        float HealthMultiplier
+        {
+            get
+            {
+                if(vehicle.IsPlayer)return DevTuning.Current.playerHealth;
+                var ai=vehicle.GetComponent<EnemyAI>();
+                return DevTuning.Current.enemyHealth*(ai&&ai.IsFriendly?1f:SpawnManager.EnemyHealthMultiplier);
+            }
         }
         public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source)
         {

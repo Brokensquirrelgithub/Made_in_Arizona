@@ -45,26 +45,27 @@ namespace MadeInArizona
             if(!trialDefinition)trialDefinition=ScriptableObject.CreateInstance<MissionDefinition>();
             trialDefinition.id="combat_trial";trialDefinition.title="Vehicle Combat Trial";trialDefinition.region="117° Proving Ground";
             trialDefinition.mode=MissionMode.Recovery;trialDefinition.enemyCount=6;trialDefinition.timeLimit=180;
-            trialDefinition.opening="JOHNNY: Six crews on the range. First: corporate guns, HOA traps, and scavenger rushes. Watch their colors and warning lines.";
+            trialDefinition.opening="JOHNNY: Twenty-four hostiles on the range. First: corporate guns, HOA traps, and scavenger rushes. Watch their colors and warning lines.";
             trialDefinition.closing="Trial complete. Your build can handle a disagreement.";
             trialDefinition.optionalKind=OptionalKind.Health;trialDefinition.optionalThreshold=.5f;
-            Begin(trialDefinition,-1);SetObjective("WAVE 1 / 2 • destroy three hostile vehicles",Point(0));
+            Begin(trialDefinition,-1);SetObjective("WAVE 1 / 2 • destroy "+SpawnManager.EnemyCount(3)+" hostile vehicles",Point(0));
         }
         void TickCombatTrial()
         {
-            if(Stage==0 && Kills>=3) {
-                SetStage(1);Spawn(new Vector3(-27,1,18),2);Spawn(new Vector3(27,1,22),3);Spawn(new Vector3(0,1,32),4);
+            int total=SpawnManager.EnemyCount(6);
+            if(Stage==0 && Kills>=SpawnManager.EnemyCount(3)) {
+                SetStage(1);SpawnWave(3,Point(0));
                 DialogueSystem.Instance?.Say("JOHNNY","Second wave: open-house sharks, snowbird roadblocks, and neon tuner cars. Grab their drops and keep moving.",7);
             }
-            Progress=Kills/6f;
-            if(Kills>=6){Objective="TRIAL COMPLETE • 6 / 6 hostile vehicles destroyed";Finish();return;}
+            Progress=Kills/(float)total;
+            if(Kills>=total){Objective="TRIAL COMPLETE • "+total+" / "+total+" hostile vehicles destroyed";Finish();return;}
             float nearest=float.MaxValue;
             foreach(var enemy in VehicleController.Active) {
                 if(!enemy||enemy.IsPlayer||enemy.Damage.IsDead)continue;
                 float distance=(enemy.transform.position-PlayerPosition).sqrMagnitude;
                 if(distance<nearest){nearest=distance;ObjectivePosition=enemy.transform.position;}
             }
-            Objective="WAVE "+(Stage+1)+" / 2 • "+Kills+" / 6 hostile vehicles destroyed";
+            Objective="WAVE "+(Stage+1)+" / 2 • "+Kills+" / "+total+" hostile vehicles destroyed";
         }
 
         public void Begin(MissionDefinition mission,int index)
@@ -86,6 +87,7 @@ namespace MadeInArizona
             if(index==0)
             {
                 suspect=Spawn(Point(0)+Vector3.up,1);
+                SpawnGroup(SpawnManager.EnemyCountMultiplier-1,Point(0));
                 if(suspect)
                 {
                     suspect.Stats.maxSpeed=55;suspect.Stats.horsepower*=.65f;
@@ -98,13 +100,13 @@ namespace MadeInArizona
             {
                 case MissionMode.Recovery:
                     SpawnWave(Mathf.Max(3,mission.enemyCount/2),Point(0));
-                    SetObjective("Break the repossession crew: destroy "+Mathf.Max(3,mission.enemyCount/2)+" vehicles",Point(0));break;
+                    SetObjective("Break the repossession crew: destroy "+SpawnManager.EnemyCount(Mathf.Max(3,mission.enemyCount/2))+" vehicles",Point(0));break;
                 case MissionMode.Convoy:
                     escort=Spawn(Game.World.PlayerSpawn+new Vector3(5,0,12),2);
                     if(escort)
                     {
                         escort.Damage.Repair(10000);escort.Stats.maxSpeed=42;escort.Stats.horsepower*=.65f;
-                        var ai=escort.GetComponent<EnemyAI>();if(ai){ai.IsFriendly=true;ai.UseDestination=true;ai.Destination=Point(0);}
+                        var ai=escort.GetComponent<EnemyAI>();if(ai){ai.IsFriendly=true;escort.Damage.ApplyHealthTuning();ai.UseDestination=true;ai.Destination=Point(0);}
                     }
                     SetObjective("Escort the evidence van • stay within 32 m",Point(0));SpawnWave(3,Point(0));break;
                 case MissionMode.Defense:
@@ -154,15 +156,16 @@ namespace MadeInArizona
                     SetStage(1);stageKills=Kills;SpawnWave(3,Point(1));
                     if(suspect&&!suspect.Damage.IsDead){var ai=suspect.GetComponent<EnemyAI>();if(ai)ai.UseDestination=false;}
                     DialogueSystem.Instance?.SayLine("Johnny: There's our loaner. Customer replaced the wheel nut with a hose clamp.|Stallion: I'll correct the workmanship.|Johnny: Clear the yard first. Propane tanks are persuasive shop tools.",12);
-                    SetObjective("Clear the junkyard crew • 0 / 3 hostile vehicles",Point(1));
+                    SetObjective("Clear the junkyard crew • 0 / "+SpawnManager.EnemyCount(3)+" hostile vehicles",Point(1));
                 }
                 Progress=.1f;
             }
             else if(Stage==1)
             {
-                Objective="Clear the junkyard crew • "+Mathf.Min(3,Kills-stageKills)+" / 3 hostile vehicles";
-                Progress=.2f+Mathf.Clamp01((Kills-stageKills)/3f)*.3f;
-                if(Kills-stageKills>=3)
+                int required=SpawnManager.EnemyCount(3);
+                Objective="Clear the junkyard crew • "+Mathf.Min(required,Kills-stageKills)+" / "+required+" hostile vehicles";
+                Progress=.2f+Mathf.Clamp01((Kills-stageKills)/(float)required)*.3f;
+                if(Kills-stageKills>=required)
                 { SetStage(2);Midpoint();SetObjective("Recover the Sunsprawl ledger • hold INTERACT at the gold ring",Point(1)); }
             }
             else if(Stage==2)
@@ -179,11 +182,12 @@ namespace MadeInArizona
         }
         void TickRecovery()
         {
-            if(Stage==0&&Kills>=Mathf.Max(3,definition.enemyCount/2))
+            int required=SpawnManager.EnemyCount(Mathf.Max(3,definition.enemyCount/2));
+            if(Stage==0&&Kills>=required)
             {SetStage(1);Midpoint();SpawnWave(Mathf.Max(2,definition.enemyCount/3),Point(2));SetObjective("Recover the title archive • hold INTERACT at the gold ring",Point(2));}
             else if(Stage==1&&InteractAt(Point(2))){Score+=650;SetStage(2);SetObjective("Return the title archive to extraction",Game.World.ExtractionPoint);}
             else if(Stage==2)TryExtract();
-            Progress=Stage==0?Mathf.Clamp01(Kills/(float)Mathf.Max(3,definition.enemyCount/2))*.4f:Stage==1?.55f:.85f;
+            Progress=Stage==0?Mathf.Clamp01(Kills/(float)required)*.4f:Stage==1?.55f:.85f;
         }
         void TickDemolition()
         {
@@ -264,12 +268,13 @@ namespace MadeInArizona
         {
             if(Stage==0)
             {
-                int required=Mathf.Max(3,definition.enemyCount/3);
+                int required=SpawnManager.EnemyCount(Mathf.Max(3,definition.enemyCount/3));
                 Objective="Clear the command vehicle's security screen • "+Mathf.Min(Kills,required)+" / "+required;
                 Progress=Mathf.Clamp01(Kills/(float)required)*.25f;
                 if(Kills>=required)
                 {
                     SetStage(1);boss=Spawn(Point(3)+Vector3.up,7);Midpoint();
+                    SpawnGroup(SpawnManager.EnemyCountMultiplier-1,Point(3));
                     SetObjective("Disable external pods, then destroy the command vehicle",Point(3));
                 }
             }
@@ -310,13 +315,17 @@ namespace MadeInArizona
         }
         void SpawnWave(int count,Vector3 center)
         {
+            SpawnGroup(SpawnManager.EnemyCount(count),center);
+        }
+        void SpawnGroup(int count,Vector3 center)
+        {
             for(int i=0;i<count;i++)
             {
                 float angle=(i*137.5f+missionIndex*31)*Mathf.Deg2Rad;
-                Vector3 p=center+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*(18+(i%3)*5);
+                Vector3 p=center+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*(18+(i%3)*5+(i/12)*14);
                 if(GeneratedWorld.Active==null){p.x=Mathf.Clamp(p.x,-86,86);p.z=Mathf.Clamp(p.z,-64,126);p.y=1.2f;}
                 else p=TerrainPoint(p)+Vector3.up;
-                Spawn(p,missionIndex<0?i:missionIndex<2?i%2:(i+wave+missionIndex)%7);
+                Spawn(p,missionIndex<0?i%3+(Stage>0?2:0):missionIndex<2?i%2:(i+wave+missionIndex)%7);
             }
         }
         public void RegisterKill()

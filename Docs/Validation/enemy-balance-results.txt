@@ -1,0 +1,21 @@
+PASS combat trial opens with twelve enemies
+PASS enemy health is one fifth across trial archetypes
+PASS player keeps full baseline health
+PASS live enemy tuning preserves reduced baseline and health fraction
+PASS unrelated slider refresh retains one fifth enemy health
+PASS trial second wave contains twelve enemies
+PASS trial completes only after twenty-four kills
+PASS loaner pursuit has four hostiles including its unique suspect
+PASS junkyard reinforcement adds twelve hostiles
+PASS old three-kill gate no longer clears junkyard
+PASS escort keeps full health while its hostile screen quadruples
+PASS boss security screen is four times larger
+PASS unique command rig arrives with three companions
+PASS command rig health also falls to one fifth
+PASS tier-two hideout spawns sixteen enemies
+PASS hideout health retains tier scaling above one fifth baseline
+PASS road encounter spawns four vehicles off screen
+PASS larger patrol still respects camera exclusion
+PASS road patrol cap increases from two to eight
+PASS road patrol population remains bounded
+RESULT: PASS

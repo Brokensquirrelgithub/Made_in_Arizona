@@ -15,6 +15,7 @@ namespace MadeInArizona
         public int Amount { get; private set; }
         float availableAt;
         Vector3 basePosition;
+        const float MagnetRadius = 12f;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
             if (!player) return null;
@@ -55,7 +56,7 @@ namespace MadeInArizona
             if (Physics.Raycast(position + Vector3.up * 6, Vector3.down, out var hit, 16, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 position.y = hit.point.y;
             go.transform.position = position + Vector3.up * .8f;
-            go.transform.localScale = kind == PickupKind.Weapon ? new Vector3(1.2f, .35f, .65f) : new Vector3(.8f, .25f, .8f);
+            go.transform.localScale = kind == PickupKind.Weapon ? new Vector3(1.5f, .44f, .81f) : new Vector3(1.1f, .34f, 1.1f);
             var color = kind == PickupKind.Health ? new Color(.25f, 1, .43f) : kind == PickupKind.Nitro ? new Color(.22f, .8f, 1) :
                 kind == PickupKind.Scrap ? new Color(1, .75f, .24f) : weapon.projectileColor;
             var material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
@@ -77,6 +78,15 @@ namespace MadeInArizona
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
             Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
+            // Only supplies follow the car. Keep weapons anchored for deliberate field-slot swaps.
+            if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= MagnetRadius * MagnetRadius &&
+                Mathf.Abs(basePosition.y - game.Player.transform.position.y) <= 5f)
+            {
+                float speed = 18f + game.Player.Body.linearVelocity.magnitude;
+                basePosition = Vector3.MoveTowards(basePosition, game.Player.transform.position + Vector3.up * .8f, speed * Time.deltaTime);
+                transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
+                delta = transform.position - game.Player.transform.position; delta.y = 0;
+            }
             if (delta.sqrMagnitude > 13 || Mathf.Abs(transform.position.y - game.Player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)
             {

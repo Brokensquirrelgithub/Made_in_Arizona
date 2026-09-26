@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -15,6 +16,9 @@ namespace MadeInArizona
         Material material;Texture2D needles;PandazoleNatureCatalog nature;
         WorldGenConfig config;
         Vector2Int lastCenter=new Vector2Int(int.MinValue,0);
+        const double BuildBudgetMs=2.5;
+        readonly SceneryMesh tileMesh=new SceneryMesh(),propMesh=new SceneryMesh();
+        IEnumerator building;Vector2Int buildingKey;
         public int LoadedTiles=>tiles.Count;
         public int DetailInstances {get;private set;}
         public int Trees {get;private set;}
@@ -35,28 +39,47 @@ namespace MadeInArizona
             if(player)Shader.SetGlobalVector("_SceneryVehicle",new Vector4(player.transform.position.x,player.transform.position.y,player.transform.position.z,1));
             Vector3 p=Camera.main.transform.position;
             var center=new Vector2Int(Mathf.FloorToInt(p.x/Tile),Mathf.FloorToInt(p.z/Tile));
+            FrameTimingProbe.Clock.Restart();
             if(center!=lastCenter)
             {
                 remove.Clear();foreach(var pair in tiles)if(Mathf.Abs(pair.Key.x-center.x)>Radius+1||Mathf.Abs(pair.Key.y-center.y)>Radius+1)remove.Add(pair.Key);
                 foreach(var key in remove){Destroy(tiles[key]);tiles.Remove(key);}lastCenter=center;
+                // A tile unloaded mid-build is abandoned; its root was destroyed above.
+                if(building!=null&&!tiles.ContainsKey(buildingKey))building=null;
             }
-            // Nearest tiles first; no single-frame generation spike when driving or opening a new region.
-            int built=0;
+            // Tiles are generated incrementally under a per-frame budget, nearest first. Whole-tile builds cost
+            // 10-18 ms each and previously ran two per frame at every tile crossing, causing a visible hitch.
+            // Tiles next to the camera (spawn, teleport, restart) are still completed immediately.
+            var clock=System.Diagnostics.Stopwatch.StartNew();
+            bool urgent=NextMissing(center,out _,out int nearest)&&nearest<=1;
+            while(urgent||clock.Elapsed.TotalMilliseconds<BuildBudgetMs)
+            {
+                if(building==null)
+                {
+                    if(!NextMissing(center,out buildingKey,out _))break;
+                    var root=new GameObject("Living ecology "+buildingKey.x+" / "+buildingKey.y);root.transform.SetParent(transform,false);root.transform.localPosition=new Vector3(buildingKey.x*Tile,0,buildingKey.y*Tile);
+                    tiles.Add(buildingKey,root);building=BuildTile(buildingKey,root);FrameTimingProbe.StreamingTiles++;
+                }
+                if(!building.MoveNext()){building=null;urgent=NextMissing(center,out _,out nearest)&&nearest<=1;}
+            }
+            FrameTimingProbe.StreamingMs+=FrameTimingProbe.Clock.Elapsed.TotalMilliseconds;
+        }
+        bool NextMissing(Vector2Int center,out Vector2Int key,out int ringFound)
+        {
             for(int ring=0;ring<=Radius;ring++)for(int z=-ring;z<=ring;z++)for(int x=-ring;x<=ring;x++)
             {
                 if(Mathf.Max(Mathf.Abs(x),Mathf.Abs(z))!=ring)continue;
-                Vector2Int key=center+new Vector2Int(x,z);
-                if(tiles.ContainsKey(key))continue;
-                tiles.Add(key,BuildTile(key));if(++built>=2)return;
+                key=center+new Vector2Int(x,z);
+                if(!tiles.ContainsKey(key)){ringFound=ring;return true;}
             }
+            key=default;ringFound=-1;return false;
         }
-        GameObject BuildTile(Vector2Int key)
+        IEnumerator BuildTile(Vector2Int key,GameObject root)
         {
             Vector3 origin=new Vector3(key.x*Tile,0,key.y*Tile);
-            var root=new GameObject("Living ecology "+key.x+" / "+key.y);root.transform.SetParent(transform,false);root.transform.localPosition=origin;
-            if(!GeneratedWorld.Contains(origin+new Vector3(16,0,16)))return root;
+            if(!GeneratedWorld.Contains(origin+new Vector3(16,0,16)))yield break;
             var random=new System.Random(unchecked(config.seed*73856093 ^ key.x*19349663 ^ key.y*83492791));
-            var mesh=new SceneryMesh();
+            var mesh=tileMesh;mesh.Clear();
             float density=Mathf.Clamp(config.vegetation,0,4),half=config.size*.5f;
             // A coarse clearance field keeps the thousands of tiny clumps away from drivable road/town surfaces.
             float[,] clearance=new float[9,9];
@@ -64,6 +87,7 @@ namespace MadeInArizona
             int attempts=Mathf.RoundToInt((nature?120:500)*density);
             for(int i=0;i<attempts;i++)
             {
+                if((i&31)==31)yield return null;
                 float x=Next(random,0,Tile),z=Next(random,0,Tile);int ix=Mathf.Min(7,(int)(x/4)),iz=Mathf.Min(7,(int)(z/4));
                 float clear=Mathf.Lerp(Mathf.Lerp(clearance[ix,iz],clearance[ix+1,iz],x/4-ix),Mathf.Lerp(clearance[ix,iz+1],clearance[ix+1,iz+1],x/4-ix),z/4-iz);
                 if(clear<.7f)continue;
@@ -93,6 +117,7 @@ namespace MadeInArizona
             // Clustered larger plants establish silhouettes, with open travel lanes between groups.
             for(int i=0;i<Mathf.RoundToInt(27*density)+5;i++)
             {
+                yield return null;
                 Vector3 world=origin+new Vector3(Next(random,1,31),0,Next(random,1,31));
                 float clear=GeneratedWorld.Active.SceneryClearance(world);if(clear<3||!GeneratedWorld.Contains(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 p=world-origin;
@@ -122,13 +147,13 @@ namespace MadeInArizona
                 {float h=Next(random,.5f,1.4f);Color c=forest?new Color(.24f,.34f,.12f):new Color(.37f,.41f,.19f);if(!mesh.Nature(nature?nature.Pick(nature.bushes,random):null,p,h,random,c))mesh.Bush(p,h,c,random);}
                 DetailInstances++;
             }
+            yield return null;
             mesh.Build(root,"Batched foliage / stones / deadwood",material);
-            return root;
         }
         void BreakableRock(GameObject tile,Vector3 at,float size,Color color,System.Random random)
         {
             var root=new GameObject("Breakable scenery rock");root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
-            var shape=new SceneryMesh();
+            var shape=propMesh;shape.Clear();
             if(!shape.Nature(nature?nature.Pick(nature.rocks,random):null,Vector3.zero,size,random,color))
                 shape.Rock(Vector3.zero,new Vector3(size,size*.72f,size*.82f),color,random);
             shape.Build(root,"Fractured stone",material);
@@ -138,7 +163,7 @@ namespace MadeInArizona
         void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random)
         {
             var root=new GameObject(pine?"Breakable ponderosa":"Breakable cottonwood");root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
-            var shape=new SceneryMesh();
+            var shape=propMesh;shape.Clear();
             Mesh source=nature?nature.Pick(pine?nature.pines:nature.broadleafTrees,random):null;
             if(!shape.Nature(source,Vector3.zero,height,random,Color.white))
             {
@@ -186,6 +211,7 @@ namespace MadeInArizona
         readonly List<Vector3> vertices=new List<Vector3>();readonly List<Vector3> normals=new List<Vector3>();readonly List<int> triangles=new List<int>();readonly List<Color> colors=new List<Color>();readonly List<Vector2> uvs=new List<Vector2>();
         public static void ClearNatureCache()=>natureCache.Clear();
         public int Count=>vertices.Count;
+        public void Clear(){vertices.Clear();normals.Clear();triangles.Clear();colors.Clear();uvs.Clear();}
         public bool Nature(Mesh source,Vector3 at,float height,System.Random random,Color tint)
         {
             if(!source||source.vertexCount==0||source.bounds.size.y<.001f)return false;

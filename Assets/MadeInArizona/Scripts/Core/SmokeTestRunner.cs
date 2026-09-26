@@ -21,9 +21,20 @@ namespace MadeInArizona
         IEnumerator Start()
         {
             if (!Active) yield break;
+            // Windows disables keyboard devices when the automated player is hidden.
+            // Keep injected test input enabled; normal interactive sessions retain their settings.
+            InputSystem.settings.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            // Real mouse/keyboard activity must not override the isolated injected devices.
+            foreach(var device in InputSystem.devices)if(device.native)InputSystem.DisableDevice(device);
             Application.logMessageReceived += OnLog;
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
+            { yield return TestSoundtrack(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEnemyBalanceTest")>=0)
+            { yield return TestEnemyBalance(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponAudioTest")>=0)
+            { yield return TestImportedWeaponAudio(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0)
             {
                 var campaignKeyboard=InputSystem.AddDevice<Keyboard>();
@@ -32,6 +43,7 @@ namespace MadeInArizona
                 InputSystem.RemoveDevice(campaignKeyboard);
                 FinishResults();yield break;
             }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFrameTimingTest")>=0){yield return FrameTimingProbe.Run(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0){yield return TestWorldGeneration();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) { game.Save.settings.quality=3;game.ApplySettings();game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f); }
             Check("garage startup", game && game.Player && game.State == GameState.Garage);
@@ -46,6 +58,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             Check("mission startup", game.State == GameState.Playing && game.Mission.Stage == 0);
             Check("destructible scene", FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None).Length > 30);
+            if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaPlaytestRevision")>=0) { yield return TestPlaytestRevision(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaTargetingTest")>=0) { yield return TestLobTargeting();FinishResults();yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDebrisReview")>=0) { yield return ReviewDebris();FinishResults();yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaVfxReview")>=0) { yield return ReviewEffects();yield break; }
@@ -61,9 +74,15 @@ namespace MadeInArizona
             Check("keyboard driving moves rigidbody", Vector3.Distance(begin, game.Player.transform.position) > 2f);
             var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
             target.name = "Integration test propane target"; target.transform.SetParent(game.World.transform);
-            target.transform.position = game.Player.transform.position + Vector3.forward * 11 + Vector3.up * .85f;
+            // The turret can still face the mouse after driving. Place this narrow fixture
+            // along the actual muzzle's firing ray rather than assuming a centered turret.
+            var testMuzzle=VehicleController.FindChild(game.Player.Visual,"Muzzle");
+            Vector3 shotOrigin=testMuzzle?testMuzzle.position:game.Player.transform.position;
+            shotOrigin.y=game.Player.transform.position.y+.85f;
+            target.transform.position = shotOrigin + Vector3.forward * 11;
             target.transform.localScale = Vector3.one * 2;
             var targetDamage = target.AddComponent<DestructionSystem>(); targetDamage.Configure(4, ExplosionKind.Propane, true, 30);
+            Physics.SyncTransforms();
             game.Player.Weapons.FirePrimary(Vector3.forward);
             yield return new WaitForSecondsRealtime(.4f);
             Check("garage weapon initializes and field slot starts empty", game.Player.Weapons != null && game.Player.Weapons.GarageWeapon != null && game.Player.Weapons.FieldWeapon == null);
@@ -194,7 +213,7 @@ namespace MadeInArizona
             Check("generated terrain has collision chunks",world.GetComponentsInChildren<MeshCollider>().Length>=50);
             float low=1000,high=-1000;
             for(int i=0;i<20;i++){float h=GeneratedWorld.HeightAt(new Vector3(-220+i*22,0,-250+i*24));low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
-            Check("world contains real elevation variation",high-low>12);
+            Check("world retains gentle elevation variation",high-low>3 && high-low<game.WorldConfig.terrainHeight);
             var keyboard=InputSystem.AddDevice<Keyboard>();var begin=game.Player.transform.position;
             InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.W));yield return new WaitForSecondsRealtime(2);
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());
@@ -262,7 +281,7 @@ namespace MadeInArizona
             Teleport(patrolAt);camera.Snap();yield return null;
             var director=GeneratedWorld.Active.GetComponent<RoadPatrolDirector>();
             Check("occasional road patrol spawns away from starter",director&&director.TrySpawnPatrol());
-            Check("road patrol population is bounded",director&&director.LivePatrols<=2);
+            Check("road patrol population is bounded",director&&director.LivePatrols<=RoadPatrolDirector.PatrolLimit);
             InputSystem.RemoveDevice(keyboard);
             Application.logMessageReceived-=OnLog;
             string result=string.Join("\n",checks)+"\n"+string.Join("\n",failures)+"\nRESULT: "+(failures.Count==0?"PASS":"FAIL");
@@ -333,10 +352,11 @@ namespace MadeInArizona
             game.Save.settings.dev=new DevTuning();
             var tuning=DevTuning.Current;
             float max=game.Player.Damage.MaxHealth;
+            float healthFraction=game.Player.Damage.Health/max;
             tuning.playerHealth=2;tuning.bloom=1.7f;tuning.chromatic=.23f;tuning.depthOfField=.5f;
             tuning.incomingDamage=0;DevTuning.Apply();
             game.Player.Damage.ApplyDamage(100,game.Player.transform.position,null);
-            Check("live health capacity and zero incoming damage",Mathf.Approximately(game.Player.Damage.MaxHealth,max*2)&&Mathf.Approximately(game.Player.Damage.Health,max*2));
+            Check("live health capacity preserves health fraction and blocks incoming damage",Mathf.Approximately(game.Player.Damage.MaxHealth,max*2)&&Mathf.Approximately(game.Player.Damage.Health,max*2*healthFraction));
             var target=new GameObject("Dev tuning damage probe").AddComponent<VehicleController>();
             var definition=ContentCatalog.Vehicles[0];
             target.transform.position=new Vector3(80,20,120);
@@ -443,7 +463,7 @@ namespace MadeInArizona
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());
             Check("combat trial fields all six faction crews",factions.Count==FactionRules.Count);
             Check("enemy vehicle weapons damage player",attacked);
-            Check("real projectiles defeat both vehicle waves",game.State==GameState.Won&&game.Mission.Kills>=6);
+            Check("real projectiles defeat both vehicle waves",game.State==GameState.Won&&game.Mission.Kills>=24);
             Check("vehicle hits and kills confirm",CombatFeedback.LastHitTime>=fightStart&&CombatFeedback.LastKillTime>=fightStart);
             Check("combat trial preserves campaign progression",game.Save.money==money&&game.Save.unlockedMission==unlock&&game.Save.completedMissions.Count==completed);
             Capture("13-combat-trial-complete");yield return new WaitForSecondsRealtime(.35f);
@@ -601,6 +621,276 @@ namespace MadeInArizona
                 var ai = enemy.GetComponent<EnemyAI>(); if (ai && ai.IsFriendly) continue;
                 enemy.Damage.ApplyDamage(100000, enemy.transform.position, GameManager.Instance.Player.gameObject);
             }
+        }
+        IEnumerator TestImportedWeaponAudio()
+        {
+            var game=GameManager.Instance;var audio=AudioManager.Instance;
+            var bank=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
+            Check("pack grenade explosion is packaged",bank&&bank.ordnanceExplosion&&bank.ordnanceExplosion.name=="GL_explosion");
+            Check("all thirteen weapons reference imported recordings",ContentCatalog.Weapons.Length==13&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
+            float oldVolume=game.Save.settings.weapons;game.Save.settings.weapons=1;
+            foreach(var weapon in ContentCatalog.Weapons)
+            {
+                StopPooledAudio(audio);audio.PlayShot(game.Player.transform.position,weapon);yield return null;
+                Check("imported recording plays for "+weapon.id,ImportedShotPlaying(audio,weapon));
+            }
+            game.StartCombatTrial();game.Pause();yield return null;
+            FreezeBalanceEnemies(BalanceHostiles());game.Resume();
+            StopPooledAudio(audio);game.Player.Weapons.FirePrimary(Vector3.forward);yield return null;
+            Check("player primary firing uses pack recordings",ImportedShotPlaying(audio,game.Player.Weapons.GarageWeapon));
+            var enemy=BalanceHostiles().Find(v=>v.GetComponent<EnemyAI>().Faction==EnemyFaction.CourtesyCompliance);
+            StopPooledAudio(audio);enemy.Weapons.FirePrimary(Vector3.forward);yield return null;
+            Check("enemy primary firing uses pack recordings",ImportedShotPlaying(audio,enemy.Weapons.GarageWeapon));
+            StopPooledAudio(audio);enemy.Weapons.FireSecondary(Vector3.forward);yield return null;
+            Check("enemy rocket firing uses launcher recording",ImportedShotPlaying(audio,WeaponRules.Find("invoice")));
+            StopPooledAudio(audio);audio.PlayExplosion(game.Player.transform.position,6,ExplosionKind.Grenade);yield return null;
+            bool blast=false;foreach(var source in audio.GetComponentsInChildren<AudioSource>())blast|=source.clip==bank.ordnanceExplosion&&source.isPlaying;
+            Check("ordnance blast uses pack explosion recording",blast);
+            game.Save.settings.weapons=0;StopPooledAudio(audio);audio.PlayShot(game.Player.transform.position,WeaponRules.Find("sweeper"));yield return null;
+            bool muted=true;foreach(var source in audio.GetComponentsInChildren<AudioSource>())if(source.gameObject!=audio.gameObject&&source.isPlaying)muted&=source.volume==0;
+            Check("weapons volume mutes imported shots",muted);
+            game.Save.settings.weapons=oldVolume;game.ReturnToGarage();
+        }
+        static void StopPooledAudio(AudioManager audio)
+        {
+            foreach(var source in audio.GetComponentsInChildren<AudioSource>())if(source.gameObject!=audio.gameObject)source.Stop();
+        }
+        static bool ImportedShotPlaying(AudioManager audio,WeaponDefinition weapon)
+        {
+            foreach(var source in audio.GetComponentsInChildren<AudioSource>())
+                if(source.isPlaying&&Array.IndexOf(weapon.fireSounds,source.clip)>=0)return true;
+            return false;
+        }
+        IEnumerator TestEnemyBalance()
+        {
+            var game=GameManager.Instance;
+            game.Save.settings.dev=new DevTuning();game.Save.settings.difficulty=1;game.Save.unlockedMission=14;
+            game.StartCombatTrial();game.Pause();yield return null;
+            var enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            Check("combat trial opens with twelve enemies",enemies.Count==12);
+            Check("enemy health is one fifth across trial archetypes",enemies.TrueForAll(v=>Mathf.Approximately(v.Damage.MaxHealth,Mathf.Max(60,v.Stats.maxHealth)*.2f)));
+            Check("player keeps full baseline health",Mathf.Approximately(game.Player.Damage.MaxHealth,Mathf.Max(60,game.Player.Stats.maxHealth)));
+            var probe=enemies[0];float baseline=probe.Damage.MaxHealth;
+            probe.Damage.ApplyDamage(baseline*.25f,probe.transform.position,game.Player.gameObject);
+            DevTuning.Current.enemyHealth=1.5f;DevTuning.Apply();
+            Check("live enemy tuning preserves reduced baseline and health fraction",Mathf.Approximately(probe.Damage.MaxHealth,baseline*1.5f)&&Mathf.Approximately(probe.Damage.Health,baseline*1.5f*.75f));
+            DevTuning.Current.enemyHealth=1;DevTuning.Apply();
+            Check("unrelated slider refresh retains one fifth enemy health",Mathf.Approximately(probe.Damage.MaxHealth,baseline));
+            game.Resume();DestroyHostiles();game.Mission.Tick(.01f);game.Pause();
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            Check("trial second wave contains twelve enemies",game.Mission.Stage==1&&game.Mission.Kills==12&&enemies.Count==12);
+            game.Resume();DestroyHostiles();game.Mission.Tick(.01f);
+            Check("trial completes only after twenty-four kills",game.State==GameState.Won&&game.Mission.Kills==24);
+
+            game.StartMission(0);game.Pause();yield return null;
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            Check("loaner pursuit has four hostiles including its unique suspect",enemies.Count==4);
+            Teleport(game.Mission.ObjectivePosition+Vector3.up);game.Resume();game.Mission.Tick(.01f);game.Pause();
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            Check("junkyard reinforcement adds twelve hostiles",enemies.Count==16&&game.Mission.Stage==1&&game.Mission.Objective.Contains("/ 12"));
+            game.Resume();for(int i=0;i<3;i++)game.Mission.RegisterKill();game.Mission.Tick(.01f);game.Pause();
+            Check("old three-kill gate no longer clears junkyard",game.Mission.Stage==1);
+
+            int convoy=Array.FindIndex(ContentCatalog.Missions,m=>m.mode==MissionMode.Convoy);
+            game.StartMission(convoy);game.Pause();yield return null;
+            var friend=Array.Find(FindObjectsByType<EnemyAI>(FindObjectsSortMode.None),ai=>ai.IsFriendly);
+            var escort=friend?friend.GetComponent<VehicleController>():null;
+            Check("escort keeps full health while its hostile screen quadruples",escort&&Mathf.Approximately(escort.Damage.MaxHealth,Mathf.Max(60,escort.Stats.maxHealth))&&BalanceHostiles().Count==12);
+
+            int bossMission=Array.FindIndex(ContentCatalog.Missions,m=>m.mode==MissionMode.Boss);
+            game.StartMission(bossMission);game.Pause();yield return null;
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            int expected=Mathf.Max(3,ContentCatalog.Missions[bossMission].enemyCount/3)*4;
+            Check("boss security screen is four times larger",enemies.Count==expected);
+            game.Resume();DestroyHostiles();game.Mission.Tick(.01f);game.Pause();
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            var bosses=enemies.FindAll(v=>v.GetComponent<EnemyAI>().Archetype==7);
+            Check("unique command rig arrives with three companions",bosses.Count==1&&enemies.Count==4);
+            Check("command rig health also falls to one fifth",bosses.Count==1&&Mathf.Approximately(bosses[0].Damage.MaxHealth,Mathf.Max(60,bosses[0].Stats.maxHealth)*.2f));
+
+            game.StartMission(0);game.Pause();yield return null;
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            var oldEnemies=new HashSet<VehicleController>(enemies);
+            var world=GeneratedWorld.Active;
+            // Isolate one known hideout while exercising the normal exploration update.
+            foreach(var pin in world.Pins)if(pin.kind=="hideout")pin.kind="landmark";
+            Vector3 center=world.Towns[1];
+            world.Pins.Add(new WorldPin{id="balance-hideout",kind="hideout",label="Balance fixture",position=center,requiredTier=2});
+            Teleport(center+new Vector3(100,1,0));game.Resume();yield return new WaitForSecondsRealtime(.6f);game.Pause();
+            enemies=BalanceHostiles().FindAll(v=>!oldEnemies.Contains(v));FreezeBalanceEnemies(enemies);
+            Check("tier-two hideout spawns sixteen enemies",enemies.Count==16);
+            Check("hideout health retains tier scaling above one fifth baseline",enemies.Count==16&&enemies.TrueForAll(v=>Mathf.Approximately(v.Damage.MaxHealth,v.Stats.maxHealth*.2f)));
+            foreach(var enemy in BalanceHostiles())Destroy(enemy.gameObject);yield return null;
+            Teleport(world.Towns[1]+new Vector3(0,1,-10));CameraController.Instance.Snap();
+            var director=world.GetComponent<RoadPatrolDirector>();
+            director.enabled=false;game.Resume();bool spawned=director.TrySpawnPatrol();game.Pause();
+            enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
+            Check("road encounter spawns four vehicles off screen",spawned&&director.LivePatrols==4);
+            bool offscreen=true;
+            foreach(var enemy in enemies){var view=Camera.main.WorldToViewportPoint(enemy.transform.position);offscreen&=view.z<=0||view.x<-.1f||view.x>1.1f||view.y<-.1f||view.y>1.1f;}
+            Check("larger patrol still respects camera exclusion",offscreen);
+            for(int attempt=0;attempt<4&&director.LivePatrols<8;attempt++)
+            {game.Resume();director.TrySpawnPatrol();game.Pause();FreezeBalanceEnemies(BalanceHostiles());}
+            Check("road patrol cap increases from two to eight",director.LivePatrols==8);
+            game.Resume();bool capped=!director.TrySpawnPatrol();game.Pause();
+            Check("road patrol population remains bounded",capped&&director.LivePatrols==8);
+            game.ReturnToGarage();
+        }
+        static List<VehicleController> BalanceHostiles()
+        {
+            return new List<VehicleController>(VehicleController.Active).FindAll(v=>v&&!v.IsPlayer&&!v.Damage.IsDead&&v.GetComponent<EnemyAI>()&&!v.GetComponent<EnemyAI>().IsFriendly);
+        }
+        static void FreezeBalanceEnemies(List<VehicleController> enemies)
+        {
+            foreach(var enemy in enemies){enemy.GetComponent<EnemyAI>().enabled=false;enemy.Body.isKinematic=true;}
+        }
+        IEnumerator TestSoundtrack()
+        {
+            var game=GameManager.Instance;
+            var music=game.GetComponent<MusicManager>();
+            var tracks=Resources.LoadAll<AudioClip>("Audio/Music");
+            Check("all fourteen soundtrack recordings packaged",tracks.Length==14);
+            Check("music streams at original stereo sample rate",Array.TrueForAll(tracks,c=>c&&c.loadType==AudioClipLoadType.Streaming&&c.channels==2&&c.frequency==48000&&c.length>120));
+            yield return new WaitForSecondsRealtime(3.2f);
+            var source=SoundtrackSource(music);
+            Check("garage plays looping Arizonaland",music.CurrentTrack=="Arizonaland"&&source&&source.isPlaying&&source.loop&&source.time>0);
+            game.ShowMainMenu();yield return new WaitForSecondsRealtime(3.2f);
+            source=SoundtrackSource(music);
+            Check("main menu plays looping Arizona Nation",music.CurrentTrack=="Arizona Nation"&&source&&source.isPlaying&&source.loop);
+            AudioManager.Instance.SetCombat(true);yield return new WaitForSecondsRealtime(3.2f);
+            Check("combat switches to supplied driving soundtrack",music.CurrentTrack!="Arizonaland"&&music.CurrentTrack!="Arizona Nation"&&Array.Exists(tracks,c=>c.name==music.CurrentTrack));
+            var played=new HashSet<string>();bool advanced=true;string last="";
+            for(int i=0;i<12;i++)
+            {
+                played.Add(music.CurrentTrack);last=music.CurrentTrack;
+                source=SoundtrackSource(music);
+                if(!source||!source.clip){advanced=false;break;}
+                // Seek near the end instead of waiting through the whole album.
+                source.time=source.clip.length-1f;
+                yield return new WaitForSecondsRealtime(3.3f);
+                advanced&=music.CurrentTrack!=last;
+            }
+            Check("track endings advance automatically through all twelve driving tracks",advanced&&played.Count==12);
+            Check("new shuffle does not immediately repeat its last track",music.CurrentTrack!=last);
+            game.StartCombatTrial();
+            Check("combat trial keeps sunny lighting before slider refresh",Mathf.Approximately(game.Sun.intensity,2.6f*DevTuning.Current.sunlight));
+            game.Pause();source=SoundtrackSource(music);float playback=source.time;
+            yield return new WaitForSecondsRealtime(.25f);
+            Check("pause keeps music playing at reduced gain",source.isPlaying&&source.time>playback&&Mathf.Abs(source.volume-game.Save.settings.music*.62f*.5f)<.01f);
+            float oldVolume=game.Save.settings.music;
+            game.Save.settings.music=0;yield return null;
+            Check("music slider mutes both crossfade sources",SoundtrackGain(tracks)<.001f);
+            game.Save.settings.music=oldVolume;game.Resume();yield return new WaitForSecondsRealtime(.1f);
+            float fullGain=SoundtrackGain(tracks);
+            AudioManager.Instance.PlayExplosion(game.Player.transform.position,10);
+            yield return new WaitForSecondsRealtime(.1f);
+            Check("explosions duck recorded music",SoundtrackGain(tracks)<fullGain*.8f);
+            game.ReturnToGarage();yield return new WaitForSecondsRealtime(3.2f);
+            Check("return to garage crossfades back to Arizonaland",music.CurrentTrack=="Arizonaland"&&SoundtrackSource(music).isPlaying);
+            Check("garage keeps sunny lighting before slider refresh",Mathf.Approximately(game.Sun.intensity,2.6f*DevTuning.Current.sunlight));
+            game.StartMission(0);
+            float sunlight=game.Sun.intensity;DevTuning.Apply();
+            Check("mission lighting matches slider refresh",Mathf.Approximately(sunlight,game.Sun.intensity)&&Mathf.Approximately(sunlight,2.6f*DevTuning.Current.sunlight));
+            var lifetimeProbe=new GameObject("Music lifecycle probe").AddComponent<MusicManager>();
+            Destroy(lifetimeProbe.gameObject);yield return null;
+            Check("music cleanup retains imported recordings",Array.TrueForAll(tracks,c=>c&&c.length>120));
+        }
+        static AudioSource SoundtrackSource(MusicManager music)
+        {
+            foreach(var source in music.GetComponents<AudioSource>())if(source.clip&&source.clip.name==music.CurrentTrack)return source;
+            return null;
+        }
+        static float SoundtrackGain(AudioClip[] tracks)
+        {
+            float gain=0;
+            foreach(var source in GameManager.Instance.GetComponents<AudioSource>())if(source.clip&&Array.IndexOf(tracks,source.clip)>=0)gain+=source.volume;
+            return gain;
+        }
+        IEnumerator TestPlaytestRevision()
+        {
+            var game=GameManager.Instance;
+            var player=game.Player;
+            var ui=game.GetComponent<GameUI>();
+            var migrated=new DevTuning{bloom=1.15f,exposure=.3f,contrast=15f,saturation=10f,chromatic=.08f,vignette=.2f,haze=.002f,ao=.45f};
+            migrated.Clamp();
+            Check("existing shipped visual defaults migrate to sunny look",migrated.presentationVersion==1&&Mathf.Approximately(migrated.exposure,.45f)&&Mathf.Approximately(migrated.vignette,.08f));
+            var custom=new DevTuning{exposure=-.7f,vignette=.35f};custom.Clamp();
+            Check("visual migration preserves custom sliders",Mathf.Approximately(custom.exposure,-.7f)&&Mathf.Approximately(custom.vignette,.35f));
+            game.Pause();ui.enabled=false;
+            yield return null;
+            float before=SceneLuminance("34-sunny-startup");
+            var profile=game.PresentationVolume.profile;
+            int volumeCount=FindObjectsByType<UnityEngine.Rendering.Volume>(FindObjectsSortMode.None).Length;
+            // An unrelated slider used to refresh the appearance; it must now leave the image stable.
+            float steering=DevTuning.Current.steering;
+            DevTuning.Current.steering=steering+.01f;DevTuning.Apply();
+            yield return new WaitForSecondsRealtime(.35f);
+            yield return null;
+            float after=SceneLuminance("35-sunny-after-driving-slider");
+            Debug.Log("MIA_BRIGHTNESS startup="+before+" refreshed="+after);
+            Check("sunny startup has readable brightness",before>.20f&&before<.92f);
+            Check("unrelated slider does not change scene brightness",Mathf.Abs(before-after)<.015f);
+            Check("startup and slider share a single presentation volume",volumeCount==1&&FindObjectsByType<UnityEngine.Rendering.Volume>(FindObjectsSortMode.None).Length==1&&game.PresentationVolume.profile==profile);
+            DevTuning.Current.steering=steering;DevTuning.Apply();
+            game.Save.settings.quality=0;game.ApplySettings();
+            Check("low quality keeps bloom disabled after tuning",profile.TryGet<UnityEngine.Rendering.Universal.Bloom>(out var bloom)&&!bloom.active);
+            game.Save.settings.quality=2;game.ApplySettings();
+            ui.enabled=true;game.Resume();
+
+            player.Damage.ApplyDamage(30,player.transform.position,null);
+            float health=player.Damage.Health;
+            int scrap=game.Save.salvage;
+            Vector3 origin=player.transform.position+Vector3.right*10;
+            var repair=CombatPickup.Create(PickupKind.Health,origin,null,25);
+            var nitro=CombatPickup.Create(PickupKind.Nitro,origin+Vector3.forward,null,25);
+            var salvage=CombatPickup.Create(PickupKind.Scrap,origin-Vector3.forward,null,2);
+            var weapon=CombatPickup.Create(PickupKind.Weapon,origin+Vector3.forward*2,WeaponRules.Find("invoice"),4);
+            Vector3 weaponStart=weapon.transform.position;
+            Vector3 nitroStart=nitro.transform.position;
+            Check("supply drops are larger",repair.transform.localScale.x>=1.1f);
+            yield return new WaitForSeconds(.15f);
+            Check("supplies respect spawn delay",repair&&Vector2.Distance(new Vector2(repair.transform.position.x,repair.transform.position.z),new Vector2(origin.x,origin.z))<.01f);
+            game.Pause();yield return new WaitForSecondsRealtime(.45f);
+            Check("pause suspends supply magnetism",salvage&&Mathf.Abs(salvage.transform.position.x-origin.x)<.01f);
+            game.Resume();yield return new WaitForSeconds(.9f);
+            Check("repair attracts and collects beyond contact range",!repair&&player.Damage.Health>health);
+            Check("scrap attracts and collects beyond contact range",!salvage&&game.Save.salvage==scrap+2);
+            Check("nitro attracts without wasting a full charge",nitro&&Vector3.Distance(nitro.transform.position,nitroStart)>3&&player.BoostCharge>=.99f);
+            Check("weapon stays anchored outside contact range",weapon&&Vector2.Distance(new Vector2(weapon.transform.position.x,weapon.transform.position.z),new Vector2(weaponStart.x,weaponStart.z))<.01f);
+            if(nitro)Destroy(nitro.gameObject);if(weapon)Destroy(weapon.gameObject);
+            var garageWeapon=player.Weapons.GarageWeapon;
+            var previousSounds=garageWeapon.fireSounds;
+            var audioProbe=AudioSynthesis.Shot(0);
+            garageWeapon.fireSounds=new[]{audioProbe};
+            AudioManager.Instance.PlayShot(player.transform.position,garageWeapon);
+            bool played=false;
+            foreach(var source in AudioManager.Instance.GetComponentsInChildren<AudioSource>())played|=source.clip==audioProbe&&source.isPlaying;
+            Check("authored weapon recording reaches pooled audio playback",played);
+            garageWeapon.fireSounds=previousSounds;
+            Destroy(audioProbe);
+            float low=float.MaxValue,high=float.MinValue;
+            for(int i=0;i<20;i++){float h=GeneratedWorld.HeightAt(new Vector3(-220+i*22,0,-250+i*24));low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
+            Check("generated terrain keeps gentle finite relief",WorldGenConfig.Finite(low)&&WorldGenConfig.Finite(high)&&high-low>3&&high-low<game.WorldConfig.terrainHeight);
+        }
+        static float SceneLuminance(string name)
+        {
+            // Hidden Windows players can skip the swapchain. Request a real URP render,
+            // including post-processing, into a texture instead of reading that backbuffer.
+            const int width=1600,height=900;
+            var target=RenderTexture.GetTemporary(width,height,24,RenderTextureFormat.ARGB32,RenderTextureReadWrite.sRGB);
+            UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(Camera.main,
+                new UnityEngine.Rendering.RenderPipeline.StandardRequest{destination=target});
+            var previous=RenderTexture.active;RenderTexture.active=target;
+            var texture=new Texture2D(width,height,TextureFormat.RGB24,false);
+            texture.ReadPixels(new Rect(0,0,width,height),0,0);texture.Apply();
+            RenderTexture.active=previous;RenderTexture.ReleaseTemporary(target);
+            string directory=Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR");
+            if(!string.IsNullOrEmpty(directory)){Directory.CreateDirectory(directory);File.WriteAllBytes(Path.Combine(directory,name+".png"),texture.EncodeToPNG());}
+            var pixels=texture.GetPixels32();float total=0;int count=0;
+            for(int y=height/4;y<height*3/4;y+=8)
+                for(int x=width/4;x<width*3/4;x+=8)
+                {var pixel=pixels[y*width+x];total+=(pixel.r*.2126f+pixel.g*.7152f+pixel.b*.0722f)/255f;count++;}
+            Destroy(texture);return total/Mathf.Max(1,count);
         }
         void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); }
         void Capture(string name)

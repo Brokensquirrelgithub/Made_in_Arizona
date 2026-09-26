@@ -143,7 +143,17 @@ namespace MadeInArizona
             if(td<65)h=Mathf.Lerp(Towns[TownIndex(p)].y,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(45,65,td)));
             return h;
         }
-        float RawHeight(float x,float z){float nx=x/size,nz=z/size,broad=Noise(nx*3.1f+2,nz*3.1f)*.48f+Noise(nx*8.7f-2,nz*8.7f+7)*.18f,north=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.02f,.5f,nz)),crags=Mathf.Pow(Noise(nx*19+5,nz*17-3),2.4f)*north,mesa=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.48f,.58f,Noise(nx*5.2f-9,nz*5.2f+11)))*(1-north*.4f);return(broad-.35f)*amp+crags*amp*.72f+mesa*amp*.28f;}
+        float RawHeight(float x,float z)
+        {
+            float nx=x/size,nz=z/size;
+            float broad=Noise(nx*3.1f+2,nz*3.1f)*.48f+Noise(nx*8.7f-2,nz*8.7f+7)*.18f;
+            float north=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.02f,.5f,nz));
+            float crags=Mathf.Pow(Noise(nx*19+5,nz*17-3),2.4f)*north;
+            float mesa=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.48f,.58f,Noise(nx*5.2f-9,nz*5.2f+11)))*(1-north*.4f);
+            // Broad gentle grades read better at gameplay camera height. Soften the sharper
+            // crags/mesa steps most, including worlds with an existing terrainHeight setting.
+            return ((broad-.35f)*.65f+crags*.28f+mesa*.12f)*amp;
+        }
         float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+seed*.01f)*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
         Vector2 RoutePoint(Route r,float u){Vector2 p=Vector2.Lerp(r.a,r.b,u),d=(r.b-r.a).normalized,n=new Vector2(-d.y,d.x);return p+n*Mathf.Sin(u*Mathf.PI*2+(r.a.x+r.b.y)*.01f)*size*.016f*Mathf.Sin(u*Mathf.PI);}
         float RoadDistance(Vector2 p){float h;return NearestRoad(p,out h);}

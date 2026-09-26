@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -75,14 +76,25 @@ namespace MadeInArizona
         void ActivateHideout(WorldPin pin, VehicleController player)
         {
             if (!activatedHideouts.Add(pin.id)) return;
+            StartCoroutine(SpawnHideout(pin,player));
+        }
+
+        // One vehicle per frame: building a full squad at once cost ~40 ms in a single frame.
+        IEnumerator SpawnHideout(WorldPin pin, VehicleController player)
+        {
+            var world=GeneratedWorld.Active;
             EnemyFaction faction=FactionRules.ForHideout(pin.id);
-            int count=Mathf.Clamp(2+pin.requiredTier,2,5);
+            int baseline=Mathf.Clamp(2+pin.requiredTier,2,5);
+            int count=SpawnManager.EnemyCount(baseline);
             for(int i=0;i<count;i++)
             {
-                float a=i*Mathf.PI*2/count;
-                Vector3 p=pin.position+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*(14+i*2);
+                float a=i*137.5f*Mathf.Deg2Rad;
+                Vector3 p=pin.position+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*(14+(i%3)*6+(i/12)*10);
                 p=Ground(p);
-                int archetype=Mathf.Clamp(i+pin.requiredTier*2,0,6);
+                int archetype=Mathf.Clamp(i%baseline+pin.requiredTier*2,0,6);
+                if(i>0)yield return null;
+                while(GameManager.Instance&&GameManager.Instance.State==GameState.Paused)yield return null;
+                if(GeneratedWorld.Active!=world||!player||!GameManager.Instance||!GameManager.Instance.IsPlaying)yield break;
                 var enemy=SpawnManager.Spawn(p+Vector3.up*.8f,archetype,player,faction);
                 if(enemy&&pin.requiredTier>0)
                 {

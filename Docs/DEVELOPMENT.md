@@ -1,6 +1,6 @@
 # Made in Arizona — development notes
 
-This project implements a native Unity vertical slice with original procedural prototype models, synthesized original audio, a garage, a four-stage opening mission, and a 15-job campaign built on reusable mission state machines. It is an early playable prototype, not a finished AAA game.
+This project implements a native Unity vertical slice with procedural prototype models, supplied music and weapon recordings, synthesized vehicle audio, a garage, a four-stage opening mission, and a 15-job campaign built on reusable mission state machines. It is an early playable prototype, not a finished AAA game.
 
 ## Runtime
 
@@ -36,11 +36,13 @@ A few large rolling lobes replace hundreds of radial blobs. Persistent fuel fire
 
 ## Effects and quality
 
-High and Arizona Summer enable screen-space heat refraction around blasts and persistent fuel fires. Garage light shafts use additive, dust-modulated billboards: an artistic scattering approximation, not ray-marched volumetric lighting. White fur uses wrapped diffuse lighting, backlighting transmission and grazing-angle sheen as an inexpensive subsurface approximation. Shared procedural normal maps add surface grain to matte bodies and scenery. HDR emissive neon and blast particles feed URP bloom, with ACES tonemapping.
+High and Arizona Summer enable screen-space heat refraction around blasts and persistent fuel fires. Garage light shafts use additive, dust-modulated billboards: an artistic scattering approximation, not ray-marched volumetric lighting. White fur uses wrapped diffuse lighting, backlighting transmission and grazing-angle sheen as an inexpensive subsurface approximation. Shared procedural normal maps add surface grain to matte bodies and scenery. HDR emissive neon and blast particles feed URP bloom, with Neutral tonemapping and sunny midday lighting.
 
 Low/Medium/High/Arizona Summer cap active physical debris at 45/100/220/640. High/Ultra cap refraction patches at 12/32 and persistent fires at 12/32; old patches expire and reuse objects. Low and Medium use reduced texture mip levels; High and Ultra retain full 4K flipbooks. Persistent fire lights are capped at six on High and twelve on Ultra. Ultra enables 4096-pixel sun shadows, eight additional lights per object, higher bloom filtering, more embers and longer-lived smoke. Quality changes fully refresh world-owned pools when entering the next garage or mission. There is no artificial workload added solely to heat the GPU, and no RTX 3080 performance claim.
 
-Engine audio combines firing harmonics, a separately synthesized loaded exhaust, compressor whine, road texture, wind, gear engagement and throttle-release bypass hiss. RPM and throttle drive pitch and layer gain; explosions duck engine/music levels. All PCM is generated from original synthesis code.
+Engine audio combines firing harmonics, a separately synthesized loaded exhaust, compressor whine, road texture, wind, gear engagement and throttle-release bypass hiss. RPM and throttle drive pitch and layer gain; explosions duck engine/music levels. `WeaponDefinition.fireSounds` references imported weapon clips (with multiple recordings for variation). All 13 weapons now use Free Weapon Sound Effects recordings, including launcher shots and mechanical mine placement. Player and enemy firing use the same pooled path, weapon-volume control and ducking; rapid-fire recordings use lower gain. A Resources WeaponAudioBank supplies the pack's grenade blast for ordnance detonations. Engine, vehicle/fuel/propane explosion and interface audio retain synthesis. Imported clips remain owned by Unity's asset system.
+
+The supplied 14-track soundtrack lives in `Assets/MadeInArizona/Resources/Audio/Music`. MusicManager loops Arizona Nation in the menu and Arizonaland in the garage, and shuffles the other twelve recordings for driving/combat without immediate repeats. Two non-spatial sources crossfade over three seconds; the outgoing stream stops afterwards. Pause attenuation, music/master sliders and explosion ducking remain active. MusicAssetImporter preserves stereo/48 kHz and streams Vorbis at quality 0.85 with preload disabled, keeping the album out of decoded PCM memory. Imported clips belong to Unity and are never destroyed by runtime music cleanup.
 
 ## Native builds
 
@@ -88,10 +90,18 @@ Escape opens the pause menu; Dev Tuning opens a mouse-operated panel with Drivin
 
 The baseline player now has 1.6× steering agility and 1.2× acceleration. Small broken props retain 85% of pre-impact velocity through the collision handler; large props and solid walls are excluded. Prop damage and retained momentum are exposed separately. Enemy capacity, outgoing player damage to vehicles, and incoming player damage can be adjusted independently.
 
-DevVisuals applies real URP volume components and the renderer's SSAO feature. Effects include bloom, exposure, contrast, saturation, chromatic aberration, camera-only motion blur, Gaussian depth of field, vignette, sunlight, ambient light and haze. DOF starts disabled. Camera zoom/shake are live. Masked procedural albedo adds dust/pitting over existing surface normals.
+DevVisuals is the sole writer of the session-owned post-processing profile and applies the renderer's SSAO feature. Startup and slider edits share the same path; settings also reapply when URP finishes creating its render pipeline, and camera volumes update every frame. Effects include bloom, exposure, contrast, saturation, chromatic aberration, camera-only motion blur, orthographic depth blur, vignette, sunlight, ambient light and haze. DOF starts disabled. Low quality keeps bloom disabled. Existing shipped visual defaults migrate to the brighter look once, preserving custom slider values. Camera zoom/shake are live. Masked procedural albedo adds dust/pitting over existing surface normals.
+
+Garage, mission and combat-trial transitions also apply DevVisuals instead of overwriting the sun with legacy dark intensity values. This closes the transition-specific version of the slider-refresh brightness bug.
 
 `-miaDevTest` adds health/damage, persistence, effect, AO-feature and menu-resume coverage to the native smoke suite; `-miaHandlingTest` includes the stronger turn and breakable momentum tests.
 
 ## Generated campaign regression
 
 Run the native player with `-miaSmokeTest -miaGeneratedCampaignTest` to exercise all 15 jobs on generated terrain (seed 173, size 1600). This is separate from `-miaWorldTest` and the compact-map suite. It verifies sequential unlocks, persisted completion/rewards/scores, boss pods, the forced vehicle and airborne achievements. The test uses isolated saves and controlled objective fixtures, and does not replace human navigation or balance playtests.
+
+## Enemy density and health — 26 September 2026
+
+Hostile waves and hideout guards spawn at four times their authored baseline counts. Kill gates and objective text use those same expanded totals; the combat trial has two waves of 12. Unique pursuit and command vehicles retain their identity and gain three companion hostiles. Expanded formations use additional rings, and hideout archetypes cycle through their original roster. Road encounters spawn squads of four, with eight live patrol slots and a 28-hostile budget, retaining off-screen placement and distance cleanup.
+
+VehicleDamage applies a 0.2 hostile-health baseline after the existing health floor, difficulty, archetype and faction adjustments. Saved enemy-health dev tuning multiplies that new baseline, and slider refreshes preserve the current health fraction. Player health and friendly escort health retain their existing baselines. Boss hull and exposed-component health also use the reduced capacity. `-miaSmokeTest -miaEnemyBalanceTest` verifies counts, kill gates, health tuning, escort protection, hideouts and patrol limits; campaign and real-projectile combat suites cover progression through the larger fights.

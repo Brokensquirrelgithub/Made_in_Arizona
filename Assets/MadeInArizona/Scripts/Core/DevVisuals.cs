@@ -8,9 +8,9 @@ namespace MadeInArizona
     /// <summary>Applies the developer-facing presentation controls to URP's live render state.</summary>
     public static class DevVisuals
     {
-        static readonly Color DefaultAmbientSky = new Color(.55f, .62f, .71f);
-        static readonly Color DefaultAmbientEquator = new Color(.49f, .39f, .29f);
-        static readonly Color DefaultAmbientGround = new Color(.24f, .18f, .15f);
+        static readonly Color DefaultAmbientSky = new Color(.70f, .80f, .92f);
+        static readonly Color DefaultAmbientEquator = new Color(.68f, .59f, .45f);
+        static readonly Color DefaultAmbientGround = new Color(.44f, .35f, .25f);
         static readonly FieldInfo AmbientOcclusionSettings = typeof(ScreenSpaceAmbientOcclusion)
             .GetField("m_Settings", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -27,11 +27,16 @@ namespace MadeInArizona
 
         static void ApplyPostProcessing(DevTuning tuning)
         {
-            var profile = FindOrCreateProfile();
+            var volume = GameManager.Instance ? GameManager.Instance.PresentationVolume : null;
+            var profile = volume ? volume.profile : null;
             if (profile == null) return;
 
+            var tonemap = GetOrAdd<Tonemapping>(profile);
+            tonemap.active = true;
+            tonemap.mode.Override(TonemappingMode.Neutral);
+
             var bloom = GetOrAdd<Bloom>(profile);
-            bloom.active = true;
+            bloom.active = GameManager.Instance.Save.settings.quality > 0 && tuning.bloom > 0f;
             bloom.intensity.Override(Mathf.Clamp(tuning.bloom, 0f, 10f));
             bloom.threshold.Override(.95f);
             bloom.scatter.Override(.72f);
@@ -77,26 +82,21 @@ namespace MadeInArizona
         static void ApplyLighting(DevTuning tuning)
         {
             if (GameManager.Instance != null && GameManager.Instance.Sun != null)
-                GameManager.Instance.Sun.intensity = 2.15f * Mathf.Clamp(tuning.sunlight, 0f, 3f);
+            {
+                GameManager.Instance.Sun.color = new Color(1f, .95f, .83f);
+                GameManager.Instance.Sun.intensity = 2.6f * Mathf.Clamp(tuning.sunlight, 0f, 3f);
+                RenderSettings.sun = GameManager.Instance.Sun;
+            }
 
             float ambient = Mathf.Clamp(tuning.ambient, 0f, 3f);
+            RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = DefaultAmbientSky * ambient;
             RenderSettings.ambientEquatorColor = DefaultAmbientEquator * ambient;
             RenderSettings.ambientGroundColor = DefaultAmbientGround * ambient;
+            RenderSettings.fog = tuning.haze > 0f;
+            RenderSettings.fogColor = new Color(.80f, .76f, .65f);
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogDensity = Mathf.Clamp(tuning.haze, 0f, .03f);
-        }
-
-        static VolumeProfile FindOrCreateProfile()
-        {
-            foreach (var volume in Object.FindObjectsByType<Volume>(FindObjectsSortMode.None))
-                if (volume.isGlobal && volume.profile != null && volume.profile.TryGet<Bloom>(out _)) return volume.profile;
-
-            var host = new GameObject("Arizona • Developer visuals");
-            var fallback = host.AddComponent<Volume>();
-            fallback.isGlobal = true;
-            fallback.priority = 1f;
-            fallback.profile = ScriptableObject.CreateInstance<VolumeProfile>();
-            return fallback.profile;
         }
 
         static T GetOrAdd<T>(VolumeProfile profile) where T : VolumeComponent

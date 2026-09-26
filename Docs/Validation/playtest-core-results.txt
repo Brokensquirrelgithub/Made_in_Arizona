@@ -1,0 +1,43 @@
+PASS garage startup
+PASS catalog: eight vehicles and fifteen missions
+PASS six-way texture pairs and shader
+PASS Suzuki present
+PASS save round trip
+PASS mission startup
+PASS destructible scene
+PASS live health capacity preserves health fraction and blocks incoming damage
+PASS enemy capacity and outgoing damage modifiers
+PASS dev tuning persists through save reload
+PASS dev controls update real post-processing
+PASS ambient occlusion renderer feature present
+PASS dev menu resumes gameplay
+PASS keyboard driving moves rigidbody
+PASS garage weapon initializes and field slot starts empty
+PASS swept projectile destroys target
+PASS gamepad movement and right-trigger fire
+PASS localized damage
+PASS driving over enemy repair restores chassis
+PASS empty LT slot equips a driven-over weapon
+PASS F swaps a held field weapon
+PASS field repair
+PASS pause freezes simulation
+PASS resume restores simulation
+PASS recovery reaches junkyard phase
+PASS combat advances objective
+PASS ledger interaction
+PASS mission completion
+PASS progression saved
+PASS garage return
+PASS mechanical part modifies stats
+PASS second starter vehicle selectable
+PASS combat trial starts without campaign unlock
+PASS combat trial opens with three factions and their weapon sets
+PASS field weapon starts empty in combat
+PASS enemy rocket drop fits LT with limited ammo
+PASS combat trial fields all six faction crews
+PASS enemy vehicle weapons damage player
+PASS real projectiles defeat both vehicle waves
+PASS vehicle hits and kills confirm
+PASS combat trial preserves campaign progression
+PASS combat trial replay restarts its own mode
+RESULT: PASS

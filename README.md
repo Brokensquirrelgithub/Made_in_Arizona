@@ -33,7 +33,7 @@ Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-c
 | Garage station | Tab | LB / RB |
 | Garage selection / confirm | Mouse / Enter | D-pad / A |
 
-The car turns toward your movement input while the turret aims independently. At low speed, hold a direction behind the car to engage reverse and back away from a wall; push ahead to return to forward drive. Release movement to brake; use the handbrake to rotate. Field repair and boost recharge, while enemy drops let you recover in the middle of a fight. Buy garage weapons with scrap and choose one for the right trigger. The left trigger is reserved for enemy weapon drops. Suzuki is always safe.
+The car turns toward your movement input while the turret aims independently. At low speed, hold a direction behind the car to engage reverse and back away from a wall; push ahead to return to forward drive. Release movement to brake; use the handbrake to rotate. Field repair and boost recharge, while larger enemy supply drops pull toward the car from within 12 metres. Weapon drops stay anchored for deliberate pickup and swapping. Buy garage weapons with scrap and choose one for the right trigger. The left trigger is reserved for enemy weapon drops. Suzuki is always safe.
 
 ## Generated world
 
@@ -57,7 +57,7 @@ The streamed wilderness uses the Pandazole Nature pack with batched conifers, br
 - Fifteen original campaign jobs across recovery, demolition, convoy escort, racing/escape, defense, collection/rescue and component-based bosses. Campaign sorties use the same seeded regional layout, with mission-specific objectives.
 - Eight distinct vehicles, a fixed protagonist named Stallion, mechanical parts with compatibility and tradeoffs, drivetrain/differential changes, final-drive and ride-height tuning.
 - Nine terrain types, localized component damage, garage and limited-ammo field weapons, enemy supply drops, tactical enemy archetypes, destructible structures/props, nine explosion profiles, bounded debris and projectile pools.
-- Suzuki the white husky with four cosmetics, discoveries, achievements, a Wonton Destruction food truck, original procedural music and sound effects.
+- Suzuki the white husky with four cosmetics, discoveries, achievements, a Wonton Destruction food truck, a 14-track supplied soundtrack, imported weapon recordings and synthesized engine/interface effects.
 - HDR bloom, normal-mapped surfaces, fur backlighting, garage light shafts, blast heat shimmer, animated six-way-lit smoke/fire using Unity’s free fluid samples, lingering embers, and layered engine/exhaust sound.
 - Saved progression/settings, keyboard/controller rebinding, audio sliders, subtitles, aim assist, difficulty, shake/UI scale, window/resolution controls and four graphics presets including **Arizona Summer**.
 

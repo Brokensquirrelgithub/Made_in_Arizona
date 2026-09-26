@@ -22,25 +22,6 @@ namespace MadeInArizona
                 default: return 0;
             }
         }
-        public static string DropHint(EnemyFaction faction, int archetype)
-        {
-            if (faction == EnemyFaction.CourtesyCompliance)
-            {
-                if (archetype == 3 || archetype == 7) return "MORTAR / GRENADES";
-                return archetype == 1 || archetype == 4 ? "GRENADES / MINES" : "MINES / GRENADES";
-            }
-            if (faction == EnemyFaction.RoadScavengers)
-                return archetype == 0 || archetype == 3 || archetype == 6 || archetype == 7 ? "MINIGUN / SHOTGUN" : "SHOTGUN / GRENADES";
-            if (faction == EnemyFaction.OpenHouseRealty)
-                return archetype == 3 || archetype == 4 || archetype == 7 ? "CLUSTER / ROCKET" : "MINES / GRENADES";
-            if (faction == EnemyFaction.SnowbirdConvoy)
-                return archetype == 3 || archetype == 7 ? "MINIGUN / MINES" : "MINES / SHOTGUN";
-            if (faction == EnemyFaction.CarOtaku)
-                return archetype == 3 ? "SNIPER / MINIGUN" : archetype == 4 || archetype == 7 ? "CLUSTER / MINIGUN" : "MINIGUN / SHOTGUN";
-            if (archetype == 3) return "SNIPER / ROCKET";
-            if (archetype == 4 || archetype == 7) return "CLUSTER / ROCKET";
-            return "ROCKET";
-        }
         public static WeaponDefinition Find(string id)
         {
             ContentCatalog.EnsureLoaded();

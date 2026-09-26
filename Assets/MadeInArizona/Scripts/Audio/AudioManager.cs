@@ -2,12 +2,12 @@ using System.Collections.Generic;
 using UnityEngine;
 namespace MadeInArizona
 {
-    /// <summary>Pooled original effects, layered engine synthesis and explosion ducking.</summary>
+    /// <summary>Pooled weapon recordings with synthesis fallback, layered engines and explosion ducking.</summary>
     public sealed class AudioManager : MonoBehaviour
     {
         public static AudioManager Instance { get; private set; }
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts;AudioClip ui,radio,shift,release;
+        AudioClip[] shots,blasts;AudioClip ui,radio,shift,release,ordnanceBlast;
         AudioSource exhaust,engine,whine,road,wind,radioSource,uiSource;
         AudioSource[] pool;int cursor,previousGear;float duck=1,lastThrottle,blowoffAt;
         MusicManager music;
@@ -17,6 +17,8 @@ namespace MadeInArizona
             exhaust=Loop(AudioSynthesis.Exhaust(),70);shift=Keep(AudioSynthesis.Mechanical(false));release=Keep(AudioSynthesis.Mechanical(true));
             engine=Loop(AudioSynthesis.Engine(),80);whine=Loop(AudioSynthesis.Turbo(),90);road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
+            var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
+            if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));
             uiSource=gameObject.AddComponent<AudioSource>();radioSource=gameObject.AddComponent<AudioSource>();uiSource.spatialBlend=0;radioSource.spatialBlend=0;
             pool=new AudioSource[28];
@@ -58,10 +60,27 @@ namespace MadeInArizona
         }
         public void PlayShot(Vector3 position,int weapon)
         {if(Settings==null)return;int kind=Mathf.Clamp(weapon,0,2);PlayAt(shots[kind],position,Settings.weapons*(kind==0?.21f:.45f)*duck,Random.Range(.93f,1.06f),kind==0?85:60);}
-        public void PlayExplosion(Vector3 position,float strength)
+        public void PlayShot(Vector3 position,WeaponDefinition weapon)
+        {
+            if (Settings == null || !weapon) return;
+            var recordings = weapon.fireSounds;
+            if (recordings != null && recordings.Length > 0)
+            {
+                var clip = recordings[Random.Range(0, recordings.Length)];
+                if (clip)
+                {
+                    float gain=weapon.fireRate>=10?.25f:weapon.fireRate>=4?.4f:.55f;
+                    PlayAt(clip, position, Settings.weapons * gain * duck, Random.Range(.97f, 1.03f), 60);
+                    return;
+                }
+            }
+            PlayShot(position, weapon.blastRadius > 0 ? 1 : weapon.id == "sweeper" || weapon.id == "boomstick" ? 2 : 0);
+        }
+        public void PlayExplosion(Vector3 position,float strength,ExplosionKind kind=ExplosionKind.Vehicle)
         {
             if(Settings==null)return;int size=strength>=10?2:strength>=5?1:0;
-            PlayAt(blasts[size],position,Settings.weapons*Mathf.Clamp(.3f+strength*.055f,.35f,.93f),Random.Range(.85f,1.04f),25);
+            var clip=ordnanceBlast&&(kind==ExplosionKind.Grenade||kind==ExplosionKind.Rocket||kind==ExplosionKind.Ammunition)?ordnanceBlast:blasts[size];
+            PlayAt(clip,position,Settings.weapons*Mathf.Clamp(.3f+strength*.055f,.35f,.93f),Random.Range(.85f,1.04f),25);
             if(size>0)duck=Mathf.Min(duck,size==2?.3f:.55f);
         }
         public void PlayUI(){if(Settings==null||!uiSource)return;uiSource.PlayOneShot(ui,Settings.environment*.5f);}

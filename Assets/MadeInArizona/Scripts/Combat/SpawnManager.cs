@@ -4,6 +4,10 @@ namespace MadeInArizona
 {
     public static class SpawnManager
     {
+        public const int EnemyCountMultiplier = 4;
+        public const float EnemyHealthMultiplier = .2f;
+        public static int EnemyCount(int baseline) => baseline * EnemyCountMultiplier;
+
         public static VehicleController Spawn(Vector3 position, int archetype, VehicleController target, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             ContentCatalog.EnsureLoaded();

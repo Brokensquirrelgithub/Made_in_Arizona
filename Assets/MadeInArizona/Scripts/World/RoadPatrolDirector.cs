@@ -2,9 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 namespace MadeInArizona
 {
-    /// <summary>Occasional off-screen road encounters, separate from fixed mission waves.</summary>
+    /// <summary>Off-screen road squads, separate from fixed mission waves.</summary>
     public sealed class RoadPatrolDirector:MonoBehaviour
     {
+        public const int PatrolLimit=2*SpawnManager.EnemyCountMultiplier;
+        public const int HostileLimit=7*SpawnManager.EnemyCountMultiplier;
         readonly List<VehicleController> patrols=new List<VehicleController>();
         float nextPatrol;System.Random random;
         public int EncountersSpawned {get;private set;}
@@ -25,10 +27,18 @@ namespace MadeInArizona
         public bool TrySpawnPatrol()
         {
             var game=GameManager.Instance;var world=GeneratedWorld.Active;
-            if(!game||!game.IsPlaying||!game.Player||!world||LivePatrols>=2)return false;
+            if(!game||!game.IsPlaying||!game.Player||!world||LivePatrols>=PatrolLimit)return false;
             int hostiles=0;foreach(var car in VehicleController.Active)if(car&&!car.IsPlayer&&!car.Damage.IsDead)hostiles++;
-            if(hostiles>=7||Vector3.Distance(game.Player.transform.position,game.World.PlayerSpawn)<80)return false;
+            if(hostiles>=HostileLimit||Vector3.Distance(game.Player.transform.position,game.World.PlayerSpawn)<80)return false;
             if(random==null)random=new System.Random(world.Seed^91379);
+            bool spawned=false;
+            for(int i=0;i<SpawnManager.EnemyCountMultiplier&&LivePatrols<PatrolLimit&&hostiles<HostileLimit;i++)
+                if(TrySpawnVehicle(game,world)){spawned=true;hostiles++;}
+            if(spawned)EncountersSpawned++;
+            return spawned;
+        }
+        bool TrySpawnVehicle(GameManager game,GeneratedWorld world)
+        {
             for(int attempt=0;attempt<18;attempt++)
             {
                 float angle=(float)random.NextDouble()*Mathf.PI*2;
@@ -36,9 +46,13 @@ namespace MadeInArizona
                 Vector3 at=world.NearestPatrolRoad(desired);float distance=Vector3.Distance(at,game.Player.transform.position);
                 if(!GeneratedWorld.Contains(at)||distance<58||distance>120)continue;
                 if(Camera.main){var view=Camera.main.WorldToViewportPoint(at);if(view.z>0&&view.x>-.1f&&view.x<1.1f&&view.y>-.1f&&view.y<1.1f)continue;}
+                bool occupied=false;
+                foreach(var car in VehicleController.Active)
+                    if(car&&!car.Damage.IsDead&&(car.transform.position-at).sqrMagnitude<64){occupied=true;break;}
+                if(occupied)continue;
                 EnemyFaction faction=(EnemyFaction)random.Next(0,FactionRules.Count);
                 var enemy=SpawnManager.Spawn(at+Vector3.up*1.15f,WorldExploration.CurrentTier>=2?random.Next(0,5):random.Next(0,2),game.Player,faction);
-                if(!enemy)continue;enemy.name=FactionRules.Name(faction)+" road patrol";enemy.transform.SetParent(world.transform,true);patrols.Add(enemy);EncountersSpawned++;return true;
+                if(!enemy)continue;enemy.name=FactionRules.Name(faction)+" road patrol";enemy.transform.SetParent(world.transform,true);patrols.Add(enemy);return true;
             }
             return false;
         }

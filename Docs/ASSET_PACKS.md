@@ -20,3 +20,19 @@ The Pandazole Nature models and atlas remain under their original `Assets/Pandaz
 ## Audio audit — 13 September 2026
 
 The three linked audio packs have **not** made it into the project. No WAV, OGG, MP3 or AIFF files are present under `Assets`, and none of these packages are in the local Unity Asset Store cache. `AudioManager.Awake` generates the weapon, explosion, engine and interface clips through `AudioSynthesis`; `MusicManager` still supplies procedural music. Downloading a pack alone will not replace these calls: the clips must be imported, auditioned and connected to the runtime mix.
+
+## Audio follow-up — 26 September 2026
+
+The workspace has no imported gun sound clips, and the accessible Windows Unity asset cache has no gun sound package. The supplied gun pack's name or location is needed to complete its integration. `WeaponDefinition.fireSounds` now supports direct serialized references to imported single-shot recordings, with random variation through the existing pooled playback. Player weapons, enemy primary weapons and enemy rockets use this path; unassigned weapons retain synthesis. Native regression verifies playback with a temporary test clip, not a third-party pack recording.
+
+## Supplied soundtrack — 26 September 2026
+
+All 14 MP3s from `C:\Users\Broke\Downloads\Made in Arizona Music` have been copied unchanged into `Assets/MadeInArizona/Resources/Audio/Music`; SHA-256 comparison verifies each copy. This replaces procedural music with menu/garage themes and a shuffled driving/combat playlist. These are user-supplied recordings, separate from the Asset Store gun sound pack. The original Downloads files are retained.
+
+## Supplied weapon recordings — 26 September 2026
+
+[Free Weapon Sound Effects by SoundLab_1](https://assetstore.unity.com/packages/audio/sound-fx/weapons/free-weapon-sound-effects-388474) was imported from the user's newly downloaded Unity package cache. All 40 WAV files retain their original `Assets/FreeWeaponSounds` paths and GUIDs. These third-party recordings use the Standard Unity Asset Store EULA; they are not original project audio.
+
+All 13 weapon definitions now reference pack recordings: rifle variations for riveter/carbine/shredder/minigun/sniper, shotgun variations for sweeper/boomstick, GL_fire for explosive launchers, and projectile-insertion foley for mine placement. A Resources weapon audio bank references GL_explosion for grenade, rocket and ammunition detonations. Vehicle/fuel/propane explosions retain synthesis. The runtime pool handles random shot variation, modest pitch variation, spatial falloff and existing weapon/master volume controls. Rapid-fire recordings use lower gain to limit overlapping-shot buildup. Imported clips are not added to the synthesized-clip destruction list.
+
+Short weapon effects preload and decompress for prompt playback; the longer music recordings remain streamed. Other pack foley, suppressed shots and long tails remain available for future mechanics, without adding forced reloads or extra reverberation to every automatic shot. `-miaSmokeTest -miaWeaponAudioTest` verifies imported asset references and pooled playback, including real player/enemy firing and enemy rockets.

@@ -24,7 +24,7 @@ namespace MadeInArizona
         Vector2 aiMove;
         Vector3 aiAim = Vector3.forward;
         bool aiFire;
-        Vector3 lastVelocity;
+        Vector3 lastVelocity, bodyAcceleration;
         Vector3 preCollisionVelocity;
         float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown;
         int driveDirection = 1;
@@ -219,6 +219,8 @@ namespace MadeInArizona
                 if (surface != SurfaceKind.Asphalt || DriftAmount > .18f) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
             preCollisionVelocity = Body.linearVelocity;
+            bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
+            lastVelocity = Body.linearVelocity;
         }
         bool SupportSuspension()
         {
@@ -249,8 +251,8 @@ namespace MadeInArizona
         {
             if (Visual == null) return;
             Vector3 localVelocity = transform.InverseTransformDirection(Body.linearVelocity);
-            Vector3 acceleration = transform.InverseTransformDirection((Body.linearVelocity - lastVelocity) / Mathf.Max(Time.deltaTime, .008f));
-            lastVelocity = Body.linearVelocity;
+            // Acceleration is sampled per physics step; per-render-frame sampling alternated between zero and double.
+            Vector3 acceleration = transform.InverseTransformDirection(bodyAcceleration);
             float narrow = Mathf.Clamp(Stats.rideHeight / Mathf.Max(1, Stats.trackWidth), .15f, 1);
             float targetRoll = -localVelocity.x * (1 + narrow * 1.5f) - Body.angularVelocity.y * localVelocity.z * .18f;
             targetRoll += (1 - Damage.Suspension) * 9;

@@ -271,7 +271,7 @@ namespace MadeInArizona
             Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*.7f);
             MakeScorch(blast.point, radius * .5f);
             Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f));
-            AudioManager.Instance?.PlayExplosion(blast.point, radius);
+            AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (player != null)
             {

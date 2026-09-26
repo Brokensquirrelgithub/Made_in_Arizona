@@ -7,12 +7,26 @@ namespace MadeInArizona
     {
         public float steering=1.6f, acceleration=1.2f, grip=1f, propMomentum=.85f, propDamage=2f;
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
-        public float bloom=1.15f, exposure=.3f, contrast=15f, saturation=10f, chromatic=.08f, motionBlur=.12f, depthOfField=0f, vignette=.2f;
-        public float haze=.002f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.45f;
+        public float bloom=.75f, exposure=.45f, contrast=6f, saturation=8f, chromatic=.02f, motionBlur=.12f, depthOfField=0f, vignette=.08f;
+        public float haze=.0012f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.30f;
+        public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
         public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
         public void Clamp()
         {
+            if (presentationVersion < 1)
+            {
+                // Update the old shipped look in existing saves without resetting custom sliders.
+                if (Mathf.Approximately(bloom,1.15f)) bloom=defaults.bloom;
+                if (Mathf.Approximately(exposure,.3f)) exposure=defaults.exposure;
+                if (Mathf.Approximately(contrast,15f)) contrast=defaults.contrast;
+                if (Mathf.Approximately(saturation,10f)) saturation=defaults.saturation;
+                if (Mathf.Approximately(chromatic,.08f)) chromatic=defaults.chromatic;
+                if (Mathf.Approximately(vignette,.2f)) vignette=defaults.vignette;
+                if (Mathf.Approximately(haze,.002f)) haze=defaults.haze;
+                if (Mathf.Approximately(ao,.45f)) ao=defaults.ao;
+                presentationVersion=1;
+            }
             foreach(var control in DevControl.All)
             {
                 float value=(float)control.field.GetValue(this);

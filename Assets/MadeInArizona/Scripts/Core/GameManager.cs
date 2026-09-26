@@ -23,6 +23,7 @@ namespace MadeInArizona
         public float NotificationUntil { get; private set; }
         public event Action StateChanged;
         public Light Sun { get; private set; }
+        public Volume PresentationVolume { get; private set; }
         float autosave;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -36,6 +37,7 @@ namespace MadeInArizona
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            RenderPipelineManager.activeRenderPipelineCreated += OnRenderPipelineCreated;
             ContentCatalog.EnsureLoaded();
             Save = SaveSystem.Load();
             SelectedMission = Mathf.Clamp(Save.unlockedMission, 0, ContentCatalog.Missions.Length - 1);
@@ -55,51 +57,48 @@ namespace MadeInArizona
                 camObject.tag = "MainCamera";
                 camera = camObject.AddComponent<Camera>();
             }
-            camera.backgroundColor = new Color(.22f, .27f, .3f);
+            camera.backgroundColor = new Color(.64f, .78f, .88f);
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.nearClipPlane = .2f;
             camera.farClipPlane = 450;
             camera.allowHDR = true;
             var additional = camera.GetUniversalAdditionalCameraData();
+            camera.SetVolumeFrameworkUpdateMode(VolumeFrameworkUpdateMode.EveryFrame);
             additional.renderPostProcessing = true;
             additional.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             if (!camera.GetComponent<AudioListener>()) camera.gameObject.AddComponent<AudioListener>();
             if (!camera.GetComponent<CameraController>()) camera.gameObject.AddComponent<CameraController>();
-            var sunObj = new GameObject("Arizona • Late afternoon sun");
+            var sunObj = new GameObject("Arizona • Midday sun");
+            sunObj.transform.SetParent(transform, false);
             Sun = sunObj.AddComponent<Light>();
             Sun.type = LightType.Directional;
-            Sun.color = new Color(1f, .81f, .62f);
-            Sun.intensity = 2.15f;
             Sun.shadows = LightShadows.Soft;
-            sunObj.transform.rotation = Quaternion.Euler(48, -35, 0);
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(.55f, .62f, .71f);
-            RenderSettings.ambientEquatorColor = new Color(.49f, .39f, .29f);
-            RenderSettings.ambientGroundColor = new Color(.24f, .18f, .15f);
-            RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(.68f, .48f, .32f);
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = .0025f;
+            sunObj.transform.rotation = Quaternion.Euler(68, -35, 0);
             CreatePostProcessing();
             gameObject.AddComponent<GameUI>();
             gameObject.AddComponent<SmokeTestRunner>();
             ApplySettings();
         }
 
-        void Start() { ReturnToGarage(); if(!SmokeTestRunner.Active)ShowMainMenu(); }
+        void Start() { ReturnToGarage(); DevTuning.Apply(); if(!SmokeTestRunner.Active)ShowMainMenu(); }
+
+        void OnRenderPipelineCreated()
+        {
+            // Awake can run before URP creates its renderer features and volume framework.
+            // Apply again once they exist so startup matches the live dev-slider path.
+            DevTuning.Apply();
+        }
 
         void CreatePostProcessing()
         {
-            var volume = new GameObject("Arizona • Color and atmosphere").AddComponent<Volume>();
-            volume.isGlobal = true;
-            volume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
-            var bloom = volume.profile.Add<Bloom>();
-            bloom.intensity.Override(.7f); bloom.threshold.Override(.95f); bloom.scatter.Override(.72f);
-            bloom.highQualityFiltering.Override(true);
-            var tonemap = volume.profile.Add<Tonemapping>(); tonemap.mode.Override(TonemappingMode.ACES);
-            var color = volume.profile.Add<ColorAdjustments>();
-            color.postExposure.Override(.25f); color.contrast.Override(12); color.saturation.Override(7);
-            var vignette = volume.profile.Add<Vignette>(); vignette.intensity.Override(.22f); vignette.smoothness.Override(.5f);
+            if (PresentationVolume) return;
+            var host = new GameObject("Arizona • Color and atmosphere");
+            host.transform.SetParent(transform, false);
+            PresentationVolume = host.AddComponent<Volume>();
+            PresentationVolume.isGlobal = true;
+            PresentationVolume.weight = 1f;
+            PresentationVolume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            // DevVisuals is the sole writer, at startup and when any slider changes.
         }
 
         public void ApplySettings()
@@ -121,7 +120,6 @@ namespace MadeInArizona
                 pipeline.maxAdditionalLightsCount = s.quality == 0 ? 0 : s.quality == 3 ? 8 : 4;
             }
             Shader.SetGlobalFloat("_ArizonaDetail", s.quality >= 2 ? 1 : 0);
-            foreach(var volume in FindObjectsByType<Volume>(FindObjectsSortMode.None)) if(volume.profile && volume.profile.TryGet<Bloom>(out var bloom)) { bloom.active=s.quality>0; bloom.highQualityFiltering.Override(s.quality>=2); bloom.intensity.Override(s.quality==3?.85f:.6f); }
             AudioListener.volume = s.master;
             if (!Application.isBatchMode) {
                 var mode = s.fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
@@ -157,7 +155,7 @@ namespace MadeInArizona
         public bool IsCombatTrial { get; private set; }
         public void StartCombatTrial()
         {
-            Time.timeScale=1;IsCombatTrial=true;State=GameState.Playing;NotificationUntil=0;Sun.intensity=1.65f;
+            Time.timeScale=1;IsCombatTrial=true;State=GameState.Playing;NotificationUntil=0;DevVisuals.Apply();
             World.BuildCombatArena();SpawnPlayer(false);InputManager.Instance.SetEnabled(true);
             Mission.BeginCombatTrial();AudioManager.Instance.SetCombat(true);CameraController.Instance.Snap();StateChanged?.Invoke();
         }
@@ -171,7 +169,7 @@ namespace MadeInArizona
             SelectedMission = index;
             State = GameState.Playing;
             NotificationUntil = 0;
-            Sun.intensity = 1.65f;
+            DevVisuals.Apply();
             if(UseGeneratedWorld)World.BuildGeneratedMission(index,WorldConfig);else World.BuildMission(index);
             SpawnPlayer(false);
             InputManager.Instance.SetEnabled(true);
@@ -188,7 +186,7 @@ namespace MadeInArizona
             IsCombatTrial=false;
             State = GameState.Garage;
             NotificationUntil = 0;
-            Sun.intensity = .9f;
+            DevVisuals.Apply();
             InputManager.Instance.SetEnabled(false);
             World.BuildGarage();
             SpawnPlayer(true);
@@ -258,6 +256,11 @@ namespace MadeInArizona
 
         void OnApplicationFocus(bool focus) { if (!focus && IsPlaying && !SmokeTestRunner.Active) Pause(); }
         void OnApplicationQuit() { if (Save != null) SaveSystem.Save(Save); Time.timeScale = 1; }
-        void OnDestroy() { if (Instance == this) Instance = null; }
+        void OnDestroy()
+        {
+            RenderPipelineManager.activeRenderPipelineCreated -= OnRenderPipelineCreated;
+            if (PresentationVolume && PresentationVolume.profile) Destroy(PresentationVolume.profile);
+            if (Instance == this) Instance = null;
+        }
     }
 }

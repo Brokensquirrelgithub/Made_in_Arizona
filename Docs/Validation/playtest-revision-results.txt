@@ -1,0 +1,23 @@
+PASS garage startup
+PASS catalog: eight vehicles and fifteen missions
+PASS six-way texture pairs and shader
+PASS Suzuki present
+PASS save round trip
+PASS mission startup
+PASS destructible scene
+PASS existing shipped visual defaults migrate to sunny look
+PASS visual migration preserves custom sliders
+PASS sunny startup has readable brightness
+PASS unrelated slider does not change scene brightness
+PASS startup and slider share a single presentation volume
+PASS low quality keeps bloom disabled after tuning
+PASS supply drops are larger
+PASS supplies respect spawn delay
+PASS pause suspends supply magnetism
+PASS repair attracts and collects beyond contact range
+PASS scrap attracts and collects beyond contact range
+PASS nitro attracts without wasting a full charge
+PASS weapon stays anchored outside contact range
+PASS authored weapon recording reaches pooled audio playback
+PASS generated terrain keeps gentle finite relief
+RESULT: PASS

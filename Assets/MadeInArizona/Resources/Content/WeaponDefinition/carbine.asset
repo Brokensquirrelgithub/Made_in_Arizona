@@ -21,3 +21,7 @@ MonoBehaviour:
   speed: 135
   blastRadius: 0
   projectileColor: {r: 0.85, g: 1, b: 0.55, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
+  - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}
+  - {fileID: 8300000, guid: 385137d1f615f524ea78bc1569276ee5, type: 3}

@@ -1,0 +1,67 @@
+PASS campaign mission unlocked 1
+PASS generated terrain active for mission 1
+PASS starter rests on generated terrain
+PASS grounded hill kill is not airborne
+PASS airborne kill still unlocks achievement
+PASS campaign objective completion 1 Recovery
+PASS campaign rewards persist for mission 1
+PASS campaign mission unlocked 2
+PASS generated terrain active for mission 2
+PASS campaign objective completion 2 Salvage
+PASS campaign rewards persist for mission 2
+PASS campaign mission unlocked 3
+PASS generated terrain active for mission 3
+PASS campaign objective completion 3 Demolition
+PASS campaign rewards persist for mission 3
+PASS campaign mission unlocked 4
+PASS generated terrain active for mission 4
+PASS campaign objective completion 4 Convoy
+PASS campaign rewards persist for mission 4
+PASS campaign mission unlocked 5
+PASS generated terrain active for mission 5
+PASS campaign objective completion 5 Rescue
+PASS campaign rewards persist for mission 5
+PASS campaign mission unlocked 6
+PASS generated terrain active for mission 6
+PASS forced inappropriate vehicle
+PASS campaign objective completion 6 Race
+PASS campaign rewards persist for mission 6
+PASS campaign mission unlocked 7
+PASS generated terrain active for mission 7
+PASS campaign objective completion 7 Escape
+PASS campaign rewards persist for mission 7
+PASS campaign mission unlocked 8
+PASS generated terrain active for mission 8
+PASS campaign objective completion 8 Defense
+PASS campaign rewards persist for mission 8
+PASS campaign mission unlocked 9
+PASS generated terrain active for mission 9
+PASS campaign objective completion 9 Convoy
+PASS campaign rewards persist for mission 9
+PASS campaign mission unlocked 10
+PASS generated terrain active for mission 10
+PASS campaign objective completion 10 Recovery
+PASS campaign rewards persist for mission 10
+PASS campaign mission unlocked 11
+PASS generated terrain active for mission 11
+PASS boss components disable in mission 11
+PASS campaign objective completion 11 Boss
+PASS campaign rewards persist for mission 11
+PASS campaign mission unlocked 12
+PASS generated terrain active for mission 12
+PASS campaign objective completion 12 Demolition
+PASS campaign rewards persist for mission 12
+PASS campaign mission unlocked 13
+PASS generated terrain active for mission 13
+PASS campaign objective completion 13 Salvage
+PASS campaign rewards persist for mission 13
+PASS campaign mission unlocked 14
+PASS generated terrain active for mission 14
+PASS campaign objective completion 14 Defense
+PASS campaign rewards persist for mission 14
+PASS campaign mission unlocked 15
+PASS generated terrain active for mission 15
+PASS boss components disable in mission 15
+PASS campaign objective completion 15 Boss
+PASS campaign rewards persist for mission 15
+RESULT: PASS

@@ -8,5 +8,6 @@ namespace MadeInArizona
         public int contentOrder;
         public float damage, fireRate, speed, blastRadius;
         public Color projectileColor = Color.yellow;
+        public AudioClip[] fireSounds = System.Array.Empty<AudioClip>();
     }
 }

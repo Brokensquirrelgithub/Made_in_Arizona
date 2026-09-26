@@ -1,0 +1,21 @@
+PASS pack grenade explosion is packaged
+PASS all thirteen weapons reference imported recordings
+PASS imported recording plays for riveter
+PASS imported recording plays for invoice
+PASS imported recording plays for sweeper
+PASS imported recording plays for carbine
+PASS imported recording plays for grenade
+PASS imported recording plays for mortar
+PASS imported recording plays for mines
+PASS imported recording plays for minigun
+PASS imported recording plays for sniper
+PASS imported recording plays for cluster
+PASS imported recording plays for boomstick
+PASS imported recording plays for shredder
+PASS imported recording plays for pothole
+PASS player primary firing uses pack recordings
+PASS enemy primary firing uses pack recordings
+PASS enemy rocket firing uses launcher recording
+PASS ordnance blast uses pack explosion recording
+PASS weapons volume mutes imported shots
+RESULT: PASS

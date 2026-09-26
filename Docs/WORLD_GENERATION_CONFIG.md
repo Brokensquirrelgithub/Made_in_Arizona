@@ -34,7 +34,7 @@ Authored pins are placed at world-space `x`/`z` coordinates and snapped to terra
 {"id":"old-relay","label":"Abandoned relay","kind":"salvage-tech","position":{"x":120,"y":0,"z":180},"requiredTier":1,"discovered":false}
 ```
 
-The generator uses bounded terrain chunks, seeded biome noise, a carved river, graded road corridors and predefined town geometry. Increasing map size spreads the same bounded terrain resolution across a larger area. This is a finite region; town blueprints are currently defined in code. Regeneration is synchronous after the loading screen is drawn and can briefly stall on large or dense configurations.
+The generator uses bounded terrain chunks, seeded biome noise, a carved river, graded road corridors and predefined town geometry. Broad grades now use 65% of their original relief; crag and mesa relief use about 40%, keeping hills gentler under the top-down camera even with an existing saved config. `terrainHeight` still scales the landscape; roads, towns, river surfaces and collision all use the same revised heightfield. Increasing map size spreads the same bounded terrain resolution across a larger area. This is a finite region; town blueprints are currently defined in code. Regeneration is synchronous after the loading screen is drawn and can briefly stall on large or dense configurations.
 
 ## Landscape detail
 
