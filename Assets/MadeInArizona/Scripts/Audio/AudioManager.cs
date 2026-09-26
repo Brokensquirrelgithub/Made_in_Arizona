@@ -7,15 +7,20 @@ namespace MadeInArizona
     {
         public static AudioManager Instance { get; private set; }
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts;AudioClip ui,radio,shift,release;
-        AudioSource exhaust,engine,whine,road,wind,radioSource,uiSource;
-        AudioSource[] pool;int cursor,previousGear;float duck=1,lastThrottle,blowoffAt;
+        AudioClip[] shots,blasts,hurts;AudioClip ui,radio,shift,release,backfire;
+        AudioSource whine,road,wind,heartbeat,radioSource,uiSource;
+        // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
+        AudioSource[] engineOn,engineOff;
+        AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt;
         MusicManager music;
         void Awake()
         {
             Instance=this;
-            exhaust=Loop(AudioSynthesis.Exhaust(),70);shift=Keep(AudioSynthesis.Mechanical(false));release=Keep(AudioSynthesis.Mechanical(true));
-            engine=Loop(AudioSynthesis.Engine(),80);whine=Loop(AudioSynthesis.Turbo(),90);road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
+            shift=Keep(AudioSynthesis.Mechanical(false));release=Keep(AudioSynthesis.Mechanical(true));backfire=Keep(AudioSynthesis.Backfire());
+            int layers=AudioSynthesis.EngineLayerHz.Length;engineOn=new AudioSource[layers];engineOff=new AudioSource[layers];
+            for(int i=0;i<layers;i++){engineOn[i]=Loop(AudioSynthesis.EngineLayer(i,true),70);engineOff[i]=Loop(AudioSynthesis.EngineLayer(i,false),75);}
+            hurts=new AudioClip[3];for(int i=0;i<hurts.Length;i++)hurts[i]=Keep(AudioSynthesis.Hurt(i));heartbeat=Loop(AudioSynthesis.Heartbeat(),20);
+            whine=Loop(AudioSynthesis.Turbo(),90);road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));
             uiSource=gameObject.AddComponent<AudioSource>();radioSource=gameObject.AddComponent<AudioSource>();uiSource.spatialBlend=0;radioSource.spatialBlend=0;
@@ -36,9 +41,8 @@ namespace MadeInArizona
             if(player&&player.Damage!=null)
             {
                 float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.Throttle;
-                engine.pitch=.5f+rpm*2.2f;engine.volume=(player.Damage.IsDead?0:active?.09f+load*.20f:.035f)*gain;
-                exhaust.pitch=Mathf.Lerp(exhaust.pitch,.55f+rpm*2.5f,Time.unscaledDeltaTime*14);
-                exhaust.volume=active&&!player.Damage.IsDead?(.07f+load*.22f+rpm*.07f)*gain:0;
+                UpdateEngineBank(rpm,load,player.Damage.IsDead?0:active?1:.3f,gain);
+                if(active&&!player.Damage.IsDead)UpdateCrackle(player,rpm,load,gain);
                 if(active&&player.Gear!=previousGear){previousGear=player.Gear;PlayAt(shift,player.transform.position,.24f*gain,Random.Range(.9f,1.1f),70);}
                 float boost=InputManager.Instance!=null&&InputManager.Instance.Boost?1:0;
                 whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f):0;
@@ -48,9 +52,64 @@ namespace MadeInArizona
                 if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain,1+rpm*.3f,75);}
                 lastThrottle=load;
             }
-            else{exhaust.volume=0;engine.volume=0;whine.volume=0;road.volume=0;}
+            else{UpdateEngineBank(0,0,0,0);whine.volume=0;road.volume=0;}
+            UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
             AudioListener.volume=Settings.master;
+        }
+        /// <summary>
+        /// Equal-power crossfade between the neighbouring RPM layers (in log-frequency, as pitch is heard) and
+        /// between on-load and overrun loops. Each layer is only pitch-shifted around its recorded rate.
+        /// </summary>
+        void UpdateEngineBank(float rpm,float load,float presence,float gain)
+        {
+            var rates=AudioSynthesis.EngineLayerHz;
+            float firing=40+rpm*190,position=0;
+            float octave=Mathf.Log(firing,2);
+            if(firing<=rates[0])position=0;
+            else if(firing>=rates[rates.Length-1])position=rates.Length-1;
+            else for(int i=0;i<rates.Length-1;i++)if(firing<rates[i+1]){position=i+Mathf.InverseLerp(Mathf.Log(rates[i],2),Mathf.Log(rates[i+1],2),octave);break;}
+            loadMix=Mathf.MoveTowards(loadMix,Mathf.Clamp01(load*1.4f),Time.unscaledDeltaTime*(load>loadMix?6f:3.5f));
+            float onGain=Mathf.Sin(loadMix*Mathf.PI*.5f),offGain=Mathf.Cos(loadMix*Mathf.PI*.5f);
+            // Louder and meatier under load; the overrun layer keeps a lighter burble between shifts.
+            float level=presence*gain*(.13f+.21f*loadMix+.08f*rpm);
+            for(int i=0;i<rates.Length;i++)
+            {
+                float distance=Mathf.Abs(position-i),weight=distance>=1?0:Mathf.Cos(distance*Mathf.PI*.5f);
+                float pitch=Mathf.Clamp(firing/rates[i],.3f,3f);
+                engineOn[i].pitch=pitch;engineOff[i].pitch=pitch;
+                engineOn[i].volume=level*weight*onGain;engineOff[i].volume=level*weight*offGain*.85f;
+            }
+        }
+        /// <summary>Lifting off at high RPM dumps unburnt fuel into the exhaust: a short run of irregular pops.</summary>
+        void UpdateCrackle(VehicleController player,float rpm,float load,float gain)
+        {
+            if(lastThrottle>.6f&&load<.2f&&rpm>.4f)crackleUntil=Time.time+Mathf.Lerp(.35f,.9f,rpm);
+            if(load>.45f)crackleUntil=0;
+            if(Time.time>crackleUntil||Time.time<crackleAt)return;
+            crackleAt=Time.time+Random.Range(.045f,.16f);
+            PlayAt(backfire,player.transform.position-player.transform.forward*2,Random.Range(.12f,.3f)*gain,Random.Range(.8f,1.25f),72);
+        }
+        /// <summary>Metal hull impact for the player, scaled by the share of health lost. Rapid fire is rate limited.</summary>
+        public void PlayHurt(float healthFraction)
+        {
+            if(Settings==null||hurts==null||Time.unscaledTime<hurtAt)return;
+            hurtAt=Time.unscaledTime+.11f;
+            float strength=Mathf.Clamp01(.35f+healthFraction*6);
+            if(uiSource)uiSource.PlayOneShot(hurts[hurtCursor++%hurts.Length],Mathf.Clamp01(Settings.weapons*(.45f+strength*.5f)));
+        }
+        void UpdateHeartbeat(VehicleController player)
+        {
+            float target=0,pitch=1;
+            if(player&&player.Damage!=null&&!player.Damage.IsDead)
+            {
+                float health=player.Damage.Health/Mathf.Max(1,player.Damage.MaxHealth);
+                float danger=Mathf.InverseLerp(.35f,.08f,health);
+                target=health<.35f?Mathf.Lerp(.28f,.6f,danger):0;pitch=Mathf.Lerp(1f,1.45f,danger);
+            }
+            heartbeat.pitch=pitch;
+            // Rides the weapons bus (the combat mix), with a floor so the warning survives a low weapons slider.
+            heartbeat.volume=Mathf.MoveTowards(heartbeat.volume,target*Mathf.Max(.35f,Settings.weapons),Time.unscaledDeltaTime*.8f);
         }
         void PlayAt(AudioClip clip,Vector3 position,float volume,float pitch,int priority)
         {

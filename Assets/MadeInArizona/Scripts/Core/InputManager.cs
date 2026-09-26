@@ -14,7 +14,8 @@ namespace MadeInArizona
         public float AimElevation {get;private set;}
         public bool Primary { get; private set; }
         public bool Secondary { get; private set; }
-        public bool Handbrake { get; private set; }
+        /// <summary>Held to drift. The action keeps its old "Handbrake" name so saved rebinds still apply.</summary>
+        public bool Drift { get; private set; }
         public bool Boost { get; private set; }
         public bool Repair { get; private set; }
         public bool Interact { get; private set; }
@@ -76,7 +77,7 @@ namespace MadeInArizona
         void ClearGameplay()
         {
             Move = Vector2.zero;
-            Primary = Secondary = Handbrake = Boost = Repair = Interact = SwapPressed = false;
+            Primary = Secondary = Drift = Boost = Repair = Interact = SwapPressed = false;
         }
 
         void Update()
@@ -102,7 +103,10 @@ namespace MadeInArizona
                 if(GeneratedWorld.Active && Physics.Raycast(ray,out var terrainHit,600,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore) && terrainHit.collider.GetComponentInParent<VehicleController>()!=player)
                 {
                     var targetVehicle=terrainHit.collider.GetComponentInParent<VehicleController>();
-                    Vector3 target=targetVehicle?targetVehicle.transform.position+Vector3.up*.85f:terrainHit.point;
+                    // Aim at hull height, not the dirt: a cursor beside a car on a slope used to fire into the ground.
+                    // A hostile close to the cursor lends its height so downhill and uphill shots still connect.
+                    if(!targetVehicle)targetVehicle=HostileNear(player,terrainHit.point,5.5f);
+                    Vector3 target=targetVehicle?targetVehicle.transform.position+Vector3.up*.85f:terrainHit.point+Vector3.up*.85f;
                     Vector3 delta=target-player.transform.position-Vector3.up*.85f;
                     float horizontal=new Vector2(delta.x,delta.z).magnitude;
                     if(horizontal>.3f){Aim=new Vector2(delta.x,delta.z)/horizontal;AimElevation=delta.y/horizontal;}
@@ -130,11 +134,59 @@ namespace MadeInArizona
                 }
                 Aim = Vector2.Lerp(Aim, corrected, .35f).normalized;
             }
+            // A stick only chooses a heading, so the turret pitch must be chosen for the player. Without it every
+            // gamepad shot left flat at muzzle height and sailed over enemies below the player.
+            if (UsingGamepad && player != null && GeneratedWorld.Active) AimElevation = GamepadElevation(player, Aim);
             Primary = primary.IsPressed();
             Secondary = secondary.IsPressed();
-            Handbrake = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
+            Drift = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
             Interact = interact.WasPressedThisFrame();
             SwapPressed = swap.WasPressedThisFrame();
+        }
+
+        static VehicleController HostileNear(VehicleController player, Vector3 point, float radius)
+        {
+            VehicleController best = null; float bestSq = radius * radius;
+            foreach (var candidate in VehicleController.Active)
+            {
+                if (!Hostile(player, candidate)) continue;
+                Vector3 d = candidate.transform.position - point; d.y = 0;
+                if (d.sqrMagnitude < bestSq) { bestSq = d.sqrMagnitude; best = candidate; }
+            }
+            return best;
+        }
+        static bool Hostile(VehicleController player, VehicleController candidate)
+        {
+            if (candidate == null || candidate == player || candidate.IsPlayer || candidate.Damage == null || candidate.Damage.IsDead) return false;
+            var ai = candidate.GetComponent<EnemyAI>();
+            return ai == null || !ai.IsFriendly;
+        }
+        /// <summary>
+        /// Pitch for a stick-aimed shot: toward the hull of the hostile best lined up with the heading, otherwise
+        /// level with the ground ahead so shots follow hills instead of burying into them or flying over dips.
+        /// </summary>
+        static float GamepadElevation(VehicleController player, Vector2 aim)
+        {
+            Vector3 muzzle = player.transform.position + Vector3.up * .85f;
+            float best = .93f; VehicleController target = null;
+            foreach (var candidate in VehicleController.Active)
+            {
+                if (!Hostile(player, candidate)) continue;
+                Vector3 delta = candidate.transform.position - player.transform.position;
+                Vector2 flat = new Vector2(delta.x, delta.z);
+                if (flat.sqrMagnitude < 1 || flat.sqrMagnitude > 5600) continue;
+                float dot = Vector2.Dot(aim, flat.normalized);
+                if (dot > best) { best = dot; target = candidate; }
+            }
+            if (target != null)
+            {
+                Vector3 delta = target.transform.position + Vector3.up * .85f - muzzle;
+                float horizontal = new Vector2(delta.x, delta.z).magnitude;
+                return Mathf.Clamp(delta.y / Mathf.Max(1, horizontal), -.8f, .8f);
+            }
+            const float probe = 18;
+            Vector3 ahead = player.transform.position + new Vector3(aim.x, 0, aim.y) * probe;
+            return Mathf.Clamp((GeneratedWorld.HeightAt(ahead) + .85f - muzzle.y) / probe, -.45f, .45f);
         }
 
         public string BindingLabel(string actionName, int bindingIndex = 0)

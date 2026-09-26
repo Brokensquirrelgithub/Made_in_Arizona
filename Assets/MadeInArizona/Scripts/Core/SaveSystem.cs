@@ -11,7 +11,7 @@ namespace MadeInArizona
     {
         public float master=.8f, music=.48f, engines=.62f, weapons=.82f, dialogue=.8f, environment=.5f, shake=.6f, uiScale=1;
         public int quality=2, difficulty=1, aimAssist=1, width=1600, height=900, windowMode=2;
-        public bool subtitles=true, fullscreen=false;
+        public bool subtitles=true, fullscreen=false, dynamicZoom=true;
         public string bindingOverrides="";
         public DevTuning dev=new DevTuning();
         public void Clamp()

@@ -11,6 +11,7 @@
   "terrainHeight": 65.0,
   "vegetation": 1.0,
   "riverWidth": 10.0,
+  "trailDensity": 1.0,
   "biomeThresholds": {
     "lowland": 0.28,
     "scrub": 0.52,
@@ -20,7 +21,7 @@
 }
 ```
 
-`seed` is saved as part of the file, so a chosen seed reproduces the same generated layout. `size` is measured in world units and must be finite from 800 through 3200. `townCount` accepts 2–6 and `poiCount` accepts 4–40. `terrainHeight` accepts 0–150, `vegetation` 0–4 (density multiplier), and `riverWidth` 0–30 metres. Biome threshold values must be ordered from 0 through 1.
+`seed` is saved as part of the file, so a chosen seed reproduces the same generated layout. `size` is measured in world units and must be finite from 800 through 3200. `townCount` accepts 2–6 and `poiCount` accepts 4–40. `terrainHeight` accepts 0–150, `vegetation` 0–4 (density multiplier), `riverWidth` 0–30 metres, and `trailDensity` 0–3. Biome threshold values must be ordered from 0 through 1.
 
 `pins` is optional and contains hand-authored map markers. Every pin needs an `id`; the other available fields are `label`, `kind`, `position` (`x`, `y`, and `z`), `requiredTier`, and `discovered`.
 
@@ -37,6 +38,8 @@ Authored pins are placed at world-space `x`/`z` coordinates and snapped to terra
 The generator uses bounded terrain chunks, seeded biome noise, a carved river, graded road corridors and predefined town geometry. Increasing map size spreads the same bounded terrain resolution across a larger area. This is a finite region; town blueprints are currently defined in code. Regeneration is synchronous after the loading screen is drawn and can briefly stall on large or dense configurations.
 
 ## Landscape detail
+
+`trailDensity` scales the dirt trail network (default 1, range 0–3; 0 disables it). Trails link scattered junctions, every point of interest, and the main roads. Each junction joins its nearest two or three neighbours, so the map fills with a loose web of routes. Every trail curves on its own and is a dirt road (6–8 m), a track (4–5.5 m) or a footpath (2.4–3.4 m). Trails avoid town centres, can ford the river, keep scenery clear, show on the minimap and drive as dirt.
 
 `vegetation` controls deterministic ground-cover and larger-plant density (default 1, range 0–4). Nearby ecology streams in 32-metre tiles: Pandazole tree canopies, riparian trees, cacti, shrubs, grass and rocks, supplemented by procedural flowers, leaf litter and deadwood. Large trunks and boulders have collision; fine plants bend around the car without adding driving resistance. Tiles unload beyond the camera region and reproduce from their seed when revisited. Scenery collision is currently static; this pass does not implement persistent felled trees.
 

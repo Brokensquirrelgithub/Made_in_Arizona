@@ -99,6 +99,10 @@ namespace MadeInArizona
             yield return null;
             Check("F swaps a held field weapon",game.Player.Weapons.FieldWeapon&&game.Player.Weapons.FieldWeapon.id=="invoice");
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+            int heldAmmo=game.Player.Weapons.FieldAmmo;
+            var matching=CombatPickup.Create(PickupKind.Weapon,game.Player.transform.position+game.Player.transform.forward*9,WeaponRules.Find("invoice"),2);
+            yield return new WaitForSecondsRealtime(1.2f);
+            Check("matching weapon drop magnets in and adds ammo",!matching&&game.Player.Weapons.FieldWeapon&&game.Player.Weapons.FieldWeapon.id=="invoice"&&game.Player.Weapons.FieldAmmo==heldAmmo+2);
             game.Player.Repair(200);
             Check("field repair", game.Player.Damage.Health > health - 40);
             game.Pause(); Check("pause freezes simulation", Time.timeScale == 0 && game.State == GameState.Paused);
@@ -184,6 +188,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             var world=GeneratedWorld.Active;
             Check("generated campaign starts from menu",world&&game.IsPlaying&&world.Towns.Count>=2);
+            Check("dirt trail network spans the generated map",world&&world.TrailCount>=20);
             var groundTextures=GroundTextureSet.Load();
             Check("licensed ground textures and height maps linked",groundTextures&&groundTextures.Diffuse(1)&&groundTextures.Height(1));
             var nature=PandazoleNatureCatalog.Load();
@@ -407,7 +412,7 @@ namespace MadeInArizona
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)){ai.enabled=false;ai.GetComponent<VehicleController>().SetAIInput(Vector2.zero,Vector3.forward,false);}
             Check("field weapon starts empty in combat",game.Player.Weapons.FieldWeapon==null);
             game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
-            Check("enemy rocket drop fits LT with limited ammo",game.Player.Weapons.FieldWeapon!=null&&game.Player.Weapons.FieldAmmo==4);
+            Check("enemy rocket drop fits LT with tripled limited ammo",game.Player.Weapons.FieldWeapon!=null&&game.Player.Weapons.FieldAmmo==12);
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))ai.enabled=true;
             float fightStart=Time.time,deadline=Time.time+70;bool attacked=false,captured=false,warned=false;
             while(Time.time<deadline&&game.IsPlaying) {

@@ -7,7 +7,7 @@ namespace MadeInArizona
         int devTab;
         Vector2 devScroll;
         float devSaveAt;
-        readonly string[] devTabs={"DRIVING","COMBAT","CAMERA","LIGHT & COLOR"};
+        readonly string[] devTabs={"DRIVING","DRIFT","COMBAT","CAMERA","LIGHT & COLOR"};
         float StylesRadioHeight(string message,float w) => Style(14,Cream).CalcHeight(new GUIContent(message),w)+5;
         public void OpenDevMenu() { if(game.IsPlaying)game.Pause();devMenu=true;settings=false; }
         void SaveDev()
@@ -24,7 +24,8 @@ namespace MadeInArizona
             Rect(x,y,w,h,new Color(.055f,.081f,.09f,1));
             Text(x+24,y+20,w-48,38,"LIVE DEV TUNING",27,Cream,true);
             Text(x+24,y+60,w-48,42,"Mouse controls • changes apply immediately and save automatically. Resume to test handling.",14,Muted);
-            for(int i=0;i<devTabs.Length;i++) if(Button(x+20+i*172,y+110,164,36,devTabs[i],devTab==i)) {devTab=i;devScroll=Vector2.zero;}
+            float tabW=(w-40)/devTabs.Length;
+            for(int i=0;i<devTabs.Length;i++) if(Button(x+20+i*tabW,y+110,tabW-8,36,devTabs[i],devTab==i)) {devTab=i;devScroll=Vector2.zero;}
             int count=0;foreach(var c in DevControl.All)if(c.group==devTabs[devTab])count++;
             devScroll=GUI.BeginScrollView(new Rect(x+20,y+160,w-40,h-252),devScroll,new Rect(0,0,w-62,count*68));
             int row=0;

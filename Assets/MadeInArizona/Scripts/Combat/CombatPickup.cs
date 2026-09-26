@@ -5,7 +5,10 @@ namespace MadeInArizona
 {
     public enum PickupKind { Health, Nitro, Scrap, Weapon }
 
-    /// <summary>Physical rewards from destroyed hostile vehicles. Supplies collect on contact; weapons require a swap when occupied.</summary>
+    /// <summary>
+    /// Physical rewards from destroyed hostile vehicles. Supplies collect on contact; weapons require a swap when occupied.
+    /// A drop of the field weapon already equipped is pulled to the player and merged into its ammo.
+    /// </summary>
     public sealed class CombatPickup : MonoBehaviour
     {
         static readonly List<CombatPickup> active = new List<CombatPickup>();
@@ -13,7 +16,8 @@ namespace MadeInArizona
         public PickupKind Kind { get; private set; }
         public WeaponDefinition Weapon { get; private set; }
         public int Amount { get; private set; }
-        float availableAt;
+        const float MagnetRadius = 14, MagnetCollect = 2.2f;
+        float availableAt, magnetSpeed;
         Vector3 basePosition;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
@@ -21,7 +25,7 @@ namespace MadeInArizona
             CombatPickup closest = null; float nearest = 16;
             foreach (var pickup in active)
             {
-                if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt) continue;
+                if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.IsAmmoFor(player)) continue;
                 Vector3 delta = pickup.transform.position - player.transform.position; delta.y = 0;
                 if (delta.sqrMagnitude < nearest) { nearest = delta.sqrMagnitude; closest = pickup; }
             }
@@ -34,17 +38,13 @@ namespace MadeInArizona
             bool health = boss || Random.value < .8f;
             bool nitro = boss || Random.value < .65f;
             bool scrap = boss || Random.value < .65f;
-            bool weapon = boss || Random.value < (faction == EnemyFaction.RoadScavengers || faction == EnemyFaction.CarOtaku ? .62f : archetype == 3 || archetype == 4 ? .6f : .48f);
-            if (!health && !nitro && !scrap && !weapon) health = true;
             Vector3 origin = vehicle.transform.position;
             if (health) Create(PickupKind.Health, origin + new Vector3(-2, 0, -1), null, boss ? 120 : 55);
             if (nitro) Create(PickupKind.Nitro, origin + new Vector3(2, 0, -1), null, boss ? 75 : 38);
             if (scrap) Create(PickupKind.Scrap, origin + new Vector3(0, 0, 2), null, boss ? 8 : Random.Range(1, 4));
-            if (weapon)
-            {
-                var drop = WeaponRules.Find(WeaponRules.EnemyDrop(faction, archetype));
-                if (drop) Create(PickupKind.Weapon, origin + new Vector3(0, 0, -2), drop, WeaponRules.PickupAmmo(drop.id));
-            }
+            // Every hostile drops a weapon from its crew's arsenal.
+            var drop = WeaponRules.Find(WeaponRules.EnemyDrop(faction, archetype));
+            if (drop) Create(PickupKind.Weapon, origin + new Vector3(0, 0, -2), drop, WeaponRules.PickupAmmo(drop.id));
         }
         public static CombatPickup Create(PickupKind kind, Vector3 position, WeaponDefinition weapon, int amount)
         {
@@ -67,6 +67,28 @@ namespace MadeInArizona
             pickup.basePosition = go.transform.position; pickup.availableAt = Time.time + .35f;
             return pickup;
         }
+        bool IsAmmoFor(VehicleController player) =>
+            Kind == PickupKind.Weapon && Weapon && player && player.Weapons && player.Weapons.FieldWeapon && player.Weapons.FieldWeapon.id == Weapon.id;
+        /// <summary>Pulls a matching weapon drop toward the player, accelerating, and merges it on arrival.</summary>
+        bool MagnetToAmmo(VehicleController player)
+        {
+            Vector3 delta = player.transform.position + Vector3.up * .8f - basePosition;
+            Vector3 flat = new Vector3(delta.x, 0, delta.z);
+            if (magnetSpeed <= 0 && flat.sqrMagnitude > MagnetRadius * MagnetRadius) return false;
+            magnetSpeed = Mathf.Max(8, magnetSpeed + 60 * Time.deltaTime);
+            float step = magnetSpeed * Time.deltaTime;
+            if (delta.magnitude <= Mathf.Max(MagnetCollect, step))
+            {
+                player.Weapons.AddFieldAmmo(Amount);
+                GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo);
+                AudioManager.Instance?.PlayUI();
+                Destroy(gameObject);
+                return true;
+            }
+            basePosition += delta.normalized * step;
+            transform.position = basePosition;
+            return true;
+        }
         void OnEnable() { if (!active.Contains(this)) active.Add(this); }
         void OnDisable() { active.Remove(this); }
         void OnDestroy() { var renderer = GetComponent<Renderer>(); if (renderer && renderer.sharedMaterial) Destroy(renderer.sharedMaterial); }
@@ -76,6 +98,8 @@ namespace MadeInArizona
             transform.Rotate(Vector3.up, 85 * Time.deltaTime);
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
+            if (IsAmmoFor(game.Player)) { MagnetToAmmo(game.Player); return; }
+            magnetSpeed = 0;
             Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
             if (delta.sqrMagnitude > 13 || Mathf.Abs(transform.position.y - game.Player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)

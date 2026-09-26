@@ -14,7 +14,8 @@ namespace MadeInArizona
             {
                 float approximateLength=Vector2.Distance(route.a,route.b)*1.08f;
                 int count=Mathf.Clamp(Mathf.CeilToInt(approximateLength/1.5f)+1,24,1800);
-                var left=new Vector3[count];var right=new Vector3[count];
+                const int lanes=AsphaltColumns;
+                var left=new Vector3[count];var right=new Vector3[count];var surface=new Vector3[count,lanes];
                 var leftOuter=new Vector3[count];var rightOuter=new Vector3[count];
                 var centers=new Vector3[count];var normals=new Vector2[count];var distance=new float[count];
                 float halfRoad=route.width*.5f;
@@ -29,16 +30,19 @@ namespace MadeInArizona
                     Vector2 n=new Vector2(-tangent.y,tangent.x);normals[i]=n;
                     Vector2 lp=p+n*halfRoad,rp=p-n*halfRoad;
                     Vector2 lo=p+n*(halfRoad+2.6f),ro=p-n*(halfRoad+2.6f);
-                    left[i]=RoadPoint(lp,.085f);right[i]=RoadPoint(rp,.085f);
-                    leftOuter[i]=RoadPoint(lo,.025f);rightOuter[i]=RoadPoint(ro,.025f);
-                    centers[i]=(left[i]+right[i])*.5f+Vector3.up*.025f;
+                    // Several columns across the asphalt let it follow the graded terrain instead of bridging
+                    // straight from edge to edge, which let terrain creases show through mid-lane.
+                    for(int j=0;j<lanes;j++)surface[i,j]=RoadSurfacePoint(Vector2.Lerp(lp,rp,j/(float)(lanes-1)),tangent,n,halfRoad/(lanes-1),.75f);
+                    left[i]=surface[i,0];right[i]=surface[i,lanes-1];
+                    leftOuter[i]=RoadPoint(lo,.03f);rightOuter[i]=RoadPoint(ro,.03f);
+                    centers[i]=surface[i,lanes/2]+Vector3.up*.012f;
                     if(i>0)distance[i]=distance[i-1]+Vector3.Distance(centers[i-1],centers[i]);
                 }
 
                 // Gravel shoulders hide the asphalt seam and make the road settle into the ground.
                 Ribbon("Gravel left shoulder",leftOuter,left,high,roads,false);
                 Ribbon("Gravel right shoulder",right,rightOuter,high,roads,false);
-                Ribbon("Smooth winding county road",left,right,asphalt,roads,true);
+                Surface("Smooth winding county road",surface,asphalt,roads,true);
                 BuildWornCenterMarkings(centers,normals,distance);
                 BuildRoadFurniture(route,centers,normals,distance);
 
@@ -51,9 +55,39 @@ namespace MadeInArizona
             }
         }
 
+        const int AsphaltColumns=5;const float RoadLift=.1f;
         Vector3 RoadPoint(Vector2 p,float lift)
         {
             Vector3 v=new Vector3(p.x,0,p.y);v.y=HeightAt(v)+lift;return v;
+        }
+
+        /// <summary>
+        /// Asphalt vertex resting on the highest terrain within half a cell of it. Terrain triangles are larger than
+        /// the road grid, so a single point sample lets curved ground (notably where town pads blend into the road)
+        /// rise between vertices; the envelope keeps the whole road quad above it.
+        /// </summary>
+        Vector3 RoadSurfacePoint(Vector2 p,Vector2 tangent,Vector2 normal,float across,float along)
+        {
+            float h=HeightAt(new Vector3(p.x,0,p.y));
+            foreach(Vector2 o in new[]{tangent*along,-tangent*along,normal*across,-normal*across})
+            {Vector2 q=p+o;h=Mathf.Max(h,HeightAt(new Vector3(q.x,0,q.y)));}
+            return new Vector3(p.x,h+RoadLift,p.y);
+        }
+
+        /// <summary>A road surface grid: rows run along the route, columns run left to right across it.</summary>
+        static void Surface(string name,Vector3[,] grid,Material mat,Transform parent,bool collider)
+        {
+            int rows=grid.GetLength(0),cols=grid.GetLength(1);
+            var v=new Vector3[rows*cols];var uv=new Vector2[v.Length];
+            for(int i=0;i<rows;i++)for(int j=0;j<cols;j++){v[i*cols+j]=grid[i,j];uv[i*cols+j]=new Vector2(j/(float)(cols-1),i);}
+            var tr=new int[(rows-1)*(cols-1)*6];int t=0;
+            for(int i=0;i<rows-1;i++)for(int j=0;j<cols-1;j++)
+            {int a=i*cols+j,b=a+1,c=a+cols,d=c+1;tr[t++]=a;tr[t++]=c;tr[t++]=b;tr[t++]=b;tr[t++]=c;tr[t++]=d;}
+            var go=new GameObject(name,typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(parent,false);
+            var m=new Mesh{name=name,vertices=v,triangles=tr,uv=uv};m.RecalculateNormals();m.RecalculateBounds();
+            go.GetComponent<MeshFilter>().sharedMesh=m;go.GetComponent<MeshRenderer>().sharedMaterial=mat;
+            go.GetComponent<MeshRenderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+            if(collider)go.AddComponent<MeshCollider>().sharedMesh=m;go.AddComponent<GeneratedMeshOwner>().Mesh=m;
         }
 
         void BuildWornCenterMarkings(Vector3[] center,Vector2[] normal,float[] distance)

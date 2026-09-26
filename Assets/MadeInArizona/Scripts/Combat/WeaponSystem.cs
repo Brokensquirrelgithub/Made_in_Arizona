@@ -61,6 +61,10 @@ namespace MadeInArizona
             FieldWeapon = weapon; FieldAmmo = Mathf.Max(1, ammo); fieldAt = 0;
             GameManager.Instance?.Notify("FIELD WEAPON • " + weapon.displayName + " / " + FieldAmmo + " rounds");
         }
+        public void AddFieldAmmo(int ammo)
+        {
+            if (FieldWeapon && ammo > 0) FieldAmmo += ammo;
+        }
         public void ConfigureEnemyPrimary(string id)
         {
             if (owner != null && !owner.IsPlayer)

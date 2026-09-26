@@ -40,7 +40,7 @@ High and Arizona Summer enable screen-space heat refraction around blasts and pe
 
 Low/Medium/High/Arizona Summer cap active physical debris at 45/100/220/640. High/Ultra cap refraction patches at 12/32 and persistent fires at 12/32; old patches expire and reuse objects. Low and Medium use reduced texture mip levels; High and Ultra retain full 4K flipbooks. Persistent fire lights are capped at six on High and twelve on Ultra. Ultra enables 4096-pixel sun shadows, eight additional lights per object, higher bloom filtering, more embers and longer-lived smoke. Quality changes fully refresh world-owned pools when entering the next garage or mission. There is no artificial workload added solely to heat the GPU, and no RTX 3080 performance claim.
 
-Engine audio combines firing harmonics, a separately synthesized loaded exhaust, compressor whine, road texture, wind, gear engagement and throttle-release bypass hiss. RPM and throttle drive pitch and layer gain; explosions duck engine/music levels. All PCM is generated from original synthesis code.
+Engine audio is a bank of synthesized cross-plane V8 loops at three firing rates, each with an on-load and an overrun version, crossfaded by RPM (equal-power, in log frequency) and throttle, plus overrun pops, compressor whine, road texture, wind, gear engagement and throttle-release bypass hiss. See [engine audio notes](Audio/ENGINE_AUDIO.md). Explosions duck engine/music levels. All PCM is generated from original synthesis code.
 
 ## Native builds
 
