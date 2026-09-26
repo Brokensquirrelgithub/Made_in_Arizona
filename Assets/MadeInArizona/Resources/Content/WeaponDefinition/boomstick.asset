@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: boomstick
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: boomstick
-  displayName: Double-Owed Boomstick
-  description: Field shotgun. Twelve heavy pellets; devastating at bumper distance.
+  displayName: 'Drainpipe Double-Barrel'
+  description: 'Two drainpipes and a nail for a firing pin. Twelve heavy pellets; devastating at bumper distance.'
+  role: 'POINT-BLANK SHOTGUN'
+  strength: 'Two-shot kills on anything touching your bumper.'
+  weakness: 'Slow reload and almost no reach.'
   contentOrder: 10
   damage: 15
   fireRate: 0.95

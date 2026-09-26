@@ -13,11 +13,13 @@ MonoBehaviour:
   m_Name: shredder
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: shredder
-  displayName: Receipt Shredder
-  description: Garage weapon. Three light blades fan out; track close targets to
-    land the full volley.
+  displayName: 'Sawblade Slingshot'
+  description: 'Surgical tubing launching three table-saw blades. Each blade cuts through one car into the next.'
+  role: 'PIERCING FAN'
+  strength: 'Blades pass through the first car and keep cutting.'
+  weakness: 'Short reach and light damage per blade.'
   contentOrder: 11
-  damage: 7
+  damage: 9
   fireRate: 5
   speed: 88
   blastRadius: 0

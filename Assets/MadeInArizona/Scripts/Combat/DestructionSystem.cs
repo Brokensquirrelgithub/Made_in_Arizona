@@ -49,30 +49,54 @@ namespace MadeInArizona
         }
         public bool TryDestroyFromVehicle(float amount, Vector3 hitPoint, GameObject source, out bool smallProp)
         {
-            smallProp = IsSmallProp();
+            smallProp = Size <= 3f;
             if (IsDestroyed || amount <= 0) return false;
             ApplyDamage(amount, hitPoint, source);
             return IsDestroyed;
         }
-        bool IsSmallProp()
+        /// <summary>Knocks the prop apart as a car drives through it: full destruction, explosions included.</summary>
+        public void SmashFromVehicle(Vector3 hitPoint, GameObject source)
+        {
+            if (IsDestroyed) return;
+            ApplyDamage(Health + 1, hitPoint, source);
+        }
+        /// <summary>Enables or disables contact between every collider of this prop and a vehicle body.</summary>
+        public void SetVehicleCollision(Collider vehicleBody, bool enabled)
+        {
+            if (!vehicleBody) return;
+            foreach (var collider in GetComponentsInChildren<Collider>())
+                if (collider && collider != vehicleBody) Physics.IgnoreCollision(vehicleBody, collider, !enabled);
+        }
+        float size = -1;
+        /// <summary>Largest dimension of the prop's collision volume (renderers when it has none), measured once.</summary>
+        public float Size
+        {
+            get
+            {
+                if (size < 0) { var bounds = WorldBounds; size = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)); }
+                return size;
+            }
+        }
+        Bounds? cachedBounds;
+        /// <summary>World bounds of the prop, measured once: scenery props never move until they are destroyed.</summary>
+        public Bounds WorldBounds => cachedBounds ?? (cachedBounds = MeasureBounds()).Value;
+        Bounds MeasureBounds()
         {
             Bounds bounds = new Bounds(transform.position, Vector3.zero);
-            bool foundBounds = false;
+            bool found = false;
             foreach (var collider in GetComponentsInChildren<Collider>())
             {
                 if (!collider.enabled) continue;
-                if (!foundBounds) { bounds = collider.bounds; foundBounds = true; }
+                if (!found) { bounds = collider.bounds; found = true; }
                 else bounds.Encapsulate(collider.bounds);
             }
-            if (!foundBounds)
+            if (!found)
                 foreach (var renderer in GetComponentsInChildren<Renderer>())
                 {
-                    if (!foundBounds) { bounds = renderer.bounds; foundBounds = true; }
+                    if (!found) { bounds = renderer.bounds; found = true; }
                     else bounds.Encapsulate(renderer.bounds);
                 }
-            if (!foundBounds) return false;
-            Vector3 size = bounds.size;
-            return Kind != ExplosionKind.Massive && Mathf.Max(size.x, Mathf.Max(size.y, size.z)) <= 3f && size.magnitude <= 4.25f;
+            return bounds;
         }
         void OnCollisionEnter(Collision collision)
         {

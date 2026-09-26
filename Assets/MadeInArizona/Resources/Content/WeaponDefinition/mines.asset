@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: mines
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: mines
-  displayName: Lien Mines
-  description: Drop charges behind the car; punish pursuers and narrow roads.
+  displayName: 'Tripwire Pipe Bomb'
+  description: 'Enemy road charges: pipe bombs on fishing line, dropped behind a hostile car.'
+  role: 'ENEMY ROAD CHARGE'
+  strength: 'Punishes anyone chasing along a narrow road.'
+  weakness: 'Telegraphed and stationary; drive around it.'
   contentOrder: 6
   damage: 105
   fireRate: 1.2

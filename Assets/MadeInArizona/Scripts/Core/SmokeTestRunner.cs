@@ -636,7 +636,7 @@ namespace MadeInArizona
             var game=GameManager.Instance;var audio=AudioManager.Instance;
             var bank=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             Check("pack grenade explosion is packaged",bank&&bank.ordnanceExplosion&&bank.ordnanceExplosion.name=="GL_explosion");
-            Check("all thirteen weapons reference imported recordings",ContentCatalog.Weapons.Length==13&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
+            Check("every weapon references imported recordings (own or borrowed)",ContentCatalog.Weapons.Length==29&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
             float oldVolume=game.Save.settings.weapons;game.Save.settings.weapons=1;
             foreach(var weapon in ContentCatalog.Weapons)
             {
@@ -847,6 +847,8 @@ namespace MadeInArizona
             ui.enabled=true;game.Resume();
 
             player.Damage.ApplyDamage(30,player.transform.position,null);
+            // The tank no longer refills on its own; start this check from a full tank.
+            player.RefillNitro(10);
             float health=player.Damage.Health;
             int scrap=game.Save.salvage;
             Vector3 origin=player.transform.position+Vector3.right*10;

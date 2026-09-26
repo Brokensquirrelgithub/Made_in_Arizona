@@ -150,6 +150,8 @@ namespace MadeInArizona
                 string json = File.ReadAllText(path, Encoding.UTF8);
                 RequireGenerationFields(json);
                 config = JsonUtility.FromJson<WorldGenConfig>(json);
+                // Configs written before the seven-town minimum are raised rather than rejected.
+                if (config != null && config.townCount >= 2 && config.townCount < WorldGenConfig.MinTowns) config.townCount = WorldGenConfig.MinTowns;
                 string validationError=null;
                 if (config == null || !config.Validate(out validationError)) throw new InvalidDataException(validationError ?? "JSON did not contain a world config.");
                 return true;

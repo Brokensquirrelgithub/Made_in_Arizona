@@ -12,6 +12,8 @@ namespace MadeInArizona
         public Rigidbody Body { get; private set; }
         public Transform Visual { get; private set; }
         public VehicleStats Stats { get; private set; }
+        /// <summary>Burn, stall and stuck-charge state, created the first time a weapon applies one.</summary>
+        public VehicleAfflictions Afflictions { get; internal set; }
         public bool IsPlayer { get; private set; }
         public float SpeedKph => Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         public float RPM { get; private set; } = 900;
@@ -27,7 +29,15 @@ namespace MadeInArizona
         public float Pace { get; set; } = 1;
         Vector2 aiMove;
         Vector3 aiAim = Vector3.forward;
-        bool aiFire;
+        bool aiFire, aiReverse;
+        /// <summary>
+        /// AI vehicles only engage reverse when their controller asks for it (stuck recovery). Friendly route
+        /// followers such as the escort van turn round instead of backing across the map.
+        /// </summary>
+        public bool AutoReverse { get; set; } = true;
+        /// <summary>Nitro tank size relative to the original tank. There is no passive refill; pickups top it up.</summary>
+        public const float NitroCapacity = 3f;
+        const float NitroBurnRate = .22f / NitroCapacity;
         Vector3 lastVelocity, bodyAcceleration;
         Vector3 preCollisionVelocity;
         float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown;
@@ -76,6 +86,7 @@ namespace MadeInArizona
             if (Weapons == null) Weapons = gameObject.AddComponent<WeaponSystem>();
             Weapons.Initialize(this);
             ExplosionSystem.IgnoreVehicleCollisions(this);
+            VehicleDamage.IgnoreWrecks(this);
             initialized = true;
         }
         public static Transform FindChild(Transform parent, string childName)
@@ -88,9 +99,15 @@ namespace MadeInArizona
             }
             return null;
         }
-        public void SetAIInput(Vector2 move, Vector3 aim, bool fire) { aiMove = move; aiAim = aim; aiFire = fire; }
+        public void SetAIInput(Vector2 move, Vector3 aim, bool fire, bool reverse = false) { aiMove = move; aiAim = aim; aiFire = fire; aiReverse = reverse; }
         public void Repair(float amount) { Damage?.Repair(amount); }
-        public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount); }
+        /// <summary>Adds a share of the tank; nitro-recovery parts scale what a pickup restores.</summary>
+        public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount * Mathf.Clamp(Stats != null ? Stats.cooling : 1, .25f, 3)); }
+        /// <summary>The player and any friendly AI are one side; hostile crews are the other.</summary>
+        public bool FriendlyToPlayer { get { if (IsPlayer) return true; var ai = GetComponent<EnemyAI>(); return ai != null && ai.IsFriendly; } }
+        public static bool Allied(VehicleController a, VehicleController b) => a && b && a.FriendlyToPlayer == b.FriendlyToPlayer;
+        /// <summary>Largest horizontal dimension of the body collider; scenery is judged against it.</summary>
+        public float BodyLength { get { var box = GetComponent<BoxCollider>(); return box ? Mathf.Max(box.size.x, box.size.z) : 3.5f; } }
 
         void Update()
         {
@@ -130,9 +147,11 @@ namespace MadeInArizona
                 Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; return;
             }
             Vector2 input = IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
+            // A stalled engine (shock weapons) coasts; steering and throttle return when it restarts.
+            if (VehicleAfflictions.Stalled(this)) input = Vector2.zero;
             bool drifting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Drift;
             var tuning = DevTuning.Current;
-            bool boosting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Boost && BoostCharge > .03f && input.sqrMagnitude > .1f;
+            bool boosting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Boost && BoostCharge > .002f && input.sqrMagnitude > .1f;
             Throttle = Mathf.MoveTowards(Throttle, input.magnitude, Time.fixedDeltaTime * 6);
             Grounded = SupportSuspension();
             Vector3 planar = Vector3.ProjectOnPlane(Body.linearVelocity, Vector3.up);
@@ -153,7 +172,8 @@ namespace MadeInArizona
             {
                 Vector3 desired = new Vector3(input.x, 0, input.y);
                 float forwardAlignment = Vector3.Dot(transform.forward, desired.normalized);
-                driveDirection = SelectDriveDirection(forwardAlignment, forwardSpeed, driveDirection);
+                if (IsPlayer || AutoReverse) driveDirection = SelectDriveDirection(forwardAlignment, forwardSpeed, driveDirection);
+                else driveDirection = aiReverse ? -1 : 1;
                 if (driveDirection < 0) boosting = false;
                 Vector3 driveForward = transform.forward * driveDirection;
                 float angle = Vector3.SignedAngle(driveForward, desired, Vector3.up);
@@ -190,8 +210,7 @@ namespace MadeInArizona
                 if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
                 if (!IsPlayer) acceleration *= Pace;
-                if (boosting) { acceleration *= 1.65f; BoostCharge -= Time.fixedDeltaTime * .22f; }
-                else BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .075f * Mathf.Max(.25f, Stats.cooling));
+                if (boosting) { acceleration *= 1.65f; BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate); }
                 float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
@@ -204,7 +223,6 @@ namespace MadeInArizona
             {
                 driveDirection = 1;
                 RPM = Mathf.Lerp(RPM, 900, Time.fixedDeltaTime * 3);
-                BoostCharge = Mathf.Min(1, BoostCharge + Time.fixedDeltaTime * .075f * Mathf.Max(.25f, Stats.cooling));
                 if (Grounded) Body.AddForce(-planar * 1.8f, ForceMode.Acceleration);
             }
             if (Grounded)
@@ -244,6 +262,7 @@ namespace MadeInArizona
                 Color dust = surface == SurfaceKind.Water ? new Color(.38f, .65f, .7f, .5f) : new Color(.7f, .49f, .28f, .4f);
                 if (surface != SurfaceKind.Asphalt || DriftAmount > .18f) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
+            if (IsPlayer) SweepScenery(speed);
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
@@ -327,7 +346,8 @@ namespace MadeInArizona
             if (prop != null)
             {
                 float propDamage = IsPlayer ? DevTuning.Current.propDamage : 1f;
-                if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out bool smallProp) && smallProp)
+                bool belowCarSize = prop.Size < BodyLength;
+                if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && belowCarSize)
                 {
                     float retainedMomentum = IsPlayer ? DevTuning.Current.propMomentum : .65f;
                     Body.linearVelocity = Vector3.Lerp(Body.linearVelocity, preCollisionVelocity, Mathf.Clamp01(retainedMomentum));
@@ -336,10 +356,66 @@ namespace MadeInArizona
             if(force<6 || Time.time<collisionCooldown)return;
             collisionCooldown=Time.time+.25f;
             var other = collision.collider.GetComponentInParent<VehicleDamage>();
+            // VehicleDamage refuses non-explosive damage between vehicles on the same side, so crews never ram-kill each other.
             if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3), point, gameObject);
-            Damage.ApplyDamage(Mathf.Max(0, force - 11) * .5f, point, collision.gameObject);
+            // The player is never hurt by landing on, scraping or bottoming out against the ground.
+            if (!(IsPlayer && IsGroundContact(collision, other, prop))) Damage.ApplyDamage(Mathf.Max(0, force - 11) * .5f, point, collision.gameObject);
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);
             if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(force / 28) * .25f);
+        }
+        /// <summary>Terrain meshes, graded surfaces and any mostly horizontal contact count as ground.</summary>
+        static bool IsGroundContact(Collision collision, VehicleDamage vehicle, DestructionSystem prop)
+        {
+            if (vehicle != null || prop != null) return false;
+            if (collision.collider is MeshCollider mesh && !mesh.convex) return true;
+            for (int i = 0; i < collision.contactCount; i++)
+                if (Mathf.Abs(collision.GetContact(i).normal.y) < .55f) return false;
+            return collision.contactCount > 0;
+        }
+
+        // ---- Scenery sweep (player only) ----
+        // Props smaller than half the car are driven straight through (and knocked apart); props between half and
+        // the full car length break away without costing speed while the car is moving briskly. Anything as large
+        // as the car stays solid and uses ordinary collision.
+        public const float BreakAwaySpeed = 6f; // m/s, about 22 km/h
+        readonly Collider[] sweepHits = new Collider[48];
+        readonly HashSet<DestructionSystem> ghosted = new HashSet<DestructionSystem>();
+        readonly List<DestructionSystem> ghostScratch = new List<DestructionSystem>();
+        void SweepScenery(float speed)
+        {
+            var body = GetComponent<BoxCollider>();
+            if (!body) return;
+            float length = BodyLength;
+            Vector3 center = transform.TransformPoint(body.center);
+            Vector3 lead = Body.linearVelocity * Time.fixedDeltaTime * 3;
+            Vector3 extents = body.size * .5f + Vector3.one * .45f;
+            int count = Physics.OverlapBoxNonAlloc(center + lead * .5f, extents + new Vector3(Mathf.Abs(lead.x), Mathf.Abs(lead.y), Mathf.Abs(lead.z)) * .5f + Vector3.one * .25f,
+                sweepHits, transform.rotation, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            Bounds car = new Bounds(center, Vector3.zero);
+            car.Encapsulate(body.bounds); car.Expand(.3f);
+            for (int i = 0; i < count; i++)
+            {
+                var hit = sweepHits[i];
+                if (!hit || hit.attachedRigidbody == Body) continue;
+                var prop = hit.GetComponentInParent<DestructionSystem>();
+                if (!prop || prop.IsDestroyed) continue;
+                float size = prop.Size;
+                if (size >= length) continue;
+                bool small = size < length * .5f;
+                if (!small && speed < BreakAwaySpeed) continue;
+                if (ghosted.Add(prop)) prop.SetVehicleCollision(body, false);
+                if (car.Intersects(prop.WorldBounds)) prop.SmashFromVehicle(hit.ClosestPointOnBounds(center), gameObject);
+            }
+            // Medium props approached too slowly become solid again, unless the car is already inside them.
+            if (ghosted.Count == 0) return;
+            ghostScratch.Clear();
+            foreach (var prop in ghosted)
+            {
+                if (!prop || prop.IsDestroyed) { ghostScratch.Add(prop); continue; }
+                bool small = prop.Size < length * .5f;
+                if (!small && speed < BreakAwaySpeed && !car.Intersects(prop.WorldBounds)) { prop.SetVehicleCollision(body, true); ghostScratch.Add(prop); }
+            }
+            foreach (var prop in ghostScratch) ghosted.Remove(prop);
         }
     }
 }

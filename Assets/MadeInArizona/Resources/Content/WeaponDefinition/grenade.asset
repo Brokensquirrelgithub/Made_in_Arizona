@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: grenade
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: grenade
-  displayName: Mailbox Grenadier
-  description: Arcing demolition rounds for clustered cars and barricades.
+  displayName: 'Potato Cannon'
+  description: 'Hairspray-fired PVC lobbing pipe bombs in a high arc. Great for clustered cars and barricades.'
+  role: 'ARCING DEMOLITION'
+  strength: 'Lands over cover and wrecks clusters.'
+  weakness: 'Slow shells; limited rounds; hard to land on moving cars.'
   contentOrder: 4
   damage: 195
   fireRate: 1.3

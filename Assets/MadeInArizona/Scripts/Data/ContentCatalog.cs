@@ -16,6 +16,17 @@ namespace MadeInArizona
             BuildVehicles(); BuildParts(); BuildDrivers(); BuildWeapons(); BuildCampaign();
             OverrideResources(Vehicles, v => v.id); OverrideResources(Parts, v => v.id);
             OverrideResources(Weapons, v => v.id); OverrideResources(Missions, v => v.id); OverrideResources(Drivers, v => v.id);
+            BorrowWeaponSounds();
+        }
+        /// <summary>Weapons without their own recordings reuse the imported clips of a similar weapon.</summary>
+        static void BorrowWeaponSounds()
+        {
+            foreach (var weapon in Weapons)
+            {
+                if (!weapon || (weapon.fireSounds != null && weapon.fireSounds.Length > 0)) continue;
+                var donor = Array.Find(Weapons, w => w && w.id == WeaponRules.SoundDonor(weapon.id));
+                if (donor && donor.fireSounds != null) weapon.fireSounds = donor.fireSounds;
+            }
         }
         static void OverrideResources<T>(T[] defaults, Func<T,string> key) where T : ScriptableObject
         {
@@ -33,10 +44,12 @@ namespace MadeInArizona
             v.springStiffness = mass * (mass > 1700 ? 44f : 38f); v.damping = mass * 4.5f;
             return v;
         }
+        /// <summary>#4d8a78, the factory green of the Geo Metro the Thimble Sprint is based on.</summary>
+        public static readonly Color GeoMetroGreen = new Color(0x4d / 255f, 0x8a / 255f, 0x78 / 255f);
         static void BuildVehicles()
         {
             Vehicles = new[] {
-                Car(0,"thimble","1991 Thimble Sprint","Three cylinders, 760 kilos, one outstanding invoice. Low mass makes every honest horsepower count.",760,58,85,102,1.08f,112,240,Drivetrain.FWD,Differential.Open,new Color(.15f,.78f,.68f),0,0,.23f,.56f,2.23f,1.36f,4.1f),
+                Car(0,"thimble","1991 Thimble Sprint","Three cylinders, 760 kilos, one outstanding invoice. Low mass makes every honest horsepower count.",760,58,85,102,1.08f,112,240,Drivetrain.FWD,Differential.Open,GeoMetroGreen,0,0,.23f,.56f,2.23f,1.36f,4.1f),
                 Car(1,"juniper","1988 Juniper JX","A tiny 4x4 with a huge sense of duty. Narrow track rewards smooth inputs; dirt is its natural habitat.",980,72,110,88,1.14f,94,310,Drivetrain.AWD,Differential.LimitedSlip,new Color(.9f,.58f,.22f),0,0,.42f,.82f,2.08f,1.34f,4.56f),
                 Car(2,"sunskip","Sunskip Trophy 900","Long travel, wide stance, enough speed to discover a wash the hard way. Heavy tires cost acceleration.",1900,420,570,148,1.1f,72,450,Drivetrain.RWD,Differential.LimitedSlip,new Color(.98f,.25f,.14f),2200,3,.78f,.95f,3.15f,2.15f,4.88f),
                 Car(3,"foreclosure","Foreclosure 6.8D","Its torque curve is a mesa. Its turning circle is a county. Includes a payment schedule longer than either.",3000,290,920,99,.94f,48,640,Drivetrain.RWD,Differential.Locked,new Color(.25f,.29f,.34f),2800,5,.32f,.82f,3.55f,1.94f,3.73f),
@@ -108,22 +121,76 @@ namespace MadeInArizona
         { var d = Create<DriverDefinition>(id); d.contentOrder=i; d.id=id; d.displayName=name; d.biography=bio; d.perk=perk; d.line=line; d.color=color; d.repairMultiplier=repair; d.powerMultiplier=power; d.gripMultiplier=grip; return d; }
         static void BuildWeapons()
         {
+            // Every weapon is bolted together from whatever was in the shed. Each has one job it does best and a
+            // clear way to lose with it, in the spirit of Halo's sandbox. Garage weapons (scrap) have unlimited
+            // ammunition; field weapons come off wrecks with limited rounds. The ten oddballs splice two firing
+            // modes together (see WeaponRules.Oddball).
             Weapons = new[] {
-                Weapon(0,"riveter","Belt-fed Riveter","Reliable mid-range automatic fire. Garage weapon; unlimited ammunition.",12,11,90,0,new Color(1,.79f,.2f)),
-                Weapon(1,"invoice","Past-Due Rocket","A rare high-explosive notice. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f)),
-                Weapon(2,"sweeper","Shop-floor Sweeper","Garage shotgun. Eight close-range pellets; clear a path through a crowd.",10,1.7f,96,0,new Color(.3f,1,1)),
-                Weapon(3,"carbine","Surveyor Carbine","Garage precision rifle. Accurate sustained fire at medium range.",24,4.2f,135,0,new Color(.85f,1,.55f)),
-                Weapon(4,"grenade","Mailbox Grenadier","Arcing demolition rounds for clustered cars and barricades.",195,1.3f,43,10,new Color(1,.65f,.18f)),
-                Weapon(5,"mortar","HOA Mortar","A slow long-range shell with a very rude landing.",145,.55f,42,10,new Color(1,.24f,.18f)),
-                Weapon(6,"mines","Lien Mines","Drop charges behind the car; punish pursuers and narrow roads.",105,1.2f,0,6,new Color(1,.48f,.1f)),
-                Weapon(7,"minigun","Circular Saw Minigun","A short-range storm of scrap. Chase a target and hold the line.",8,20,105,0,new Color(1,.92f,.32f)),
-                Weapon(8,"sniper","Long Receipt","An uncommon accurate precision shot for distant weak points.",155,.65f,210,0,new Color(.45f,.95f,1)),
-                Weapon(9,"cluster","Tax Audit","Uncommon cluster launcher. The paperwork is explosive and limited.",75,.7f,54,5,new Color(1,.18f,.65f)),
-                Weapon(10,"boomstick","Double-Owed Boomstick","Field shotgun. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1)),
-                Weapon(11,"shredder","Receipt Shredder","Garage weapon. Three light blades fan out; track close targets to land the full volley.",7,5,88,0,new Color(.95f,.84f,.48f)),
-                Weapon(12,"pothole","Pothole Popper","Garage weapon. Lob a small charge over obstacles; slow reload and modest blast.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f))
+                // ---- Garage arsenal ----
+                Weapon(0,"riveter","Chain-Fed Nail Gun","A framing nailer welded to a bicycle chain that feeds nails as fast as the pedals turn. Garage weapon; unlimited ammunition.",12,11,90,0,new Color(1,.79f,.2f),
+                    "ALL-ROUNDER AUTOMATIC","Steady damage at any sensible range and it never runs dry.","Low damage per nail; the chain spreads its aim at long range."),
+                Weapon(1,"invoice","Tailpipe Bazooka","A muffler, a road flare and far too much black powder. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f),
+                    "HEAVY ANTI-VEHICLE","Deletes a car or a cluster of them in one blast.","Slow rockets that fast cars can dodge, and very little ammunition."),
+                Weapon(2,"sweeper","Coffee-Can Scattergun","A coffee can of roofing tacks behind a shotgun shell. Eight pellets that clear a path through a crowd.",10,1.7f,96,0,new Color(.3f,1,1),
+                    "CLOSE-QUARTERS CROWD CLEARER","Shreds anything at bumper distance, several cars at once.","Pellets fizzle out past twenty metres."),
+                Weapon(3,"carbine","Rain-Gutter Repeater","A length of rain gutter rifled with a drill bit. Accurate sustained fire at medium range.",24,4.2f,135,0,new Color(.85f,1,.55f),
+                    "PRECISION MID-RANGE","Accurate at range; picks off weak points and fleeing cars.","Slow rate of fire; misses cost you and swarms overwhelm it."),
+                Weapon(4,"grenade","Potato Cannon","Hairspray-fired PVC lobbing pipe bombs in a high arc. Great for clustered cars and barricades.",195,1.3f,43,10,new Color(1,.65f,.18f),
+                    "ARCING DEMOLITION","Lands over cover and wrecks clusters.","Slow shells; limited rounds; hard to land on moving cars."),
+                Weapon(5,"mortar","Propane-Tank Mortar","A propane tank with the bottom cut off and a very rude landing.",145,.55f,42,10,new Color(1,.24f,.18f),
+                    "LONG-RANGE ARTILLERY","Hits from beyond the enemy's reach.","Long flight time; useless up close; three rounds a drop."),
+                Weapon(6,"mines","Tripwire Pipe Bomb","Enemy road charges: pipe bombs on fishing line, dropped behind a hostile car.",105,1.2f,0,6,new Color(1,.48f,.1f),
+                    "ENEMY ROAD CHARGE","Punishes anyone chasing along a narrow road.","Telegraphed and stationary; drive around it."),
+                Weapon(7,"minigun","Lawnmower Gatling","Six barrels spun by a pull-start mower engine. A short-range storm of scrap.",8,20,105,0,new Color(1,.92f,.32f),
+                    "SUPPRESSION","Overwhelming close-range damage while you hold the line.","Wild spread and a hungry belt: ammunition drains fast."),
+                Weapon(8,"sniper",".50 Cal Weed Whacker","A trimmer motor spinning up a fifty-calibre slug. One accurate, brutal shot.",155,.65f,210,0,new Color(.45f,.95f,1),
+                    "LONG-RANGE PRECISION","Enormous single hits from across the map.","Slow to cycle; nearly useless against a swarm on your bumper."),
+                Weapon(9,"cluster","Bottle-Rocket Rack","Three sticks of illegal fireworks taped to a roof rack. Explosive and limited.",75,.7f,54,5,new Color(1,.18f,.65f),
+                    "AREA SATURATION","Three rockets cover a wide spread.","Few volleys; each rocket alone is modest."),
+                Weapon(10,"boomstick","Drainpipe Double-Barrel","Two drainpipes and a nail for a firing pin. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1),
+                    "POINT-BLANK SHOTGUN","Two-shot kills on anything touching your bumper.","Slow reload and almost no reach."),
+                Weapon(11,"shredder","Sawblade Slingshot","Surgical tubing launching three table-saw blades. Each blade cuts through one car into the next.",9,5,88,0,new Color(.95f,.84f,.48f),
+                    "PIERCING FAN","Blades pass through the first car and keep cutting.","Short reach and light damage per blade."),
+                Weapon(12,"pothole","Tennis-Ball Mortar","A welded stack of beer cans lobbing charges that bounce once before they go off.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f),
+                    "INDIRECT FIRE","Arcs over cover and bounces into hiding spots.","Small blast and slow shells; hopeless against fast movers."),
+                Weapon(13,"needler","Cactus-Spine Needler","A saguaro rib packed into a leaf-spring launcher. Spines curve after cars; seven stuck spines rupture together.",6,8,58,0,new Color(.95f,.36f,.78f),
+                    "TRACKING / SUPERCOMBINE","Spines chase moving cars; seven hits set off a big rupture.","Slow spines, weak until they stack, and cover eats them."),
+                Weapon(14,"zapper","Jumper-Cable Zapper","Two car batteries and a pair of jumper cables. Each bolt stalls an engine and arcs to two more cars.",9,3,110,0,new Color(.45f,.85f,1),
+                    "ENGINE KILLER","Stalls engines and guns; arcs through a pack.","Barely scratches the paint on its own."),
+                Weapon(15,"torch","Weed-Burner Torch","A propane weed burner with the regulator removed. Sets cars alight; the fire keeps working after they flee.",5,14,34,0,new Color(1,.45f,.12f),
+                    "FLAMETHROWER / BURN","Burning damage keeps ticking after contact.","Fourteen metres of reach and nothing more."),
+                Weapon(16,"railgun","Arc-Welder Railgun","Two arc welders and a length of copper busbar. An instant bolt that punches through every car in line.",150,.45f,0,0,new Color(.55f,.9f,1),
+                    "PIERCING HEAVY SHOT","Instant hit at long range that passes through whole convoys.","Two seconds to recharge; a miss hurts."),
+                Weapon(17,"aircannon","Leaf-Blower Air Cannon","Six leaf blowers and a trash-can barrel. A pressure slug that shoves cars off roads and over cliffs.",20,1.4f,70,0,new Color(.85f,.95f,1),
+                    "CROWD CONTROL / KNOCKBACK","Shoves cars into hazards, each other and off ledges.","Low damage; it moves problems rather than ending them."),
+                // ---- Oddballs: two firing modes spliced together ----
+                Weapon(18,"sprinkler","Lawn-Sprinkler Firebomb","GRENADE + FLAMETHROWER. A lobbed paint can that spins like a lawn sprinkler, spraying burning fuel in a ring.",40,.8f,42,3.5f,new Color(1,.5f,.1f),
+                    "AREA DENIAL","Sets every car around the landing point on fire.","Weak blast and a slow lob; the burn does the work."),
+                Weapon(19,"pinata","Piñata Bottle Rocket","ROCKET + CLUSTER BOMB. A papier-mâché rocket that bursts into seven bouncing bomblets.",60,.6f,55,4.5f,new Color(1,.3f,.75f),
+                    "AREA SATURATION","One hit carpets a wide area with bomblets.","Bomblets scatter randomly; poor against a single fast car."),
+                Weapon(20,"shopvac","Shop-Vac Black Hole","GRENADE + GRAVITY. A shop vacuum wired backwards: it lands, drags cars into a heap, then blows.",120,.35f,40,7,new Color(.6f,.45f,1),
+                    "CROWD GATHERER","Pulls a whole pack together for one big blast.","Long recharge and a short delay before it pays off."),
+                Weapon(21,"deathray","Satellite-Dish Death Ray","SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing the sun; damage builds the longer it stays on one car.",5,12,0,0,new Color(1,.93f,.5f),
+                    "SUSTAINED FOCUS BEAM","Melts a target you can keep it on for two seconds.","Weak until it warms up; switching targets resets it."),
+                Weapon(22,"crossbow","Dynamite Crossbow","PRECISION RIFLE + STICKY BOMB. A garage-door-spring crossbow firing dynamite bolts that stick, fizz and blow.",20,.9f,170,5.5f,new Color(1,.3f,.2f),
+                    "STICKY DELAYED BLAST","A hit guarantees a heavy explosion on that car.","A second's fuse, and misses stick to the ground instead."),
+                Weapon(23,"bowling","Bowling-Ball Cannon","SHELL + RAM. A leaf-blower barrel launching a bowling ball that rolls through every car in its lane.",65,.7f,36,0,new Color(.35f,.35f,.45f),
+                    "LANE CLEARER","Rolls through several cars and knocks them aside.","Only goes where the ground goes; hills and walls deflect it."),
+                Weapon(24,"boomerang","Hubcap Boomerang","SAWBLADE + RETURN. A sharpened hubcap that flies out, cuts through cars and comes back for a second pass.",26,1.3f,60,0,new Color(.8f,.85f,.9f),
+                    "DOUBLE-PASS PIERCER","Hits everything twice: once out, once back.","Useless beyond its turn-around point."),
+                Weapon(25,"harpoon","Tow-Hook Harpoon","SNIPER + WINCH. A tow hook on a winch cable: it spears a car and yanks it into your bumper.",45,.8f,120,0,new Color(.9f,.75f,.4f),
+                    "PULL / SETUP","Drags runners and snipers into ram and shotgun range.","Single target and pulls danger toward you."),
+                Weapon(26,"firecracker","Firecracker Blunderbuss","SHOTGUN + EXPLOSIVES. A blunderbuss loaded with lit firecrackers; every pellet pops.",13,1.1f,80,1.8f,new Color(1,.25f,.2f),
+                    "EXPLOSIVE SPREAD","Splash on every pellet rewards near misses.","Short range, and the pops hurt you up close."),
+                Weapon(27,"sentry","Lawn-Chair Sentry","MINE + TURRET. A lawn chair with a nail gun zip-tied to it. Drop it and it guards the road for twelve seconds.",8,.25f,90,0,new Color(.5f,1,.55f),
+                    "DEPLOYABLE TURRET","Keeps shooting while you drive elsewhere; two at a time.","Stationary; slow to redeploy; light damage per nail."),
+                // ---- Field replacement for the old Lien Mines ----
+                Weapon(28,"gokart","Dynamite Go-Kart","A toy go-kart with a car-alarm brain and a bundle of dynamite. It hunts down the nearest hostile and hugs it.",140,.8f,24,7,new Color(1,.62f,.1f),
+                    "SEEKING BOMB","Chases targets around cover and corners.","Slow; can be outrun or blocked by walls; three a drop.")
             };
         }
+        static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color,string role,string strength,string weakness)
+        { var w=Weapon(i,id,name,desc,damage,rate,speed,radius,color); w.role=role; w.strength=strength; w.weakness=weakness; return w; }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color)
         { var w=Create<WeaponDefinition>(id); w.contentOrder=i; w.id=id; w.displayName=name; w.description=desc; w.damage=damage; w.fireRate=rate; w.speed=speed; w.blastRadius=radius; w.projectileColor=color; return w; }
     }

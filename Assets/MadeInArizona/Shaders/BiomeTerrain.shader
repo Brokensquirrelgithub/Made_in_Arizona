@@ -31,6 +31,7 @@ Shader "MadeInArizona/BiomeTerrain"
             // All fourteen Outdoor Ground Textures live in two arrays built at load (see WorldArt.GroundArrays).
             TEXTURE2D_ARRAY(_GroundAlbedoArray); SAMPLER(sampler_GroundAlbedoArray); TEXTURE2D_ARRAY(_GroundNormalArray);
             float _UseGroundTextures;
+            float4 _ElevationRange; // min, max, enabled (set by GeneratedWorld)
             struct A { float4 p:POSITION; float3 n:NORMAL; float2 uv:TEXCOORD0; float4 c:COLOR; };
             struct V { float4 p:SV_POSITION; float3 world:TEXCOORD0; float3 n:TEXCOORD1; float2 uv:TEXCOORD2; float4 c:COLOR; float fog:TEXCOORD3; };
             float2 Hash22(float2 p){p=float2(dot(p,float2(127.1,311.7)),dot(p,float2(269.5,183.3)));return frac(sin(p)*43758.5453123);}
@@ -64,6 +65,11 @@ Shader "MadeInArizona/BiomeTerrain"
                 float3 gravelColor=lerp(float3(.30,.245,.18),float3(.48,.37,.25),colorVariation);
                 float3 rockColor=lerp(float3(.20,.19,.16),float3(.42,.35,.27),Fbm(p*.31))*lerp(.85,1.12,colorVariation);
                 float3 albedo=lerp(soilColor,sandColor,sand*.46);albedo=lerp(albedo,gravelColor,gravel*.68);albedo=lerp(albedo,rockColor,rock);albedo*=1-cracks*.10;albedo=lerp(albedo,gravelColor*.90,scatteredStone*.27);
+                // Elevation readability from the top-down camera: higher ground is sun-bleached, lower ground deeper,
+                // and the ramps between levels carry a darker, eroded band.
+                float altitude=saturate((i.world.y-_ElevationRange.x)/max(1,_ElevationRange.y-_ElevationRange.x));
+                albedo*=lerp(1,lerp(.8,1.14,altitude),_ElevationRange.z);
+                albedo*=1-saturate(slope*7)*.2;
                 // Each biome draws on its own collection of ground textures. Candidate layers are weighted by the
                 // material role (sand/earth/gravel/rock), the biome, and patch noise at ~55 m, ~16 m and ~5 m, so a biome
                 // reads as a mosaic of related grounds rather than one repeating texture. Only the three strongest

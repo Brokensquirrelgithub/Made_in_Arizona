@@ -27,6 +27,21 @@ namespace MadeInArizona
             Materials[key] = result;
             return result;
         }
+        /// <summary>
+        /// Glossy clear-coated car paint (MadeInArizona/CarPaint). Falls back to a smooth URP Lit finish when the
+        /// custom shader is unavailable on the current graphics device.
+        /// </summary>
+        public static Material CarPaint(Color color, float metallic = .35f, float clearCoat = 1)
+        {
+            string key = "paint/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + metallic + "/" + clearCoat;
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("MadeInArizona/CarPaint");
+            if (!shader || !shader.isSupported) return Material(color, metallic * .6f, .86f);
+            result = new Material(shader) { name = "MIA_CarPaint_" + key };
+            result.SetColor("_BaseColor", color); result.SetFloat("_Metallic", metallic); result.SetFloat("_ClearCoat", clearCoat);
+            Materials[key] = result;
+            return result;
+        }
         public static Material GroundMaterial(Color color, int textureIndex = 0)
         {
             string key = "ground/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + textureIndex;

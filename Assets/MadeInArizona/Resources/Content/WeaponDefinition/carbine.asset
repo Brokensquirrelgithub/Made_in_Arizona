@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: carbine
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: carbine
-  displayName: Surveyor Carbine
-  description: Garage precision rifle. Accurate sustained fire at medium range.
+  displayName: 'Rain-Gutter Repeater'
+  description: 'A length of rain gutter rifled with a drill bit. Accurate sustained fire at medium range.'
+  role: 'PRECISION MID-RANGE'
+  strength: 'Accurate at range; picks off weak points and fleeing cars.'
+  weakness: 'Slow rate of fire; misses cost you and swarms overwhelm it.'
   contentOrder: 3
   damage: 24
   fireRate: 4.2

@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: sweeper
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: sweeper
-  displayName: Shop-floor Sweeper
-  description: 'Garage shotgun. Eight close-range pellets; clear a path through a crowd.'
+  displayName: 'Coffee-Can Scattergun'
+  description: 'A coffee can of roofing tacks behind a shotgun shell. Eight pellets that clear a path through a crowd.'
+  role: 'CLOSE-QUARTERS CROWD CLEARER'
+  strength: 'Shreds anything at bumper distance, several cars at once.'
+  weakness: 'Pellets fizzle out past twenty metres.'
   contentOrder: 2
   damage: 9
   fireRate: 1.7

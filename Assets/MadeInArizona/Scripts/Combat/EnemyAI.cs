@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MadeInArizona
@@ -11,7 +12,13 @@ namespace MadeInArizona
         public VehicleController Target;
         public Vector3 Destination;
         public bool UseDestination;
+        /// <summary>Plan a road-following route to <see cref="Destination"/> instead of driving straight at it.</summary>
+        public bool FollowRoads;
+        /// <summary>Keeps the destination but waits in place (the escort waits for the player to catch up).</summary>
+        public bool HoldPosition;
         public bool IsFriendly;
+        /// <summary>Remaining planned waypoints, for the minimap and tests.</summary>
+        public IReadOnlyList<Vector3> Route => route;
         public int Archetype { get; private set; }
         public EnemyFaction Faction { get; private set; }
         public float WeaponEfficiency { get; private set; } = 1;
@@ -27,6 +34,8 @@ namespace MadeInArizona
         Vector3 avoidance, committedAim;
         float committedDistance;
         float orbitSign;
+        readonly List<Vector3> route = new List<Vector3>();
+        int routeIndex; Vector3 routeGoal; float routePlannedAt = float.NegativeInfinity, reverseUntil;
         readonly RaycastHit[] hits = new RaycastHit[16];
         readonly Collider[] hazards = new Collider[24];
 
@@ -46,9 +55,9 @@ namespace MadeInArizona
             if (Target == null || Target.Damage == null || Target.Damage.IsDead) return;
 
             // A destination controls where a vehicle drives; it never replaces its combat target.
-            Vector3 travelDelta = FlatDelta(UseDestination ? Destination : Target.transform.position, transform.position);
-            float travelDistance = travelDelta.magnitude;
-            Vector3 towardTravel = travelDistance > .01f ? travelDelta / travelDistance : Vector3.zero;
+            Vector3 travelDelta = FlatDelta(UseDestination ? RouteTarget() : Target.transform.position, transform.position);
+            float travelDistance = UseDestination ? FlatDelta(Destination, transform.position).magnitude : travelDelta.magnitude;
+            Vector3 towardTravel = travelDelta.sqrMagnitude > .0001f ? travelDelta.normalized : Vector3.zero;
             Vector3 targetDelta = FlatDelta(Target.transform.position, transform.position);
             float targetDistance = targetDelta.magnitude;
             Vector3 towardTarget = targetDistance > .01f ? targetDelta / targetDistance : Vector3.zero;
@@ -83,8 +92,10 @@ namespace MadeInArizona
             desired = UpdateCatchUp(desired, towardTarget, targetDistance);
             UpdateHazardAvoidance(); desired = AvoidBlockedRoute(desired);
             RecoverIfStuck(ref desired, towardTarget, tangent);
+            bool reversing = Time.time < reverseUntil;
+            if (reversing) desired = -transform.forward;
             bool firePrimary = !IsFriendly && Time.time < primaryBurstUntil && targetDistance > 7 && targetDistance < primaryRange && clearShot && AttackTelegraph == EnemyAttackTelegraph.None;
-            vehicle.SetAIInput(new Vector2(desired.x, desired.z), aim, firePrimary);
+            vehicle.SetAIInput(new Vector2(desired.x, desired.z), aim, firePrimary, reversing);
         }
 
         /// <summary>
@@ -113,8 +124,71 @@ namespace MadeInArizona
 
         Vector3 FriendlySteering(Vector3 towardDestination, float destinationDistance)
         {
-            // Full throttle out on the road, easing off over the last stretch so a fast van settles on its mark.
-            return UseDestination && destinationDistance > 4 ? towardDestination * Mathf.Clamp(destinationDistance / 25, .35f, 1) : Vector3.zero;
+            if (!UseDestination || HoldPosition || destinationDistance <= 4) return Vector3.zero;
+            // Full throttle out on the road, easing off over the last stretch so a fast van settles on its mark,
+            // and lifting for sharp bends in the planned route.
+            return towardDestination * Mathf.Clamp(destinationDistance / 25, .35f, 1) * CornerThrottle();
+        }
+
+        /// <summary>
+        /// The point to steer at: a look-ahead waypoint on the planned road route when <see cref="FollowRoads"/> is set,
+        /// otherwise the destination itself. Routes re-plan when the destination moves or the vehicle strays.
+        /// </summary>
+        Vector3 RouteTarget()
+        {
+            var world = GeneratedWorld.Active;
+            if (!FollowRoads || !world) return Destination;
+            Vector3 here = transform.position;
+            bool stale = route.Count == 0 || FlatDelta(Destination, routeGoal).sqrMagnitude > 25;
+            if (!stale && Time.time - routePlannedAt > 3 && DistanceToRoute(here) > 28) stale = true;
+            if (stale) PlanRoute();
+            float lookAhead = 9 + vehicle.Body.linearVelocity.magnitude * .55f;
+            while (routeIndex < route.Count - 1 && FlatDelta(route[routeIndex], here).magnitude < lookAhead) routeIndex++;
+            return route.Count > 0 ? route[routeIndex] : Destination;
+        }
+        public void PlanRoute()
+        {
+            var world = GeneratedWorld.Active;
+            routeGoal = Destination; routePlannedAt = Time.time; routeIndex = 0;
+            if (world) world.FindPath(transform.position, Destination, route);
+            else { route.Clear(); route.Add(Destination); }
+            // Start from the waypoint nearest the vehicle so it never doubles back to the first node.
+            float best = float.MaxValue;
+            for (int i = 0; i < route.Count; i++) { float d = FlatDelta(route[i], transform.position).sqrMagnitude; if (d < best) { best = d; routeIndex = i; } }
+        }
+        /// <summary>Flat heading of the planned route just ahead of the vehicle (for spawning facing the road).</summary>
+        public Vector3 RouteHeading()
+        {
+            if (route.Count == 0) PlanRoute();
+            Vector3 here = transform.position;
+            for (int i = routeIndex; i < route.Count; i++)
+            {
+                Vector3 d = FlatDelta(route[i], here);
+                if (d.sqrMagnitude > 64) return d.normalized;
+            }
+            Vector3 fallback = FlatDelta(Destination, here);
+            return fallback.sqrMagnitude > .01f ? fallback.normalized : transform.forward;
+        }
+        float DistanceToRoute(Vector3 p)
+        {
+            float best = float.MaxValue;
+            int from = Mathf.Max(0, routeIndex - 2), to = Mathf.Min(route.Count - 1, routeIndex + 2);
+            for (int i = from; i < to; i++)
+            {
+                Vector3 a = route[i], d = FlatDelta(route[i + 1], a);
+                float u = Mathf.Clamp01(Vector3.Dot(FlatDelta(p, a), d) / Mathf.Max(.01f, d.sqrMagnitude));
+                best = Mathf.Min(best, FlatDelta(p, a + d * u).magnitude);
+            }
+            return route.Count > 1 ? best : 0;
+        }
+        float CornerThrottle()
+        {
+            if (!FollowRoads || route.Count < 2 || routeIndex >= route.Count - 1) return 1;
+            Vector3 ahead = FlatDelta(route[Mathf.Min(route.Count - 1, routeIndex + 1)], route[routeIndex]);
+            if (ahead.sqrMagnitude < .01f) return 1;
+            float bend = Vector3.Angle(Vector3.ProjectOnPlane(transform.forward, Vector3.up), ahead);
+            float speed = vehicle.Body.linearVelocity.magnitude;
+            return Mathf.Lerp(1, .4f, Mathf.InverseLerp(25, 90, bend) * Mathf.InverseLerp(10, 30, speed));
         }
 
         Vector3 CombatSteering(Vector3 toward, Vector3 tangent, float distance)
@@ -303,6 +377,17 @@ namespace MadeInArizona
 
         void RecoverIfStuck(ref Vector3 desired, Vector3 towardTarget, Vector3 tangent)
         {
+            if (!vehicle.AutoReverse)
+            {
+                // Vehicles that never auto-reverse back off deliberately when wedged, then re-plan their route.
+                if (desired.sqrMagnitude > .2f && vehicle.SpeedKph < 2 && Time.time >= reverseUntil)
+                {
+                    stuckTime += Time.deltaTime;
+                    if (stuckTime > 1.4f) { reverseUntil = Time.time + 1.3f; stuckTime = 0; route.Clear(); }
+                }
+                else stuckTime = 0;
+                return;
+            }
             if (desired.sqrMagnitude > .2f && vehicle.SpeedKph < 2)
             {
                 stuckTime += Time.deltaTime;
@@ -325,7 +410,7 @@ namespace MadeInArizona
             {
                 if (hits[i].collider == null || hits[i].collider.transform.IsChildOf(transform)) continue;
                 var other = hits[i].collider.GetComponentInParent<VehicleController>();
-                if (other == Target) continue;
+                if (other == Target && !IsFriendly) continue;
                 var prop = hits[i].collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && prop.MaxHealth < 80 && Archetype != 3 && Archetype != 4) continue;
                 if (hits[i].normal.y > .5f) continue;

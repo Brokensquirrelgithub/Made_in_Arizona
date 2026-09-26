@@ -16,9 +16,9 @@ namespace MadeInArizona
         public static int MaterialCount { get { return Alloy + Circuits + Propellant; } }
         public static string Inventory { get { return "Alloy "+Alloy+" • Circuits "+Circuits+" • Propellant "+Propellant; } }
         public static readonly string[] RecipeDescriptions = {
-            "Hardened riveter feed • 2 alloy • +25% machine-gun damage",
-            "Guided invoice fuse • 1 circuit + 1 propellant • +30% rocket damage and blast radius",
-            "Choked shop sweeper • 1 alloy + 1 circuit • +25% shotgun damage"
+            "Hardened nail-gun chain • 2 alloy • +25% Chain-Fed Nail Gun damage",
+            "Guided tailpipe fuse • 1 circuit + 1 propellant • +30% Tailpipe Bazooka damage and blast radius",
+            "Choked coffee-can barrel • 1 alloy + 1 circuit • +25% Coffee-Can Scattergun damage"
         };
 
         readonly HashSet<string> activatedHideouts = new HashSet<string>();

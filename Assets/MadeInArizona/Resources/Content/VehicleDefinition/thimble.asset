@@ -33,6 +33,6 @@ MonoBehaviour:
   springStiffness: 28880
   damping: 3420
   finalDrive: 4.1
-  color: {r: 0.15, g: 0.78, b: 0.68, a: 1}
+  color: {r: 0.3019608, g: 0.5411765, b: 0.47058824, a: 1}
   drivetrain: 0
   differential: 0

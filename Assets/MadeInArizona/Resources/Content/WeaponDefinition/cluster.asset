@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: cluster
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: cluster
-  displayName: Tax Audit
-  description: Uncommon cluster launcher. The paperwork is explosive and limited.
+  displayName: 'Bottle-Rocket Rack'
+  description: 'Three sticks of illegal fireworks taped to a roof rack. Explosive and limited.'
+  role: 'AREA SATURATION'
+  strength: 'Three rockets cover a wide spread.'
+  weakness: 'Few volleys; each rocket alone is modest.'
   contentOrder: 9
   damage: 75
   fireRate: 0.7
