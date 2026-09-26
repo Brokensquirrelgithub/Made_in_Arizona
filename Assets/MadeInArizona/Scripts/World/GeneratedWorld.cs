@@ -13,7 +13,7 @@ namespace MadeInArizona
         public List<Vector3> Towns{get;private set;}=new List<Vector3>();
         public Texture2D MapTexture{get;private set;}
         public int Seed=>seed;
-        const int Chunks=8,Cells=32;
+        const int Chunks=8,Cells=48;
         static readonly Vector2[] Outline={new Vector2(-.47f,.49f),new Vector2(.45f,.49f),new Vector2(.49f,.18f),new Vector2(.48f,-.48f),new Vector2(-.08f,-.48f),new Vector2(-.47f,-.18f),new Vector2(-.43f,.08f),new Vector2(-.50f,.12f)};
         static readonly Vector2[] TownPlan={new Vector2(-.06f,-.25f),new Vector2(.20f,-.04f),new Vector2(-.20f,.09f),new Vector2(.10f,.27f),new Vector2(-.28f,.31f),new Vector2(.30f,.34f)};
         WorldGenConfig cfg;System.Random rng;int seed,townCount,poiCount;float size,half,amp,riverWidth;
@@ -31,7 +31,9 @@ namespace MadeInArizona
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
             Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
-        void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));}
+        void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));
+            // Elevation levels depend on the planned towns and routes (cliffs keep clear of both), so heights follow.
+            PrepareElevation();for(int i=0;i<Towns.Count;i++){Vector3 t=Towns[i];t.y=RawHeight(t.x,t.z);Towns[i]=t;}}
         void BakeRoutes()
         {
             foreach(var route in routes)for(int i=0;i<64;i++)
@@ -44,6 +46,7 @@ namespace MadeInArizona
         {
             terrainRoot=Group("Chunked terrain",transform,Vector3.zero);props=Group("Streamed ecology",transform,Vector3.zero);roads=Group("Road and river network",transform,Vector3.zero);float cs=size/Chunks;int grid=Chunks*Cells;float step=size/grid;heights=new float[grid+1,grid+1];
             for(int z=0;z<=grid;z++)for(int x=0;x<=grid;x++)heights[x,z]=HeightInternal(-half+x*step,-half+z*step);
+            EnsureReachable(step);
             for(int cz=0;cz<Chunks;cz++)for(int cx=0;cx<Chunks;cx++){float x0=-half+cx*cs,z0=-half+cz*cs;var v=new Vector3[(Cells+1)*(Cells+1)];var uv=new Vector2[v.Length];
                 for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){float wx=x0+x*cs/Cells,wz=z0+z*cs/Cells;int k=z*(Cells+1)+x;v[k]=new Vector3(wx,heights[cx*Cells+x,cz*Cells+z],wz);uv[k]=new Vector2(wx/12,wz/12);}
                 var tri=new List<int>();for(int z=0;z<Cells;z++)for(int x=0;x<Cells;x++){int a=z*(Cells+1)+x,b=a+1,c=a+Cells+1,d=c+1;if(Contains((v[a]+v[c]+v[b])/3)){tri.Add(a);tri.Add(c);tri.Add(b);}if(Contains((v[b]+v[c]+v[d])/3)){tri.Add(b);tri.Add(c);tri.Add(d);}}
@@ -219,10 +222,9 @@ namespace MadeInArizona
             float broad=Noise(nx*3.1f+2,nz*3.1f)*.48f+Noise(nx*8.7f-2,nz*8.7f+7)*.18f;
             float north=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.02f,.5f,nz));
             float crags=Mathf.Pow(Noise(nx*19+5,nz*17-3),2.4f)*north;
-            float mesa=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.48f,.58f,Noise(nx*5.2f-9,nz*5.2f+11)))*(1-north*.4f);
-            // Broad gentle grades read better at gameplay camera height. Soften the sharper
-            // crags/mesa steps most, including worlds with an existing terrainHeight setting.
-            return ((broad-.35f)*.65f+crags*.28f+mesa*.12f)*amp;
+            // Broad gentle grades read better at gameplay camera height. Elevation levels (and their occasional
+            // cliffs) replace the old mesa steps; see GeneratedWorldElevation.
+            return ((broad-.35f)*.65f+crags*.28f)*amp+LevelOffset(x,z);
         }
         float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+seed*.01f)*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
         Vector2 RoutePoint(Route r,float u){Vector2 p=Vector2.Lerp(r.a,r.b,u),d=(r.b-r.a).normalized,n=new Vector2(-d.y,d.x);return p+n*Mathf.Sin(u*Mathf.PI*2+(r.a.x+r.b.y)*.01f)*size*.016f*Mathf.Sin(u*Mathf.PI);}

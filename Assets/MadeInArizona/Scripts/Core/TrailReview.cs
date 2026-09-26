@@ -11,8 +11,10 @@ namespace MadeInArizona
         public static IEnumerator Run(Action<string, bool> check)
         {
             var game = GameManager.Instance;
+            float started = Time.realtimeSinceStartup;
             game.StartCampaign(173, 1600);
             yield return new WaitUntil(() => game.State == GameState.Playing);
+            Debug.Log("MIA_GENERATION_SECONDS " + (Time.realtimeSinceStartup - started).ToString("F2"));
             yield return new WaitForSecondsRealtime(1);
             var world = GeneratedWorld.Active;
             check("generated world has trails", world && world.TrailCount > 0);
@@ -73,6 +75,34 @@ namespace MadeInArizona
                 yield return null;
                 Render(Camera.main, Path.Combine(directory, "biome-" + b + "-wide.png"));
                 Camera.main.orthographicSize = size; camera.enabled = true;
+            }
+            // Elevation levels: cliff walls, from gameplay zoom and a low oblique view.
+            var cliffs = world.FindCliffs(2);
+            Debug.Log("MIA_ELEVATION cliffs=" + cliffs.Count + " rampOpenings=" + world.RampOpenings + " unreachableVertices=" + world.UnreachableVertices);
+            check("every area reachable from the first town", world.UnreachableVertices == 0);
+            for (int c = 0; c < cliffs.Count; c++)
+            {
+                Vector3 p = cliffs[c].position; Vector2 down = cliffs[c].downhill;
+                game.Player.Body.position = p + new Vector3(70, 3, 70);
+                focus.transform.position = p; camera.Snap();
+                for (int f = 0; f < 90; f++) yield return null;
+                Render(Camera.main, Path.Combine(directory, "cliff-" + c + "-gameplay.png"));
+                var cam = Camera.main; bool ortho = cam.orthographic; camera.enabled = false;
+                cam.orthographic = false; cam.fieldOfView = 55;
+                cam.transform.position = p + new Vector3(down.x, 0, down.y) * 34 + Vector3.up * 9; cam.transform.LookAt(p + Vector3.up * 4);
+                yield return null;
+                Render(cam, Path.Combine(directory, "cliff-" + c + "-oblique.png"));
+                cam.orthographic = ortho; camera.enabled = true;
+            }
+            // Reachability across several seeds and map sizes.
+            foreach (var (seed, mapSize) in new[] { (1, 1600f), (42, 800f), (999, 2400f), (2024, 3200f), (77, 1600f) })
+            {
+                float t0 = Time.realtimeSinceStartup;
+                game.StartCampaign(seed, mapSize);
+                yield return new WaitUntil(() => game.State == GameState.Playing);
+                var generated = GeneratedWorld.Active;
+                Debug.Log($"MIA_ELEVATION seed={seed} size={mapSize} seconds={Time.realtimeSinceStartup - t0:F2} cliffs={generated.FindCliffs(50).Count} rampOpenings={generated.RampOpenings} unreachableVertices={generated.UnreachableVertices}");
+                check($"seed {seed} at {mapSize} m fully reachable", generated.UnreachableVertices == 0);
             }
             Debug.Log("MIA_TRAIL_REVIEW " + directory);
         }

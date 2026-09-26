@@ -91,7 +91,7 @@ namespace MadeInArizona
                 float x=Next(random,0,Tile),z=Next(random,0,Tile);int ix=Mathf.Min(7,(int)(x/4)),iz=Mathf.Min(7,(int)(z/4));
                 float clear=Mathf.Lerp(Mathf.Lerp(clearance[ix,iz],clearance[ix+1,iz],x/4-ix),Mathf.Lerp(clearance[ix,iz+1],clearance[ix+1,iz+1],x/4-ix),z/4-iz);
                 if(clear<.7f)continue;
-                Vector3 world=origin+new Vector3(x,0,z);if(!GeneratedWorld.Contains(world))continue;
+                Vector3 world=origin+new Vector3(x,0,z);if(!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 local=world-origin;
                 float north=Mathf.InverseLerp(-half,half,world.z);
                 float patch=Mathf.PerlinNoise(world.x*.045f+config.seed*.013f,world.z*.045f);
@@ -119,7 +119,7 @@ namespace MadeInArizona
             {
                 yield return null;
                 Vector3 world=origin+new Vector3(Next(random,1,31),0,Next(random,1,31));
-                float clear=GeneratedWorld.Active.SceneryClearance(world);if(clear<3||!GeneratedWorld.Contains(world))continue;
+                float clear=GeneratedWorld.Active.SceneryClearance(world);if(clear<3||!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 p=world-origin;
                 float north=Mathf.InverseLerp(-half,half,world.z),patch=Mathf.PerlinNoise(world.x*.023f+config.seed*.001f,world.z*.023f);
                 bool forest=north>config.biomeThresholds.scrub;
@@ -174,6 +174,12 @@ namespace MadeInArizona
             var collider=root.AddComponent<CapsuleCollider>();
             collider.center=Vector3.up*(pine?height*.325f:2f);collider.height=pine?height*.65f:4f;collider.radius=pine?height*.023f:.24f;
             WorldArt.MakeBreakable(root.transform,pine?26:22,false,ExplosionKind.Ammunition,5);
+        }
+        /// <summary>Cliff faces stay bare; plants and rocks would hang off them.</summary>
+        static bool Steep(Vector3 p)
+        {
+            float dx=GeneratedWorld.HeightAt(p+Vector3.right)-GeneratedWorld.HeightAt(p-Vector3.right),dz=GeneratedWorld.HeightAt(p+Vector3.forward)-GeneratedWorld.HeightAt(p-Vector3.forward);
+            return dx*dx+dz*dz>4*1.2f*1.2f;
         }
         static Color StoneColor(bool forest,System.Random r)=>Color.Lerp(forest?new Color(.29f,.32f,.27f):new Color(.43f,.29f,.20f),forest?new Color(.49f,.48f,.38f):new Color(.68f,.48f,.31f),(float)r.NextDouble());
         internal static float Next(System.Random r,float a,float b)=>Mathf.Lerp(a,b,(float)r.NextDouble());

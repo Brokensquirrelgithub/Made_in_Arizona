@@ -125,6 +125,25 @@ Shader "MadeInArizona/BiomeTerrain"
                 float3 photo=packColor*clamp(pow(paletteLuma/packLuma,.6),.6,1.6);
                 photo=lerp(photo,photo*albedo/paletteLuma*.5+photo*.5,.4);
                 albedo=lerp(albedo,lerp(detailOnly,photo,.7),_UseGroundTextures);
+                // Cliff walls: side-projected rock (no smearing down the face) with horizontal sandstone strata.
+                float cliffWeight=smoothstep(.22,.42,slope)*_UseGroundTextures;
+                UNITY_BRANCH if(cliffWeight>.001)
+                {
+                    float3 an=abs(normalize(i.n));float2 side=an.xz/max(an.x+an.z,.001);
+                    int cliffSlice=desert>.5?12:13;
+                    float3 rockX=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.zy*.12,cliffSlice).rgb;
+                    float3 rockZ=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.xy*.12+.37,cliffSlice).rgb;
+                    float3 rockTex=rockX*side.x+rockZ*side.y;
+                    float band=i.world.y*.62+Fbm(p*.035+float2(3,9))*2.4;
+                    float strata=Noise(float2(band,band*.13+7))*.7+Noise(float2(band*3.1,1.7))*.3;
+                    float3 strataTint=lerp(lerp(float3(.30,.27,.23),float3(.50,.44,.36),strata),lerp(float3(.44,.22,.13),float3(.70,.44,.27),strata),desert);
+                    float rockLuma=max(.05,dot(rockTex,float3(.299,.587,.114)));
+                    float3 cliffAlbedo=strataTint*clamp(rockLuma/.38,.55,1.45)*lerp(.82,1.1,Noise(p*.9));
+                    albedo=lerp(albedo,cliffAlbedo,cliffWeight);
+                    // Shaded, crumbly foot and a sun-bleached rim help the wall read from the overhead camera.
+                    float foot=smoothstep(.1,.3,slope)*(1-smoothstep(.3,.5,slope));
+                    albedo*=1-foot*.18*saturate(dot(i.n.xz,i.n.xz)*4);
+                }
                 // ddx/ddy recovers the world-space slope from one shared micro-height evaluation.
                 // It replaces four high-frequency procedural resamples per fragment.
                 float microHeight=Noise(p*2.6)*.055+Noise(p*7.0)*.018+scatteredStone*.018-cracks*.012;

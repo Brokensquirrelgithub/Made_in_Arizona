@@ -94,6 +94,12 @@ namespace MadeInArizona
                     points[i] = Vector2.Lerp(a, b, u) + normal * offset * damping;
                     // Trails skirt town centres and stay inside the state outline.
                     valid = InOutline(points[i] / size) && TownDistance(points[i]) > TownTrailClearance;
+                    // Trails never climb a cliff wall; they follow the ramps between elevation levels.
+                    if (valid && i > 0)
+                    {
+                        float rise = Mathf.Abs(HeightAt(new Vector3(points[i].x, 0, points[i].y)) - HeightAt(new Vector3(points[i - 1].x, 0, points[i - 1].y)));
+                        valid = rise <= Vector2.Distance(points[i], points[i - 1]) * .4f + .15f;
+                    }
                 }
                 if (!valid) continue;
                 var trail = new Trail { points = points, width = width, dirtRoad = dirtRoad };
