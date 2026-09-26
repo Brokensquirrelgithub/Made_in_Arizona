@@ -19,6 +19,13 @@ namespace MadeInArizona
         readonly Dictionary<long, List<int>> trailCells = new Dictionary<long, List<int>>();
 
         public int TrailCount => trails.Count;
+        /// <summary>Midpoint and type of a trail, for review captures.</summary>
+        public Vector3 TrailMidpoint(int index, out float width, out bool dirtRoad, out Vector2 direction)
+        {
+            var trail = trails[index]; int m = trail.points.Length / 2;
+            width = trail.width; dirtRoad = trail.dirtRoad; direction = (trail.points[m + 1] - trail.points[m - 1]).normalized;
+            Vector3 p = new Vector3(trail.points[m].x, 0, trail.points[m].y); p.y = HeightAt(p); return p;
+        }
 
         void PlanTrails()
         {
@@ -149,27 +156,78 @@ namespace MadeInArizona
         {
             if (trails.Count == 0) return;
             Transform root = Group("Dirt trail network", transform, Vector3.zero);
-            var dirtRoad = GroundMaterial(new Color(.52f, .40f, .27f), 8);
-            var track = GroundMaterial(new Color(.58f, .45f, .30f), 12);
-            var footpath = GroundMaterial(new Color(.64f, .52f, .36f), 12);
+            var blend = Shader.Find("MadeInArizona/TrailBlend");
+            var dirtRoad = TrailMaterial(blend, new Color(.52f, .40f, .27f), 8, 1f, 0, 0);
+            var track = TrailMaterial(blend, new Color(.58f, .45f, .30f), 12, .85f, 1, 0);
+            var footpath = TrailMaterial(blend, new Color(.64f, .52f, .36f), 12, 0, 0, 1);
             for (int t = 0; t < trails.Count; t++)
             {
                 var trail = trails[t];
-                int rows = trail.points.Length, columns = Mathf.Clamp(Mathf.CeilToInt(trail.width / 1.6f) + 1, 3, 6);
+                // The ribbon extends past the trail edge so the shader can feather it into the terrain.
+                // Extension covers the shader's widest noise reach (edge lobes, clumps and dust spill, ~2.8 x feather), so nothing is clipped.
+                float halfWidth = trail.width * .5f, feather = Mathf.Clamp(trail.width * .22f, .7f, 1.4f);
+                float outer = halfWidth + (blend ? feather * 2.9f + .6f : 0);
+                int rows = trail.points.Length, columns = Mathf.Clamp(Mathf.CeilToInt(outer * 2 / 1.2f) + 1, 4, 12);
                 var grid = new Vector3[rows, columns];
+                var uv = new Vector4[rows * columns]; var shape = new Vector2[rows * columns];
                 // Below the asphalt (0.1 m) and above the gravel shoulders; a per-trail offset avoids z-fighting at crossings.
-                float lift = .045f + (t % 7) * .0035f, halfWidth = trail.width * .5f, across = trail.width / (columns - 1) * .5f;
+                float lift = .045f + (t % 7) * .0035f, across = outer * 2 / (columns - 1) * .5f;
+                float length = 0;
+                for (int i = 1; i < rows; i++) length += Vector2.Distance(trail.points[i - 1], trail.points[i]);
+                float along = 0;
                 for (int i = 0; i < rows; i++)
                 {
+                    if (i > 0) along += Vector2.Distance(trail.points[i - 1], trail.points[i]);
                     Vector2 tangent = (trail.points[Mathf.Min(rows - 1, i + 1)] - trail.points[Mathf.Max(0, i - 1)]).normalized;
                     Vector2 normal = new Vector2(-tangent.y, tangent.x);
-                    Vector2 left = trail.points[i] + normal * halfWidth, right = trail.points[i] - normal * halfWidth;
+                    Vector2 left = trail.points[i] + normal * outer, right = trail.points[i] - normal * outer;
                     for (int j = 0; j < columns; j++)
-                        grid[i, j] = TrailSurfacePoint(Vector2.Lerp(left, right, j / (float)(columns - 1)), tangent, normal, across, .6f, lift);
+                    {
+                        float u = j / (float)(columns - 1);
+                        grid[i, j] = TrailSurfacePoint(Vector2.Lerp(left, right, u), tangent, normal, across, .6f, lift);
+                        uv[i * columns + j] = new Vector4(Mathf.Lerp(outer, -outer, u), along, halfWidth, length);
+                        shape[i * columns + j] = new Vector2(outer, feather);
+                    }
                 }
-                Surface(trail.dirtRoad ? "Graded dirt road" : trail.width > 3.6f ? "Two-track trail" : "Footpath", grid,
-                    trail.dirtRoad ? dirtRoad : trail.width > 3.6f ? track : footpath, root, false);
+                var material = trail.dirtRoad ? dirtRoad : trail.width > 3.6f ? track : footpath;
+                TrailSurface(trail.dirtRoad ? "Graded dirt road" : trail.width > 3.6f ? "Two-track trail" : "Footpath", grid, uv, shape, material, root);
             }
+        }
+
+        /// <summary>Feathered, height-blended soil material; falls back to the opaque ground material without the shader.</summary>
+        static Material TrailMaterial(Shader blend, Color color, int textureIndex, float ruts, float crown, float worn)
+        {
+            if (!blend) return GroundMaterial(color, textureIndex);
+            var material = new Material(blend) { name = "MIA_Trail_" + textureIndex, enableInstancing = false };
+            material.SetColor("_Tint", color);
+            var set = GroundTextureSet.Load();
+            if (set)
+            {
+                if (set.Diffuse(textureIndex)) material.SetTexture("_Diffuse", set.Diffuse(textureIndex));
+                if (set.Normal(textureIndex)) material.SetTexture("_Normal", set.Normal(textureIndex));
+                if (set.Height(textureIndex)) material.SetTexture("_Height", set.Height(textureIndex));
+                if (set.Occlusion(textureIndex)) material.SetTexture("_AO", set.Occlusion(textureIndex));
+            }
+            material.SetFloat("_Ruts", ruts); material.SetFloat("_Crown", crown); material.SetFloat("_Worn", worn);
+            return material;
+        }
+
+        static GameObject TrailSurface(string name, Vector3[,] grid, Vector4[] uv, Vector2[] shape, Material material, Transform parent)
+        {
+            int rows = grid.GetLength(0), cols = grid.GetLength(1);
+            var vertices = new Vector3[rows * cols];
+            for (int i = 0; i < rows; i++) for (int j = 0; j < cols; j++) vertices[i * cols + j] = grid[i, j];
+            var triangles = new int[(rows - 1) * (cols - 1) * 6]; int t = 0;
+            for (int i = 0; i < rows - 1; i++) for (int j = 0; j < cols - 1; j++)
+            { int a = i * cols + j, b = a + 1, c = a + cols, d = c + 1; triangles[t++] = a; triangles[t++] = c; triangles[t++] = b; triangles[t++] = b; triangles[t++] = c; triangles[t++] = d; }
+            var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer)); go.transform.SetParent(parent, false);
+            var mesh = new Mesh { name = name }; mesh.vertices = vertices; mesh.SetUVs(0, uv); mesh.SetUVs(1, shape); mesh.triangles = triangles;
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            go.GetComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = go.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            go.AddComponent<GeneratedMeshOwner>().Mesh = mesh;
+            return go;
         }
 
         /// <summary>Trail vertex on the highest nearby terrain, so the unpaved surface never sinks into a crease.</summary>

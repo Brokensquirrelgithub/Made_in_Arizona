@@ -59,7 +59,7 @@ namespace MadeInArizona
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
                 if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
                 if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 8 : settingsPage == 1 ? 6 : 14;
+                int rowCount = settingsPage == 0 ? 9 : settingsPage == 1 ? 6 : 14;
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -527,6 +527,7 @@ namespace MadeInArizona
                 SettingLabel(x, y + 466, "CAMERA SHAKE", 4); s.shake = Slider(x + 465, y + 466, 426, s.shake, 0, 1);
                 SettingLabel(x, y + 519, "INTERFACE SCALE", 5); s.uiScale = Slider(x + 465, y + 519, 426, s.uiScale, .85f, 1.2f);
                 SettingLabel(x, y + 572, "SUBTITLES", 6); if (Button(x + 465, y + 567, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
+                SettingLabel(x, y + 673, "VSYNC", 8); if (Button(x + 465, y + 668, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
                 SettingLabel(x, y + 625, "DYNAMIC CAMERA ZOOM", 7); if (Button(x + 465, y + 620, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
             }
             if (settingsPage == 1) {
@@ -556,6 +557,7 @@ namespace MadeInArizona
             Text(x + 35, y + 730, 520, 35, "LB/RB tabs · D-pad select/adjust · A toggle · B close", 12, Muted);
         }
 
+        static readonly string[] FrameSyncLabels = { "ON • MATCH DISPLAY REFRESH", "OFF • 120 FPS CAP", "OFF • UNCAPPED" };
         void SettingLabel(float x, float y, string label, int index)
         { Text(x + 35, y, 420, 32, (InputManager.Instance.UsingGamepad && menuFocus == index ? "›  " : "") + label, 17, InputManager.Instance.UsingGamepad && menuFocus == index ? Orange : Cream, true); }
         float Slider(float x, float y, float w, float value, float min, float max)
@@ -587,6 +589,7 @@ namespace MadeInArizona
                 if (menuFocus == 5) s.uiScale = Mathf.Clamp(s.uiScale + .05f * direction, .85f, 1.2f);
                 if (menuFocus == 6) s.subtitles = !s.subtitles;
                 if (menuFocus == 7) s.dynamicZoom = !s.dynamicZoom;
+                if (menuFocus == 8) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
             } else if (settingsPage == 1) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);

@@ -105,7 +105,9 @@ namespace MadeInArizona
         {
             var s = Save.settings;
             s.quality = Mathf.Clamp(s.quality, 0, 3);
-            QualitySettings.vSyncCount = 0;
+            s.frameSync = Mathf.Clamp(s.frameSync, 0, 2);
+            QualitySettings.vSyncCount = s.frameSync == 0 ? 1 : 0;
+            Application.targetFrameRate = s.frameSync == 1 ? 120 : -1;
             QualitySettings.globalTextureMipmapLimit = s.quality==0?2:s.quality==1?1:0;
             QualitySettings.shadows = s.quality == 0 ? UnityEngine.ShadowQuality.Disable : UnityEngine.ShadowQuality.All;
             QualitySettings.shadowDistance = new[] { 0f, 65f, 110f, 160f }[s.quality];

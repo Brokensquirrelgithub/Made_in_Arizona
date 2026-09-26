@@ -11,6 +11,8 @@ namespace MadeInArizona
     {
         public float master=.8f, music=.48f, engines=.62f, weapons=.82f, dialogue=.8f, environment=.5f, shake=.6f, uiScale=1;
         public int quality=2, difficulty=1, aimAssist=1, width=1600, height=900, windowMode=2;
+        // 0 = VSync on (match display), 1 = off with 120 FPS cap, 2 = off and uncapped.
+        public int frameSync=0;
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
         public string bindingOverrides="";
         public DevTuning dev=new DevTuning();
@@ -21,7 +23,7 @@ namespace MadeInArizona
             dialogue=Unit(dialogue,.8f); environment=Unit(environment,.5f); shake=Unit(shake,.6f);
             uiScale=Finite(uiScale)?Mathf.Clamp(uiScale,.75f,1.5f):1;
             quality=Mathf.Clamp(quality,0,3); difficulty=Mathf.Clamp(difficulty,0,2); aimAssist=Mathf.Clamp(aimAssist,0,2);
-            width=Mathf.Clamp(width,960,7680); height=Mathf.Clamp(height,540,4320); windowMode=Mathf.Clamp(windowMode,0,2);
+            width=Mathf.Clamp(width,960,7680); height=Mathf.Clamp(height,540,4320); windowMode=Mathf.Clamp(windowMode,0,2); frameSync=Mathf.Clamp(frameSync,0,2);
             if(bindingOverrides==null || bindingOverrides.Length>200000) bindingOverrides="";
         }
         static bool Finite(float f) { return !float.IsNaN(f)&&!float.IsInfinity(f); }
