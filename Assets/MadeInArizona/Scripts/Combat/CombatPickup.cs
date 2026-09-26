@@ -19,7 +19,7 @@ namespace MadeInArizona
         const float MagnetRadius = 14, MagnetCollect = 2.2f;
         float availableAt, magnetSpeed;
         Vector3 basePosition;
-        const float MagnetRadius = 12f;
+        const float SupplyMagnetRadius = 12f;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
             if (!player) return null;
@@ -103,7 +103,7 @@ namespace MadeInArizona
             magnetSpeed = 0;
             Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
             // Only supplies follow the car. Keep weapons anchored for deliberate field-slot swaps.
-            if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= MagnetRadius * MagnetRadius &&
+            if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= SupplyMagnetRadius * SupplyMagnetRadius &&
                 Mathf.Abs(basePosition.y - game.Player.transform.position.y) <= 5f)
             {
                 float speed = 18f + game.Player.Body.linearVelocity.magnitude;
