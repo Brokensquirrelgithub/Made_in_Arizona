@@ -14,7 +14,8 @@ namespace MadeInArizona
         public float AimElevation {get;private set;}
         public bool Primary { get; private set; }
         public bool Secondary { get; private set; }
-        public bool Handbrake { get; private set; }
+        /// <summary>Held to drift. The action keeps its old "Handbrake" name so saved rebinds still apply.</summary>
+        public bool Drift { get; private set; }
         public bool Boost { get; private set; }
         public bool Repair { get; private set; }
         public bool Interact { get; private set; }
@@ -76,7 +77,7 @@ namespace MadeInArizona
         void ClearGameplay()
         {
             Move = Vector2.zero;
-            Primary = Secondary = Handbrake = Boost = Repair = Interact = SwapPressed = false;
+            Primary = Secondary = Drift = Boost = Repair = Interact = SwapPressed = false;
         }
 
         void Update()
@@ -138,7 +139,7 @@ namespace MadeInArizona
             if (UsingGamepad && player != null && GeneratedWorld.Active) AimElevation = GamepadElevation(player, Aim);
             Primary = primary.IsPressed();
             Secondary = secondary.IsPressed();
-            Handbrake = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
+            Drift = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
             Interact = interact.WasPressedThisFrame();
             SwapPressed = swap.WasPressedThisFrame();
         }

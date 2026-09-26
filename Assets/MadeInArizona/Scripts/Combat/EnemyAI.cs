@@ -80,15 +80,41 @@ namespace MadeInArizona
             if (UseDestination && !IsFriendly && AttackTelegraph != EnemyAttackTelegraph.Ram && Time.time >= ramUntil)
                 desired = travelDistance > 4 ? towardTravel : CombatSteering(towardTarget, tangent, targetDistance) * .35f;
 
+            desired = UpdateCatchUp(desired, towardTarget, targetDistance);
             UpdateHazardAvoidance(); desired = AvoidBlockedRoute(desired);
             RecoverIfStuck(ref desired, towardTarget, tangent);
             bool firePrimary = !IsFriendly && Time.time < primaryBurstUntil && targetDistance > 7 && targetDistance < primaryRange && clearShot && AttackTelegraph == EnemyAttackTelegraph.None;
             vehicle.SetAIInput(new Vector2(desired.x, desired.z), aim, firePrimary);
         }
 
+        /// <summary>
+        /// Hostiles outside the camera view close the gap at a raised pace and drive straight in; once visible they
+        /// return to their normal stats and tactics. Friendly and route-following vehicles keep normal pace.
+        /// </summary>
+        Vector3 UpdateCatchUp(Vector3 desired, Vector3 towardTarget, float targetDistance)
+        {
+            float pace = 1;
+            if (!IsFriendly && !UseDestination && OffScreen())
+            {
+                pace = Mathf.Lerp(1, Mathf.Max(1, DevTuning.Current.enemyCatchUp), Mathf.InverseLerp(30, 70, targetDistance));
+                if (targetDistance > 45 && AttackTelegraph == EnemyAttackTelegraph.None && Time.time >= ramUntil) desired = towardTarget;
+            }
+            vehicle.Pace = Mathf.MoveTowards(vehicle.Pace, pace, Time.deltaTime * (pace > vehicle.Pace ? 1.5f : 3f));
+            return desired;
+        }
+
+        bool OffScreen()
+        {
+            var camera = Camera.main;
+            if (!camera) return false;
+            Vector3 view = camera.WorldToViewportPoint(transform.position);
+            return view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
+        }
+
         Vector3 FriendlySteering(Vector3 towardDestination, float destinationDistance)
         {
-            return UseDestination && destinationDistance > 4 ? towardDestination * .6f : Vector3.zero;
+            // Full throttle out on the road, easing off over the last stretch so a fast van settles on its mark.
+            return UseDestination && destinationDistance > 4 ? towardDestination * Mathf.Clamp(destinationDistance / 25, .35f, 1) : Vector3.zero;
         }
 
         Vector3 CombatSteering(Vector3 toward, Vector3 tangent, float distance)
