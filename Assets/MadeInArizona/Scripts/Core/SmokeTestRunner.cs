@@ -188,6 +188,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1);
             var world=GeneratedWorld.Active;
             Check("generated campaign starts from menu",world&&game.IsPlaying&&world.Towns.Count>=2);
+            Check("dirt trail network spans the generated map",world&&world.TrailCount>=20);
             var groundTextures=GroundTextureSet.Load();
             Check("licensed ground textures and height maps linked",groundTextures&&groundTextures.Diffuse(1)&&groundTextures.Height(1));
             var nature=PandazoleNatureCatalog.Load();

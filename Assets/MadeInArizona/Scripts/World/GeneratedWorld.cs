@@ -29,7 +29,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,2,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildEcology();BuildPins();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan(){for(int i=0;i<townCount;i++){Vector2 n=TownPlan[i]+new Vector2(R(-.05f,.05f),R(-.05f,.05f));Vector3 p=new Vector3(n.x*size,0,n.y*size);float bank=RiverX(p.z);if(Mathf.Abs(p.x-bank)<riverWidth+85)p.x=bank+(p.x>=bank?1:-1)*(riverWidth+85);p.y=RawHeight(p.x,p.z);Towns.Add(p);}for(int i=0;i<Towns.Count-1;i++)routes.Add(new Route(XZ(Towns[i]),XZ(Towns[i+1]),14));if(Towns.Count>2)routes.Add(new Route(XZ(Towns[0]),XZ(Towns[2]),11));if(Towns.Count>3)routes.Add(new Route(XZ(Towns[1]),XZ(Towns[3]),10));}
         void BakeRoutes()
@@ -126,6 +126,8 @@ namespace MadeInArizona
         public float SceneryClearance(Vector3 p)
         {
             float c=Mathf.Min(RoadDistance(XZ(p))-9,TownDistance(XZ(p))-38);
+            // Grass may brush a trail edge; larger plants (clearance 3) stand a few metres back.
+            c=Mathf.Min(c,TrailEdgeDistance(XZ(p))+.3f);
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
             return c;
         }
@@ -150,6 +152,7 @@ namespace MadeInArizona
                 Vector3 p=new Vector3(Mathf.Lerp(-half,half,x/(float)(res-1)),0,Mathf.Lerp(-half,half,y/(float)(res-1)));
                 Color c=BiomeColor(p)*Mathf.Lerp(.65f,1.2f,Mathf.InverseLerp(-amp*.3f,amp,RawHeight(p.x,p.z)));c.a=1;
                 if(riverWidth>0&&Mathf.Abs(p.x-RiverX(p.z))<riverWidth)c=new Color(.05f,.48f,.57f);
+                if(TrailEdgeDistance(XZ(p))<2)c=Color.Lerp(c,new Color(.72f,.55f,.36f),.75f);
                 if(RoadDistance(XZ(p))<7)c=new Color(.86f,.68f,.38f);
                 if(!Contains(p))c=Color.clear;px[y*res+x]=c;
             }
@@ -169,6 +172,7 @@ namespace MadeInArizona
             if(!Active)return SurfaceKind.Dirt;
             if(Active.RoadDistance(XZ(p))<9 || Active.TownDistance(XZ(p))<34)return SurfaceKind.Asphalt;
             if(Active.riverWidth>0&&Mathf.Abs(p.x-Active.RiverX(p.z))<Active.riverWidth)return SurfaceKind.Water;
+            if(Active.TrailEdgeDistance(XZ(p))<0)return SurfaceKind.Dirt;
             float n=Mathf.InverseLerp(-Active.half,Active.half,p.z);
             return n<Active.cfg.biomeThresholds.lowland?SurfaceKind.Sand:n>Active.cfg.biomeThresholds.highland?SurfaceKind.Rocks:SurfaceKind.Dirt;
         }

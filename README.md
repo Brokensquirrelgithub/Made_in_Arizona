@@ -37,7 +37,7 @@ The car turns toward your movement input while the turret aims independently. At
 
 ## Generated world
 
-The wilderness now uses dense streamed grass, shrubs, branching trees, stones, boulders, flowers and deadwood, with wind and small bird flocks. Roads have smooth curves, gravel shoulders and worn markings; towns have detailed storefronts and lot clutter.
+The wilderness now uses dense streamed grass, shrubs, branching trees, stones, boulders, flowers and deadwood, with wind and small bird flocks. Roads have smooth curves, gravel shoulders and worn markings; a web of dirt roads, two-track trails and footpaths of varying width winds between them, linking every point of interest. Towns have storefronts lining their main street and lot clutter.
 
 Towns are charted; off-road secrets reveal as you approach. Press **E** near specialty salvage. Open **M** to place a waypoint and craft weapon improvements using recovered alloy, circuits and propellant. Northern hideouts are stronger; drivetrain, suspension and weapon upgrades help with difficult terrain and fights.
 
