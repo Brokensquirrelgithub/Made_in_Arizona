@@ -94,17 +94,24 @@ namespace MadeInArizona
                 Render(cam, Path.Combine(directory, "cliff-" + c + "-oblique.png"));
                 cam.orthographic = ortho; camera.enabled = true;
             }
-            // Reachability across several seeds and map sizes.
-            foreach (var (seed, mapSize) in new[] { (1, 1600f), (42, 800f), (999, 2400f), (2024, 3200f), (77, 1600f) })
+            yield return Reachability(check);
+            Debug.Log("MIA_TRAIL_REVIEW " + directory);
+        }
+
+        /// <summary>Every generated map must be drivable from the first town (-miaSmokeTest -miaReachabilityTest; no rendering needed).</summary>
+        public static IEnumerator Reachability(Action<string, bool> check)
+        {
+            var game = GameManager.Instance;
+            var cases = new[] { (173, 1600f), (1, 1600f), (42, 800f), (7, 800f), (1234, 800f), (5, 1200f), (999, 2400f), (2024, 3200f), (77, 1600f), (31337, 800f), (88, 2000f), (600, 1000f) };
+            foreach (var (seed, mapSize) in cases)
             {
                 float t0 = Time.realtimeSinceStartup;
                 game.StartCampaign(seed, mapSize);
                 yield return new WaitUntil(() => game.State == GameState.Playing);
                 var generated = GeneratedWorld.Active;
-                Debug.Log($"MIA_ELEVATION seed={seed} size={mapSize} seconds={Time.realtimeSinceStartup - t0:F2} cliffs={generated.FindCliffs(50).Count} rampOpenings={generated.RampOpenings} unreachableVertices={generated.UnreachableVertices}");
+                Debug.Log($"MIA_ELEVATION seed={seed} size={mapSize} towns={generated.Towns.Count} seconds={Time.realtimeSinceStartup - t0:F2} cliffs={generated.FindCliffs(50).Count} rampOpenings={generated.RampOpenings} unreachableVertices={generated.UnreachableVertices}");
                 check($"seed {seed} at {mapSize} m fully reachable", generated.UnreachableVertices == 0);
             }
-            Debug.Log("MIA_TRAIL_REVIEW " + directory);
         }
 
         static void Render(Camera camera, string path)

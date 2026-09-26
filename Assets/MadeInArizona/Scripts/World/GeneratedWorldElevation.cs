@@ -85,7 +85,7 @@ namespace MadeInArizona
                     UnreachableVertices += component;
                     var opening = new Vector3(-half + border.x * step, -half + border.y * step, Mathf.Max(30, levelHeight * 3));
                     // A repeat means cliffs are not what seals this area (e.g. the state outline); stop trying there.
-                    if (rampOpenings.Exists(o => Vector2.Distance(new Vector2(o.x, o.y), new Vector2(opening.x, opening.y)) < o.z)) { Debug.LogWarning("MIA_ELEVATION sealed area not caused by cliffs at " + opening); continue; }
+                    if (rampOpenings.Exists(o => Vector2.Distance(new Vector2(o.x, o.y), new Vector2(opening.x, opening.y)) < o.z)) { Debug.LogWarning("MIA_ELEVATION sealed area not caused by cliffs at " + opening + " " + DescribeBarrier(border, step)); continue; }
                     rampOpenings.Add(opening);
                     opened++;
                 }
@@ -113,6 +113,19 @@ namespace MadeInArizona
                 if (found.Count >= count) return found;
             }
             return found;
+        }
+
+        /// <summary>What surrounds a blocked border vertex, for diagnosing sealed areas.</summary>
+        string DescribeBarrier(Vector2Int v, float step)
+        {
+            Vector2 p = new Vector2(-half + v.x * step, -half + v.y * step);
+            int grid = Chunks * Cells; float worst = 0;
+            for (int k = 0; k < 4; k++)
+            {
+                int nx = v.x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = v.y + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                if (nx >= 0 && nz >= 0 && nx <= grid && nz <= grid) worst = Mathf.Max(worst, Mathf.Abs(heights[nx, nz] - heights[v.x, v.y]) / step);
+            }
+            return $"grade={worst:F2} town={TownDistance(p):F0} road={RoadDistance(p):F0} river={(riverWidth > 0 ? Mathf.Abs(p.x - RiverX(p.y)) : -1):F0} raw={RawHeight(p.x, p.y):F1} final={heights[v.x, v.y]:F1} level={LevelOffset(p.x, p.y):F1}";
         }
 
         bool InsideVertex(int x, int z, float step) => InOutline(new Vector2((-half + x * step) / size, (-half + z * step) / size));

@@ -43,6 +43,7 @@ namespace MadeInArizona
                 InputSystem.RemoveDevice(campaignKeyboard);
                 FinishResults();yield break;
             }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReachabilityTest")>=0){yield return TrailReview.Reachability(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0){yield return TrailReview.Run(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFrameTimingTest")>=0){yield return FrameTimingProbe.Run(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0){yield return TestWorldGeneration();yield break;}

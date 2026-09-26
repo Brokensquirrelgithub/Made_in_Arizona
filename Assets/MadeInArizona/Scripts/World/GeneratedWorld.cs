@@ -70,7 +70,9 @@ namespace MadeInArizona
             if(linked.Add(key))routes.Add(new Route(XZ(Towns[a]),XZ(Towns[b]),width));
         }
         // Road queries only need exact answers near a road: grading, scenery clearance and surfaces all use short radii.
-        readonly SegmentGrid roadIndex=new SegmentGrid(32,64);
+        readonly SegmentGrid roadIndex=new SegmentGrid(32,96);
+        /// <summary>Average grade of road and town embankments (peak ≈ 0.6, under the 0.65 drivable limit).</summary>
+        const float EmbankmentGrade=.4f;
         void BakeRoutes()
         {
             foreach(var route in routes)for(int i=0;i<64;i++)
@@ -256,10 +258,21 @@ namespace MadeInArizona
             float roadHeight;float rd=NearestRoad(p,out roadHeight);
             // Terrain is linear between grid vertices, so any triangle touching the road must be fully graded
             // or its raised corners poke through the asphalt. Grade the road, shoulders and one cell diagonal.
-            float graded=RoadKeepOut+size/(Chunks*Cells)*1.42f,blend=graded+Mathf.Max(11,size/(Chunks*Cells)*1.5f);
-            if(rd<blend)h=Mathf.Lerp(roadHeight,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(graded,blend,rd)));
-            float td=TownDistance(p);
-            if(td<65)h=Mathf.Lerp(Towns[TownIndex(p)].y,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(45,65,td)));
+            // Embankments widen with the height they absorb, so a road or town cut into an elevation level
+            // stays drivable instead of leaving a wall (smoothstep peaks at 1.5x the average grade).
+            float graded=RoadKeepOut+size/(Chunks*Cells)*1.42f;
+            if(rd<roadIndex.Reach)
+            {
+                float blend=graded+Mathf.Min(Mathf.Max(Mathf.Max(11,size/(Chunks*Cells)*1.5f),Mathf.Abs(h-roadHeight)/EmbankmentGrade),roadIndex.Reach-graded-1);
+                if(rd<blend)h=Mathf.Lerp(roadHeight,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(graded,blend,rd)));
+            }
+            // Each town flattens its pad in turn; applying all of them (not just the nearest) keeps the ground
+            // continuous where two towns' aprons overlap.
+            foreach(var town in Towns)
+            {
+                float td=Vector2.Distance(p,XZ(town)),end=45+Mathf.Max(20,Mathf.Abs(h-town.y)/EmbankmentGrade);
+                if(td<end)h=Mathf.Lerp(town.y,h,Mathf.SmoothStep(0,1,Mathf.InverseLerp(45,end,td)));
+            }
             return h;
         }
         float RawHeight(float x,float z)
