@@ -77,6 +77,21 @@ namespace MadeInArizona
                 yield return new WaitForSeconds(.8f);
                 check("hostile drives through small scenery without damage", shrubDamage == null && enemy.transform.position.z > origin.z - 3 && Mathf.Approximately(enemy.Damage.Health, enemyHealth));
                 check("hostile-smashed scenery earns the player no score", game.Mission.DestructionCount == destroyedBefore);
+                // An escort (friendly AI) ignores environmental damage but still takes hostile attacks.
+                var escort = SpawnManager.Spawn(origin + new Vector3(9, .6f, -12), 2, player);
+                if (escort)
+                {
+                    var escortAI = escort.GetComponent<EnemyAI>(); escortAI.IsFriendly = true; escortAI.enabled = false;
+                    float full = escort.Damage.Health;
+                    escort.Damage.ApplyDamage(40, escort.transform.position, null);
+                    escort.Damage.ApplyDamage(40, escort.transform.position, arena);
+                    escort.Damage.ApplyDamage(40, escort.transform.position, null, true);
+                    check("escort ignores environment damage", Mathf.Approximately(escort.Damage.Health, full));
+                    escort.Damage.ApplyDamage(20, escort.transform.position, enemy.gameObject);
+                    check("escort still takes hostile damage", escort.Damage.Health < full);
+                    UnityEngine.Object.Destroy(escort.gameObject);
+                }
+                else check("escort spawns for damage regression", false);
                 UnityEngine.Object.Destroy(enemy.gameObject);
             }
             else check("hostile spawns for scenery regression", false);

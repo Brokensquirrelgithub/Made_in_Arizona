@@ -50,6 +50,8 @@ namespace MadeInArizona
             if (IsDead || amount <= 0 || vehicle == null) return;
             var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
             if (!explosive && attacker && attacker != vehicle && VehicleController.Allied(attacker, vehicle)) return;
+            // Escorts only suffer hostile attacks: walls, rocks, trees, terrain and explosions no vehicle set off never wear them down.
+            if (!vehicle.IsPlayer && vehicle.FriendlyToPlayer && (attacker == null || attacker == vehicle)) return;
             if (vehicle.IsPlayer && GameManager.Instance != null && GameManager.Instance.Save != null)
             {
                 int difficulty = GameManager.Instance.Save.settings.difficulty;
