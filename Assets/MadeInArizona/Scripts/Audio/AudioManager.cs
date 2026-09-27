@@ -6,6 +6,8 @@ namespace MadeInArizona
     public sealed class AudioManager : MonoBehaviour
     {
         public static AudioManager Instance { get; private set; }
+        /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
+        public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
         AudioClip[] shots,blasts,hurts;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite;
         AudioSource whine,road,wind,heartbeat,nitro,radioSource,uiSource;
@@ -59,7 +61,7 @@ namespace MadeInArizona
             else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;}
             UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
-            AudioListener.volume=Settings.master;
+            AudioListener.volume=OutputVolume(Settings.master);
         }
         /// <summary>
         /// Equal-power crossfade between the neighbouring RPM layers (in log-frequency, as pitch is heard) and

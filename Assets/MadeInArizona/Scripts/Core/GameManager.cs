@@ -123,7 +123,7 @@ namespace MadeInArizona
                 pipeline.maxAdditionalLightsCount = s.quality == 0 ? 0 : s.quality == 3 ? 8 : 4;
             }
             Shader.SetGlobalFloat("_ArizonaDetail", s.quality >= 2 ? 1 : 0);
-            AudioListener.volume = s.master;
+            AudioListener.volume = AudioManager.OutputVolume(s.master);
             if (!Application.isBatchMode) {
                 var mode = s.fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
                 if (Screen.width != s.width || Screen.height != s.height || Screen.fullScreenMode != mode)

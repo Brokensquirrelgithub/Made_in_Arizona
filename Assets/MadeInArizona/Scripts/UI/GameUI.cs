@@ -557,7 +557,7 @@ namespace MadeInArizona
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
                 float[] values = { s.master, s.music, s.engines, s.weapons, s.dialogue, s.environment };
                 for (int i = 0; i < labels.Length; i++) { SettingLabel(x, y + 215 + i * 65, labels[i], i); values[i] = Slider(x + 465, y + 215 + i * 65, 426, values[i], 0, 1); }
-                s.master = values[0]; s.music = values[1]; s.engines = values[2]; s.weapons = values[3]; s.dialogue = values[4]; s.environment = values[5]; AudioListener.volume = s.master;
+                s.master = values[0]; s.music = values[1]; s.engines = values[2]; s.weapons = values[3]; s.dialogue = values[4]; s.environment = values[5]; AudioListener.volume = AudioManager.OutputVolume(s.master);
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 2) {
