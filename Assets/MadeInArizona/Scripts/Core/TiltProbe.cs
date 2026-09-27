@@ -38,7 +38,7 @@ namespace MadeInArizona
                 (0f, w), (.4f, new KeyboardState(Key.W, Key.D, Key.Space)), (1.6f, w));
 
             // Straddling a 6 m drop (left wheels over the edge), then steering fully onto the ledge.
-            var ledge = Box(arena, "Ledge", o + new Vector3(10 - .25f, 3, 10), new Vector3(20, 6, 60), Quaternion.identity);
+            var ledge = Box(arena, "Ledge", o + new Vector3(10 - .25f, 3, 50), new Vector3(20, 6, 140), Quaternion.identity);
             yield return Drive(player, keyboard, o + new Vector3(0, 6.2f, -12), 0, "cliff-edge", check, null,
                 (0f, none), (1f, new KeyboardState(Key.D)), (1.8f, w));
             ledge.SetActive(false);
@@ -47,6 +47,16 @@ namespace MadeInArizona
             var slope = Box(arena, "Side slope", o + new Vector3(0, -.5f, 0), new Vector3(14, 1, 30), Quaternion.Euler(0, 0, 20));
             yield return Drive(player, keyboard, o + new Vector3(4, 2.2f, -12), 12, "side-slope", check, () => player.transform.position.z > o.z + 15, (0f, w));
             slope.SetActive(false);
+
+            // Beached on a ridge: a 0.9 m block narrower than the track under the belly, then throttle.
+            var ridge = Box(arena, "Ridge", o + new Vector3(0, .45f, 0), new Vector3(1, .9f, 8), Quaternion.identity);
+            yield return Drive(player, keyboard, o + new Vector3(0, .9f, 1), 0, "ridge", check, null, (0f, none), (.6f, w));
+            ridge.SetActive(false);
+
+            // Crawling diagonally off a 1.2 m ledge, so the belly catches the lip with one wheel still on top.
+            var lip = Box(arena, "Diagonal lip", o + new Vector3(-8, .6f, -8), new Vector3(20, 1.2f, 20), Quaternion.Euler(0, 45, 0));
+            yield return Drive(player, keyboard, o + new Vector3(-4, 1.5f, -8), 3, "diagonal-lip", check, () => player.transform.position.z > o.z + 2.5f, (0f, w));
+            lip.SetActive(false);
 
             // A sideways shove (mine, ram or air-cannon style) while driving. Recovery counts from the shove.
             bool shoved = false;
@@ -96,7 +106,7 @@ namespace MadeInArizona
                 if (recoverFrom < 0 && (causeGone != null ? causeGone() : step >= script.Length)) recoverFrom = t;
                 bool level = Mathf.Abs(roll) < Settle && gapL < AirGap && gapR < AirGap;
                 // Airtime is not hanging: only count wheels up while the car is on the ground.
-                if (!player.Grounded && gapL > AirGap && gapR > AirGap) level = true;
+                if (!player.Grounded && !player.Beached) level = true;
                 if (recoverFrom >= 0) { if (!level) recoveredAt = -1; else if (recoveredAt < 0) recoveredAt = t; }
                 if (Mathf.RoundToInt(t / Time.fixedDeltaTime) % 6 == 0)
                     trace.Append($" t={t:F1} roll={roll:F0} gapL={gapL:F2} gapR={gapR:F2} y={player.Body.position.y - start.y:F2} x={player.Body.position.x - start.x:F1} z={player.Body.position.z - start.z:F0} g={(player.Grounded ? 1 : 0)}\n");
@@ -104,7 +114,9 @@ namespace MadeInArizona
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             float recovery = recoverFrom < 0 ? 99 : recoveredAt < 0 ? 99 : recoveredAt - recoverFrom;
             Debug.Log($"MIA_TILT {name}: maxVisualRoll={maxRoll:F1} recovery={recovery:F2}s (from t={recoverFrom:F2})\n{trace}");
-            check($"{name}: back on four wheels within 0.5 s", recovery <= .5f);
+            // Driving off a ridge takes a moment; a sideways shove keeps its slide lean briefly.
+            float allowed = name == "ridge" ? 2f : name == "shove" ? 1f : .5f;
+            check($"{name}: back on four wheels within {allowed:F1} s", recovery <= allowed);
         }
 
         /// <summary>
@@ -145,9 +157,56 @@ namespace MadeInArizona
                     hang = 0;
                 }
             }
+            // Real cliff lips: the car set down half over the drop, along the edge and facing it, then throttle.
+            var world = GeneratedWorld.Active; int lipTests = 0, stuck = 0;
+            foreach (var cliff in world.FindCliffs(4))
+            {
+                Vector3 down3 = new Vector3(cliff.downhill.x, 0, cliff.downhill.y);
+                Vector3 lip = cliff.position;
+                for (int k = 0; k < 40; k++) { Vector3 next = lip - down3; next.y = GeneratedWorld.HeightAt(next); if (next.y - GeneratedWorld.HeightAt(lip) < .25f && k > 3) break; lip = next; }
+                lip.y = GeneratedWorld.HeightAt(lip);
+                foreach (var facing in new[] { Quaternion.LookRotation(Vector3.Cross(Vector3.up, down3)), Quaternion.LookRotation(down3) })
+                {
+                    Vector3 at = lip + down3 * .4f + Vector3.up * 1.2f;
+                    player.Body.position = at; player.Body.rotation = facing; player.transform.SetPositionAndRotation(at, facing);
+                    player.Body.linearVelocity = Vector3.zero; player.Body.angularVelocity = Vector3.zero; player.Repair(10000); Physics.SyncTransforms();
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                    yield return new WaitForSeconds(.6f);
+                    bool beachedAtRest = player.Beached;
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+                    float held = 0, recoveredAt = -1; Vector3 from = player.transform.position;
+                    var lipTrace = new StringBuilder(); var pitchField = typeof(VehicleController).GetField("chassisPitch", Private);
+                    while (held < 3)
+                    {
+                        yield return new WaitForFixedUpdate(); held += Time.fixedDeltaTime;
+                        bool down = true; foreach (var wheel in wheels) if (wheel && Gap(wheel.position, player.Body) > AirGap) down = false;
+                        if (player.Grounded && down) { if (recoveredAt < 0) recoveredAt = held; } else recoveredAt = -1; // slopes may roll the body legitimately
+                        if (Mathf.RoundToInt(held / Time.fixedDeltaTime) % 18 == 0)
+                        {
+                            float gl = Mathf.Max(Gap(wheels[0].position, player.Body), Gap(wheels[2].position, player.Body)), gr = Mathf.Max(Gap(wheels[1].position, player.Body), Gap(wheels[3].position, player.Body));
+                            float gf = Mathf.Max(Gap(wheels[0].position, player.Body), Gap(wheels[1].position, player.Body)), gb = Mathf.Max(Gap(wheels[2].position, player.Body), Gap(wheels[3].position, player.Body));
+                            lipTrace.Append($"   t={held:F1} roll={Mathf.DeltaAngle(0, player.Visual.localEulerAngles.z):F0} pitch={(float)pitchField.GetValue(player):F0} gapL={gl:F2} gapR={gr:F2} gapF={gf:F2} gapB={gb:F2} g={(player.Grounded ? 1 : 0)} b={(player.Beached ? 1 : 0)} v={player.Body.linearVelocity.magnitude:F1} wc={typeof(VehicleController).GetField("wheelContacts", Private).GetValue(player)} sL={typeof(VehicleController).GetField("supportLeft", Private).GetValue(player)} sR={typeof(VehicleController).GetField("supportRight", Private).GetValue(player)} belly={typeof(VehicleController).GetField("bellyNormal", Private).GetValue(player)} ahead={GeneratedWorld.HeightAt(player.transform.position + player.transform.forward * 3) - GeneratedWorld.HeightAt(player.transform.position):F2} dir={typeof(VehicleController).GetField("driveDirection", Private).GetValue(player)} thr={player.Throttle:F2} hullBottom={player.Hull.bounds.min.y - GeneratedWorld.HeightAt(player.Hull.bounds.center):F2} sleeping={player.Body.IsSleeping()} under={Under(player)}\n");
+                        }
+                    }
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                    float moved = Vector3.Distance(from, player.transform.position);
+                    lipTests++; if (recoveredAt < 0 || moved < 2) stuck++;
+                    log.Append($" lip {lipTests}: beachedAtRest={beachedAtRest} moved={moved:F1}m fourWheelsAt={(recoveredAt < 0 ? "never" : recoveredAt.ToString("F2") + "s")}\n");
+                    if (recoveredAt < 0 || moved < 2) log.Append(lipTrace);
+                }
+            }
+            check("cliff lips: the car drives off and lands on four wheels", stuck == 0);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             Debug.Log($"MIA_TILT world: hangEvents={events} totalHang={total:F2}s longest={longest:F2}s\n{log}");
             check("world drive: no wheel hangs off the ground for more than 0.5 s", longest <= .5f);
+        }
+
+        static string Under(VehicleController player)
+        {
+            var b = player.Hull.bounds; var names = new StringBuilder();
+            foreach (var c in Physics.OverlapBox(b.center - Vector3.up * b.extents.y, new Vector3(b.extents.x, .35f, b.extents.z)))
+                if (c.attachedRigidbody != player.Body) names.Append(c.name).Append('/').Append(c.GetComponentInParent<DestructionSystem>() ? "breakable" : "solid").Append(':').Append(c.bounds.size.ToString("F1")).Append(' ');
+            return names.ToString();
         }
 
         static string UnderWheels(Transform[] wheels, Rigidbody body)

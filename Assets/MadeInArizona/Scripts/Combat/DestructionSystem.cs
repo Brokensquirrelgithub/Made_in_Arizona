@@ -14,6 +14,8 @@ namespace MadeInArizona
         {
             Health = MaxHealth = Mathf.Max(1, health); Kind = kind; Explosive = explosive; score = destructionScore;
         }
+        /// <summary>Breaks caused by hostile vehicles, which award the player nothing (counted for the regression suite).</summary>
+        public static int UncreditedHostileBreaks { get; private set; }
         public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source)
         {
             if (IsDestroyed || amount <= 0) return;
@@ -39,6 +41,7 @@ namespace MadeInArizona
             var sourceCar = source ? source.GetComponentInParent<VehicleController>() : null;
             bool hostileCaused = sourceCar && !sourceCar.IsPlayer;
             if (!hostileCaused) GameManager.Instance?.Mission?.RegisterDestruction(score, bounds.center);
+            else UncreditedHostileBreaks++;
             float scale = Mathf.Clamp(bounds.size.magnitude, 1, 12);
             ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color);
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);

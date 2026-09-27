@@ -66,7 +66,7 @@ namespace MadeInArizona
             var enemy = SpawnManager.Spawn(origin + new Vector3(-9, .6f, -12), 0, player);
             var enemyAI = enemy ? enemy.GetComponent<EnemyAI>() : null;
             if (enemyAI) enemyAI.enabled = false;
-            int destroyedBefore = game.Mission.DestructionCount;
+            int uncreditedBefore = DestructionSystem.UncreditedHostileBreaks;
             if (enemy)
             {
                 enemy.transform.rotation = Quaternion.identity;
@@ -76,7 +76,8 @@ namespace MadeInArizona
                 enemy.SetAIInput(Vector2.up, Vector3.forward, false);
                 yield return new WaitForSeconds(.8f);
                 check("hostile drives through small scenery without damage", shrubDamage == null && enemy.transform.position.z > origin.z - 3 && Mathf.Approximately(enemy.Damage.Health, enemyHealth));
-                check("hostile-smashed scenery earns the player no score", game.Mission.DestructionCount == destroyedBefore);
+                // Checked through the rule itself: other props breaking elsewhere at the same moment must not matter.
+                check("hostile-smashed scenery earns the player no score", DestructionSystem.UncreditedHostileBreaks > uncreditedBefore);
                 // An escort (friendly AI) ignores environmental damage but still takes hostile attacks.
                 var escort = SpawnManager.Spawn(origin + new Vector3(9, .6f, -12), 2, player);
                 if (escort)
