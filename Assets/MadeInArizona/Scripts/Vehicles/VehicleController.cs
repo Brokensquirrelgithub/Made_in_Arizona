@@ -337,7 +337,9 @@ namespace MadeInArizona
         /// </summary>
         void TiltChassis(int front, int rear, int left, int right, Vector3 frontSum, Vector3 rearSum, Vector3 leftSum, Vector3 rightSum)
         {
+            // Teetering (ground under one side or one end only) levels out quickly instead of hanging on two wheels.
             float follow = 1 - Mathf.Exp(-Time.fixedDeltaTime * 16), settle = Time.fixedDeltaTime * 30;
+            float teeterRoll = Time.fixedDeltaTime * 90, teeterPitch = Time.fixedDeltaTime * 45;
             Vector3 forward = Body.rotation * Vector3.forward, side = Body.rotation * Vector3.right;
             if (front > 0 && rear > 0)
             {
@@ -345,14 +347,14 @@ namespace MadeInArizona
                 float run = Vector3.Dot(span, forward);
                 if (run > .4f) chassisPitch = Mathf.Lerp(chassisPitch, Mathf.Clamp(-Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisPitch, MaxChassisPitch), follow);
             }
-            else if (front + rear == 0) chassisPitch = Mathf.MoveTowards(chassisPitch, 0, settle);
+            else chassisPitch = Mathf.MoveTowards(chassisPitch, 0, front + rear == 0 ? settle : teeterPitch);
             if (left > 0 && right > 0)
             {
                 Vector3 span = rightSum / right - leftSum / left;
                 float run = Vector3.Dot(span, side);
                 if (run > .4f) chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisRoll, MaxChassisRoll), follow);
             }
-            else if (left + right == 0) chassisRoll = Mathf.MoveTowards(chassisRoll, 0, settle);
+            else chassisRoll = Mathf.MoveTowards(chassisRoll, 0, left + right == 0 ? settle : teeterRoll);
             // Only re-pose the hull for a visible change; every pose change is a collider update for the physics scene.
             if (Mathf.Abs(chassisPitch - appliedHullPitch) > .2f || Mathf.Abs(chassisRoll - appliedHullRoll) > .2f)
             {
@@ -367,9 +369,12 @@ namespace MadeInArizona
             // Acceleration is sampled per physics step; per-render-frame sampling alternated between zero and double.
             Vector3 acceleration = transform.InverseTransformDirection(bodyAcceleration);
             float narrow = Mathf.Clamp(Stats.rideHeight / Mathf.Max(1, Stats.trackWidth), .15f, 1);
-            float targetRoll = -localVelocity.x * (1 + narrow * 1.5f) - Body.angularVelocity.y * localVelocity.z * .18f;
-            targetRoll += (1 - Damage.Suspension) * 9;
-            visualRoll = Mathf.Lerp(visualRoll, Mathf.Clamp(targetRoll, -19, 19), Time.deltaTime * 6);
+            // Body lean follows cornering force (yaw rate x speed), which ends with the turn. Sideways slip only adds a
+            // little, so the car no longer hangs on two wheels while a slide or drift bleeds off.
+            float targetRoll = -Body.angularVelocity.y * localVelocity.z * .14f * (1 + narrow * .5f) - localVelocity.x * .35f * (1 + narrow);
+            targetRoll = Mathf.Clamp(targetRoll, -12, 12) + (1 - Damage.Suspension) * 9;
+            float leanRate = Mathf.Abs(targetRoll) < Mathf.Abs(visualRoll) ? 12 : 6; // settle back twice as fast as it leans
+            visualRoll = Mathf.Lerp(visualRoll, targetRoll, Time.deltaTime * leanRate);
             // The body sits on the slope, then squats under power and dives under braking. The old pitch dipped the
             // nose under acceleration, which read as the car tipping forward into every hill it tried to climb.
             visualTilt = Mathf.Lerp(visualTilt, chassisPitch, Time.deltaTime * 18);
