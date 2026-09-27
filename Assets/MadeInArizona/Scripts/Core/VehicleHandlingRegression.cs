@@ -61,7 +61,7 @@ namespace MadeInArizona
             check("roadside rocks break under weapon damage", rockDamage.IsDestroyed && !rock.GetComponent<Collider>().enabled);
             ExplosionSystem.ScatterDebris(origin + Vector3.up * 2, 3, 4, Color.gray);
             var debris = GameObject.Find("Pooled debris");
-            check("debris cannot push cars or affect suspension casts", debris != null && debris.layer == 2 && Physics.GetIgnoreCollision(debris.GetComponent<Collider>(), player.GetComponent<Collider>()));
+            check("debris cannot push cars or affect suspension casts", debris != null && debris.layer == 2 && Physics.GetIgnoreCollision(debris.GetComponent<Collider>(), player.Hull));
 
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = "Handling regression wall";
@@ -90,6 +90,30 @@ namespace MadeInArizona
             Release(keyboard);
             Vector3 retreat = player.transform.position - impactPosition;
             check("angled wall reverse escape", wallProbe.ContactedPlayer && Vector3.Dot(retreat, new Vector3(-1, 0, -1).normalized) > .8f);
+
+            // A 22 degree ramp: the car keeps its speed up the climb and the body pitches nose-up with the slope,
+            // instead of plowing its front edge into the hill and tipping forward.
+            wall.SetActive(false);
+            var ramp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ramp.name = "Handling regression ramp";
+            ramp.transform.SetParent(arena.transform);
+            ramp.transform.localScale = new Vector3(8, 1, 24);
+            ramp.transform.rotation = Quaternion.Euler(-22, 0, 0);
+            Vector3 rampFoot = origin + new Vector3(0, -.5f, 4);
+            ramp.transform.position = rampFoot + ramp.transform.forward * 12 - ramp.transform.up * .5f;
+            Physics.SyncTransforms();
+            yield return Place(player, keyboard, origin, Quaternion.identity);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+            float noseUp = -1;
+            for (float t = 0; t < 3 && player.transform.position.y < origin.y + 3; t += Time.deltaTime)
+            {
+                if (player.transform.position.y > origin.y + 1.5f) noseUp = Mathf.Max(noseUp, player.Visual.forward.y);
+                yield return null;
+            }
+            float climbSpeed = new Vector2(player.Body.linearVelocity.x, player.Body.linearVelocity.z).magnitude;
+            Release(keyboard);
+            check("climbs a 22 degree ramp without stalling", player.transform.position.y >= origin.y + 3 && climbSpeed > 8);
+            check("body pitches nose-up on a climb", noseUp > .25f);
 
             Release(keyboard);
             player.Body.position = originalPosition;

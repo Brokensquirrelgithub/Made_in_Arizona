@@ -19,7 +19,7 @@ MonoBehaviour:
   strength: 'Blades pass through the first car and keep cutting.'
   weakness: 'Short reach and light damage per blade.'
   contentOrder: 11
-  damage: 9
+  damage: 6
   fireRate: 5
   speed: 88
   blastRadius: 0

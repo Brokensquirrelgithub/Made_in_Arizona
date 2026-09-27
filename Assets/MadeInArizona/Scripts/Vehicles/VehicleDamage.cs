@@ -103,7 +103,7 @@ namespace MadeInArizona
                     foreach (var mine in own) Physics.IgnoreCollision(mine, theirs, true);
             }
             // Weak points and other child colliders are decoration now; only the body keeps the shell on the ground.
-            var body = GetComponent<Collider>();
+            Collider body = vehicle ? vehicle.Hull : null;
             foreach (var mine in own) if (mine != body) mine.enabled = false;
         }
         public const int WreckLayer = 2;

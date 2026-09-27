@@ -124,7 +124,7 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1.2f);
             Check("matching weapon drop magnets in and adds ammo",!matching&&game.Player.Weapons.FieldWeapon&&game.Player.Weapons.FieldWeapon.id=="invoice"&&game.Player.Weapons.FieldAmmo==heldAmmo+2);
             game.Player.Repair(200);
-            Check("field repair", game.Player.Damage.Health > health - 40);
+            Check("repair restores chassis", game.Player.Damage.Health > health - 40);
             game.Pause(); Check("pause freezes simulation", Time.timeScale == 0 && game.State == GameState.Paused);
             game.Resume(); Check("resume restores simulation", Time.timeScale == 1 && game.State == GameState.Playing);
             // Advance via the same proximity, combat and interaction conditions used during normal play.

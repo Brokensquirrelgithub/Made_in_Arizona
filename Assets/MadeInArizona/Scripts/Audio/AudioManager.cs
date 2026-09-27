@@ -7,11 +7,12 @@ namespace MadeInArizona
     {
         public static AudioManager Instance { get; private set; }
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts;AudioClip ui,radio,shift,release,backfire,ordnanceBlast;
-        AudioSource whine,road,wind,heartbeat,radioSource,uiSource;
+        AudioClip[] shots,blasts,hurts;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite;
+        AudioSource whine,road,wind,heartbeat,nitro,radioSource,uiSource;
         // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
         AudioSource[] engineOn,engineOff;
-        AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt;
+        AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,nitroLevel,nitroOffAt=-10;
+        bool wasBoosting;
         MusicManager music;
         void Awake()
         {
@@ -20,7 +21,7 @@ namespace MadeInArizona
             int layers=AudioSynthesis.EngineLayerHz.Length;engineOn=new AudioSource[layers];engineOff=new AudioSource[layers];
             for(int i=0;i<layers;i++){engineOn[i]=Loop(AudioSynthesis.EngineLayer(i,true),70);engineOff[i]=Loop(AudioSynthesis.EngineLayer(i,false),75);}
             hurts=new AudioClip[3];for(int i=0;i<hurts.Length;i++)hurts[i]=Keep(AudioSynthesis.Hurt(i));heartbeat=Loop(AudioSynthesis.Heartbeat(),20);
-            whine=Loop(AudioSynthesis.Turbo(),90);road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
+            whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
@@ -46,7 +47,8 @@ namespace MadeInArizona
                 UpdateEngineBank(rpm,load,player.Damage.IsDead?0:active?1:.3f,gain);
                 if(active&&!player.Damage.IsDead)UpdateCrackle(player,rpm,load,gain);
                 if(active&&player.Gear!=previousGear){previousGear=player.Gear;PlayAt(shift,player.transform.position,.24f*gain,Random.Range(.9f,1.1f),70);}
-                float boost=InputManager.Instance!=null&&InputManager.Instance.Boost?1:0;
+                float boost=active&&player.Boosting&&!player.Damage.IsDead?1:0;
+                UpdateNitro(player,active,boost>0,rpm,gain);
                 whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f):0;
                 road.pitch=.6f+player.SpeedKph/80;
                 float rough=WorldBuilder.SurfaceAt(player.transform.position)==SurfaceKind.Asphalt?.12f:.36f;
@@ -54,7 +56,7 @@ namespace MadeInArizona
                 if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain,1+rpm*.3f,75);}
                 lastThrottle=load;
             }
-            else{UpdateEngineBank(0,0,0,0);whine.volume=0;road.volume=0;}
+            else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;}
             UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
             AudioListener.volume=Settings.master;
@@ -82,6 +84,20 @@ namespace MadeInArizona
                 engineOn[i].pitch=pitch;engineOff[i].pitch=pitch;
                 engineOn[i].volume=level*weight*onGain;engineOff[i].volume=level*weight*offGain*.85f;
             }
+        }
+        /// <summary>
+        /// Nitro: a whump as the charge lights, a roaring burn that climbs in pitch with road speed while held, and a
+        /// hiss of purged gas when it cuts. Brief flickers of the button do not retrigger the ignition.
+        /// </summary>
+        void UpdateNitro(VehicleController player,bool active,bool boosting,float rpm,float gain)
+        {
+            if(player&&boosting&&!wasBoosting&&Time.time-nitroOffAt>.3f)PlayAt(nitroIgnite,player.transform.position-player.transform.forward*2,.6f*gain,Random.Range(.95f,1.05f),40);
+            if(player&&active&&!boosting&&wasBoosting)PlayAt(release,player.transform.position-player.transform.forward*2,.24f*gain,.85f,75);
+            if(boosting)nitroOffAt=Time.time;
+            wasBoosting=boosting;
+            nitroLevel=Mathf.MoveTowards(nitroLevel,boosting?1:0,Time.unscaledDeltaTime*(boosting?10:4));
+            nitro.volume=nitroLevel*gain*.5f;
+            if(player)nitro.pitch=.88f+Mathf.Clamp01(player.SpeedKph/140)*.32f+rpm*.08f;
         }
         /// <summary>Lifting off at high RPM dumps unburnt fuel into the exhaust: a short run of irregular pops.</summary>
         void UpdateCrackle(VehicleController player,float rpm,float load,float gain)

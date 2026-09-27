@@ -5,7 +5,7 @@ namespace MadeInArizona
     [Serializable]
     public sealed class DevTuning
     {
-        public float steering=1.6f, acceleration=1.2f, grip=1f, propMomentum=.85f, propDamage=2f;
+        public float steering=1.6f, acceleration=1.2f, grip=1f, propMomentum=.85f, propDamage=2f, nitro=1f;
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
         public float bloom=.75f, exposure=.45f, contrast=6f, saturation=8f, chromatic=.02f, motionBlur=.12f, depthOfField=0f, vignette=.08f;
         public float haze=.0012f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.30f;
@@ -29,6 +29,8 @@ namespace MadeInArizona
                 if (Mathf.Approximately(ao,.45f)) ao=defaults.ao;
                 presentationVersion=1;
             }
+            // Saves from before the nitro slider existed carry no value for it.
+            if (nitro<=0) nitro=defaults.nitro;
             foreach(var control in DevControl.All)
             {
                 float value=(float)control.field.GetValue(this);
@@ -54,6 +56,7 @@ namespace MadeInArizona
             new DevControl("DRIVING","steering","Steering agility",.5f,3.5f),
             new DevControl("DRIVING","acceleration","Acceleration",.5f,3f),
             new DevControl("DRIVING","grip","Lateral tire grip",.3f,2f),
+            new DevControl("DRIVING","nitro","Nitro thrust (1 = default, 4x the original boost)",.25f,2f),
             new DevControl("DRIVING","propMomentum","Speed retained through small broken props",0,1),
             new DevControl("DRIVING","propDamage","Impact damage to props",.5f,5),
             new DevControl("COMBAT","playerHealth","Player health capacity",.25f,10),
