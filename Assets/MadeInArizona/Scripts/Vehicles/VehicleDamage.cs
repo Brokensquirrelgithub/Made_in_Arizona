@@ -180,7 +180,7 @@ namespace MadeInArizona
                 }
             }
             BecomeWreck();
-            if (vehicle.IsPlayer) GameManager.Instance?.FailMission();
+            if (vehicle.IsPlayer) GameManager.Instance?.BeginPlayerDeath();
             else
             {
                 // Salvage is credited by MissionManager; the wreck is visual only and burns out shortly.

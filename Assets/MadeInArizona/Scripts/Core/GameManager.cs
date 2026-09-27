@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -209,9 +210,59 @@ namespace MadeInArizona
             SaveSystem.Save(Save);
         }
 
+        /// <summary>True while the player's wreck plays out its death sequence, before the debrief appears.</summary>
+        public bool Dying { get; private set; }
+        public float DyingStarted { get; private set; }
+        public const float DeathSequenceSeconds = 2.8f;
+
+        /// <summary>
+        /// The player's car has been destroyed: the wreck is thrown into a tumble, secondary blasts and fire follow in slow
+        /// motion while the camera closes in, and only then does the mission fail.
+        /// </summary>
+        public void BeginPlayerDeath()
+        {
+            if (Dying || !IsPlaying) return;
+            StartCoroutine(PlayerDeathSequence());
+        }
+
+        IEnumerator PlayerDeathSequence()
+        {
+            Dying = true; DyingStarted = Time.unscaledTime;
+            InputManager.Instance.SetEnabled(false);
+            var car = Player;
+            if (car && car.Body && !car.Body.isKinematic)
+            {
+                // Released from the yaw-only lock, the wreck is thrown up and tumbles.
+                car.Body.constraints = RigidbodyConstraints.None;
+                car.Body.linearDamping = .15f; car.Body.angularDamping = .5f; car.Body.maxAngularVelocity = 12;
+                Vector3 side = car.transform.right * (UnityEngine.Random.value < .5f ? -1 : 1);
+                car.Body.AddForce(Vector3.up * 8 + side * 2.5f, ForceMode.VelocityChange);
+                car.Body.AddTorque(car.transform.forward * -Vector3.Dot(side, car.transform.right) * 6 + car.transform.right * UnityEngine.Random.Range(-2.5f, 2.5f), ForceMode.VelocityChange);
+            }
+            CameraController.Instance?.Shake(1.5f);
+            bool secondBlast = false, thirdBlast = false; float fireAt = 0;
+            while (Time.unscaledTime - DyingStarted < DeathSequenceSeconds)
+            {
+                if (State != GameState.Playing) { Time.timeScale = State == GameState.Paused ? 0 : 1; Dying = false; yield break; }
+                float t = Time.unscaledTime - DyingStarted;
+                // Slow motion at the moment of death, easing back to full speed before the debrief.
+                Time.timeScale = Mathf.Lerp(.35f, 1f, Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.9f, 2.1f, t)));
+                if (car)
+                {
+                    Vector3 at = car.transform.position + Vector3.up;
+                    if (!secondBlast && t > .55f) { secondBlast = true; ExplosionSystem.Detonate(at, 4, 12, car.gameObject, ExplosionKind.Gasoline); CameraController.Instance?.Shake(.8f); }
+                    if (!thirdBlast && t > 1.35f) { thirdBlast = true; ExplosionSystem.Detonate(at, 3, 8, car.gameObject, ExplosionKind.Gasoline); CameraController.Instance?.Shake(.5f); }
+                    if (t > fireAt) { fireAt = t + .1f; ExplosionSystem.Burst(at, new Color(1, .42f, .1f, .85f), 5, 2.2f); ExplosionSystem.Burst(at + Vector3.up, new Color(.12f, .12f, .13f, .6f), 3, 3f); }
+                }
+                yield return null;
+            }
+            Time.timeScale = 1; Dying = false;
+            FailMission();
+        }
+
         public void Pause()
         {
-            if (State != GameState.Playing) return;
+            if (State != GameState.Playing || Dying) return;
             State = GameState.Paused; Time.timeScale = 0;
             InputManager.Instance.SetEnabled(false); StateChanged?.Invoke();
         }
@@ -253,7 +304,7 @@ namespace MadeInArizona
             if (InputManager.Instance.PausePressed) { if (State == GameState.Playing) Pause(); else if (State == GameState.Paused) Resume(); }
             if (!IsPlaying) return;
             Mission.Tick(Time.deltaTime);
-            if (Player && Player.Damage.IsDead) FailMission();
+            if (Player && Player.Damage.IsDead) BeginPlayerDeath();
             autosave += Time.unscaledDeltaTime;
             if (autosave > 60) { autosave = 0; SaveSystem.Save(Save); }
         }

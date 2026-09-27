@@ -331,6 +331,35 @@ namespace MadeInArizona
             var vehicle=SpawnManager.Spawn(position,archetype,target,FactionRules.ForMission(missionIndex,archetype,Mathf.Max(wave,Stage)));
             if(vehicle)vehicle.transform.SetParent(Game.World.transform);return vehicle;
         }
+        Vector3 Ground(Vector3 p)
+        {
+            if(GeneratedWorld.Active==null){p.x=Mathf.Clamp(p.x,-86,86);p.z=Mathf.Clamp(p.z,-64,126);p.y=1.2f;return p;}
+            return TerrainPoint(p)+Vector3.up;
+        }
+        /// <summary>
+        /// Wave members never pop in on screen: a spawn point inside the camera's view is pushed straight away from the
+        /// player (or, if that leaves the map, to the side or behind) until it is out of view.
+        /// </summary>
+        Vector3 OffScreen(Vector3 p)
+        {
+            var cam=Camera.main;var player=Game.Player;
+            if(!cam||!player||!InView(cam,p))return p;
+            Vector3 away=p-player.transform.position;away.y=0;
+            if(away.sqrMagnitude<.01f)away=Vector3.forward;
+            away.Normalize();
+            for(int turn=0;turn<4;turn++)
+            {
+                Vector3 dir=Quaternion.Euler(0,turn*90,0)*away,q=p;
+                for(int step=0;step<45;step++)
+                {
+                    q=Ground(q+dir*6);
+                    if(GeneratedWorld.Active&&!GeneratedWorld.Contains(q))break;
+                    if(!InView(cam,q))return q;
+                }
+            }
+            return p;
+        }
+        static bool InView(Camera cam,Vector3 p){var v=cam.WorldToViewportPoint(p);return v.z>0&&v.x>-.12f&&v.x<1.12f&&v.y>-.12f&&v.y<1.12f;}
         void SpawnWave(int count,Vector3 center)
         {
             SpawnGroup(SpawnManager.EnemyCount(count),center);
@@ -341,8 +370,7 @@ namespace MadeInArizona
             {
                 float angle=(i*137.5f+missionIndex*31)*Mathf.Deg2Rad;
                 Vector3 p=center+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*(18+(i%3)*5+(i/12)*14);
-                if(GeneratedWorld.Active==null){p.x=Mathf.Clamp(p.x,-86,86);p.z=Mathf.Clamp(p.z,-64,126);p.y=1.2f;}
-                else p=TerrainPoint(p)+Vector3.up;
+                p=OffScreen(Ground(p));
                 Spawn(p,missionIndex<0?i%3+(Stage>0?2:0):missionIndex<2?i%2:(i+wave+missionIndex)%7);
             }
         }

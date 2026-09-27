@@ -44,6 +44,28 @@ namespace MadeInArizona
                 FinishResults();yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltWorld")>=0){var worldKeyboard=InputSystem.AddDevice<Keyboard>();yield return TiltProbe.World(worldKeyboard,Check);InputSystem.RemoveDevice(worldKeyboard);FinishResults();yield break;}
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDeathTest")>=0)
+            {
+                game.StartMission(0);yield return new WaitForSecondsRealtime(1);
+                game.Player.Damage.ApplyDamage(100000,game.Player.transform.position,null,true);
+                yield return new WaitForSecondsRealtime(.3f);
+                Check("player death plays a sequence before the debrief",game.Dying&&game.State==GameState.Playing&&Time.timeScale<.9f&&game.Player.Body.constraints==RigidbodyConstraints.None);
+                yield return new WaitForSecondsRealtime(GameManager.DeathSequenceSeconds);
+                Check("death sequence ends in the failure debrief at normal speed",!game.Dying&&game.State==GameState.Lost&&Mathf.Approximately(Time.timeScale,1));
+                FinishResults();yield break;
+            }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnTest")>=0)
+            {
+                if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnGenerated")>=0){game.StartCampaign(173,1600);yield return new WaitUntil(()=>game.State==GameState.Playing);}
+                else game.StartMission(0);yield return new WaitForSecondsRealtime(1.5f);
+                var before=new HashSet<VehicleController>(VehicleController.Active);
+                typeof(MissionManager).GetMethod("SpawnWave",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(game.Mission,new object[]{6,game.Player.transform.position});
+                int spawned=0,visible=0;
+                foreach(var v in VehicleController.Active){if(!v||before.Contains(v))continue;spawned++;var vp=Camera.main.WorldToViewportPoint(v.transform.position);if(vp.z>0&&vp.x>-.05f&&vp.x<1.05f&&vp.y>-.05f&&vp.y<1.05f)visible++;}
+                Debug.Log("MIA_SPAWN spawned="+spawned+" visible="+visible);
+                Check("wave spawned on the player appears off screen",spawned>0&&visible==0);
+                FinishResults();yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltProbe")>=0){game.StartMission(0);yield return new WaitForSecondsRealtime(1);var tiltKeyboard=InputSystem.AddDevice<Keyboard>();yield return TiltProbe.Run(tiltKeyboard,Check);InputSystem.RemoveDevice(tiltKeyboard);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReachabilityTest")>=0){yield return TrailReview.Reachability(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0){yield return TrailReview.Run(Check);FinishResults();yield break;}

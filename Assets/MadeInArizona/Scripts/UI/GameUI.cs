@@ -146,12 +146,18 @@ namespace MadeInArizona
             if(game.State==GameState.MainMenu){DrawMainMenu();GUI.matrix=Matrix4x4.identity;return;}
             if(game.State==GameState.Generating){DrawGeneration();GUI.matrix=Matrix4x4.identity;return;}
             if(worldMap&&GeneratedWorld.Active){DrawWorldMap();GUI.matrix=Matrix4x4.identity;return;}
-            if (game.State == GameState.Garage) DrawGarage();
-            else if(!devMenu) DrawHUD();
-            if (game.State == GameState.Paused && !devMenu) DrawPause();
-            if(devMenu) DrawDevMenu();
-            if (game.State == GameState.Won || game.State == GameState.Lost) DrawDebrief();
+            // Settings covers the screen: nothing underneath is drawn, so its buttons cannot take the click (IMGUI gives
+            // it to the first control drawn). The dynamic zoom toggle was landing on the pause menu's map regenerate.
             if (settings) DrawSettings();
+            else
+            {
+                if (game.State == GameState.Garage) DrawGarage();
+                else if(!devMenu) DrawHUD();
+                if (game.State == GameState.Paused && !devMenu) DrawPause();
+                if(devMenu) DrawDevMenu();
+                if (game.State == GameState.Won || game.State == GameState.Lost) DrawDebrief();
+            }
+            if (game.Dying) DrawDeathOverlay();
             if (!settings && game.NotificationUntil > Time.unscaledTime) {
                 float w = Mathf.Min(650, width - 80); Rect((width - w) / 2, 106, w, 48, Ink);
                 Rect((width - w) / 2, 106, 4, 48, Lime);
@@ -167,8 +173,10 @@ namespace MadeInArizona
             Rect(30, 22, 4, 44, Orange);
             Text(48, 17, 420, 35, "MADE IN ARIZONA", 29, Cream, true);
             Tag(49, 56, "117° AUTO CARE   /   REPAIRS BY SUPERIOR FIREPOWER", Orange);
-            Text(width - 520, 28, 240, 30, "$ " + game.Save.money.ToString("N0"), 25, Lime, true, TextAnchor.MiddleRight);
-            Text(width - 250, 31, 215, 30, game.Save.salvage + " SCRAP    •    REP " + game.Save.reputation, 14, Muted, true, TextAnchor.MiddleRight);
+            // Money and scrap are the two spendable currencies: same size, each in its own colour.
+            Text(width - 760, 28, 230, 30, "$ " + game.Save.money.ToString("N0"), 25, Lime, true, TextAnchor.MiddleRight);
+            Text(width - 510, 28, 270, 30, game.Save.salvage.ToString("N0") + " SCRAP", 25, Orange, true, TextAnchor.MiddleRight);
+            Text(width - 225, 31, 190, 30, "REP " + game.Save.reputation, 16, Cream, true, TextAnchor.MiddleRight);
             for (int i = 0; i < stations.Length; i++) {
                 float x = 32 + i * 175;
                 if (Button(x, 110, 165, 39, stations[i], station == i)) { station = i; listScroll = Vector2.zero; }
@@ -180,7 +188,7 @@ namespace MadeInArizona
             if (station == 3) DrawWeapons(top, panelHeight);
             if (station == 4) DrawDog(top, panelHeight);
             Rect(0, height - 62, width, 62, Ink);
-            Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB / RB  STATION     D-PAD  SELECT     A  CONFIRM     Y  SETTINGS" : "TAB  CHANGE STATION     ENTER  CONFIRM     F1  SETTINGS", 12, Muted, true);
+            Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB / RB  STATION     D-PAD  SELECT     A  CONFIRM     RIGHT STICK  ROTATE VIEW     Y  SETTINGS" : "TAB  CHANGE STATION     ENTER  CONFIRM     RMB DRAG / Q E  ROTATE VIEW     F1  SETTINGS", 12, Muted, true);
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
             if (Button(width - 155, height - 48, 120, 34, "QUIT")) Application.Quit();
         }
@@ -191,7 +199,10 @@ namespace MadeInArizona
             Rect(left, top, w, panelHeight, Ink);
             var mission = ContentCatalog.Missions[game.SelectedMission];
             Tag(left + 25, top + 22, "WORK ORDER  " + (game.SelectedMission + 1).ToString("00") + "   /   " + mission.region.ToUpperInvariant(), Orange);
-            Text(left + 25, top + 57, w - 50, 100, mission.title.ToUpperInvariant(), 36, Cream, true);
+            // Long titles shrink to fit their box instead of running under the briefing.
+            string title = mission.title.ToUpperInvariant(); int titleSize = 36;
+            while (titleSize > 20 && Style(titleSize, Cream, true).CalcHeight(new GUIContent(title), w - 50) > 100) titleSize -= 2;
+            Text(left + 25, top + 57, w - 50, 100, title, titleSize, Cream, true);
             Rule(left + 25, top + 161, w - 50);
             Text(left + 25, top + 185, w - 50, 145, mission.briefing, 21);
             Tag(left + 25, top + 344, "THE FINE PRINT", Muted);
@@ -511,6 +522,20 @@ namespace MadeInArizona
             Text(x + 40, y + 630, 420, 40, "Restarts this job on a freshly generated Arizona. Progress is kept.", 13, Muted);
         }
 
+        /// <summary>Red flash at the moment of death, a closing dark vignette, and a WRECKED title before the debrief.</summary>
+        void DrawDeathOverlay()
+        {
+            float t = Time.unscaledTime - game.DyingStarted;
+            float flash = Mathf.Clamp01(.55f - t * .9f);
+            if (flash > 0) Rect(0, 0, width, height, new Color(1, .12f, .05f, Mathf.Round(flash * 20) / 20));
+            float dark = Mathf.SmoothStep(0, .55f, t / GameManager.DeathSequenceSeconds);
+            float band = Mathf.Lerp(0, height * .22f, dark / .55f);
+            Rect(0, 0, width, band, new Color(0, 0, 0, dark + .3f)); Rect(0, height - band, width, band, new Color(0, 0, 0, dark + .3f));
+            float title = Mathf.Round(Mathf.Clamp01((t - .45f) / .5f) * 20) / 20; // stepped: styles are cached per colour
+            if (title <= 0) return;
+            Text(0, height * .5f - 70, width, 90, "WRECKED", 84, new Color(1, .35f, .18f, title), true, TextAnchor.MiddleCenter);
+            Text(0, height * .5f + 22, width, 34, "THE VEHICLE HAS BEEN DECLARED A TOTAL LOSS", 18, new Color(.95f, .9f, .8f, title * .9f), true, TextAnchor.MiddleCenter);
+        }
         void DrawDebrief()
         {
             bool won = game.State == GameState.Won;

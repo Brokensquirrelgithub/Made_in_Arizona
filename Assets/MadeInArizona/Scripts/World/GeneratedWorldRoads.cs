@@ -56,12 +56,6 @@ namespace MadeInArizona
                 BuildWornCenterMarkings(centers,normals,distance);
                 BuildRoadFurniture(route,centers,normals,distance);
 
-                if(riverWidth>0)for(int i=1;i<count;i++)
-                {
-                    float bank0=centers[i-1].x-RiverX(centers[i-1].z),bank1=centers[i].x-RiverX(centers[i].z);
-                    if(bank0*bank1<=0&&Mathf.Abs(bank0-bank1)<riverWidth*3.5f)
-                    {Vector3 d=(centers[i]-centers[i-1]).normalized;BuildBridge(centers[i],route,new Vector2(d.x,d.z));break;}
-                }
             }
         }
 
@@ -144,13 +138,5 @@ namespace MadeInArizona
             }
         }
 
-        void BuildBridge(Vector3 p,Route route,Vector2 tangent)
-        {
-            Transform g=Group("Concrete river bridge",roads,p);
-            g.localRotation=Quaternion.LookRotation(new Vector3(tangent.x,0,tangent.y));
-            float len=Mathf.Max(12,riverWidth*4);
-            Box("Bridge deck",g,Vector3.down*.16f,new Vector3(route.width+1.2f,.32f,len),new Color(.38f,.36f,.31f),true);
-            for(int side=-1;side<=1;side+=2)Box("Bridge rail",g,new Vector3(side*(route.width*.5f+.25f),.46f,0),new Vector3(.18f,.72f,len),Cream,true);
-        }
     }
 }

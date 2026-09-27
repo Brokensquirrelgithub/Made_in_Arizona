@@ -64,6 +64,8 @@ namespace MadeInArizona
         int wheelContacts, supportLeft, supportRight;
         /// <summary>Sideways push that tips a car balanced with one whole side over nothing off the edge, as gravity would.</summary>
         const float TipOffAcceleration = 5f;
+        /// <summary>Added to normal gravity while airborne (about 2.2 g in total), so jumps are short and punchy.</summary>
+        const float ExtraAirGravity = 12f;
         /// <summary>
         /// Safety net for any geometry that still catches a car off its wheels (hung by the underside on a lip or face):
         /// after this long with throttle held and no movement, the car hops toward the direction being asked for.
@@ -204,6 +206,8 @@ namespace MadeInArizona
             bool boosting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Boost && BoostCharge > .002f && input.sqrMagnitude > .1f;
             Throttle = Mathf.MoveTowards(Throttle, input.magnitude, Time.fixedDeltaTime * 6);
             Grounded = SupportSuspension();
+            // Cars come back down quickly: extra gravity whenever no wheel is on the ground (player and hostiles alike).
+            if (!Grounded && wheelContacts == 0 && !Beached) Body.AddForce(Vector3.down * ExtraAirGravity, ForceMode.Acceleration);
             // Any wheel down or the belly resting on ground still gives drive, so a car hung on a lip can get itself off.
             bool traction = Grounded || Beached || wheelContacts > 0;
             if (!Grounded && input.sqrMagnitude > .25f && new Vector2(Body.linearVelocity.x, Body.linearVelocity.z).sqrMagnitude < .25f && (Beached || wheelContacts > 0 || Body.linearVelocity.y > -.5f))

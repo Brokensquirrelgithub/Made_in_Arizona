@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -23,6 +24,8 @@ namespace MadeInArizona
         public static float DepthOffset { get; private set; }
         const float Headroom = 42f; // two elevation levels (2 x 13 m) plus a tall pine above the car
         float shake, dynamicZoom = 1, dynamicZoomVelocity, dynamicZoomHoldUntil;
+        /// <summary>Garage orbit around the car: right-mouse drag, Q / E, or the right stick.</summary>
+        float garageYaw;
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
         void Start()
         {
@@ -38,9 +41,13 @@ namespace MadeInArizona
         {
             if (!Target || !view || !GameManager.Instance) return;
             bool garage = GameManager.Instance.State == GameState.Garage || GameManager.Instance.State == GameState.MainMenu;
-            var offset = garage ? new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
+            if (garage && !snap) OrbitGarage();
+            // In the garage the whole composition (camera offset and the framing shift that keeps the car to the right of
+            // the mission board) turns around the car, so it stays framed the same way from every side.
+            Quaternion orbit = garage ? Quaternion.Euler(0, garageYaw, 0) : Quaternion.identity;
+            var offset = garage ? orbit * new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
             // Offset the garage composition so the car sits to the right of the mission board.
-            var focus = Target.position + (garage ? new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
+            var focus = Target.position + (garage ? orbit * new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
             FocusPoint = focus; HasFocus = true;
             var desired = focus + offset;
             if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+9);
@@ -52,6 +59,8 @@ namespace MadeInArizona
             size *= Mathf.Max(1, 1.55f / view.aspect);
             UpdateDynamicZoom(garage, snap, focus, rotation, size);
             size *= dynamicZoom;
+            // Death sequence: close in on the wreck.
+            if (!garage && GameManager.Instance.Dying) size *= Mathf.Lerp(1, .68f, Mathf.SmoothStep(0, 1, (Time.unscaledTime - GameManager.Instance.DyingStarted) / 1.4f));
             view.orthographicSize = snap ? size : Mathf.Lerp(view.orthographicSize, size, Time.unscaledDeltaTime * 8);
             // Back the lens off far enough that the bottom screen edge clears Headroom metres above the car.
             Vector3 forward = rotation * Vector3.forward;
@@ -71,6 +80,16 @@ namespace MadeInArizona
             ApplyDepthOffset(extra);
             shake = Mathf.MoveTowards(shake, 0, Time.unscaledDeltaTime * 2.5f);
             if (!garage && shake > 0) transform.position += Random.insideUnitSphere * shake * GameManager.Instance.Save.settings.shake * Mathf.Clamp(DevTuning.Current.shake, 0f, 3f) * .35f;
+        }
+
+        void OrbitGarage()
+        {
+            float dt = Time.unscaledDeltaTime, turn = 0;
+            var mouse = Mouse.current; var keys = Keyboard.current; var pad = Gamepad.current;
+            if (mouse != null && mouse.rightButton.isPressed) turn += mouse.delta.ReadValue().x * .3f;
+            if (keys != null) { if (keys.qKey.isPressed) turn -= 90 * dt; if (keys.eKey.isPressed) turn += 90 * dt; }
+            if (pad != null) turn += pad.rightStick.ReadValue().x * 120 * dt;
+            garageYaw = Mathf.Repeat(garageYaw + turn, 360);
         }
 
         /// <summary>Keeps the far-depth blur range and the shadow range measured from the car, not from the backed-off lens.</summary>

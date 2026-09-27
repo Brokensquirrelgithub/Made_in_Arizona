@@ -23,6 +23,7 @@ namespace MadeInArizona
             float w=720,h=Mathf.Min(height-40,820),x=width-w-20,y=20;
             Rect(x,y,w,h,new Color(.055f,.081f,.09f,1));
             Text(x+24,y+20,w-48,38,"LIVE DEV TUNING",27,Cream,true);
+            if(Button(x+w-250,y+22,226,34,"+10,000 SCRAP & $")){game.Save.salvage+=10000;game.Save.money+=10000;SaveSystem.Save(game.Save);game.Notify("DEV • +10,000 SCRAP AND $10,000");}
             Text(x+24,y+60,w-48,42,"Mouse controls • changes apply immediately and save automatically. Resume to test handling.",14,Muted);
             float tabW=(w-40)/devTabs.Length;
             for(int i=0;i<devTabs.Length;i++) if(Button(x+20+i*tabW,y+110,tabW-8,36,devTabs[i],devTab==i)) {devTab=i;devScroll=Vector2.zero;}
