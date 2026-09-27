@@ -50,7 +50,7 @@ namespace MadeInArizona
         public BoxCollider Hull { get; private set; }
         /// <summary>Chassis tilt that follows the ground under the wheels (Unity Euler: +pitch is nose down, +roll lifts the right side).</summary>
         float chassisPitch, chassisRoll, appliedHullPitch, appliedHullRoll;
-        const float MaxChassisPitch = 38, MaxChassisRoll = 32;
+        const float MaxChassisPitch = 38, MaxChassisRoll = 32, MaxCorneringLean = 8, MaxAirTilt = 20;
         /// <summary>
         /// Resting on the underside (the hull touching supporting ground) with fewer than two wheels in suspension reach:
         /// high-centred on a ridge, a lip or a cliff edge, or landed across one. The car keeps some traction to drive off,
@@ -74,8 +74,8 @@ namespace MadeInArizona
         const float SideSupportMargin = .3f;
         /// <summary>Steepest surface (45°) that counts as ground to rest on; cliff faces are walls, not support.</summary>
         const float MinSupportNormal = .7f;
-        /// <summary>Wheel rays reach this far past full droop so the chassis can still read the slope ahead and behind.</summary>
-        const float GroundProbe = 1.5f;
+        /// <summary>Tilt probes start this far above each suspension point, so ground rising ahead on a climb is still read.</summary>
+        const float TiltProbeRise = 1f;
         Quaternion ChassisRotation => Body.rotation * Quaternion.Euler(chassisPitch, 0, chassisRoll);
         Vector3 lastVelocity, bodyAcceleration;
         Vector3 preCollisionVelocity;
@@ -345,7 +345,7 @@ namespace MadeInArizona
             for (int i = 0; i < 4; i++)
             {
                 Vector3 origin = Body.position + chassis * suspensionPoints[i];
-                int count = Physics.RaycastNonAlloc(origin, down, groundHits, reach + GroundProbe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                int count = Physics.RaycastNonAlloc(origin, down, groundHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue;
                 Vector3 point = Vector3.zero, normal = Vector3.up;
                 for (int h = 0; h < count; h++)
@@ -353,9 +353,7 @@ namespace MadeInArizona
                     if (groundHits[h].rigidbody == Body || groundHits[h].normal.y < .3f || groundHits[h].distance >= nearest) continue;
                     nearest = groundHits[h].distance; point = groundHits[h].point; normal = groundHits[h].normal;
                 }
-                if (nearest == float.MaxValue) continue;
-                if (i < 2) { frontSum += point; front++; } else { rearSum += point; rear++; }
-                if (nearest > reach) continue;
+                if (nearest == float.MaxValue || nearest > reach) continue;
                 contacts++;
                 float spring = Mathf.Clamp(Stats.springStiffness / Body.mass, 20, 100) * Mathf.Lerp(.45f, 1, Damage.Suspension);
                 float damp = Mathf.Clamp(Stats.damping / Body.mass, 2, 16);
@@ -366,17 +364,20 @@ namespace MadeInArizona
                 float acceleration = 9.81f / 4 + compression * spring + compressionRate * damp;
                 Body.AddForceAtPosition(Vector3.up * Mathf.Clamp(acceleration, -3, 65), origin, ForceMode.Acceleration);
             }
-            // Roll reads the ground with straight-down probes at each wheel, independent of the current tilt, and only
-            // from drivable surfaces close under the wheels. Rays cast along a tilted chassis reached down cliff faces,
-            // which held the car tipped toward the drop and wedged its hull on the lip.
+            // Pitch and roll read the ground with straight-down probes at each wheel, independent of the current tilt:
+            // from 1 m above the suspension point (the ground ahead on a climb) to just past full droop, drivable
+            // surfaces only. Rays cast along the tilted chassis fed the tilt back into itself: a nose pitched up in
+            // the air or a side leaning at a cliff kept reading ground that held it there, standing the car on its
+            // back wheels or wedging it on a lip.
             for (int i = 0; i < 4; i++)
             {
-                Vector3 probe = Body.position + Body.rotation * suspensionPoints[i];
-                int count = Physics.RaycastNonAlloc(probe, Vector3.down, groundHits, reach + SideSupportMargin, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                Vector3 probe = Body.position + Body.rotation * suspensionPoints[i] + Vector3.up * TiltProbeRise;
+                int count = Physics.RaycastNonAlloc(probe, Vector3.down, groundHits, TiltProbeRise + reach + SideSupportMargin, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue; RaycastHit best = default;
                 for (int h = 0; h < count; h++)
                     if (groundHits[h].rigidbody != Body && groundHits[h].normal.y >= MinSupportNormal && groundHits[h].distance < nearest) { nearest = groundHits[h].distance; best = groundHits[h]; }
                 if (nearest == float.MaxValue) continue;
+                if (i < 2) { frontSum += best.point; front++; } else { rearSum += best.point; rear++; }
                 if (i % 2 == 0) { leftSum += best.point; left++; } else { rightSum += best.point; right++; }
                 supportNormal += best.normal;
             }
@@ -391,9 +392,14 @@ namespace MadeInArizona
         /// </summary>
         void TiltChassis(int front, int rear, int left, int right, Vector3 frontSum, Vector3 rearSum, Vector3 leftSum, Vector3 rightSum, Vector3 supportNormal)
         {
-            float follow = 1 - Mathf.Exp(-Time.fixedDeltaTime * 16), settle = Time.fixedDeltaTime * 30;
+            // In the air the body only drifts gently toward the ground below (and never far), so jumps stay calm.
+            bool airborne = wheelContacts == 0 && !Beached;
+            float follow = 1 - Mathf.Exp(-Time.fixedDeltaTime * (airborne ? 5 : 16)), settle = Time.fixedDeltaTime * 60;
+            float pitchLimit = airborne ? MaxAirTilt : MaxChassisPitch, rollLimit = airborne ? MaxAirTilt : MaxChassisRoll;
             Vector3 forward = Body.rotation * Vector3.forward, side = Body.rotation * Vector3.right;
-            if (Beached)
+            // Ground seen under the wheels always wins; the belly contact only guides a car with no wheel over ground.
+            bool bellyOnly = Beached && front + rear + left + right == 0;
+            if (bellyOnly)
             {
                 // Lie on the surface the hull rests on, so the wheels come down onto it.
                 Vector3 n = Quaternion.Inverse(Body.rotation) * bellyNormal;
@@ -404,22 +410,28 @@ namespace MadeInArizona
             {
                 Vector3 span = frontSum / front - rearSum / rear;
                 float run = Vector3.Dot(span, forward);
-                if (run > .4f) chassisPitch = Mathf.Lerp(chassisPitch, Mathf.Clamp(-Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisPitch, MaxChassisPitch), follow);
+                if (run > .4f) chassisPitch = Mathf.Lerp(chassisPitch, Mathf.Clamp(-Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -pitchLimit, pitchLimit), follow);
             }
-            else if (front + rear == 0) chassisPitch = Mathf.MoveTowards(chassisPitch, 0, settle);
-            if (!Beached && left > 0 && right > 0)
+            else if (front + rear > 0)
+            {
+                // Nose or tail over a drop: lie along the ground under the wheels that are down.
+                Vector3 n = Quaternion.Inverse(Body.rotation) * supportNormal.normalized;
+                chassisPitch = Mathf.Lerp(chassisPitch, Mathf.Clamp(Mathf.Atan2(n.z, n.y) * Mathf.Rad2Deg, -pitchLimit, pitchLimit), follow);
+            }
+            else chassisPitch = Mathf.MoveTowards(chassisPitch, 0, settle); // nothing below: level out in the air
+            if (!bellyOnly && left > 0 && right > 0)
             {
                 Vector3 span = rightSum / right - leftSum / left;
                 float run = Vector3.Dot(span, side);
-                if (run > .4f) chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisRoll, MaxChassisRoll), follow);
+                if (run > .4f) chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -rollLimit, rollLimit), follow);
             }
-            else if (!Beached && left + right > 0)
+            else if (!bellyOnly && left + right > 0)
             {
                 // One side over a drop: lie along the ground under the wheels that are down instead of hanging tilted.
                 Vector3 n = Quaternion.Inverse(Body.rotation) * supportNormal.normalized;
-                chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(-n.x, n.y) * Mathf.Rad2Deg, -MaxChassisRoll, MaxChassisRoll), follow);
+                chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(-n.x, n.y) * Mathf.Rad2Deg, -rollLimit, rollLimit), follow);
             }
-            else if (!Beached) chassisRoll = Mathf.MoveTowards(chassisRoll, 0, settle);
+            else if (!bellyOnly) chassisRoll = Mathf.MoveTowards(chassisRoll, 0, settle);
             // Only re-pose the hull for a visible change; every pose change is a collider update for the physics scene.
             if (Mathf.Abs(chassisPitch - appliedHullPitch) > .2f || Mathf.Abs(chassisRoll - appliedHullRoll) > .2f)
             {
@@ -434,13 +446,15 @@ namespace MadeInArizona
             // Acceleration is sampled per physics step; per-render-frame sampling alternated between zero and double.
             Vector3 acceleration = transform.InverseTransformDirection(bodyAcceleration);
             float narrow = Mathf.Clamp(Stats.rideHeight / Mathf.Max(1, Stats.trackWidth), .15f, 1);
-            float targetRoll = -localVelocity.x * (1 + narrow * 1.5f) - Body.angularVelocity.y * localVelocity.z * .18f;
-            targetRoll += (1 - Damage.Suspension) * 9;
-            visualRoll = Mathf.Lerp(visualRoll, Mathf.Clamp(targetRoll, -19, 19), Time.deltaTime * 6);
+            // Cornering lean follows turn force (yaw rate x speed) with a little slip, capped low so fast turns never
+            // look like the car tipping over; it settles back twice as fast as it leans in.
+            float targetRoll = -Body.angularVelocity.y * localVelocity.z * .1f * (1 + narrow * .5f) - localVelocity.x * .25f * (1 + narrow);
+            targetRoll = Mathf.Clamp(targetRoll, -MaxCorneringLean, MaxCorneringLean) + (1 - Damage.Suspension) * 4;
+            visualRoll = Mathf.Lerp(visualRoll, targetRoll, Time.deltaTime * (Mathf.Abs(targetRoll) < Mathf.Abs(visualRoll) ? 12 : 6));
             // The body sits on the slope, then squats under power and dives under braking. The old pitch dipped the
             // nose under acceleration, which read as the car tipping forward into every hill it tried to climb.
             visualTilt = Mathf.Lerp(visualTilt, chassisPitch, Time.deltaTime * 18);
-            visualWeight = Mathf.Lerp(visualWeight, Mathf.Clamp(-acceleration.z * .23f, -7, 7), Time.deltaTime * 7);
+            visualWeight = Mathf.Lerp(visualWeight, Mathf.Clamp(-acceleration.z * .23f, -4, 4), Time.deltaTime * 7);
             Visual.localRotation = Quaternion.Euler(visualTilt + visualWeight, 0, chassisRoll + visualRoll);
             wheelAngle += localVelocity.z * Time.deltaTime * 150;
             if (wheels != null)

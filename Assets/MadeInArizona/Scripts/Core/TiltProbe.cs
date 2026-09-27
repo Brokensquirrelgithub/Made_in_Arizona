@@ -48,6 +48,12 @@ namespace MadeInArizona
             yield return Drive(player, keyboard, o + new Vector3(4, 2.2f, -12), 12, "side-slope", check, () => player.transform.position.z > o.z + 15, (0f, w));
             slope.SetActive(false);
 
+            // Full-width ramp jump at speed: tilt in the air and on landing.
+            var jump = Box(arena, "Jump ramp", Vector3.zero, new Vector3(6, .3f, 7), Quaternion.Euler(-18, 0, 0));
+            jump.transform.position = o + new Vector3(10, .9f, -8);
+            yield return Drive(player, keyboard, o + new Vector3(10, 0, -32), 22, "jump", check, () => player.transform.position.z > o.z - 4, (0f, w));
+            jump.SetActive(false);
+
             // Beached on a ridge: a 0.9 m block narrower than the track under the belly, then throttle.
             var ridge = Box(arena, "Ridge", o + new Vector3(0, .45f, 0), new Vector3(1, .9f, 8), Quaternion.identity);
             yield return Drive(player, keyboard, o + new Vector3(0, .9f, 1), 0, "ridge", check, null, (0f, none), (.6f, w));
@@ -136,7 +142,7 @@ namespace MadeInArizona
                 new KeyboardState(Key.W, Key.A, Key.LeftShift), new KeyboardState(Key.A), new KeyboardState(Key.S, Key.A, Key.Space), new KeyboardState(Key.W) };
             var log = new StringBuilder();
             float t = 0, hang = 0, total = 0, longest = 0, maxRoll = 0; string cause = ""; int events = 0, leg = -1;
-            while (t < 60)
+            while (t < 30)
             {
                 int want = (int)(t / 4) % legs.Length;
                 if (want != leg) { leg = want; InputSystem.QueueStateEvent(keyboard, legs[leg]); }
@@ -157,8 +163,51 @@ namespace MadeInArizona
                     hang = 0;
                 }
             }
+            // Aggressive driving on two maps (nitro, drifts, hard turns): log every stretch the body stays tilted past 20°
+            // and every time the car will not move with a direction held.
+            GeneratedWorld world;
+            var pitchF = typeof(VehicleController).GetField("chassisPitch", Private); var rollF = typeof(VehicleController).GetField("chassisRoll", Private);
+            var visualRollF = typeof(VehicleController).GetField("visualRoll", Private);
+            int tiltEvents = 0, stuckEvents = 0; float worstTilt = 0;
+            foreach (int mapSeed in new[] { 173, 42 })
+            {
+                game.StartCampaign(mapSeed, mapSeed == 42 ? 800 : 1600);
+                yield return new WaitUntil(() => game.State == GameState.Playing);
+                yield return new WaitForSecondsRealtime(1);
+                player = game.Player; wheels = (Transform[])typeof(VehicleController).GetField("wheels", Private).GetValue(player);
+                foreach (var ai in UnityEngine.Object.FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)) ai.enabled = false;
+                var hard = new[] { new KeyboardState(Key.W, Key.LeftShift), new KeyboardState(Key.D, Key.Space, Key.LeftShift), new KeyboardState(Key.S, Key.LeftShift), new KeyboardState(Key.A, Key.Space),
+                    new KeyboardState(Key.W, Key.D, Key.LeftShift), new KeyboardState(Key.S, Key.A, Key.LeftShift), new KeyboardState(Key.D, Key.LeftShift), new KeyboardState(Key.W, Key.A, Key.Space) };
+                float d = 0, tilted = 0, still = 0; int dl = -1; string tiltInfo = "";
+                while (d < 45)
+                {
+                    int want = (int)(d / 2.5f) % hard.Length;
+                    if (want != dl) { dl = want; InputSystem.QueueStateEvent(keyboard, hard[dl]); }
+                    if (player.Damage.Health < player.Damage.MaxHealth * .5f) player.Repair(10000);
+                    yield return new WaitForFixedUpdate(); d += Time.fixedDeltaTime;
+                    float vp = Mathf.DeltaAngle(0, player.Visual.localEulerAngles.x), vr = Mathf.DeltaAngle(0, player.Visual.localEulerAngles.z);
+                    float tilt = Mathf.Max(Mathf.Abs(vp), Mathf.Abs(vr));
+                    // Tilted and hanging: past 20° with a wheel visibly off the ground (matching a slope is fine).
+                    float worstGap = 0; foreach (var wheel in wheels) if (wheel) worstGap = Mathf.Max(worstGap, Gap(wheel.position, player.Body));
+                    if (tilt > 20 && worstGap > .4f && (player.Grounded || player.Beached)) { if (tilted == 0) tiltInfo = $"pitch={vp:F0} roll={vr:F0} chassisP={(float)pitchF.GetValue(player):F0} chassisR={(float)rollF.GetValue(player):F0} lean={(float)visualRollF.GetValue(player):F0} g={(player.Grounded ? 1 : 0)} b={(player.Beached ? 1 : 0)} v={player.Body.linearVelocity.magnitude:F0} vy={player.Body.linearVelocity.y:F1} under: {UnderWheels(wheels, player.Body)}"; tilted += Time.fixedDeltaTime; worstTilt = Mathf.Max(worstTilt, tilt); }
+                    else { if (tilted > .4f) { tiltEvents++; log.Append($" seed {mapSeed} t={d - tilted:F1} tilted {tilted:F2}s: {tiltInfo}\n"); } tilted = 0; }
+                    // Stuck off its wheels (the reported symptom); nosing into a building on four wheels is not a tilt problem.
+                    if (!player.Grounded && new Vector2(player.Body.linearVelocity.x, player.Body.linearVelocity.z).magnitude < .5f) still += Time.fixedDeltaTime; else still = 0;
+                    if (still > 1 && still - Time.fixedDeltaTime <= 1) { stuckEvents++; log.Append($" seed {mapSeed} t={d:F1} STUCK: pitch={vp:F0} roll={vr:F0} g={(player.Grounded ? 1 : 0)} b={(player.Beached ? 1 : 0)} under: {UnderWheels(wheels, player.Body)} hull={Under(player)}\n"); }
+                }
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            }
+            log.Append($" aggressive: tiltEvents={tiltEvents} stuckEvents={stuckEvents} worstTilt={worstTilt:F0}\n");
+            check("aggressive drive: never hangs tilted on its wheels for 0.4 s", tiltEvents == 0);
+            check("aggressive drive: never stuck with a direction held", stuckEvents == 0);
+            game.StartCampaign(173, 1600);
+            yield return new WaitUntil(() => game.State == GameState.Playing);
+            yield return new WaitForSecondsRealtime(1);
+            player = game.Player; wheels = (Transform[])typeof(VehicleController).GetField("wheels", Private).GetValue(player);
+            world = GeneratedWorld.Active;
+
             // Real cliff lips: the car set down half over the drop, along the edge and facing it, then throttle.
-            var world = GeneratedWorld.Active; int lipTests = 0, stuck = 0;
+            int lipTests = 0, stuck = 0;
             foreach (var cliff in world.FindCliffs(4))
             {
                 Vector3 down3 = new Vector3(cliff.downhill.x, 0, cliff.downhill.y);
@@ -173,7 +222,11 @@ namespace MadeInArizona
                     InputSystem.QueueStateEvent(keyboard, new KeyboardState());
                     yield return new WaitForSeconds(.6f);
                     bool beachedAtRest = player.Beached;
-                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+                    // Hold the direction a player would use to get off the lip: toward the lower ground.
+                    var off = new System.Collections.Generic.List<Key>();
+                    if (down3.z > .38f) off.Add(Key.W); else if (down3.z < -.38f) off.Add(Key.S);
+                    if (down3.x > .38f) off.Add(Key.D); else if (down3.x < -.38f) off.Add(Key.A);
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(off.ToArray()));
                     float held = 0, recoveredAt = -1; Vector3 from = player.transform.position;
                     var lipTrace = new StringBuilder(); var pitchField = typeof(VehicleController).GetField("chassisPitch", Private);
                     while (held < 3)

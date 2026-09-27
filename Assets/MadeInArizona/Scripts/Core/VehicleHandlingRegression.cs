@@ -157,6 +157,21 @@ namespace MadeInArizona
             check("climbs a 22 degree ramp without stalling", player.transform.position.y >= origin.y + 3 && climbSpeed > 8);
             check("body pitches nose-up on a climb", noseUp > .25f);
 
+            // Tilted on flat ground (as after a jump or a hard turn), the car settles flat on four wheels at once.
+            ramp.SetActive(false);
+            var pitchField = typeof(VehicleController).GetField("chassisPitch", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var rollField = typeof(VehicleController).GetField("chassisRoll", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            // The tilt is held long enough for the tilted hull to lever the car up onto its edge (how it ends up in play,
+            // e.g. landing from a jump), then released.
+            yield return Place(player, keyboard, origin, Quaternion.identity);
+            for (float held = 0; held < .4f; held += Time.fixedDeltaTime) { pitchField.SetValue(player, 38f); yield return new WaitForFixedUpdate(); }
+            yield return new WaitForSeconds(.4f);
+            check("nose-up car settles flat on four wheels", Mathf.Abs((float)pitchField.GetValue(player)) < 5 && player.Grounded);
+            yield return Place(player, keyboard, origin, Quaternion.identity);
+            for (float held = 0; held < .4f; held += Time.fixedDeltaTime) { rollField.SetValue(player, 30f); yield return new WaitForFixedUpdate(); }
+            yield return new WaitForSeconds(.4f);
+            check("side-tilted car settles flat on four wheels", Mathf.Abs((float)rollField.GetValue(player)) < 5 && player.Grounded);
+
             Release(keyboard);
             player.Body.position = originalPosition;
             player.Body.rotation = originalRotation;
