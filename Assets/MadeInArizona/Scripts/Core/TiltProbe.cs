@@ -178,13 +178,14 @@ namespace MadeInArizona
                 foreach (var ai in UnityEngine.Object.FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)) ai.enabled = false;
                 var hard = new[] { new KeyboardState(Key.W, Key.LeftShift), new KeyboardState(Key.D, Key.Space, Key.LeftShift), new KeyboardState(Key.S, Key.LeftShift), new KeyboardState(Key.A, Key.Space),
                     new KeyboardState(Key.W, Key.D, Key.LeftShift), new KeyboardState(Key.S, Key.A, Key.LeftShift), new KeyboardState(Key.D, Key.LeftShift), new KeyboardState(Key.W, Key.A, Key.Space) };
-                float d = 0, tilted = 0, still = 0; int dl = -1; string tiltInfo = "";
+                float d = 0, tilted = 0, still = 0, bodyTiltMax = 0; int dl = -1; string tiltInfo = "";
                 while (d < 45)
                 {
                     int want = (int)(d / 2.5f) % hard.Length;
                     if (want != dl) { dl = want; InputSystem.QueueStateEvent(keyboard, hard[dl]); }
                     if (player.Damage.Health < player.Damage.MaxHealth * .5f) player.Repair(10000);
                     yield return new WaitForFixedUpdate(); d += Time.fixedDeltaTime;
+                    bodyTiltMax = Mathf.Max(bodyTiltMax, Vector3.Angle(player.Body.rotation * Vector3.up, Vector3.up));
                     float vp = Mathf.DeltaAngle(0, player.Visual.localEulerAngles.x), vr = Mathf.DeltaAngle(0, player.Visual.localEulerAngles.z);
                     float tilt = Mathf.Max(Mathf.Abs(vp), Mathf.Abs(vr));
                     // Tilted and hanging: past 20° with a wheel visibly off the ground (matching a slope is fine).
@@ -196,6 +197,7 @@ namespace MadeInArizona
                     if (still > 1 && still - Time.fixedDeltaTime <= 1) { stuckEvents++; log.Append($" seed {mapSeed} t={d:F1} STUCK: pitch={vp:F0} roll={vr:F0} g={(player.Grounded ? 1 : 0)} b={(player.Beached ? 1 : 0)} under: {UnderWheels(wheels, player.Body)} hull={Under(player)}\n"); }
                 }
                 InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                log.Append($" seed {mapSeed} physics body max tilt={bodyTiltMax:F1} deg (should be 0: rotation is locked to yaw) inertiaRot={player.Body.inertiaTensorRotation.eulerAngles}\n");
             }
             log.Append($" aggressive: tiltEvents={tiltEvents} stuckEvents={stuckEvents} worstTilt={worstTilt:F0}\n");
             check("aggressive drive: never hangs tilted on its wheels for 0.4 s", tiltEvents == 0);

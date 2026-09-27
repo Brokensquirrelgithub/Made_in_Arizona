@@ -115,6 +115,14 @@ namespace MadeInArizona
             Hull.size = new Vector3(Mathf.Max(1.3f, stats.trackWidth + .25f), 1.13f, Mathf.Max(2.6f, stats.wheelbase + .9f));
             var material = new PhysicsMaterial("Sliding body") { dynamicFriction = .18f, staticFriction = .25f, bounciness = .12f };
             Hull.material = material;
+            // Fix the inertia from the level hull. Left automatic, Unity recomputed it every time the hull tilted, which
+            // rotated the principal axes the X/Z rotation locks act in, and the "locked" body rolled and pitched for real.
+            Physics.SyncTransforms();
+            Body.ResetInertiaTensor();
+            Vector3 inertia = Body.inertiaTensor;
+            Body.automaticInertiaTensor = false;
+            Body.inertiaTensor = inertia;
+            Body.inertiaTensorRotation = Quaternion.identity;
             if (Visual != null) Destroy(Visual.gameObject);
             Visual = VehicleVisual.Build(definition, transform, !isPlayer, faction);
             if (isPlayer)
@@ -183,6 +191,7 @@ namespace MadeInArizona
         {
             Boosting = false;
             if (!initialized || Damage.IsDead || Body.isKinematic) return;
+            KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
                 Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; return;
@@ -483,6 +492,18 @@ namespace MadeInArizona
             if (currentDirection < 0)
                 return forwardAlignment < .08f && forwardSpeed < 4f ? -1 : 1;
             return forwardAlignment < -.35f && Mathf.Abs(forwardSpeed) < 5.5f ? -1 : 1;
+        }
+        /// <summary>Internal chassis state for the opt-in telemetry recorder (-miaTelemetry).</summary>
+        internal string TelemetryState() =>
+            $"cp={chassisPitch:F1} cr={chassisRoll:F1} lean={visualRoll:F1} tilt={visualTilt:F1} squat={visualWeight:F1} wc={wheelContacts} sL={supportLeft} sR={supportRight} " +
+            $"G={(Grounded ? 1 : 0)} B={(Beached ? 1 : 0)} drift={DriftBlend:F2} boost={(Boosting ? 1 : 0)} thr={Throttle:F2} dir={driveDirection} hull=({appliedHullPitch:F0},{appliedHullRoll:F0}) stuck={stuckTime:F2}";
+        /// <summary>The body only ever yaws; pitch and roll are the chassis tilt's job. Any leak is removed immediately.</summary>
+        void KeepYawOnly()
+        {
+            Quaternion rotation = Body.rotation;
+            if (Mathf.Abs(Mathf.DeltaAngle(0, rotation.eulerAngles.x)) < .01f && Mathf.Abs(Mathf.DeltaAngle(0, rotation.eulerAngles.z)) < .01f) return;
+            Body.rotation = Quaternion.Euler(0, rotation.eulerAngles.y, 0);
+            Vector3 spin = Body.angularVelocity; Body.angularVelocity = new Vector3(0, spin.y, 0);
         }
         public static float LowSpeedTurnMultiplier(float speed)
         {

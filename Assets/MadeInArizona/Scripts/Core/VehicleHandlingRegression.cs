@@ -156,6 +156,8 @@ namespace MadeInArizona
             Release(keyboard);
             check("climbs a 22 degree ramp without stalling", player.transform.position.y >= origin.y + 3 && climbSpeed > 8);
             check("body pitches nose-up on a climb", noseUp > .25f);
+            // The tilt is visual/collision only: the physics body itself must stay yaw-only through the climb.
+            check("physics body stays upright (yaw-only) on a climb", Vector3.Angle(player.Body.rotation * Vector3.up, Vector3.up) < 1f);
 
             // Tilted on flat ground (as after a jump or a hard turn), the car settles flat on four wheels at once.
             ramp.SetActive(false);

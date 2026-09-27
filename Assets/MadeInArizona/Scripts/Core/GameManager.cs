@@ -77,6 +77,7 @@ namespace MadeInArizona
             CreatePostProcessing();
             gameObject.AddComponent<GameUI>();
             gameObject.AddComponent<SmokeTestRunner>();
+            if (TelemetryRecorder.Enabled) gameObject.AddComponent<TelemetryRecorder>();
             ApplySettings();
         }
 
