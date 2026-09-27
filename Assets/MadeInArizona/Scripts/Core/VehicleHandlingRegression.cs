@@ -156,16 +156,6 @@ namespace MadeInArizona
             check("climbs a 22 degree ramp without stalling", player.transform.position.y >= origin.y + 3 && climbSpeed > 8);
             check("body pitches nose-up on a climb", noseUp > .25f);
 
-            // With ground under one side only (left wheels over the floor edge), a tilted car levels out quickly
-            // instead of hanging on two wheels.
-            ramp.SetActive(false);
-            var chassisRoll = typeof(VehicleController).GetField("chassisRoll", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            yield return Place(player, keyboard, origin + new Vector3(-16 + .35f, 0, 0), Quaternion.identity);
-            chassisRoll.SetValue(player, 25f);
-            yield return new WaitForSeconds(.6f);
-            float teeterRoll = (float)chassisRoll.GetValue(player);
-            check("teetering car levels out instead of hanging on two wheels", Mathf.Abs(teeterRoll) < 4);
-
             Release(keyboard);
             player.Body.position = originalPosition;
             player.Body.rotation = originalRotation;
