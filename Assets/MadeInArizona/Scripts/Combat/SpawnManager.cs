@@ -51,7 +51,8 @@ namespace MadeInArizona
         static void AddWeakPoint(VehicleController vehicle, string component, Vector3 position, Vector3 scale)
         {
             var part = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            part.name = "Exposed " + component; part.transform.SetParent(vehicle.transform, false);
+            // On the hull so the solid panels tilt with the slope instead of plowing into climbs.
+            part.name = "Exposed " + component; part.transform.SetParent(vehicle.Hull.transform, false);
             part.transform.localPosition = position; part.transform.localScale = scale;
             var material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
             material.name = "Boss component warning cyan"; material.SetColor("_BaseColor", new Color(.08f, .68f, .75f));

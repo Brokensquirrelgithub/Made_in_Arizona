@@ -19,7 +19,8 @@ namespace MadeInArizona
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
         public float BoostCharge { get; private set; } = 1;
-        public float RepairCharge { get; private set; } = 1;
+        /// <summary>True on physics steps where nitro is actually firing (held, charged, driving forward).</summary>
+        public bool Boosting { get; private set; }
         public float DriftAmount { get; private set; }
         public bool Grounded { get; private set; }
         public int Gear { get; private set; } = 1;
@@ -38,9 +39,24 @@ namespace MadeInArizona
         /// <summary>Nitro tank size relative to the original tank. There is no passive refill; pickups top it up.</summary>
         public const float NitroCapacity = 3f;
         const float NitroBurnRate = .22f / NitroCapacity;
+        /// <summary>Drive multiplier while boosting: four times the old 65% extra shove.</summary>
+        public const float NitroThrust = 1 + .65f * 4;
+        /// <summary>Nitro hits hardest from a standstill: an extra multiplier that fades out by about 65 km/h.</summary>
+        const float NitroLaunch = 1.6f, NitroLaunchFadeSpeed = 18f;
+        /// <summary>
+        /// Collision hull on a child transform. The rigidbody only yaws, so the hull is tilted on its own to lie
+        /// parallel to the ground under the wheels; a level box plowed its front edge into every climb.
+        /// </summary>
+        public BoxCollider Hull { get; private set; }
+        /// <summary>Chassis tilt that follows the ground under the wheels (Unity Euler: +pitch is nose down, +roll lifts the right side).</summary>
+        float chassisPitch, chassisRoll, appliedHullPitch, appliedHullRoll;
+        const float MaxChassisPitch = 38, MaxChassisRoll = 32;
+        /// <summary>Wheel rays reach this far past full droop so the chassis can still read the slope ahead and behind.</summary>
+        const float GroundProbe = 1.5f;
+        Quaternion ChassisRotation => Body.rotation * Quaternion.Euler(chassisPitch, 0, chassisRoll);
         Vector3 lastVelocity, bodyAcceleration;
         Vector3 preCollisionVelocity;
-        float wheelAngle, visualPitch, visualRoll, dustTimer, collisionCooldown;
+        float wheelAngle, visualTilt, visualWeight, visualRoll, dustTimer, collisionCooldown;
         int driveDirection = 1;
         bool wasDrifting;
         float paceSettleUntil;
@@ -64,14 +80,26 @@ namespace MadeInArizona
             Body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             Body.centerOfMass = new Vector3(0, .36f, .08f);
             Body.maxAngularVelocity = 4;
-            var box = GetComponent<BoxCollider>();
-            if (box == null) box = gameObject.AddComponent<BoxCollider>();
-            box.center = new Vector3(0, .83f, 0);
-            box.size = new Vector3(Mathf.Max(1.3f, stats.trackWidth + .25f), 1.13f, Mathf.Max(2.6f, stats.wheelbase + .9f));
+            if (Hull == null)
+            {
+                var hullObject = new GameObject("Collision hull");
+                hullObject.transform.SetParent(transform, false);
+                Hull = hullObject.AddComponent<BoxCollider>();
+            }
+            chassisPitch = chassisRoll = appliedHullPitch = appliedHullRoll = 0;
+            Hull.transform.localRotation = Quaternion.identity;
+            Hull.center = new Vector3(0, .83f, 0);
+            Hull.size = new Vector3(Mathf.Max(1.3f, stats.trackWidth + .25f), 1.13f, Mathf.Max(2.6f, stats.wheelbase + .9f));
             var material = new PhysicsMaterial("Sliding body") { dynamicFriction = .18f, staticFriction = .25f, bounciness = .12f };
-            box.material = material;
+            Hull.material = material;
             if (Visual != null) Destroy(Visual.gameObject);
             Visual = VehicleVisual.Build(definition, transform, !isPlayer, faction);
+            if (isPlayer)
+            {
+                var exhaust = GetComponent<NitroExhaust>();
+                if (exhaust == null) exhaust = gameObject.AddComponent<NitroExhaust>();
+                exhaust.Bind(this);
+            }
             wheels = new Transform[4];
             string[] names = { "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR" };
             for (int i = 0; i < 4; i++)
@@ -107,7 +135,7 @@ namespace MadeInArizona
         public bool FriendlyToPlayer { get { if (IsPlayer) return true; var ai = GetComponent<EnemyAI>(); return ai != null && ai.IsFriendly; } }
         public static bool Allied(VehicleController a, VehicleController b) => a && b && a.FriendlyToPlayer == b.FriendlyToPlayer;
         /// <summary>Largest horizontal dimension of the body collider; scenery is judged against it.</summary>
-        public float BodyLength { get { var box = GetComponent<BoxCollider>(); return box ? Mathf.Max(box.size.x, box.size.z) : 3.5f; } }
+        public float BodyLength => Hull ? Mathf.Max(Hull.size.x, Hull.size.z) : 3.5f;
 
         void Update()
         {
@@ -120,17 +148,6 @@ namespace MadeInArizona
                 Weapons.AimAt(aimDirection);
                 if (input.Primary) Weapons.FirePrimary(aimDirection);
                 if (input.Secondary) Weapons.FireSecondary(aimDirection);
-                if (input.Repair && RepairCharge > 0 && Damage.Health < Damage.MaxHealth)
-                {
-                    float rate = 34;
-                    var save = GameManager.Instance.Save;
-                    if (save != null && ContentCatalog.Drivers.Length > 0)
-                        rate *= ContentCatalog.Drivers[Mathf.Clamp(save.selectedDriver, 0, ContentCatalog.Drivers.Length - 1)].repairMultiplier;
-                    Repair(rate * Time.deltaTime);
-                    RepairCharge = Mathf.Max(0, RepairCharge - .09f * Time.deltaTime);
-                    if (Time.frameCount % 8 == 0) ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.2f, 1, .68f), 2, .5f);
-                }
-                else RepairCharge = Mathf.Min(1, RepairCharge + Time.deltaTime * .007f);
             }
             else
             {
@@ -141,6 +158,7 @@ namespace MadeInArizona
         }
         void FixedUpdate()
         {
+            Boosting = false;
             if (!initialized || Damage.IsDead || Body.isKinematic) return;
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
@@ -210,7 +228,13 @@ namespace MadeInArizona
                 if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
                 if (!IsPlayer) acceleration *= Pace;
-                if (boosting) { acceleration *= 1.65f; BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate); }
+                if (boosting)
+                {
+                    float thrust = 1 + (NitroThrust - 1) * tuning.nitro;
+                    acceleration *= thrust * Mathf.Lerp(NitroLaunch, 1, Mathf.Clamp01(speed / NitroLaunchFadeSpeed));
+                    BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate);
+                }
+                Boosting = boosting;
                 float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
@@ -272,25 +296,69 @@ namespace MadeInArizona
             int contacts = 0;
             float restLength = .85f + Mathf.Clamp(Stats.rideHeight * .2f, .03f, .18f);
             float travel = Mathf.Clamp(Stats.suspensionTravel, .15f, 1.2f);
+            float reach = restLength + travel;
+            // The wheels hang off a chassis tilted to match the ground, so on a climb all four still reach the slope
+            // and the body rides at its normal height instead of perching on the front axle.
+            Quaternion chassis = ChassisRotation;
+            Vector3 down = chassis * Vector3.down;
+            Vector3 frontSum = Vector3.zero, rearSum = Vector3.zero, leftSum = Vector3.zero, rightSum = Vector3.zero;
+            int front = 0, rear = 0, left = 0, right = 0;
             for (int i = 0; i < 4; i++)
             {
-                Vector3 origin = transform.TransformPoint(suspensionPoints[i]);
-                int count = Physics.RaycastNonAlloc(origin, Vector3.down, groundHits, restLength + travel, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                Vector3 origin = Body.position + chassis * suspensionPoints[i];
+                int count = Physics.RaycastNonAlloc(origin, down, groundHits, reach + GroundProbe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue;
+                Vector3 point = Vector3.zero, normal = Vector3.up;
                 for (int h = 0; h < count; h++)
                 {
-                    if (groundHits[h].rigidbody == Body || groundHits[h].normal.y < .3f) continue;
-                    nearest = Mathf.Min(nearest, groundHits[h].distance);
+                    if (groundHits[h].rigidbody == Body || groundHits[h].normal.y < .3f || groundHits[h].distance >= nearest) continue;
+                    nearest = groundHits[h].distance; point = groundHits[h].point; normal = groundHits[h].normal;
                 }
                 if (nearest == float.MaxValue) continue;
+                if (i < 2) { frontSum += point; front++; } else { rearSum += point; rear++; }
+                if (i % 2 == 0) { leftSum += point; left++; } else { rightSum += point; right++; }
+                if (nearest > reach) continue;
                 contacts++;
                 float spring = Mathf.Clamp(Stats.springStiffness / Body.mass, 20, 100) * Mathf.Lerp(.45f, 1, Damage.Suspension);
                 float damp = Mathf.Clamp(Stats.damping / Body.mass, 2, 16);
                 float compression = restLength - nearest;
-                float acceleration = 9.81f / 4 + compression * spring - Body.GetPointVelocity(origin).y * damp;
+                // Damp the wheel's motion relative to the ground it rolls over. Damping absolute vertical speed (the
+                // old behaviour) fought every climb and sank the car into the hillside; on flat ground they match.
+                float compressionRate = -Vector3.Dot(Body.GetPointVelocity(origin), normal) / Mathf.Max(.3f, -Vector3.Dot(normal, down));
+                float acceleration = 9.81f / 4 + compression * spring + compressionRate * damp;
                 Body.AddForceAtPosition(Vector3.up * Mathf.Clamp(acceleration, -3, 65), origin, ForceMode.Acceleration);
             }
+            TiltChassis(front, rear, left, right, frontSum, rearSum, leftSum, rightSum);
             return contacts > 1;
+        }
+        /// <summary>
+        /// Eases the chassis toward the plane under the wheels and tilts the collision hull with it. With no ground
+        /// in reach the car slowly levels out, so jumps land nose-first only when the terrain below asks for it.
+        /// </summary>
+        void TiltChassis(int front, int rear, int left, int right, Vector3 frontSum, Vector3 rearSum, Vector3 leftSum, Vector3 rightSum)
+        {
+            float follow = 1 - Mathf.Exp(-Time.fixedDeltaTime * 16), settle = Time.fixedDeltaTime * 30;
+            Vector3 forward = Body.rotation * Vector3.forward, side = Body.rotation * Vector3.right;
+            if (front > 0 && rear > 0)
+            {
+                Vector3 span = frontSum / front - rearSum / rear;
+                float run = Vector3.Dot(span, forward);
+                if (run > .4f) chassisPitch = Mathf.Lerp(chassisPitch, Mathf.Clamp(-Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisPitch, MaxChassisPitch), follow);
+            }
+            else if (front + rear == 0) chassisPitch = Mathf.MoveTowards(chassisPitch, 0, settle);
+            if (left > 0 && right > 0)
+            {
+                Vector3 span = rightSum / right - leftSum / left;
+                float run = Vector3.Dot(span, side);
+                if (run > .4f) chassisRoll = Mathf.Lerp(chassisRoll, Mathf.Clamp(Mathf.Atan2(span.y, run) * Mathf.Rad2Deg, -MaxChassisRoll, MaxChassisRoll), follow);
+            }
+            else if (left + right == 0) chassisRoll = Mathf.MoveTowards(chassisRoll, 0, settle);
+            // Only re-pose the hull for a visible change; every pose change is a collider update for the physics scene.
+            if (Mathf.Abs(chassisPitch - appliedHullPitch) > .2f || Mathf.Abs(chassisRoll - appliedHullRoll) > .2f)
+            {
+                appliedHullPitch = chassisPitch; appliedHullRoll = chassisRoll;
+                Hull.transform.localRotation = Quaternion.Euler(appliedHullPitch, 0, appliedHullRoll);
+            }
         }
         void AnimateBody()
         {
@@ -302,8 +370,11 @@ namespace MadeInArizona
             float targetRoll = -localVelocity.x * (1 + narrow * 1.5f) - Body.angularVelocity.y * localVelocity.z * .18f;
             targetRoll += (1 - Damage.Suspension) * 9;
             visualRoll = Mathf.Lerp(visualRoll, Mathf.Clamp(targetRoll, -19, 19), Time.deltaTime * 6);
-            visualPitch = Mathf.Lerp(visualPitch, Mathf.Clamp(acceleration.z * .23f - Body.linearVelocity.y * 1.1f, -10, 10), Time.deltaTime * 7);
-            Visual.localRotation = Quaternion.Euler(visualPitch, 0, visualRoll);
+            // The body sits on the slope, then squats under power and dives under braking. The old pitch dipped the
+            // nose under acceleration, which read as the car tipping forward into every hill it tried to climb.
+            visualTilt = Mathf.Lerp(visualTilt, chassisPitch, Time.deltaTime * 18);
+            visualWeight = Mathf.Lerp(visualWeight, Mathf.Clamp(-acceleration.z * .23f, -7, 7), Time.deltaTime * 7);
+            Visual.localRotation = Quaternion.Euler(visualTilt + visualWeight, 0, chassisRoll + visualRoll);
             wheelAngle += localVelocity.z * Time.deltaTime * 150;
             if (wheels != null)
                 for (int i = 0; i < wheels.Length; i++)
@@ -383,14 +454,14 @@ namespace MadeInArizona
         readonly List<DestructionSystem> ghostScratch = new List<DestructionSystem>();
         void SweepScenery(float speed)
         {
-            var body = GetComponent<BoxCollider>();
+            var body = Hull;
             if (!body) return;
             float length = BodyLength;
-            Vector3 center = transform.TransformPoint(body.center);
+            Vector3 center = body.transform.TransformPoint(body.center);
             Vector3 lead = Body.linearVelocity * Time.fixedDeltaTime * 3;
             Vector3 extents = body.size * .5f + Vector3.one * .45f;
             int count = Physics.OverlapBoxNonAlloc(center + lead * .5f, extents + new Vector3(Mathf.Abs(lead.x), Mathf.Abs(lead.y), Mathf.Abs(lead.z)) * .5f + Vector3.one * .25f,
-                sweepHits, transform.rotation, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                sweepHits, body.transform.rotation, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             Bounds car = new Bounds(center, Vector3.zero);
             car.Encapsulate(body.bounds); car.Expand(.3f);
             for (int i = 0; i < count; i++)

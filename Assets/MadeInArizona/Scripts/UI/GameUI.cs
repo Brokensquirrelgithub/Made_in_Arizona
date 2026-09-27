@@ -18,7 +18,7 @@ namespace MadeInArizona
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
-        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Repair", "Interact", "Pause" };
+        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Pause" };
         int[] garageWeaponIndices;
         /// <summary>Catalog indices of every scrap weapon, core roles first and then the oddballs.</summary>
         int[] garageWeapons
@@ -74,7 +74,7 @@ namespace MadeInArizona
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
                 if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
                 if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 9 : settingsPage == 1 ? 6 : 14;
+                int rowCount = settingsPage == 0 ? 9 : settingsPage == 1 ? 6 : 2 + actions.Length;
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -383,7 +383,7 @@ namespace MadeInArizona
                 Text(410, height - 180, 530, 27, p.Weapons.FieldWeapon ?
                     (padControls ? "Y" : "F") + " SWAP FOR " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
                     "DRIVE OVER " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() + " TO EQUIP", 16, Lime, true);
-            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    LB REPAIR    B DRIFT    Y SWAP" : "SHIFT BOOST    R REPAIR    SPACE DRIFT    F SWAP", 12, Cream, true);
+            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    B DRIFT    Y SWAP" : "SHIFT BOOST    SPACE DRIFT    F SWAP", 12, Cream, true);
             if (game.Mission.Combo > 1) Text(28, 136, 320, 43, "×" + game.Mission.Combo + "  INSURANCE EVENT", 23, Orange, true);
             Text(28, 185, 320, 30, game.Mission.Score.ToString("N0") + "  DAMAGE CLAIM", 17, Cream, true);
             DrawMinimap(width - 216, height - 228, 188);
@@ -561,8 +561,8 @@ namespace MadeInArizona
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 2) {
-                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / R repair / Esc pause", 18);
-                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, LB repair, B drift, A interact, Start pause.", 18, Muted);
+                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / Esc pause", 18);
+                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, B drift, A interact, Start pause.", 18, Muted);
                 Tag(x + 35, y + 368, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
                     float bx = x + 35 + i % 4 * 215, by = y + 401 + i / 4 * 59;

@@ -17,14 +17,13 @@ namespace MadeInArizona
         /// <summary>Held to drift. The action keeps its old "Handbrake" name so saved rebinds still apply.</summary>
         public bool Drift { get; private set; }
         public bool Boost { get; private set; }
-        public bool Repair { get; private set; }
         public bool Interact { get; private set; }
         public bool SwapPressed { get; private set; }
         public bool PausePressed { get; private set; }
         public bool UsingGamepad { get; private set; }
         public bool Rebinding => rebind != null;
         InputActionMap map;
-        InputAction move, aim, pointer, primary, secondary, brake, boost, repair, interact, swap, pause;
+        InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause;
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
 
@@ -43,7 +42,7 @@ namespace MadeInArizona
             secondary = Button("Secondary", "<Mouse>/rightButton", "<Gamepad>/leftTrigger");
             brake = Button("Handbrake", "<Keyboard>/space", "<Gamepad>/buttonEast");
             boost = Button("Boost", "<Keyboard>/leftShift", "<Gamepad>/rightShoulder");
-            repair = Button("Repair", "<Keyboard>/r", "<Gamepad>/leftShoulder");
+            // Left shoulder (and R) are free: the old hold-to-repair ability was removed pending a replacement.
             interact = Button("Interact", "<Keyboard>/e", "<Gamepad>/buttonSouth");
             swap = Button("Swap", "<Keyboard>/f", "<Gamepad>/buttonNorth");
             pause = Button("Pause", "<Keyboard>/escape", "<Gamepad>/start");
@@ -77,7 +76,7 @@ namespace MadeInArizona
         void ClearGameplay()
         {
             Move = Vector2.zero;
-            Primary = Secondary = Drift = Boost = Repair = Interact = SwapPressed = false;
+            Primary = Secondary = Drift = Boost = Interact = SwapPressed = false;
         }
 
         void Update()
@@ -139,7 +138,7 @@ namespace MadeInArizona
             if (UsingGamepad && player != null && GeneratedWorld.Active) AimElevation = GamepadElevation(player, Aim);
             Primary = primary.IsPressed();
             Secondary = secondary.IsPressed();
-            Drift = brake.IsPressed(); Boost = boost.IsPressed(); Repair = repair.IsPressed();
+            Drift = brake.IsPressed(); Boost = boost.IsPressed();
             Interact = interact.WasPressedThisFrame();
             SwapPressed = swap.WasPressedThisFrame();
         }

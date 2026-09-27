@@ -116,6 +116,47 @@ namespace MadeInArizona
             int fade=500;for(int i=0;i<fade;i++){float mix=i/(float)fade;samples[i]*=mix;samples[samples.Length-1-i]*=mix;}
             return Clip("Original • desert air and road texture",samples);
         }
+        /// <summary>
+        /// Loopable nitrous burn: a deep rumble under a rushing flame roar with a fast combustion flutter and a thin
+        /// hiss of gas on top. Every modulation completes whole cycles inside the loop, so the seam is silent.
+        /// </summary>
+        public static AudioClip NitroRoar()
+        {
+            int length=Rate*2;var noise=new float[length];uint seed=9337;
+            for(int i=0;i<length;i++)noise[i]=Noise(ref seed);
+            var samples=new float[length];float rumble=0,roar=0,roarLow=0,hissLow=0,energy=0;
+            // Two passes around the loop settle the filter state so the wrap point is seamless.
+            for(int pass=0;pass<2;pass++)for(int i=0;i<length;i++)
+            {
+                float n=noise[i];
+                rumble=Mathf.Lerp(rumble,n,.012f);roar=Mathf.Lerp(roar,n,.16f);roarLow=Mathf.Lerp(roarLow,roar,.03f);hissLow=Mathf.Lerp(hissLow,n,.55f);
+                if(pass==0)continue;
+                float t=i/(float)Rate;
+                float flutter=1+.35f*Wave(31*t)+.15f*Wave(47*t+.3f),swell=1+.12f*Wave(.5f*t);
+                samples[i]=rumble*9*swell+(roar-roarLow)*2.2f*flutter+(n-hissLow)*.35f;
+                energy+=samples[i]*samples[i];
+            }
+            float scale=1/Mathf.Sqrt(Mathf.Max(1e-6f,energy/length));
+            for(int i=0;i<length;i++)samples[i]=SoftLimit(samples[i]*scale*.75f)*.8f;
+            return Clip("Original • nitro burn",samples);
+        }
+        /// <summary>Nitro lighting off: a hollow whump as the charge catches, then a tearing rush of flame and gas hiss.</summary>
+        public static AudioClip NitroIgnite()
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.9f)];uint seed=12011;float low=0,band=0,hissLow=0;
+            float fade=Rate*.05f;
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed);
+                low=Mathf.Lerp(low,n,.05f);band=Mathf.Lerp(band,n,.25f);hissLow=Mathf.Lerp(hissLow,n,.6f);
+                float whump=Wave(110*t-70*t*t)*Mathf.Exp(-t*9)*Mathf.Min(1,t*400)*1.1f;
+                float tear=(band-low)*(1-Mathf.Exp(-t*40))*Mathf.Exp(-t*2.8f)*3.2f;
+                float roar=low*Mathf.Exp(-t*3.5f)*Mathf.Min(1,t*60)*4;
+                float hiss=(n-hissLow)*Mathf.Exp(-t*7)*.5f;
+                samples[i]=SoftLimit((whump+tear+roar+hiss)*1.1f)*Mathf.Min(1,t*800)*Mathf.Min(1,(samples.Length-i)/fade);
+            }
+            return Clip("Original • nitro ignition",samples);
+        }
         public static AudioClip Turbo()
         {
             var samples=new float[Rate];uint seed=44;

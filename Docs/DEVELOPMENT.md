@@ -4,7 +4,7 @@ This project implements a native Unity vertical slice with procedural prototype 
 
 ## Runtime
 
-Open `Assets/MadeInArizona/Scenes/Main.unity` and press Play. `GameManager` owns session state and initializes independent systems. `WorldBuilder` builds deterministic garage/desert layouts; scene changes clear the previous world before enabling new colliders. Player physics uses a rigidbody with four suspension rays, torque/horsepower limits, gearing, terrain friction, drivetrain/differential response, heat and localized damage. Pitch/roll are animated; full mechanical articulation and rollover simulation are future work.
+Open `Assets/MadeInArizona/Scenes/Main.unity` and press Play. `GameManager` owns session state and initializes independent systems. `WorldBuilder` builds deterministic garage/desert layouts; scene changes clear the previous world before enabling new colliders. Player physics uses a rigidbody with four suspension rays, torque/horsepower limits, gearing, terrain friction, drivetrain/differential response, heat and localized damage. The rigidbody only yaws; a chassis pitch/roll estimated from the wheel rays tilts the suspension rays, the child collision hull and the visual model to the slope, and suspension damping acts relative to the ground so climbs no longer sink the car into the hillside. Full mechanical articulation and rollover simulation are future work.
 
 `ContentCatalog` loads editable ScriptableObjects from `Resources/Content`, with original code-authored defaults. Add a new definition to the catalog and save it as a matching resource. Parts enforce vehicle compatibility and one installed part per category. Power, weight, cooling, torque, grip, suspension and gearing tradeoffs affect driving.
 

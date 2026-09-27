@@ -27,6 +27,14 @@ namespace MadeInArizona
             PaintBox("Hood",root,new Vector3(0,sill+.34f,length*.31f),new Vector3(width*.98f,.23f,length*.33f),paint);
             Box("Front bumper",root,new Vector3(0,sill-.08f,length*.52f),new Vector3(width+.16f,.2f,.19f),Ink);
             Box("Rear bumper",root,new Vector3(0,sill-.1f,-length*.52f),new Vector3(width+.16f,.18f,.19f),Ink);
+            // Twin tailpipes poke out under the rear bumper; nitro flames leave from each mouth (see NitroExhaust).
+            for(int side=-1;side<=1;side+=2)
+            {
+                float pipeX=side*width*.3f,pipeY=sill-.25f,pipeEnd=-length*.52f-.2f;
+                Beam("Tailpipe",root,new Vector3(pipeX,pipeY,-length*.4f),new Vector3(pipeX,pipeY,pipeEnd),.055f,new Color(.6f,.61f,.58f));
+                var mouth=Cylinder("Tailpipe mouth",root,new Vector3(pipeX,pipeY,pipeEnd-.005f),.042f,.02f,Ink); mouth.transform.localRotation=Quaternion.Euler(90,0,0);
+                Group(NitroExhaust.ExitName,root,new Vector3(pipeX,pipeY,pipeEnd-.03f)).localRotation=Quaternion.Euler(0,180,0);
+            }
             Box("Radiator grille",root,new Vector3(0,sill+.16f,length*.506f),new Vector3(width*.52f,.25f,.04f),Ink);
             for(int i=0;i<7;i++) Box("Cooling fin",root,new Vector3((i-3)*width*.065f,sill+.16f,length*.531f),new Vector3(.025f,.2f,.026f),metal);
             for(int side=-1;side<=1;side+=2)

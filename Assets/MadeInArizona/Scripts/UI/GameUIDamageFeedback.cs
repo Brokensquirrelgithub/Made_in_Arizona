@@ -47,8 +47,7 @@ namespace MadeInArizona
                 float beat = Mathf.Pow(.5f + .5f * Mathf.Sin(Time.time * rate * Mathf.PI * 2), 3);
                 DrawEdgeVignette(new Color(.75f, .02f, .0f, Mathf.Lerp(.28f, .5f, danger) + beat * Mathf.Lerp(.18f, .32f, danger)));
                 float blink = .55f + .45f * Mathf.Sin(Time.time * rate * Mathf.PI * 2);
-                string repair = player.RepairCharge > .02f ? (InputManager.Instance.UsingGamepad ? "  •  HOLD LB TO REPAIR" : "  •  HOLD R TO REPAIR") : "  •  FIND A REPAIR DROP";
-                Text(width * .5f - 320, height - 250, 640, 34, "CRITICAL DAMAGE" + repair, 22, new Color(1, .22f, .12f, blink), true, TextAnchor.MiddleCenter);
+                Text(width * .5f - 320, height - 250, 640, 34, "CRITICAL DAMAGE  •  FIND A REPAIR DROP", 22, new Color(1, .22f, .12f, blink), true, TextAnchor.MiddleCenter);
             }
 
             // Fresh hit: a strong red flash that fades out, plus a bright wedge toward the attacker.

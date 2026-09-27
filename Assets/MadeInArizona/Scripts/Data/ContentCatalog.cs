@@ -149,7 +149,7 @@ namespace MadeInArizona
                     "AREA SATURATION","Three rockets cover a wide spread.","Few volleys; each rocket alone is modest."),
                 Weapon(10,"boomstick","Drainpipe Double-Barrel","Two drainpipes and a nail for a firing pin. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1),
                     "POINT-BLANK SHOTGUN","Two-shot kills on anything touching your bumper.","Slow reload and almost no reach."),
-                Weapon(11,"shredder","Sawblade Slingshot","Surgical tubing launching three table-saw blades. Each blade cuts through one car into the next.",9,5,88,0,new Color(.95f,.84f,.48f),
+                Weapon(11,"shredder","Sawblade Slingshot","Surgical tubing launching three table-saw blades. Each blade cuts through one car into the next.",6,5,88,0,new Color(.95f,.84f,.48f),
                     "PIERCING FAN","Blades pass through the first car and keep cutting.","Short reach and light damage per blade."),
                 Weapon(12,"pothole","Tennis-Ball Mortar","A welded stack of beer cans lobbing charges that bounce once before they go off.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f),
                     "INDIRECT FIRE","Arcs over cover and bounces into hiding spots.","Small blast and slow shells; hopeless against fast movers."),
