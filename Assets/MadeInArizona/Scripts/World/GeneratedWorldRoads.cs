@@ -42,10 +42,17 @@ namespace MadeInArizona
                 }
 
                 // Gravel shoulders hide the asphalt seam and dissolve into the terrain like the dirt trails.
+                // They stop at bridges: draped over the carved channel they would show through the water.
                 if(blend)
                 {
-                    var line=new Vector2[count];for(int i=0;i<count;i++)line[i]=XZ(centers[i]);
-                    SoilStrip("Gravel shoulders",line,halfRoad+1.6f,1.2f,halfRoad-.4f,shoulder,.03f,roads);
+                    var line=new List<Vector2>();
+                    for(int i=0;i<=count;i++)
+                    {
+                        bool dry=i<count&&!OverRiver(XZ(centers[i]));
+                        if(dry){line.Add(XZ(centers[i]));continue;}
+                        if(line.Count>3)SoilStrip("Gravel shoulders",line.ToArray(),halfRoad+1.6f,1.2f,halfRoad-.4f,shoulder,.03f,roads);
+                        line.Clear();
+                    }
                 }
                 else
                 {
@@ -53,6 +60,7 @@ namespace MadeInArizona
                     Ribbon("Gravel right shoulder",right,rightOuter,high,roads,false);
                 }
                 Surface("Smooth winding county road",surface,asphalt,roads,true);
+                BuildBridges(surface,centers,normals);
                 BuildWornCenterMarkings(centers,normals,distance);
                 BuildRoadFurniture(route,centers,normals,distance);
 
@@ -75,6 +83,8 @@ namespace MadeInArizona
             float h=HeightAt(new Vector3(p.x,0,p.y));
             foreach(Vector2 o in new[]{tangent*along,-tangent*along,normal*across,-normal*across})
             {Vector2 q=p+o;h=Mathf.Max(h,HeightAt(new Vector3(q.x,0,q.y)));}
+            // Over the river the asphalt keeps the road's graded profile and becomes a bridge deck above the channel.
+            if(OverRiver(p))h=Mathf.Max(h,Mathf.Max(GroundHeight(p.x,p.y),RiverLevel(p.y)+1.8f));
             return new Vector3(p.x,h+RoadLift,p.y);
         }
 
@@ -101,7 +111,7 @@ namespace MadeInArizona
             for(float start=3;start+dash<distance[distance.Length-1]-3;start+=cycle)
             {
                 // Missing paint on a few cycles gives the line a sun-faded, repaired-road rhythm.
-                if(Mathf.PerlinNoise(start*.037f,seed*.013f)<.22f)continue;
+                if(Mathf.PerlinNoise(start*.037f,SeedOffset(seed,.013,PerlinPeriod))<.22f)continue;
                 AddMarkingPoint(start,-halfWidth,center,normal,distance,vertices,uv);
                 AddMarkingPoint(start, halfWidth,center,normal,distance,vertices,uv);
                 AddMarkingPoint(start+dash,-halfWidth,center,normal,distance,vertices,uv);
@@ -131,7 +141,7 @@ namespace MadeInArizona
                 float t=Mathf.InverseLerp(distance[i-1],distance[i],along);
                 Vector3 c=Vector3.Lerp(center[i-1],center[i],t);Vector2 n=Vector2.Lerp(normal[i-1],normal[i],t).normalized;
                 int side=((Mathf.FloorToInt(along/72)+(int)(route.a.x*.1f))&1)==0?-1:1;
-                Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+3.7f);p.y=HeightAt(p);
+                Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+3.7f);if(OverRiver(XZ(p)))continue;p.y=HeightAt(p);
                 Transform g=Group("Weathered roadside marker",roads,p);
                 Box("Marker post",g,new Vector3(0,.48f,0),new Vector3(.10f,.96f,.10f),new Color(.62f,.58f,.47f));
                 Box("Amber reflector",g,new Vector3(0,.76f,0),new Vector3(.14f,.13f,.035f),new Color(.92f,.56f,.12f));

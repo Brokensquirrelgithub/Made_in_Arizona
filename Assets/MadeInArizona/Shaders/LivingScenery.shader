@@ -31,13 +31,13 @@ Shader "MadeInArizona/LivingScenery"
             float strata=sin(i.world.y*15+sin(i.world.x*4)+sin(i.world.z*5));
             float3 albedo=i.c.rgb*needle*(.89+grain*.14+strata*.045*(1-i.c.a));
             Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
-            float ao=1;
+            float ao=1,directAO=1;
             #if defined(_SCREEN_SPACE_OCCLUSION)
-                ao=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p)).indirectAmbientOcclusion;
+                AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
             #endif
             float wrap=saturate((dot(n,sun.direction)+.22)/1.22);
             float transmission=pow(saturate(dot(normalize(_WorldSpaceCameraPos-i.world),-sun.direction)),3)*i.c.a*.3;
-            float3 lit=albedo*(SampleSH(n)*ao+sun.color*(wrap+transmission)*sun.shadowAttenuation);
+            float3 lit=albedo*(SampleSH(n)*ao+sun.color*(wrap+transmission)*sun.shadowAttenuation*directAO);
             #if defined(_ADDITIONAL_LIGHTS)
                 uint count=GetAdditionalLightsCount();
                 for(uint lightIndex=0;lightIndex<count;lightIndex++)

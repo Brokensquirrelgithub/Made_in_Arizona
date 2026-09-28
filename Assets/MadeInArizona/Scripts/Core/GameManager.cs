@@ -103,6 +103,9 @@ namespace MadeInArizona
             // DevVisuals is the sole writer, at startup and when any slider changes.
         }
 
+        /// <summary>Shadow atlas size for explosion, fire and muzzle lights at each graphics preset.</summary>
+        public static int AdditionalShadowAtlas(int quality) => quality >= 2 ? 4096 : 1024;
+
         public void ApplySettings()
         {
             var s = Save.settings;
@@ -123,7 +126,12 @@ namespace MadeInArizona
                 pipeline.msaaSampleCount = s.quality < 2 ? 1 : 4;
                 pipeline.mainLightShadowmapResolution = s.quality == 3 ? 4096 : 2048;
                 pipeline.maxAdditionalLightsCount = s.quality == 0 ? 0 : s.quality == 3 ? 8 : 4;
+                // Explosion and fire lights cast shadows on High Octane and Arizona Summer. A big fight puts up to 36
+                // point-light shadow maps in this atlas, and at 2048 URP halved their resolution. The lower presets'
+                // effect lights cast no shadows, so they keep a small atlas and the video memory it saves.
+                pipeline.additionalLightsShadowmapResolution = AdditionalShadowAtlas(s.quality);
             }
+            DevVisuals.Apply(); // ambient occlusion quality follows the preset
             Shader.SetGlobalFloat("_ArizonaDetail", s.quality >= 2 ? 1 : 0);
             AudioListener.volume = AudioManager.OutputVolume(s.master);
             if (!Application.isBatchMode) {
@@ -147,6 +155,8 @@ namespace MadeInArizona
             var obj = new GameObject(def.displayName + " • Player");
             obj.transform.SetParent(World.transform);
             obj.transform.position = World.PlayerSpawn;
+            // In the garage the car sits backed onto the lift, nose out toward the open bay and the camera.
+            if (garage) obj.transform.rotation = Quaternion.Euler(0, 180, 0);
             Player = obj.AddComponent<VehicleController>();
             Player.Initialize(def, GarageManager.StatsFor(def, Save), true);
             if (!garage) {

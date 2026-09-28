@@ -10,8 +10,13 @@ namespace MadeInArizona
     public sealed class LivingWorldDetail : MonoBehaviour
     {
         const float Tile=32;
-        /// <summary>Scattered rocks: 30% fewer than the original density, each about 20% larger.</summary>
-        public const float RockCountScale=.7f,RockSizeScale=1.2f;
+        /// <summary>Scattered rocks: 55% fewer than the original density, each about 20% larger.</summary>
+        public const float RockCountScale=.45f,RockSizeScale=1.2f;
+        /// <summary>
+        /// Forest trees gather in groves. 18 m cells are either clearings (20%) or groves (80%) that pull their trees
+        /// toward a grove centre and sometimes add a companion, for 90% of the former, evenly spread tree count.
+        /// </summary>
+        const float GroveCell=18,ClearingShare=.2f,GrovePull=.4f,CompanionChance=.125f;
         const int Radius=4;
         readonly Dictionary<Vector2Int,GameObject> tiles=new Dictionary<Vector2Int,GameObject>();
         readonly List<Vector2Int> remove=new List<Vector2Int>();
@@ -96,7 +101,7 @@ namespace MadeInArizona
                 Vector3 world=origin+new Vector3(x,0,z);if(!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 local=world-origin;
                 float north=Mathf.InverseLerp(-half,half,world.z);
-                float patch=Mathf.PerlinNoise(world.x*.045f+config.seed*.013f,world.z*.045f);
+                float patch=Mathf.PerlinNoise(world.x*.045f+GeneratedWorld.SeedOffset(config.seed,.013,GeneratedWorld.PerlinPeriod),world.z*.045f);
                 bool forest=north>config.biomeThresholds.scrub;
                 bool bank=GeneratedWorld.Active.DistanceToRiver(world)<config.riverWidth+13&&config.riverWidth>0;
                 float scale=Next(random,.65f,1.35f);
@@ -124,7 +129,7 @@ namespace MadeInArizona
                 Vector3 world=origin+new Vector3(Next(random,1,31),0,Next(random,1,31));
                 float clear=GeneratedWorld.Active.SceneryClearance(world);if(clear<3||!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 p=world-origin;
-                float north=Mathf.InverseLerp(-half,half,world.z),patch=Mathf.PerlinNoise(world.x*.023f+config.seed*.001f,world.z*.023f);
+                float north=Mathf.InverseLerp(-half,half,world.z),patch=Mathf.PerlinNoise(world.x*.023f+GeneratedWorld.SeedOffset(config.seed,.001,GeneratedWorld.PerlinPeriod),world.z*.023f);
                 bool forest=north>config.biomeThresholds.scrub;
                 bool bank=config.riverWidth>0&&GeneratedWorld.Active.DistanceToRiver(world)<config.riverWidth+17;
                 if(i<5)
@@ -138,7 +143,17 @@ namespace MadeInArizona
                 }
                 else if(density>0&&forest&&patch>.28f&&i%2==0)
                 {
+                    int cx=Mathf.FloorToInt(world.x/GroveCell),cz=Mathf.FloorToInt(world.z/GroveCell);
+                    if(CellHash(cx,cz,config.seed)<ClearingShare){DetailInstances++;continue;}
+                    Vector3 grove=new Vector3((cx+.2f+.6f*CellHash(cx,cz,config.seed+17))*GroveCell,0,(cz+.2f+.6f*CellHash(cx,cz,config.seed+31))*GroveCell);
+                    Vector3 pulled=Vector3.Lerp(world,grove,GrovePull);
+                    if(GeneratedWorld.Active.SceneryClearance(pulled)>=3&&GeneratedWorld.Contains(pulled)&&!Steep(pulled)){pulled.y=GeneratedWorld.HeightAt(pulled);p=pulled-origin;}
                     float h=Next(random,7,15);BreakableTree(root,p,h,true,random);Trees++;
+                    if(Next(random,0,1)<CompanionChance)
+                    {
+                        float angle=Next(random,0,Mathf.PI*2),gap=Next(random,3.2f,5.5f);Vector3 mate=origin+p+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*gap;
+                        if(GeneratedWorld.Active.SceneryClearance(mate)>=3&&GeneratedWorld.Contains(mate)&&!Steep(mate)){mate.y=GeneratedWorld.HeightAt(mate);BreakableTree(root,mate-origin,Next(random,6,13),true,random);Trees++;}
+                    }
                     // Ground litter under the canopy, in irregular patches rather than uniform distribution.
                     for(int j=0;j<28;j++){Vector3 q=p+new Vector3(Next(random,-2.8f,2.8f),0,Next(random,-2.8f,2.8f));q.y=GeneratedWorld.HeightAt(q+origin);mesh.Leaf(q,.18f,Next(random,0,6.28f),new Color(.35f,.24f,.12f),0);}
                     if(i%6==0){float heading=Next(random,0,Mathf.PI*2),length=Next(random,3.2f,6.5f),offset=Next(random,1.2f,2.6f);Vector3 dir=new Vector3(Mathf.Cos(heading),0,Mathf.Sin(heading));Vector3 start=p+new Vector3(Mathf.Sin(heading),0,-Mathf.Cos(heading))*offset;Vector3 finish=start+dir*length;start.y=GeneratedWorld.HeightAt(start+origin)-origin.y+.22f;finish.y=GeneratedWorld.HeightAt(finish+origin)-origin.y+.18f+Next(random,0,.25f);mesh.Tube(start,finish,Next(random,.18f,.27f),Next(random,.11f,.17f),new Color(.27f,.19f,.11f)*Next(random,.85f,1.1f),8);}
@@ -187,6 +202,8 @@ namespace MadeInArizona
         }
         static Color StoneColor(bool forest,System.Random r)=>Color.Lerp(forest?new Color(.29f,.32f,.27f):new Color(.43f,.29f,.20f),forest?new Color(.49f,.48f,.38f):new Color(.68f,.48f,.31f),(float)r.NextDouble());
         internal static float Next(System.Random r,float a,float b)=>Mathf.Lerp(a,b,(float)r.NextDouble());
+        /// <summary>Uniform 0..1 per grid cell, stable for a seed.</summary>
+        static float CellHash(int x,int z,int seed){unchecked{uint h=(uint)(x*73856093^z*19349663^seed*83492791);h^=h>>13;h*=0x5bd1e995;h^=h>>15;return(h&0xFFFFFF)/16777216f;}}
         static Texture2D NeedleTexture()
         {
             const int size=128;var texture=new Texture2D(size,size,TextureFormat.RGBA32,true){name="Ponderosa branching needle silhouette",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Trilinear,anisoLevel=4};

@@ -24,8 +24,9 @@ namespace MadeInArizona
         int bounces;
         Mode mode; Payload payload;
         Color color;
-        Transform head;
-        Material ownMaterial;
+        Transform head, beaconBeam;
+        Material ownMaterial, beaconMaterial;
+        static readonly Color BeaconRed = new Color(1, .06f, .03f);
         readonly HashSet<VehicleController> struck = new HashSet<VehicleController>();
 
         public static void LaunchShell(VehicleController owner, Vector3 origin, Vector3 aim, WeaponDefinition weapon, float damage, float horizontalSpeed = 0, VehicleController assistedTarget = null)
@@ -82,6 +83,44 @@ namespace MadeInArizona
             charge.mode = Mode.Mine; charge.damage = damage; charge.radius = weapon.blastRadius;
             charge.armedAt = Time.time + .6f; charge.expiresAt = Time.time + 25;
             charge.transform.localScale = new Vector3(.8f, .25f, .8f);
+            charge.AddWarningBeacon();
+        }
+        /// <summary>
+        /// A red warning lamp on top of the mine with a spotlight sweeping the ground around it, so a mine on the road
+        /// reads from the overhead camera. On the lowest preset (no extra lights) the flashing lamp still shows.
+        /// </summary>
+        void AddWarningBeacon()
+        {
+            var lamp = GameObject.CreatePrimitive(PrimitiveType.Sphere); lamp.name = "Mine warning beacon";
+            Destroy(lamp.GetComponent<Collider>());
+            lamp.transform.SetParent(transform, false);
+            // The mine body is scaled (.8, .25, .8); counter-scale so the lamp is a small round dome on top.
+            lamp.transform.localPosition = new Vector3(0, .85f, 0);
+            lamp.transform.localScale = new Vector3(.36f / .8f, .28f / .25f, .36f / .8f);
+            beaconMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            beaconMaterial.color = BeaconRed; beaconMaterial.EnableKeyword("_EMISSION"); beaconMaterial.SetColor("_EmissionColor", BeaconRed * 3);
+            var renderer = lamp.GetComponent<Renderer>(); renderer.sharedMaterial = beaconMaterial;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            beaconBeam = new GameObject("Rotating beacon beam").transform; beaconBeam.SetParent(lamp.transform, false);
+            var light = beaconBeam.gameObject.AddComponent<Light>();
+            light.type = LightType.Spot; light.color = BeaconRed; light.range = 11; light.spotAngle = 62; light.innerSpotAngle = 22;
+            light.intensity = 34; light.shadows = LightShadows.None; light.renderMode = LightRenderMode.ForcePixel;
+        }
+        void SpinBeacon()
+        {
+            if (!beaconBeam) return;
+            // Tilted down so the beam sweeps a red arc across the ground, like a rotating road-works lamp.
+            float angle = Time.time * 400;
+            beaconBeam.rotation = Quaternion.Euler(32, angle, 0);
+            // The lamp flares as the beam swings past the camera, as a real rotating reflector does.
+            var view = Camera.main;
+            float flare = 0;
+            if (view)
+            {
+                Vector3 beam = Quaternion.Euler(0, angle, 0) * Vector3.forward, toView = view.transform.position - transform.position; toView.y = 0;
+                flare = Mathf.Pow(Mathf.Max(0, Vector3.Dot(beam, toView.normalized)), 6);
+            }
+            beaconMaterial.SetColor("_EmissionColor", BeaconRed * (3.5f + 8 * flare));
         }
         /// <summary>A dynamite bolt stuck in the ground or a wall; it goes off after <paramref name="delay"/>.</summary>
         public static void PlantCharge(VehicleController owner, Vector3 point, float delay, float damage, float radius, Color color)
@@ -198,6 +237,7 @@ namespace MadeInArizona
         void UpdateMine()
         {
             transform.Rotate(Vector3.up, 90 * Time.deltaTime);
+            SpinBeacon();
             if (Time.time > armedAt)
                 foreach (var vehicle in VehicleController.Active)
                     if (Hostile(vehicle) && (vehicle.transform.position - transform.position).sqrMagnitude < 12.25f) { Detonate(); return; }
@@ -404,6 +444,6 @@ namespace MadeInArizona
             sentries.Remove(this);
             Destroy(gameObject);
         }
-        void OnDestroy() { sentries.Remove(this); if (ownMaterial) Destroy(ownMaterial); }
+        void OnDestroy() { sentries.Remove(this); if (ownMaterial) Destroy(ownMaterial); if (beaconMaterial) Destroy(beaconMaterial); }
     }
 }

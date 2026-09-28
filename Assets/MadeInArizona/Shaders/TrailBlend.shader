@@ -107,14 +107,14 @@ Shader "MadeInArizona/TrailBlend"
 
                 float3 tn=UnpackNormal(SAMPLE_TEXTURE2D(_Normal,sampler_Diffuse,soilUV));
                 float3 n=normalize(i.n+float3(tn.x,0,tn.y)*(.55-rut*.25));
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1;
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
-                    ao=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p)).indirectAmbientOcclusion;
+                    AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 ao*=lerp(.66,1,SAMPLE_TEXTURE2D(_AO,sampler_Diffuse,soilUV).r);
                 float cloud=Fbm(p*.006+_Time.y*float2(.0021,.0013));
                 float cloudShade=lerp(.91,1.0,smoothstep(.38,.68,cloud));
-                float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade);
+                float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade*directAO);
                 #if defined(_ADDITIONAL_LIGHTS)
                 uint count=GetAdditionalLightsCount();
                 for(uint lightIndex=0;lightIndex<count;lightIndex++)

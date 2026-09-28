@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: gokart
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: gokart
+  displayName: Dynamite Go-Kart
+  description: A toy go-kart with a car-alarm brain and a bundle of dynamite. It
+    hunts down the nearest hostile and hugs it.
+  role: SEEKING BOMB
+  strength: Chases targets around cover and corners.
+  weakness: Slow; can be outrun or blocked by walls; three a drop.
+  contentOrder: 28
+  damage: 140
+  fireRate: 0.8
+  speed: 24
+  blastRadius: 7
+  projectileColor: {r: 1, g: 0.62, b: 0.1, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 699bd86719ba9964991c544b699b754e, type: 3}

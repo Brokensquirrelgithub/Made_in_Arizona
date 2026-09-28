@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: harpoon
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: harpoon
+  displayName: Tow-Hook Harpoon
+  description: 'SNIPER + WINCH. A tow hook on a winch cable: it spears a car and
+    yanks it into your bumper.'
+  role: PULL / SETUP
+  strength: Drags runners and snipers into ram and shotgun range.
+  weakness: Single target and pulls danger toward you.
+  contentOrder: 25
+  damage: 45
+  fireRate: 0.8
+  speed: 120
+  blastRadius: 0
+  projectileColor: {r: 0.9, g: 0.75, b: 0.4, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
+  - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}
+  - {fileID: 8300000, guid: 385137d1f615f524ea78bc1569276ee5, type: 3}

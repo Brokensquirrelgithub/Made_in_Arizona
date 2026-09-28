@@ -27,6 +27,9 @@ namespace MadeInArizona
             Vector3 p = new Vector3(trail.points[m].x, 0, trail.points[m].y); p.y = HeightAt(p); return p;
         }
 
+        /// <summary>Crossings of the dirt-trail network out in open country, used as mission objectives.</summary>
+        public List<Vector3> TrailJunctions { get; } = new List<Vector3>();
+
         void PlanTrails()
         {
             float density = Mathf.Clamp(cfg.trailDensity, 0, 3);
@@ -45,6 +48,7 @@ namespace MadeInArizona
                 nodes.Add(p);
             }
             int junctions = nodes.Count;
+            var joined = new bool[junctions];
             foreach (var pin in Pins) if (pin.kind != "town" && TownDistance(XZ(pin.position)) > TownTrailClearance) nodes.Add(XZ(pin.position));
 
             var linked = new HashSet<long>();
@@ -60,7 +64,7 @@ namespace MadeInArizona
                     if (made >= links || (nodes[j] - nodes[i]).magnitude > spacing * 3.4f) break;
                     long key = i < j ? (long)i << 32 | (uint)j : (long)j << 32 | (uint)i;
                     if (linked.Contains(key)) { made++; continue; }
-                    if (AddTrail(nodes[i], nodes[j], random, false)) { linked.Add(key); made++; }
+                    if (AddTrail(nodes[i], nodes[j], random, false)) { linked.Add(key); made++; if (i < junctions) joined[i] = true; if (j < junctions) joined[j] = true; }
                 }
                 // Every third junction and every point of interest also has a dirt road out to the paved network.
                 if ((i < junctions && i % 3 == 0) || i >= junctions)
@@ -69,6 +73,8 @@ namespace MadeInArizona
                     if ((road - nodes[i]).magnitude < spacing * 2.6f) AddTrail(nodes[i], road, random, true);
                 }
             }
+            TrailJunctions.Clear();
+            for (int i = 0; i < junctions; i++) if (joined[i]) { var p = new Vector3(nodes[i].x, 0, nodes[i].y); p.y = HeightAt(p); TrailJunctions.Add(p); }
         }
 
         bool AddTrail(Vector2 a, Vector2 b, System.Random random, bool toRoad)
@@ -215,7 +221,7 @@ namespace MadeInArizona
         }
 
         /// <summary>Feathered, height-blended soil material; falls back to the opaque ground material without the shader.</summary>
-        static Material TrailMaterial(Shader blend, Color color, int textureIndex, float ruts, float crown, float worn)
+        internal static Material TrailMaterial(Shader blend, Color color, int textureIndex, float ruts, float crown, float worn)
         {
             if (!blend) return GroundMaterial(color, textureIndex);
             var material = new Material(blend) { name = "MIA_Trail_" + textureIndex, enableInstancing = false };
@@ -232,7 +238,7 @@ namespace MadeInArizona
             return material;
         }
 
-        static GameObject TrailSurface(string name, Vector3[,] grid, Vector4[] uv, Vector2[] shape, Material material, Transform parent)
+        internal static GameObject TrailSurface(string name, Vector3[,] grid, Vector4[] uv, Vector2[] shape, Material material, Transform parent)
         {
             int rows = grid.GetLength(0), cols = grid.GetLength(1);
             var vertices = new Vector3[rows * cols];

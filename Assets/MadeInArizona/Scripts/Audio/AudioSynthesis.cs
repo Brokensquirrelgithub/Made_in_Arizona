@@ -70,7 +70,7 @@ namespace MadeInArizona
             }
             return Clip("Original • overrun pop",samples);
         }
-        /// <summary>The player's hull taking a hit: body thump, inharmonic panel ring and a crunch of bending metal.</summary>
+        /// <summary>The player's hull taking a hit: body thump, a low clang of struck sheet steel and a crunch of bending metal.</summary>
         public static AudioClip Hurt(int variant)
         {
             var samples=new float[Mathf.RoundToInt(Rate*.55f)];uint seed=(uint)(7207+variant*613);float low=0,band=0;
@@ -79,12 +79,94 @@ namespace MadeInArizona
             {
                 float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.08f);band=Mathf.Lerp(band,n-low,.5f);
                 float thump=Wave((95-70*Mathf.Min(1,t*9))*t)*Mathf.Exp(-t*16)*.95f;
-                float panel=(Wave(417*spread*t)*.45f+Wave(1093*spread*t)*.28f+Wave(1777*spread*t)*.2f+Wave(2631*spread*t)*.12f)*Mathf.Exp(-t*11);
-                float crunch=band*Mathf.Exp(-t*26)*(1+.6f*Wave(37*t))*1.1f;
+                // Low, detuned partial pairs beat against each other and die quickly, so the hit reads as a dull clang
+                // of a car panel rather than the sparse, long ring of a bell. The ring-modulated pair adds clank.
+                float f=spread;
+                float panel=(Wave(151*f*t)*.5f+Wave(158*f*t)*.38f)*Mathf.Exp(-t*10)
+                    +(Wave(263*f*t)*.34f+Wave(281*f*t)*.26f)*Mathf.Exp(-t*15)
+                    +(Wave(419*f*t)*.2f+Wave(452*f*t)*.15f)*Mathf.Exp(-t*22)
+                    +Wave(207*f*t)*Wave(653*f*t)*.32f*Mathf.Exp(-t*24);
+                float crunch=band*Mathf.Exp(-t*26)*(1+.6f*Wave(37*t))*1.2f;
                 float rattle=n*Mathf.Exp(-Mathf.Abs(t-.09f)*80)*.25f;
-                samples[i]=SoftLimit((thump+panel*.55f+crunch+rattle)*1.25f)*Mathf.Min(1,t*900);
+                samples[i]=SoftLimit((thump+panel*.6f+crunch+rattle)*1.25f)*Mathf.Min(1,t*900);
             }
             return Clip("Original • hull impact "+variant,samples);
+        }
+        /// <summary>
+        /// Hit confirmation for the player's shots, in the style of shooter hitmarkers: a crisp high-passed click, a
+        /// short bright metallic "tink" and a small low knock for weight, all over within ~80 ms so rapid fire stays
+        /// clean. Variants shift the pitch slightly so repeated hits do not sound machine-gunned.
+        /// </summary>
+        public static AudioClip HitMarker(int variant)
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.085f)];uint seed=(uint)(8117+variant*977);float low=0;
+            float pitch=1+(variant-1)*.045f;
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.22f);
+                float click=(n-low)*Mathf.Exp(-t*480)*.95f;
+                float tink=(Wave(2150*pitch*t)*.55f+Wave(3260*pitch*t)*.3f+Wave(4870*pitch*t)*.12f)*Mathf.Exp(-t*75);
+                float knock=Wave(185*t)*Mathf.Exp(-t*95)*.4f;
+                samples[i]=SoftLimit((click+tink*.75f+knock)*1.25f)*Mathf.Min(1,t*4000);
+            }
+            return Clip("Original • hit marker "+variant,samples);
+        }
+        /// <summary>
+        /// Kill confirmation: a heavy punched thunk with a short crunch, topped by a bright two-note ding, so a kill
+        /// lands clearly above the ordinary hit tick.
+        /// </summary>
+        public static AudioClip KillConfirm()
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.42f)];uint seed=5521;float low=0;
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.15f);
+                float thunk=Wave((125-70*Mathf.Min(1,t*14))*t)*Mathf.Exp(-t*16)*.95f;
+                float crunch=(n-low)*Mathf.Exp(-t*55)*.45f;
+                float ding=0;
+                float[] notes={1318.5f,1760f};
+                for(int k=0;k<2;k++){float local=t-.012f-k*.055f;if(local<0)continue;
+                    ding+=(Wave(notes[k]*local)*.6f+Wave(notes[k]*2.01f*local)*.15f)*Mathf.Exp(-local*11)*Mathf.Min(1,local*900)*.4f;}
+                samples[i]=SoftLimit((thunk+crunch+ding)*1.15f)*Mathf.Min(1,t*3000);
+            }
+            return Clip("Original • kill confirm",samples);
+        }
+        /// <summary>Objective progress (checkpoints, optional objectives): a quick rising major arpeggio over an airy sweep.</summary>
+        public static AudioClip ObjectiveChime()
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.85f)];uint seed=9151;float low=0,air=0;
+            float[] notes={523.25f,659.25f,783.99f,1046.5f};
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed),s=0;low=Mathf.Lerp(low,n,.25f);air=Mathf.Lerp(air,n-low,.6f);
+                for(int k=0;k<notes.Length;k++)
+                {
+                    float start=k*.075f,local=t-start;if(local<0)continue;
+                    float env=Mathf.Min(1,local*140)*Mathf.Exp(-local*(k==notes.Length-1?4.5f:9));
+                    s+=(Wave(notes[k]*local)*.6f+Wave(notes[k]*2.003f*local)*.18f+Wave(notes[k]*3.01f*local)*.07f)*env*.42f;
+                }
+                // Rising breath of air under the notes.
+                s+=air*Mathf.Sin(Mathf.PI*Mathf.Clamp01(t/.5f))*.18f*(1+.5f*Wave((300+900*t)*t));
+                samples[i]=SoftLimit(s*1.1f)*Mathf.Min(1,(samples.Length-i)/(Rate*.05f));
+            }
+            return Clip("Original • objective chime",samples);
+        }
+        /// <summary>
+        /// Repair pickup: three soft socket-wrench ratchet clicks over a faint warm hum. Deliberately quieter and duller
+        /// than the hull-impact clang, so being hurt always reads louder than being patched up.
+        /// </summary>
+        public static AudioClip Repair()
+        {
+            var samples=new float[Mathf.RoundToInt(Rate*.42f)];uint seed=4409;float low=0,band=0;
+            for(int i=0;i<samples.Length;i++)
+            {
+                float t=i/(float)Rate,n=Noise(ref seed);low=Mathf.Lerp(low,n,.35f);band=Mathf.Lerp(band,low-band*.2f,.5f);
+                float clicks=0;
+                for(int k=0;k<3;k++){float local=t-.03f-k*.055f;if(local>=0)clicks+=band*Mathf.Exp(-local*260)*(1-k*.18f);}
+                float hum=(Wave(196*t)*.7f+Wave(294*t)*.3f)*Mathf.Sin(Mathf.PI*Mathf.Clamp01(t/.42f))*.16f;
+                samples[i]=SoftLimit((clicks*.9f+hum)*1.1f)*Mathf.Min(1,t*600);
+            }
+            return Clip("Original • repair ratchet",samples);
         }
         /// <summary>A two-beat low heartbeat loop layered in while the player's vehicle is critically damaged.</summary>
         public static AudioClip Heartbeat()

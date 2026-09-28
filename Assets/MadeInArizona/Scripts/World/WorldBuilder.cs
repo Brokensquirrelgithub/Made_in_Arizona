@@ -27,8 +27,11 @@ namespace MadeInArizona
             for(int i=transform.childCount-1;i>=0;i--) { GameObject child=transform.GetChild(i).gameObject; child.SetActive(false); if(Application.isPlaying) Destroy(child); else DestroyImmediate(child); }
             ObjectivePoints.Clear(); EnemySpawns.Clear(); Surfaces.Clear();
         }
+        /// <summary>Drive probe: forces one surface everywhere, so handling runs compare builds on equal ground.</summary>
+        internal static SurfaceKind? SurfaceOverride;
         public static SurfaceKind SurfaceAt(Vector3 position)
         {
+            if(SurfaceOverride.HasValue)return SurfaceOverride.Value;
             if(GeneratedWorld.Active)return GeneratedWorld.SurfaceAt(position);
             for(int i=Surfaces.Count-1;i>=0;i--) if(Surfaces[i].bounds.Contains(new Vector2(position.x,position.z))) return Surfaces[i].kind;
             return SurfaceKind.Dirt;
@@ -139,8 +142,8 @@ namespace MadeInArizona
                 Box("Recovered campaign plate",shop,new Vector3(x,y,11.41f),new Vector3(.55f,.32f,.03f),i%2==0?Cream:Turquoise);
                 Text((i+1).ToString("00"),shop,new Vector3(x,y,11.38f),.13f,Ink);
             }
-            // Outdoor apron and silhouettes keep the dollhouse garage grounded in the desert.
-            Box("Exterior desert",transform,new Vector3(0,-.3f,5),new Vector3(120,.35f,110),Sand,true);
+            // The desert outside uses the open world's terrain, soil, plant and rock rendering (see WorldBuilderGarage).
+            BuildGarageGrounds(shop);
             RoadsideProps.Cactus(transform,new Vector3(-17,0,-8),1.6f,false);
             RoadsideProps.Cactus(transform,new Vector3(19,0,7),2,false);
             RoadsideProps.JunkCar(transform,new Vector3(-18,0,12),Rust,-20);

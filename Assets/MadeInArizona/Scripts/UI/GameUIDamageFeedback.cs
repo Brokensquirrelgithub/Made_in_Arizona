@@ -50,6 +50,16 @@ namespace MadeInArizona
                 Text(width * .5f - 320, height - 250, 640, 34, "CRITICAL DAMAGE  •  FIND A REPAIR DROP", 22, new Color(1, .22f, .12f, blink), true, TextAnchor.MiddleCenter);
             }
 
+            // Repair: a faint green edge glow and a small "+N" over the car, well under the hurt flash.
+            float healed = Time.time - damage.LastRepairTime;
+            if (healed < .8f && !damage.IsDead)
+            {
+                float fade = 1 - healed / .8f;
+                DrawEdgeVignette(new Color(.2f, 1, .42f, .16f * fade * fade));
+                Vector2 at = ScreenPoint(player.transform.position + Vector3.up * 2.2f);
+                Text(at.x - 80, at.y - 30 - healed * 40, 160, 30, "+" + Mathf.RoundToInt(damage.LastRepairAmount), 17, new Color(.45f, 1, .6f, Mathf.Clamp01(fade * 1.3f) * .85f), true, TextAnchor.MiddleCenter);
+            }
+
             // Fresh hit: a strong red flash that fades out, plus a bright wedge toward the attacker.
             if (since < .6f)
             {
@@ -122,6 +132,8 @@ namespace MadeInArizona
             if (ghostHealth > health) Rect(x + w * health, y, w * (Mathf.Clamp01(ghostHealth) - health), h, new Color(1, .82f, .55f));
             Color fill = critical ? Color.Lerp(Orange, new Color(1, .1f, .05f), pulse) : health > .55f ? Lime : Color.Lerp(Orange, Lime, (health - CriticalHealth) / (.55f - CriticalHealth));
             if (since < .12f) fill = Color.white;
+            float healed = Time.time - damage.LastRepairTime;
+            if (healed < .6f) { float glow = 1 - healed / .6f; Rect(x - 2, y - 2, w + 4, h + 4, new Color(.3f, 1, .5f, .3f * glow)); fill = Color.Lerp(fill, new Color(.75f, 1, .8f), glow * .5f); }
             Rect(x, y, w * health, h, fill);
         }
 

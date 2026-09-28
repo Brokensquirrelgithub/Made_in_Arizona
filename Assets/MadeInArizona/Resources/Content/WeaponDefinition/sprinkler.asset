@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: sprinkler
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: sprinkler
+  displayName: Lawn-Sprinkler Firebomb
+  description: GRENADE + FLAMETHROWER. A lobbed paint can that spins like a lawn
+    sprinkler, spraying burning fuel in a ring.
+  role: AREA DENIAL
+  strength: Sets every car around the landing point on fire.
+  weakness: Weak blast and a slow lob; the burn does the work.
+  contentOrder: 18
+  damage: 40
+  fireRate: 0.8
+  speed: 42
+  blastRadius: 3.5
+  projectileColor: {r: 1, g: 0.5, b: 0.1, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: bea96d7184098574481c153c4ebe3048, type: 3}

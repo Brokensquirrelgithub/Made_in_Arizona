@@ -150,6 +150,20 @@ Shader "MadeInArizona/BiomeTerrain"
                     float foot=smoothstep(.1,.3,slope)*(1-smoothstep(.3,.5,slope));
                     albedo*=1-foot*.18*saturate(dot(i.n.xz,i.n.xz)*4);
                 }
+                // River bed (vertex alpha: 1 dry, .5 waterline, 0 deepest): rounded wet gravel with silt drifts under the
+                // water, darkening and turning olive with depth, plus a darker wet band just above the waterline.
+                float wet=saturate((1-i.c.a)*2),underwater=saturate((.5-i.c.a)*2);
+                UNITY_BRANCH if(wet>.001)
+                {
+                    float2 bedUV=p*.21;
+                    float3 pebbles=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,bedUV,6).rgb;
+                    float3 silt=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,float2(bedUV.y,-bedUV.x)*.6+.31,7).rgb;
+                    float drift=smoothstep(.38,.66,Fbm(p*.07+float2(7,-11))+underwater*.12);
+                    float3 bed=lerp(pebbles,dot(silt,float3(.299,.587,.114))*float3(.86,.84,.7),drift*.7);
+                    bed=lerp(albedo*float3(.7,.68,.6),bed*1.05,_UseGroundTextures);
+                    bed*=lerp(.7,.46,underwater);bed*=lerp(float3(1,1,1),float3(.78,.94,.84),underwater);
+                    albedo=lerp(albedo,bed,wet);
+                }
                 // ddx/ddy recovers the world-space slope from one shared micro-height evaluation.
                 // It replaces four high-frequency procedural resamples per fragment.
                 float microHeight=Noise(p*2.6)*.055+Noise(p*7.0)*.018+scatteredStone*.018-cracks*.012;
@@ -166,15 +180,23 @@ Shader "MadeInArizona/BiomeTerrain"
                 float2 nx0=n0.xy*2-1,nx1=n1.xy*2-1,nx2=n2.xy*2-1;
                 float2 packNormal=(nx0*layerWeight.x+float2(nx1.y,-nx1.x)*layerWeight.y+float2(-nx2.y,nx2.x)*layerWeight.z)*_UseGroundTextures;
                 float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22));
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1;
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
-                    ao=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p)).indirectAmbientOcclusion;
+                    AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 float cloud=Fbm(p*.006+_Time.y*float2(.0021,.0013));
                 float cloudShade=lerp(.91,1.0,smoothstep(.38,.68,cloud));
                 float packAO=n0.b*layerWeight.x+n1.b*layerWeight.y+n2.b*layerWeight.z;
                 ao*=lerp(1,lerp(.62,1,packAO),_UseGroundTextures*.72);
-                float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade);
+                float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade*directAO);
+                // Sun caustics dancing on the submerged bed.
+                UNITY_BRANCH if(underwater>.001)
+                {
+                    float ce,ch,ce2,ch2;
+                    Voronoi(p*.9+_Time.y*float2(.21,.13),ce,ch);Voronoi(p*1.3-_Time.y*float2(.11,.19)+7.3,ce2,ch2);
+                    float caustic=(1-smoothstep(0,.14,ce))*(1-smoothstep(0,.2,ce2));
+                    lit+=albedo*sun.color*sun.shadowAttenuation*caustic*1.4*saturate(underwater*3)*(1-underwater*.55);
+                }
                 #if defined(_ADDITIONAL_LIGHTS)
                 uint count=GetAdditionalLightsCount();
                 for(uint lightIndex=0;lightIndex<count;lightIndex++)

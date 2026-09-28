@@ -111,14 +111,42 @@ namespace MadeInArizona
 
         // URP exposes SSAO's quality settings only through its renderer feature. Reflection keeps this runtime
         // control in player builds while the editor setup below creates the real feature and its shader variants.
+        static void SetAmbientOcclusionField(object settings, string name, float value)
+        {
+            var field = settings.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null && field.FieldType == typeof(float)) field.SetValue(settings, value);
+        }
+        static void SetAmbientOcclusionEnum(object settings, string name, int value)
+        {
+            var field = settings.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null && field.FieldType.IsEnum) field.SetValue(settings, System.Enum.ToObject(field.FieldType, value));
+        }
+        static void SetAmbientOcclusionBool(object settings, string name, bool value)
+        {
+            var field = settings.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null && field.FieldType == typeof(bool)) field.SetValue(settings, value);
+        }
         static void ApplyAmbientOcclusion(float amount)
         {
             if (AmbientOcclusionSettings == null) return;
             foreach (var feature in Resources.FindObjectsOfTypeAll<ScreenSpaceAmbientOcclusion>()) {
                 object settings = AmbientOcclusionSettings.GetValue(feature);
                 if (settings == null) continue;
-                var intensity = settings.GetType().GetField("Intensity", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (intensity != null) intensity.SetValue(settings, Mathf.Clamp(amount, 0f, 4f));
+                amount = Mathf.Clamp01(amount);
+                // Scaled for the distant orthographic camera: the stock 3.5 cm radius was invisible from there, and the
+                // 80 m falloff faded occlusion out entirely, since the lens sits more than 80 m from the car.
+                SetAmbientOcclusionField(settings, "Intensity", amount * 4f);
+                SetAmbientOcclusionField(settings, "Radius", .3f + amount * .9f);
+                SetAmbientOcclusionField(settings, "Falloff", 2000f);
+                SetAmbientOcclusionField(settings, "DirectLightingStrength", .15f + amount * .5f);
+                // Grain and flicker came from the renderer asset's SSAO setup: blue noise, which swaps its texture every
+                // frame (it expects temporal anti-aliasing, which this game does not use), 4 samples, half resolution and
+                // the Kawase blur. The asset now uses fixed interleaved-gradient noise, 8 samples and medium normal
+                // reconstruction. Those are shader keywords, so they stay as set there: the build strips variants the
+                // asset does not use. Resolution and blur are not keywords and follow the graphics preset.
+                int quality = GameManager.Instance && GameManager.Instance.Save != null ? GameManager.Instance.Save.settings.quality : 2;
+                SetAmbientOcclusionEnum(settings, "BlurQuality", quality >= 2 ? 0 : 1);     // bilateral, else Gaussian
+                SetAmbientOcclusionBool(settings, "Downsample", quality < 2);
                 feature.SetActive(amount > 0f);
             }
         }

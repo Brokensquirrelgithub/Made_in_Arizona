@@ -35,13 +35,13 @@ namespace MadeInArizona
             {
                 muzzleFlash = muzzleTransform.GetComponent<Light>();
                 if (muzzleFlash == null) muzzleFlash = muzzleTransform.gameObject.AddComponent<Light>();
-                muzzleFlash.type = LightType.Point; muzzleFlash.range = 7;
+                muzzleFlash.type = LightType.Point; muzzleFlash.range = 9;
                 muzzleFlash.intensity = 0; muzzleFlash.shadows = LightShadows.None;
             }
         }
         void Update()
         {
-            if (muzzleFlash != null) muzzleFlash.intensity = Mathf.MoveTowards(muzzleFlash.intensity, 0, Time.deltaTime * 95);
+            if (muzzleFlash != null) muzzleFlash.intensity = Mathf.MoveTowards(muzzleFlash.intensity, 0, Time.deltaTime * 150);
             if (owner == null || owner.Damage.IsDead) return;
             if (turret != null && aimDirection.sqrMagnitude > .1f)
             {
@@ -314,7 +314,7 @@ namespace MadeInArizona
         {
             recoil = Mathf.Min(.28f, recoil + kick);
             if (muzzleFlash == null) return;
-            muzzleFlash.color = color; muzzleFlash.intensity = intensity;
+            muzzleFlash.color = color; muzzleFlash.intensity = intensity * 1.6f;
         }
         bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying && !VehicleAfflictions.Stalled(owner);
         void OnDestroy() { if (lobMarkerMaterial) Destroy(lobMarkerMaterial); }

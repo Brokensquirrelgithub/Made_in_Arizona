@@ -15,8 +15,9 @@ namespace MadeInArizona
         public int Seed=>seed;
         const int Chunks=8,Cells=48;
         static readonly Vector2[] Outline={new Vector2(-.47f,.49f),new Vector2(.45f,.49f),new Vector2(.49f,.18f),new Vector2(.48f,-.48f),new Vector2(-.08f,-.48f),new Vector2(-.47f,-.18f),new Vector2(-.43f,.08f),new Vector2(-.50f,.12f)};
-        // Normalised town sites inside the outline; the first MinTowns are always used.
-        static readonly Vector2[] TownPlan={new Vector2(-.06f,-.25f),new Vector2(.20f,-.04f),new Vector2(-.20f,.09f),new Vector2(.10f,.27f),new Vector2(-.28f,.31f),new Vector2(.30f,.34f),new Vector2(.38f,-.03f),new Vector2(.24f,-.33f),new Vector2(-.31f,-.09f),new Vector2(.02f,.43f)};
+        // Normalised town sites inside the outline; the first MinTowns are always used. The south-east site comes early
+        // so the southern third of the state has towns besides the starter town.
+        static readonly Vector2[] TownPlan={new Vector2(-.06f,-.25f),new Vector2(.20f,-.04f),new Vector2(-.20f,.09f),new Vector2(.10f,.27f),new Vector2(-.28f,.31f),new Vector2(.26f,-.36f),new Vector2(.30f,.34f),new Vector2(.40f,-.17f),new Vector2(-.31f,-.09f),new Vector2(.02f,.43f)};
         public static int MaxTowns=>TownPlan.Length;
         WorldGenConfig cfg;System.Random rng;int seed,townCount,poiCount;float size,half,amp,riverWidth;
         readonly List<Route> routes=new List<Route>();readonly List<Transform> details=new List<Transform>();readonly Dictionary<long,SurfaceKind> surfaceCache=new Dictionary<long,SurfaceKind>();
@@ -24,13 +25,13 @@ namespace MadeInArizona
         Transform terrainRoot,props,roads;Material desert,high,rock,asphalt,water;
         struct Segment { public Vector2 a,b; public float ha,hb; }
         readonly List<Segment> segments=new List<Segment>();
-        struct Route{public Vector2 a,b;public float width;public Route(Vector2 x,Vector2 y,float w){a=x;b=y;width=w;}}
+        struct Route{public Vector2 a,b;public float width,cross,crossWindow;public Route(Vector2 x,Vector2 y,float w){a=x;b=y;width=w;cross=-1;crossWindow=0;}}
 
         public void Configure(WorldGenConfig config,Transform parent)
         {
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
-            desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=GroundMaterial(new Color(.10f,.12f,.115f),10);water=new Material(Shader.Find("MadeInArizona/FlowRiver"));water.SetTexture("_BumpMap",WorldArt.SurfaceNormal());
+            desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
             Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan()
@@ -45,7 +46,7 @@ namespace MadeInArizona
             }
             PlanRoutes();
             // Elevation levels depend on the planned towns and routes (cliffs keep clear of both), so heights follow.
-            PrepareElevation();for(int i=0;i<Towns.Count;i++){Vector3 t=Towns[i];t.y=RawHeight(t.x,t.z);Towns[i]=t;}
+            PrepareElevation();for(int i=0;i<Towns.Count;i++){Vector3 t=Towns[i];t.y=RawHeight(t.x,t.z);Towns[i]=t;}PlanRiver();
         }
         /// <summary>
         /// Highways form a minimum spanning tree over the towns (short, non-crossing links that reach every town),
@@ -67,7 +68,7 @@ namespace MadeInArizona
         {
             if(a==b||a>=Towns.Count||b>=Towns.Count)return;
             long key=a<b?(long)a<<32|(uint)b:(long)b<<32|(uint)a;
-            if(linked.Add(key))routes.Add(new Route(XZ(Towns[a]),XZ(Towns[b]),width));
+            if(!linked.Add(key))return;var route=new Route(XZ(Towns[a]),XZ(Towns[b]),width);PlanRiverCrossing(ref route);routes.Add(route);
         }
         // Road queries only need exact answers near a road: grading, scenery clearance and surfaces all use short radii.
         readonly SegmentGrid roadIndex=new SegmentGrid(32,96);
@@ -94,16 +95,8 @@ namespace MadeInArizona
             for(int cz=0;cz<Chunks;cz++)for(int cx=0;cx<Chunks;cx++){float x0=-half+cx*cs,z0=-half+cz*cs;var v=new Vector3[(Cells+1)*(Cells+1)];var uv=new Vector2[v.Length];
                 for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){float wx=x0+x*cs/Cells,wz=z0+z*cs/Cells;int k=z*(Cells+1)+x;v[k]=new Vector3(wx,heights[cx*Cells+x,cz*Cells+z],wz);uv[k]=new Vector2(wx/12,wz/12);}
                 var tri=new List<int>();for(int z=0;z<Cells;z++)for(int x=0;x<Cells;x++){int a=z*(Cells+1)+x,b=a+1,c=a+Cells+1,d=c+1;if(Contains((v[a]+v[c]+v[b])/3)){tri.Add(a);tri.Add(c);tri.Add(b);}if(Contains((v[b]+v[c]+v[d])/3)){tri.Add(b);tri.Add(c);tri.Add(d);}}
-                var go=new GameObject("Terrain "+cx+"_"+cz,typeof(MeshFilter),typeof(MeshRenderer),typeof(MeshCollider));go.transform.SetParent(terrainRoot,false);var m=new Mesh{name="Arizona terrain chunk",vertices=v,triangles=tri.ToArray(),uv=uv};var normals=new Vector3[v.Length];for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){int gx=cx*Cells+x,gz=cz*Cells+z;normals[z*(Cells+1)+x]=new Vector3(heights[Mathf.Max(0,gx-1),gz]-heights[Mathf.Min(grid,gx+1),gz],step*2,heights[gx,Mathf.Max(0,gz-1)]-heights[gx,Mathf.Min(grid,gz+1)]).normalized;}m.normals=normals;m.RecalculateTangents();m.RecalculateBounds();go.GetComponent<MeshFilter>().sharedMesh=m;if(tri.Count>0)go.GetComponent<MeshCollider>().sharedMesh=m;go.GetComponent<MeshRenderer>().sharedMaterial=desert;var colors=new Color[v.Length];for(int k=0;k<v.Length;k++)colors[k]=BiomeColor(v[k]);m.colors=colors;go.AddComponent<GeneratedMeshOwner>().Mesh=m;details.Add(Group("Details "+cx+"_"+cz,props,Vector3.zero));
+                var go=new GameObject("Terrain "+cx+"_"+cz,typeof(MeshFilter),typeof(MeshRenderer),typeof(MeshCollider));go.transform.SetParent(terrainRoot,false);var m=new Mesh{name="Arizona terrain chunk",vertices=v,triangles=tri.ToArray(),uv=uv};var normals=new Vector3[v.Length];for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){int gx=cx*Cells+x,gz=cz*Cells+z;normals[z*(Cells+1)+x]=new Vector3(heights[Mathf.Max(0,gx-1),gz]-heights[Mathf.Min(grid,gx+1),gz],step*2,heights[gx,Mathf.Max(0,gz-1)]-heights[gx,Mathf.Min(grid,gz+1)]).normalized;}m.normals=normals;m.RecalculateTangents();m.RecalculateBounds();go.GetComponent<MeshFilter>().sharedMesh=m;if(tri.Count>0)go.GetComponent<MeshCollider>().sharedMesh=m;go.GetComponent<MeshRenderer>().sharedMaterial=desert;var colors=new Color[v.Length];for(int k=0;k<v.Length;k++){colors[k]=BiomeColor(v[k]);colors[k].a=RiverBedMask(v[k]);}m.colors=colors;go.AddComponent<GeneratedMeshOwner>().Mesh=m;details.Add(Group("Details "+cx+"_"+cz,props,Vector3.zero));
             }
-        }
-        void BuildRiver()
-        {
-            if(riverWidth<=0)return;
-            int count=Mathf.CeilToInt(size/3)+1;var l=new Vector3[count];var r=new Vector3[count];
-            for(int i=0;i<count;i++){float z=Mathf.Lerp(-half*.93f,half*.94f,i/(float)(count-1)),x=RiverX(z);Vector2 tangent=new Vector2(RiverX(z+1)-RiverX(z-1),2).normalized,n=new Vector2(-tangent.y,tangent.x);float w=riverWidth*(.86f+.12f*Mathf.Sin(z*.035f)+.07f*Mathf.Sin(z*.19f+seed)),y=RawHeight(x,z)-3.1f;l[i]=new Vector3(x+n.x*w,y,z+n.y*w);r[i]=new Vector3(x-n.x*w,y,z-n.y*w);}
-            Ribbon("Salt River",l,r,water,roads,false);
-            for(int i=2;i<count-2;i+=30)for(int side=-1;side<=1;side+=2){Vector3 p=(l[i]+r[i])*.5f;p.x+=side*(riverWidth+R(4,10));p.z+=R(-6,6);p.y=HeightInternal(p.x,p.z);Tree(Detail(p),p,R(5,9));}
         }
         /// <summary>Player spawn and extraction offsets from the starter town, kept clear of buildings.</summary>
         public static readonly Vector3 HomeSpawnOffset=new Vector3(-8,0,-12),HomeExtractionOffset=new Vector3(12,0,-10);
@@ -250,11 +243,12 @@ namespace MadeInArizona
             float n=Mathf.InverseLerp(-Active.half,Active.half,p.z);
             return n<Active.cfg.biomeThresholds.lowland?SurfaceKind.Sand:n>Active.cfg.biomeThresholds.highland?SurfaceKind.Rocks:SurfaceKind.Dirt;
         }
-        float HeightInternal(float x,float z)
+        // The river is carved last, into graded ground: road embankments and town pads used to bury it at crossings.
+        float HeightInternal(float x,float z)=>CarveRiver(x,z,GroundHeight(x,z));
+        /// <summary>Terrain before the river channel: raw relief with roads and towns graded in.</summary>
+        float GroundHeight(float x,float z)
         {
             float h=RawHeight(x,z);var p=new Vector2(x,z);
-            float river=Mathf.Abs(x-RiverX(z));
-            if(riverWidth>0&&river<riverWidth*2.2f)h=Mathf.Lerp(RawHeight(RiverX(z),z)-4.5f,h,Mathf.SmoothStep(0,1,river/(riverWidth*2.2f)));
             float roadHeight;float rd=NearestRoad(p,out roadHeight);
             // Terrain is linear between grid vertices, so any triangle touching the road must be fully graded
             // or its raised corners poke through the asphalt. Grade the road, shoulders and one cell diagonal.
@@ -285,8 +279,15 @@ namespace MadeInArizona
             // cliffs) replace the old mesa steps; see GeneratedWorldElevation.
             return ((broad-.35f)*.65f+crags*.28f)*amp+LevelOffset(x,z);
         }
-        float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+seed*.01f)*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
-        Vector2 RoutePoint(Route r,float u){Vector2 p=Vector2.Lerp(r.a,r.b,u),d=(r.b-r.a).normalized,n=new Vector2(-d.y,d.x);return p+n*Mathf.Sin(u*Mathf.PI*2+(r.a.x+r.b.y)*.01f)*size*.016f*Mathf.Sin(u*Mathf.PI);}
+        float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));public float RiverCenterX(float z)=>RiverX(z);float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+SeedOffset(seed,.01,SinePeriod))*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
+        /// <summary>
+        /// seed*scale reduced to one period of the function it offsets, in double precision. As a raw float, a large seed
+        /// (seeds reach two billion) swamped the coordinate term: the river's course jumped ~100 m sideways between
+        /// samples and noise patterns turned blocky. Seeds whose offset is already within one period are unchanged.
+        /// </summary>
+        public static float SeedOffset(int seed,double scale,double period)=>(float)(seed*scale%period);
+        public const double SinePeriod=System.Math.PI*2,PerlinPeriod=256;
+        Vector2 BaseRoutePoint(Route r,float u){Vector2 p=Vector2.Lerp(r.a,r.b,u),d=(r.b-r.a).normalized,n=new Vector2(-d.y,d.x);return p+n*Mathf.Sin(u*Mathf.PI*2+(r.a.x+r.b.y)*.01f)*size*.016f*Mathf.Sin(u*Mathf.PI);}
         /// <summary>Distance to the nearest road centre line; anything beyond 64 m reads as 65 m (every caller tests a shorter radius).</summary>
         float RoadDistance(Vector2 p)=>roadIndex.Distance(p);
         float NearestRoad(Vector2 p,out float height)=>roadIndex.Nearest(p,out height);

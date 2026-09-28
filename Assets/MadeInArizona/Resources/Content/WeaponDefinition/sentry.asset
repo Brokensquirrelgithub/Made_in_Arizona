@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: sentry
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: sentry
+  displayName: Lawn-Chair Sentry
+  description: MINE + TURRET. A lawn chair with a nail gun zip-tied to it. Drop it
+    and it guards the road for twelve seconds.
+  role: DEPLOYABLE TURRET
+  strength: Keeps shooting while you drive elsewhere; two at a time.
+  weakness: Stationary; slow to redeploy; light damage per nail.
+  contentOrder: 27
+  damage: 8
+  fireRate: 0.25
+  speed: 90
+  blastRadius: 0
+  projectileColor: {r: 0.5, g: 1, b: 0.55, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
+  - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}
+  - {fileID: 8300000, guid: 385137d1f615f524ea78bc1569276ee5, type: 3}

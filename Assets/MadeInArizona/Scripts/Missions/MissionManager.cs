@@ -235,7 +235,7 @@ namespace MadeInArizona
                 Progress=checkpoint/3f*.8f;
                 if(Vector3.Distance(escort.transform.position,Point(checkpoint))<11)
                 {
-                    checkpoint++;Score+=350;AudioManager.Instance?.PlayUI();
+                    checkpoint++;Score+=350;AudioManager.Instance?.PlayObjective();
                     if(checkpoint<3){SpawnWave(Mathf.Max(3,definition.enemyCount/3),Point(checkpoint));Midpoint();}
                     else{SetStage(1);if(ai)ai.HoldPosition=true;SetObjective("Evidence transferred • player return to extraction",Game.World.ExtractionPoint);}
                 }
@@ -249,7 +249,7 @@ namespace MadeInArizona
             {
                 if(Near(Point(checkpoint),11))
                 {
-                    checkpoint++;Score+=350;AudioManager.Instance?.PlayUI();
+                    checkpoint++;Score+=350;AudioManager.Instance?.PlayObjective();
                     if(checkpoint>=total){SetStage(1);SetObjective("Course complete • reach extraction before the timer expires",Game.World.ExtractionPoint);}
                     else{SetObjective("Checkpoint "+(checkpoint+1)+" / "+total+" • drive through the gold ring",Point(checkpoint));if(checkpoint==2){Midpoint();SpawnWave(3,Point(3));}}
                 }
@@ -262,7 +262,7 @@ namespace MadeInArizona
             int total=Mathf.Clamp(definition.targetCount,1,4);
             if(Stage==0&&InteractAt(Point(checkpoint)))
             {
-                checkpoint++;Score+=300;AudioManager.Instance?.PlayUI();
+                checkpoint++;Score+=300;AudioManager.Instance?.PlayObjective();
                 if(checkpoint>=total){SetStage(1);SpawnWave(Mathf.Max(2,definition.enemyCount/3),Point(0));SetObjective("All items secured • reach extraction",Game.World.ExtractionPoint);}
                 else
                 {
@@ -443,7 +443,7 @@ namespace MadeInArizona
                 case OptionalKind.Combo:satisfied=bestCombo>=definition.optionalThreshold;break;
                 case OptionalKind.Kills:satisfied=Kills>=definition.optionalThreshold;break;
             }
-            if(satisfied&&!OptionalComplete){OptionalComplete=true;Score+=800;Game.Notify("OPTIONAL OBJECTIVE COMPLETE • +800 score");AudioManager.Instance?.PlayUI();}
+            if(satisfied&&!OptionalComplete){OptionalComplete=true;Score+=800;Game.Notify("OPTIONAL OBJECTIVE COMPLETE • +800 score");AudioManager.Instance?.PlayObjective();}
         }
         void UnlockAchievement(string id,string title)
         {if(missionIndex<0)return;if(!Game.Save.achievements.Contains(id)){Game.Save.achievements.Add(id);Game.Notify("DISTINCTION UNLOCKED: "+title);}}

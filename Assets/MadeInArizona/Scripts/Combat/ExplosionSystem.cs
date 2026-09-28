@@ -200,7 +200,7 @@ namespace MadeInArizona
             if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
             for(int i=burns.Count-1;i>=0;i--) {
                 var burn=burns[i];if(Time.time>burn.until){if(burn.light)burn.light.enabled=false;burns.RemoveAt(i);continue;}
-                if(burn.light)burn.light.intensity=(7+Mathf.PerlinNoise(Time.time*7,burn.point.x)*10)*Mathf.Clamp01((burn.until-Time.time)*2);
+                if(burn.light)burn.light.intensity=(11+Mathf.PerlinNoise(Time.time*7,burn.point.x)*16)*Mathf.Clamp01((burn.until-Time.time)*2);
                 if(Time.time<burn.next)continue;burn.next=Time.time+.24f;
                 for(int j=0;j<(quality==3?2:1);j++) {
                     Vector3 p=burn.point+Random.insideUnitSphere*burn.radius*.2f;p.y=Mathf.Max(.15f,p.y);
@@ -377,7 +377,7 @@ namespace MadeInArizona
                 light=WorldArt.Lamp("Pooled flickering fire illumination",transform,point, new Color(1,.27f,.045f),5,radius*3);burnLights.Add(light);
             }
             if(light){
-                light.transform.position=point+Vector3.up*2;light.range=Mathf.Clamp(radius*2.5f,6,24);light.renderMode=LightRenderMode.ForcePixel;
+                light.transform.position=point+Vector3.up*2;light.range=Mathf.Clamp(radius*3f,8,30);light.renderMode=LightRenderMode.ForcePixel;
                 light.GetUniversalAdditionalLightData().additionalLightsShadowResolutionTier=0;
                 light.shadows=quality==3?LightShadows.Soft:LightShadows.None;light.shadowStrength=.72f;light.enabled=true;
             }
@@ -396,8 +396,8 @@ namespace MadeInArizona
                 flash = new Flash { light = light }; flashes.Add(flash);
             }
             if (flash == null) return;
-            flash.light.transform.position = point; flash.light.color = color; flash.light.range = Mathf.Clamp(radius * 2.7f, 7f, 34f);
-            flash.power = 48 + radius * 18; flash.light.intensity = flash.power;
+            flash.light.transform.position = point; flash.light.color = color; flash.light.range = Mathf.Clamp(radius * 3.2f, 9f, 42f);
+            flash.power = 78 + radius * 29; flash.light.intensity = flash.power;
             flash.start = Time.time; flash.until = Time.time + .35f; flash.light.enabled = true;
         }
         void MakeWave(Vector3 point, float radius, Color color)

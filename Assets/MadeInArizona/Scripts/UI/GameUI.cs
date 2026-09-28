@@ -378,23 +378,25 @@ namespace MadeInArizona
             Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
-            Text(48, height - 78, 320, 30, p.SpeedKph.ToString("000") + " KM/H     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
+            Text(48, height - 78, 320, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
             float weaponsX = 410;
             bool padControls = InputManager.Instance.UsingGamepad;
             Rect(weaponsX, height - 104, 210, 76, Ink);
             Tag(weaponsX + 12, height - 90, padControls ? "RT  /  GARAGE" : "LMB  /  GARAGE", Lime);
-            Text(weaponsX + 12, height - 63, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "NAIL GUN", 13, Cream, true);
+            Text(weaponsX + 12, height - 66, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "NAIL GUN", 15, Cream, true);
             Bar(weaponsX + 12, height - 34, 186, 4, 1 - p.Weapons.GarageCooldown, Lime);
             Rect(weaponsX + 220, height - 104, 210, 76, Ink);
             Tag(weaponsX + 232, height - 90, padControls ? "LT  /  FIELD" : "RMB  /  FIELD", Orange);
-            Text(weaponsX + 232, height - 63, 190, 30, p.Weapons.FieldWeapon ? p.Weapons.FieldWeapon.displayName.ToUpperInvariant() + "  " + p.Weapons.FieldAmmo : "EMPTY • FIND A DROP", 12, Cream, true);
+            Text(weaponsX + 232, height - 66, 190, 30, p.Weapons.FieldWeapon ? p.Weapons.FieldWeapon.displayName.ToUpperInvariant() + "  " + p.Weapons.FieldAmmo : "EMPTY • FIND A DROP", p.Weapons.FieldWeapon ? 15 : 13, Cream, true);
             Bar(weaponsX + 232, height - 34, 186, 4, 1 - p.Weapons.FieldCooldown, Orange);
             var nearbyWeapon = CombatPickup.NearbyWeapon(p);
             if (nearbyWeapon)
                 Text(410, height - 180, 530, 27, p.Weapons.FieldWeapon ?
                     (padControls ? "Y" : "F") + " SWAP FOR " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
                     "DRIVE OVER " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() + " TO EQUIP", 16, Lime, true);
-            Text(410, height - 146, 535, 29, padControls ? "RB BOOST    B DRIFT    Y SWAP" : "SHIFT BOOST    SPACE DRIFT    F SWAP", 12, Cream, true);
+            // Backing panel: the control hints were unreadable over pale sand.
+            Rect(weaponsX, height - 142, 430, 28, new Color(Ink.r, Ink.g, Ink.b, .85f));
+            Text(weaponsX + 12, height - 142, 418, 28, padControls ? "RB BOOST    B DRIFT    Y SWAP" : "SHIFT BOOST    SPACE DRIFT    F SWAP", 12, Cream, true, TextAnchor.MiddleLeft);
             if (game.Mission.Combo > 1) Text(28, 136, 320, 43, "×" + game.Mission.Combo + "  INSURANCE EVENT", 23, Orange, true);
             Text(28, 185, 320, 30, game.Mission.Score.ToString("N0") + "  DAMAGE CLAIM", 17, Cream, true);
             DrawMinimap(width - 216, height - 228, 188);
@@ -412,8 +414,11 @@ namespace MadeInArizona
         }
         void CombatLine(Vector2 a,Vector2 b,float thickness,Color color)
         {
+            // Rotate in the HUD's own (scaled) space. GUIUtility.RotateAroundPivot ignores the HUD scale, so at any UI
+            // scale other than 1 every rotated line drifted off its pivot: the vertical bar of the gamepad reticle
+            // separated from the horizontal one ("the reticle splits in two").
             Matrix4x4 matrix=GUI.matrix;
-            GUIUtility.RotateAroundPivot(Mathf.Atan2(b.y-a.y,b.x-a.x)*Mathf.Rad2Deg,a);
+            GUI.matrix=matrix*Matrix4x4.TRS(a,Quaternion.Euler(0,0,Mathf.Atan2(b.y-a.y,b.x-a.x)*Mathf.Rad2Deg),Vector3.one)*Matrix4x4.Translate(-a);
             Rect(a.x,a.y-thickness*.5f,(b-a).magnitude,thickness,color);GUI.matrix=matrix;
         }
         void DrawCombatReadability()

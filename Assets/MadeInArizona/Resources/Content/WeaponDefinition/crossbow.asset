@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: crossbow
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: crossbow
+  displayName: Dynamite Crossbow
+  description: PRECISION RIFLE + STICKY BOMB. A garage-door-spring crossbow firing
+    dynamite bolts that stick, fizz and blow.
+  role: STICKY DELAYED BLAST
+  strength: A hit guarantees a heavy explosion on that car.
+  weakness: A second's fuse, and misses stick to the ground instead.
+  contentOrder: 22
+  damage: 20
+  fireRate: 0.9
+  speed: 170
+  blastRadius: 5.5
+  projectileColor: {r: 1, g: 0.3, b: 0.2, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
+  - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}
+  - {fileID: 8300000, guid: 385137d1f615f524ea78bc1569276ee5, type: 3}

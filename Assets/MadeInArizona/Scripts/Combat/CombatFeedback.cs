@@ -10,6 +10,8 @@ namespace MadeInArizona
         public static float LastKillTime { get; private set; } = float.NegativeInfinity;
         public static float LastHitDamage { get; private set; }
         public static Vector3 LastHitPoint { get; private set; }
+        /// <summary>Whether the latest confirmation came from the player (rather than a friendly AI), for hit sounds.</summary>
+        public static bool LastHitByPlayer { get; private set; }
 
         public static event Action<float, Vector3> HitConfirmed;
         public static event Action<Vector3> KillConfirmed;
@@ -32,6 +34,7 @@ namespace MadeInArizona
             if (!sourceFriendly || targetFriendly) return;
 
             LastHitTime = Time.time;
+            LastHitByPlayer = sourceVehicle.IsPlayer;
             LastHitDamage = damage;
             LastHitPoint = point;
             HitConfirmed?.Invoke(damage, point);

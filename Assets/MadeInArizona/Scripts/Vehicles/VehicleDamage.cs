@@ -15,6 +15,9 @@ namespace MadeInArizona
         VehicleController vehicle;
         float smokeAt, baseHealth;
         public float LastDamageTime { get; private set; } = float.NegativeInfinity;
+        /// <summary>When hull health was last restored, and by how much, for the heal tell.</summary>
+        public float LastRepairTime { get; private set; } = float.NegativeInfinity;
+        public float LastRepairAmount { get; private set; }
         public Vector3 LastDamagePoint { get; private set; }
         public GameObject LastDamageSource { get; private set; }
         /// <summary>Share of maximum health removed by the most recent hit, for player hurt feedback.</summary>
@@ -136,7 +139,9 @@ namespace MadeInArizona
         public void Repair(float amount)
         {
             if (IsDead || amount <= 0) return;
+            float before = Health;
             Health = Mathf.Min(MaxHealth, Health + amount);
+            if (Health - before > .5f) { LastRepairTime = Time.time; LastRepairAmount = Health - before; }
             float restore = amount / MaxHealth * 1.8f;
             Engine = Mathf.Min(1, Engine + restore); Radiator = Mathf.Min(1, Radiator + restore);
             Transmission = Mathf.Min(1, Transmission + restore); Wheels = Mathf.Min(1, Wheels + restore);
@@ -173,7 +178,8 @@ namespace MadeInArizona
                 foreach (var renderer in vehicle.Visual.GetComponentsInChildren<Renderer>())
                 {
                     var block = new MaterialPropertyBlock(); block.SetColor("_BaseColor", new Color(.13f, .11f, .1f));
-                    block.SetColor("_Color", new Color(.13f, .11f, .1f));
+                    // Only legacy materials have _Color; setting it on the others logged a warning per panel.
+                    if (renderer.sharedMaterial && renderer.sharedMaterial.HasProperty("_Color")) block.SetColor("_Color", new Color(.13f, .11f, .1f));
                     // Burnt paint loses its clear coat and gloss.
                     block.SetFloat("_ClearCoat", 0); block.SetFloat("_Smoothness", .12f); block.SetFloat("_Metallic", .05f);
                     renderer.SetPropertyBlock(block);

@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: firecracker
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: firecracker
+  displayName: Firecracker Blunderbuss
+  description: SHOTGUN + EXPLOSIVES. A blunderbuss loaded with lit firecrackers;
+    every pellet pops.
+  role: EXPLOSIVE SPREAD
+  strength: Splash on every pellet rewards near misses.
+  weakness: Short range, and the pops hurt you up close.
+  contentOrder: 26
+  damage: 13
+  fireRate: 1.1
+  speed: 80
+  blastRadius: 1.8
+  projectileColor: {r: 1, g: 0.25, b: 0.2, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: e07faa26d7d74e348b43973cb93fa6bd, type: 3}
+  - {fileID: 8300000, guid: 345e09e37e315704a8ef418ee7ee8097, type: 3}
+  - {fileID: 8300000, guid: 28b4b9c0fbdb06c4b8e57c5bcd6a9af0, type: 3}

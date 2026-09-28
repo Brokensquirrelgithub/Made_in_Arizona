@@ -25,7 +25,16 @@ namespace MadeInArizona
         const float Headroom = 42f; // two elevation levels (2 x 13 m) plus a tall pine above the car
         float shake, dynamicZoom = 1, dynamicZoomVelocity, dynamicZoomHoldUntil;
         /// <summary>Garage orbit around the car: right-mouse drag, Q / E, or the right stick.</summary>
-        float garageYaw;
+        float garageYaw, manualOrbitUntil;
+        /// <summary>Idle garage turntable speed (degrees per second); manual orbiting pauses it for a few seconds.</summary>
+        const float GarageAutoOrbit = 7f;
+        /// <summary>
+        /// Look-ahead: the view shifts toward where the car is heading, by its velocity times the cameraLead dev value
+        /// (seconds), capped. The first version (0.32 s, 8.5 m, 0.55 s smoothing) swung so far and so slowly through
+        /// turns that the car appeared to slide across the screen and understeer.
+        /// </summary>
+        const float MaxLead = 4f, LeadSmoothing = .22f;
+        Vector3 lead, leadVelocity; Rigidbody targetBody; Transform leadTarget;
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
         void Start()
         {
@@ -49,6 +58,7 @@ namespace MadeInArizona
             // Offset the garage composition so the car sits to the right of the mission board.
             var focus = Target.position + (garage ? orbit * new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
             FocusPoint = focus; HasFocus = true;
+            if (!garage) focus += Lead(snap);
             var desired = focus + offset;
             if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+9);
             var rotation = Quaternion.LookRotation((focus-desired).normalized, Vector3.up);
@@ -82,6 +92,22 @@ namespace MadeInArizona
             if (!garage && shake > 0) transform.position += Random.insideUnitSphere * shake * GameManager.Instance.Save.settings.shake * Mathf.Clamp(DevTuning.Current.shake, 0f, 3f) * .35f;
         }
 
+        Vector3 Lead(bool snap)
+        {
+            if (leadTarget != Target) { leadTarget = Target; targetBody = Target.GetComponentInParent<Rigidbody>(); lead = leadVelocity = Vector3.zero; }
+            // Paused: hold the framing instead of drifting back to the car.
+            if (!snap && !GameManager.Instance.IsPlaying) return lead;
+            Vector3 wanted = Vector3.zero;
+            if (targetBody && !GameManager.Instance.Dying)
+            {
+                Vector3 planar = targetBody.linearVelocity; planar.y = 0;
+                wanted = Vector3.ClampMagnitude(planar * Mathf.Clamp(DevTuning.Current.cameraLead, 0, .4f), MaxLead);
+            }
+            if (snap) { lead = wanted; leadVelocity = Vector3.zero; }
+            else lead = Vector3.SmoothDamp(lead, wanted, ref leadVelocity, LeadSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
+            return lead;
+        }
+
         void OrbitGarage()
         {
             float dt = Time.unscaledDeltaTime, turn = 0;
@@ -89,6 +115,8 @@ namespace MadeInArizona
             if (mouse != null && mouse.rightButton.isPressed) turn += mouse.delta.ReadValue().x * .3f;
             if (keys != null) { if (keys.qKey.isPressed) turn -= 90 * dt; if (keys.eKey.isPressed) turn += 90 * dt; }
             if (pad != null) turn += pad.rightStick.ReadValue().x * 120 * dt;
+            if (Mathf.Abs(turn) > .0001f) manualOrbitUntil = Time.unscaledTime + 4;
+            else if (Time.unscaledTime > manualOrbitUntil) turn = GarageAutoOrbit * dt;
             garageYaw = Mathf.Repeat(garageYaw + turn, 360);
         }
 

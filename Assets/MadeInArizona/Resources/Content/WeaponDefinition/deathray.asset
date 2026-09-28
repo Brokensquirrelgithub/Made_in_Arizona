@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: deathray
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: deathray
+  displayName: Satellite-Dish Death Ray
+  description: SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing
+    the sun; damage builds the longer it stays on one car.
+  role: SUSTAINED FOCUS BEAM
+  strength: Melts a target you can keep it on for two seconds.
+  weakness: Weak until it warms up; switching targets resets it.
+  contentOrder: 21
+  damage: 5
+  fireRate: 12
+  speed: 0
+  blastRadius: 0
+  projectileColor: {r: 1, g: 0.93, b: 0.5, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
+  - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}
+  - {fileID: 8300000, guid: 385137d1f615f524ea78bc1569276ee5, type: 3}

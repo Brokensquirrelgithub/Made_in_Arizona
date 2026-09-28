@@ -37,7 +37,7 @@ namespace MadeInArizona
                 var go = new GameObject("Nitro glow");
                 go.transform.SetParent(transform, false);
                 glow = go.AddComponent<Light>();
-                glow.type = LightType.Point; glow.shadows = LightShadows.None; glow.range = 5.5f;
+                glow.type = LightType.Point; glow.shadows = LightShadows.None; glow.range = 7f;
                 glow.color = new Color(.35f, .55f, 1f);
             }
             glow.enabled = false; intensity = 0; wasBoosting = false;
@@ -77,7 +77,7 @@ namespace MadeInArizona
             glow.enabled = intensity > .01f && live > 0;
             if (!glow.enabled) return;
             glow.transform.position = center / live + back.normalized * .7f;
-            glow.intensity = intensity * 3.2f * flutter;
+            glow.intensity = intensity * 4.8f * flutter;
             if (boosting && Time.time >= emberAt)
             {
                 emberAt = Time.time + .045f;

@@ -125,8 +125,11 @@ namespace MadeInArizona.Editor
             }
         }
 
-        // SSAO is a real URP renderer feature. Keep it downsampled with low samples so the tuning control
-        // remains suitable for the game's wide orthographic camera on desktop hardware.
+        // SSAO is a real URP renderer feature. The noise method, sample count and normal reconstruction are shader
+        // keywords: the build keeps only the variants set here, so the runtime (DevVisuals) never changes them. It
+        // changes only resolution and blur per graphics preset, plus intensity and radius from the dev slider.
+        // Interleaved-gradient noise is fixed per pixel; blue noise swaps textures every frame and flickered
+        // without temporal anti-aliasing. Four samples with the Kawase blur looked grainy.
         static void EnsureAmbientOcclusion(UniversalRendererData renderer)
         {
             var ao = renderer.rendererFeatures.OfType<ScreenSpaceAmbientOcclusion>().FirstOrDefault();
@@ -144,15 +147,16 @@ namespace MadeInArizona.Editor
             }
             var serializedAo = new SerializedObject(ao);
             var settings = serializedAo.FindProperty("m_Settings");
-            settings.FindPropertyRelative("Downsample").boolValue = true;
+            settings.FindPropertyRelative("AOMethod").enumValueIndex = 1; // Interleaved gradient.
+            settings.FindPropertyRelative("Downsample").boolValue = false;
             settings.FindPropertyRelative("Source").enumValueIndex = 0; // Depth avoids a normal prepass.
-            settings.FindPropertyRelative("NormalSamples").enumValueIndex = 0;
-            settings.FindPropertyRelative("Intensity").floatValue = .45f;
-            settings.FindPropertyRelative("DirectLightingStrength").floatValue = .2f;
-            settings.FindPropertyRelative("Radius").floatValue = .035f;
-            settings.FindPropertyRelative("Samples").enumValueIndex = 2; // Four samples.
-            settings.FindPropertyRelative("BlurQuality").enumValueIndex = 2; // Kawase blur.
-            settings.FindPropertyRelative("Falloff").floatValue = 80f;
+            settings.FindPropertyRelative("NormalSamples").enumValueIndex = 1; // Medium.
+            settings.FindPropertyRelative("Intensity").floatValue = 1.2f;
+            settings.FindPropertyRelative("DirectLightingStrength").floatValue = .3f;
+            settings.FindPropertyRelative("Radius").floatValue = .57f;
+            settings.FindPropertyRelative("Samples").enumValueIndex = 1; // Eight samples.
+            settings.FindPropertyRelative("BlurQuality").enumValueIndex = 0; // Bilateral.
+            settings.FindPropertyRelative("Falloff").floatValue = 2000f; // The lens sits well over 80 m from the car.
             serializedAo.ApplyModifiedPropertiesWithoutUndo();
             ao.SetActive(true);
             renderer.SetDirty();

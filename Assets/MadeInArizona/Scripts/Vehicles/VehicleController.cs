@@ -66,6 +66,9 @@ namespace MadeInArizona
         const float TipOffAcceleration = 5f;
         /// <summary>Added to normal gravity while airborne (about 2.2 g in total), so jumps are short and punchy.</summary>
         const float ExtraAirGravity = 12f;
+        /// <summary>Drive probe controls: switch the extra air gravity off, and count the player's steps under it.</summary>
+        internal static bool ExtraAirGravityEnabled = true;
+        internal static int ExtraGravitySteps;
         /// <summary>
         /// Safety net for any geometry that still catches a car off its wheels (hung by the underside on a lip or face):
         /// after this long with throttle held and no movement, the car hops toward the direction being asked for.
@@ -207,7 +210,11 @@ namespace MadeInArizona
             Throttle = Mathf.MoveTowards(Throttle, input.magnitude, Time.fixedDeltaTime * 6);
             Grounded = SupportSuspension();
             // Cars come back down quickly: extra gravity whenever no wheel is on the ground (player and hostiles alike).
-            if (!Grounded && wheelContacts == 0 && !Beached) Body.AddForce(Vector3.down * ExtraAirGravity, ForceMode.Acceleration);
+            if (!Grounded && wheelContacts == 0 && !Beached && ExtraAirGravityEnabled)
+            {
+                Body.AddForce(Vector3.down * ExtraAirGravity, ForceMode.Acceleration);
+                if (IsPlayer) ExtraGravitySteps++;
+            }
             // Any wheel down or the belly resting on ground still gives drive, so a car hung on a lip can get itself off.
             bool traction = Grounded || Beached || wheelContacts > 0;
             if (!Grounded && input.sqrMagnitude > .25f && new Vector2(Body.linearVelocity.x, Body.linearVelocity.z).sqrMagnitude < .25f && (Beached || wheelContacts > 0 || Body.linearVelocity.y > -.5f))
@@ -540,8 +547,17 @@ namespace MadeInArizona
             if (supported && flattest < MinSupportNormal) normal = Vector3.up;
             return supported;
         }
+        /// <summary>Drive probe counters: physics steps with the hull touching ground, and the last thing hit.</summary>
+        internal static int HullGroundSteps; internal static string LastHitName = "";
+        void OnCollisionStay(Collision collision)
+        {
+            if (!IsPlayer || !ProbeCounting) return;
+            if (collision.collider is MeshCollider mesh && !mesh.convex || collision.collider.GetComponent<Terrain>()) HullGroundSteps++;
+        }
+        internal static bool ProbeCounting;
         void OnCollisionEnter(Collision collision)
         {
+            if (IsPlayer && ProbeCounting) LastHitName = collision.collider.name + " @" + collision.relativeVelocity.magnitude.ToString("F0");
             if (!initialized || Damage.IsDead || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
             float force = collision.relativeVelocity.magnitude;
             if(force<2)return;
@@ -550,12 +566,10 @@ namespace MadeInArizona
             if (prop != null)
             {
                 float propDamage = IsPlayer ? DevTuning.Current.propDamage : 1f;
-                bool belowCarSize = prop.Size < BodyLength;
-                if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && belowCarSize)
-                {
-                    float retainedMomentum = IsPlayer ? DevTuning.Current.propMomentum : .65f;
-                    Body.linearVelocity = Vector3.Lerp(Body.linearVelocity, preCollisionVelocity, Mathf.Clamp01(retainedMomentum));
-                }
+                bool plowable = prop.Size < BodyLength * BreakAwayScale;
+                // A prop the car plows through costs no speed: the velocity from before the contact is restored in full.
+                if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && plowable)
+                    Body.linearVelocity = preCollisionVelocity;
             }
             if(force<6 || Time.time<collisionCooldown)return;
             collisionCooldown=Time.time+.25f;
@@ -578,10 +592,11 @@ namespace MadeInArizona
         }
 
         // ---- Scenery sweep (every vehicle; hostiles get the same small-obstacle rules as the player) ----
-        // Props smaller than half the car are driven straight through (and knocked apart); props between half and
-        // the full car length break away without costing speed while the car is moving briskly. Anything as large
-        // as the car stays solid and uses ordinary collision.
+        // Props smaller than 60% of the car are driven straight through (and knocked apart); props up to 120% of the
+        // car's length break away without costing speed while the car is moving briskly. Anything larger stays solid
+        // and uses ordinary collision.
         public const float BreakAwaySpeed = 6f; // m/s, about 22 km/h
+        public const float SmallPropScale = .6f, BreakAwayScale = 1.2f;
         readonly Collider[] sweepHits = new Collider[48];
         readonly HashSet<DestructionSystem> ghosted = new HashSet<DestructionSystem>();
         readonly List<DestructionSystem> ghostScratch = new List<DestructionSystem>();
@@ -604,8 +619,8 @@ namespace MadeInArizona
                 var prop = hit.GetComponentInParent<DestructionSystem>();
                 if (!prop || prop.IsDestroyed) continue;
                 float size = prop.Size;
-                if (size >= length) continue;
-                bool small = size < length * .5f;
+                if (size >= length * BreakAwayScale) continue;
+                bool small = size < length * SmallPropScale;
                 if (!small && speed < BreakAwaySpeed) continue;
                 if (ghosted.Add(prop)) prop.SetVehicleCollision(body, false);
                 if (car.Intersects(prop.WorldBounds)) prop.SmashFromVehicle(hit.ClosestPointOnBounds(center), gameObject);
@@ -616,7 +631,7 @@ namespace MadeInArizona
             foreach (var prop in ghosted)
             {
                 if (!prop || prop.IsDestroyed) { ghostScratch.Add(prop); continue; }
-                bool small = prop.Size < length * .5f;
+                bool small = prop.Size < length * SmallPropScale;
                 if (!small && speed < BreakAwaySpeed && !car.Intersects(prop.WorldBounds)) { prop.SetVehicleCollision(body, true); ghostScratch.Add(prop); }
             }
             foreach (var prop in ghostScratch) ghosted.Remove(prop);

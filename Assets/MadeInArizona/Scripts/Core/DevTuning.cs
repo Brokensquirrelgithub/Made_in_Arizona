@@ -5,10 +5,10 @@ namespace MadeInArizona
     [Serializable]
     public sealed class DevTuning
     {
-        public float steering=1.6f, acceleration=1.2f, grip=1f, propMomentum=.85f, propDamage=2f, nitro=1f;
+        public float steering=1.6f, acceleration=1.2f, grip=1f, propDamage=2f, nitro=1f;
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
         public float bloom=.75f, exposure=.45f, contrast=6f, saturation=8f, chromatic=.02f, motionBlur=.12f, depthOfField=0f, vignette=.08f;
-        public float haze=.0012f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.30f;
+        public float haze=.0012f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.30f, cameraLead=.12f;
         public float dynamicZoomOut=1.45f, dynamicZoomMargin=.16f, enemyCatchUp=2.2f;
         public float driftGrip=.9f, driftYaw=1.6f, driftKick=45f, driftSpeedLoss=.6f, driftThrottle=.9f, driftRecovery=.35f;
         public int presentationVersion;
@@ -57,7 +57,6 @@ namespace MadeInArizona
             new DevControl("DRIVING","acceleration","Acceleration",.5f,3f),
             new DevControl("DRIVING","grip","Lateral tire grip",.3f,2f),
             new DevControl("DRIVING","nitro","Nitro thrust (1 = default, 4x the original boost)",.25f,2f),
-            new DevControl("DRIVING","propMomentum","Speed retained through small broken props",0,1),
             new DevControl("DRIVING","propDamage","Impact damage to props",.5f,5),
             new DevControl("COMBAT","playerHealth","Player health capacity",.25f,10),
             new DevControl("COMBAT","enemyHealth","Enemy health capacity",.25f,5),
@@ -74,6 +73,7 @@ namespace MadeInArizona
             new DevControl("CAMERA","dynamicZoomOut","Dynamic zoom maximum pull-back",1,2.2f),
             new DevControl("CAMERA","dynamicZoomMargin","Dynamic zoom screen-edge margin",.05f,.35f),
             new DevControl("CAMERA","shake","Camera shake multiplier",0,3),
+            new DevControl("CAMERA","cameraLead","Look-ahead toward the direction of travel (0 = off)",0,.4f),
             new DevControl("CAMERA","motionBlur","Camera motion blur",0,1),
             new DevControl("CAMERA","chromatic","Chromatic aberration",0,1),
             new DevControl("CAMERA","depthOfField","Depth of field strength (0 disables)",0,1),

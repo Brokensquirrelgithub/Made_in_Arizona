@@ -26,6 +26,7 @@ namespace MadeInArizona
         InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause;
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
+        float mouseTravel;
 
         void Awake()
         {
@@ -84,9 +85,16 @@ namespace MadeInArizona
             PausePressed = !Rebinding && pause.WasPressedThisFrame();
             Vector2 stickAim = aim.ReadValue<Vector2>();
             var pad = Gamepad.current;
-            if (pad != null && (pad.leftStick.ReadValue().sqrMagnitude > .04f || stickAim.sqrMagnitude > .04f || pad.buttonSouth.wasPressedThisFrame || pad.leftTrigger.ReadValue() > .15f || pad.rightTrigger.ReadValue() > .15f)) UsingGamepad = true;
-            if ((Mouse.current != null && (Mouse.current.delta.ReadValue().sqrMagnitude > 2f || Mouse.current.leftButton.wasPressedThisFrame)) || (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame)) UsingGamepad = false;
-            if (pad != null && (pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame)) UsingGamepad = true;
+            bool padActive = pad != null && (pad.leftStick.ReadValue().sqrMagnitude > .04f || stickAim.sqrMagnitude > .04f || pad.buttonSouth.wasPressedThisFrame || pad.leftTrigger.ReadValue() > .15f || pad.rightTrigger.ReadValue() > .15f
+                || pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame);
+            // The mouse takes over only after deliberate travel. A single jittery frame used to flip devices back and forth,
+            // alternating the stick and mouse aim points so the reticle appeared split in two.
+            mouseTravel = Mathf.Max(0, mouseTravel - 90 * Time.unscaledDeltaTime) + (Mouse.current != null ? Mouse.current.delta.ReadValue().magnitude : 0);
+            if (padActive) { UsingGamepad = true; mouseTravel = 0; }
+            else if (mouseTravel > 40 || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) || (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame)) UsingGamepad = false;
+            // The HUD draws its own reticle; the system arrow would be a second one.
+            bool playing = GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
+            Cursor.visible = !playing;
             if (Rebinding || !gameplayEnabled) { ClearGameplay(); return; }
             Move = Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;

@@ -74,8 +74,24 @@ namespace MadeInArizona
         bool IsAmmoFor(VehicleController player) =>
             Kind == PickupKind.Weapon && Weapon && player && player.Weapons && player.Weapons.FieldWeapon && player.Weapons.FieldWeapon.id == Weapon.id &&
             player.Weapons.FieldAmmo < WeaponRules.MaxAmmo(Weapon.id); // a full weapon leaves matching drops on the ground
-        /// <summary>Pulls a matching weapon drop toward the player, accelerating, and merges it on arrival.</summary>
-        bool MagnetToAmmo(VehicleController player)
+        /// <summary>With the field slot empty, the nearest weapon drop in magnet range (or the one already flying) is claimed.</summary>
+        bool ClaimsEmptySlot(VehicleController player)
+        {
+            if (Kind != PickupKind.Weapon || !Weapon || !player || !player.Weapons || player.Weapons.FieldWeapon) return false;
+            CombatPickup best = null; float nearest = MagnetRadius * MagnetRadius;
+            foreach (var pickup in active)
+            {
+                if (!pickup || pickup.Kind != PickupKind.Weapon || !pickup.Weapon || Time.time < pickup.availableAt) continue;
+                if (pickup.magnetSpeed > 0) return pickup == this;
+                Vector3 delta = pickup.basePosition - player.transform.position;
+                if (Mathf.Abs(delta.y) > 5) continue;
+                delta.y = 0;
+                if (delta.sqrMagnitude < nearest) { nearest = delta.sqrMagnitude; best = pickup; }
+            }
+            return best == this;
+        }
+        /// <summary>Pulls a weapon drop toward the player, accelerating: merged as ammo, or equipped into an empty slot.</summary>
+        bool MagnetToAmmo(VehicleController player, bool equip = false)
         {
             Vector3 delta = player.transform.position + Vector3.up * .8f - basePosition;
             Vector3 flat = new Vector3(delta.x, 0, delta.z);
@@ -84,8 +100,8 @@ namespace MadeInArizona
             float step = magnetSpeed * Time.deltaTime;
             if (delta.magnitude <= Mathf.Max(MagnetCollect, step))
             {
-                player.Weapons.AddFieldAmmo(Amount);
-                GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo);
+                if (equip) { player.Weapons.EquipField(Weapon, Amount); GameManager.Instance.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped"); }
+                else { player.Weapons.AddFieldAmmo(Amount); GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo); }
                 AudioManager.Instance?.PlayUI();
                 Destroy(gameObject);
                 return true;
@@ -104,6 +120,7 @@ namespace MadeInArizona
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
             if (IsAmmoFor(game.Player)) { MagnetToAmmo(game.Player); return; }
+            if (ClaimsEmptySlot(game.Player)) { MagnetToAmmo(game.Player, true); return; }
             if (SameAsHeld(game.Player)) { magnetSpeed = 0; return; } // full: leave it for later
             magnetSpeed = 0;
             Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
@@ -134,6 +151,9 @@ namespace MadeInArizona
             {
                 if (game.Player.Damage.Health >= game.Player.Damage.MaxHealth) return;
                 game.Player.Repair(Amount); game.Notify("REPAIR PICKUP • +" + Amount + " chassis");
+                // Repair tell: a light puff of green sparks and a soft ratchet, deliberately quieter than being hit.
+                ExplosionSystem.Burst(game.Player.transform.position + Vector3.up * 1.1f, new Color(.3f, 1, .45f), 12, 3);
+                AudioManager.Instance?.PlayRepair();
             }
             else if (Kind == PickupKind.Nitro)
             {

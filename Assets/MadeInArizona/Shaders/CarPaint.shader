@@ -10,7 +10,7 @@ Shader "MadeInArizona/CarPaint"
         _Smoothness("Base coat smoothness",Range(0,1))=.62
         _ClearCoat("Clear coat",Range(0,1))=1
         _Flake("Flake sparkle",Range(0,1))=.5
-        _Pillow("Panel curvature for reflections",Range(0,2))=1.35
+        _Pillow("Panel curvature for reflections",Range(0,3))=1.9
     }
     SubShader
     {
@@ -56,6 +56,11 @@ Shader "MadeInArizona/CarPaint"
                 env+=float3(1,.94,.84)*.45*exp(-abs(r.y-.05)*18);
                 env+=float3(1,.98,.94)*.55*smoothstep(.93,.985,dot(r,normalize(float3(.35,.8,.45))));
                 env+=float3(1,.98,.94)*.35*smoothstep(.95,.99,dot(r,normalize(float3(-.55,.7,-.25))));
+                // The gameplay camera looks down steeply from the south, so roofs and hoods reflect only a narrow patch
+                // of sky to the north. Two softboxes sit near that patch in world space: highlights roll across the
+                // curved panels as a car turns, while other views (garage, close-ups) do not wash the paint out.
+                env+=float3(1,.97,.92)*1.4*smoothstep(.975,.995,dot(r,normalize(float3(.2,.74,.64))));
+                env+=float3(1,.97,.92)*.6*smoothstep(.94,.975,dot(r,normalize(float3(-.32,.78,.54))));
                 float s=saturate(dot(r,sunDir));
                 env+=sunColor*(pow(s,700)*8+pow(s,28)*.3);
                 return env;
@@ -66,9 +71,9 @@ Shader "MadeInArizona/CarPaint"
                 float3 v=GetWorldSpaceNormalizeViewDir(i.world);
                 Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
                 float atten=sun.shadowAttenuation*sun.distanceAttenuation;
-                float ao=1;
+                float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
-                    ao=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p)).indirectAmbientOcclusion;
+                    AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 float3 albedo=_BaseColor.rgb;
                 float metal=_Metallic,roughness=max(.12,1-_Smoothness);
@@ -76,7 +81,7 @@ Shader "MadeInArizona/CarPaint"
                 float nl=saturate(dot(n,sun.direction));
                 float3 h=normalize(sun.direction+v);
                 // Base coat: diffuse paint plus a soft metallic lobe.
-                float3 lit=albedo*(1-metal*.55)*(SampleSH(n)*ao+sun.color*nl*atten);
+                float3 lit=albedo*(1-metal*.55)*(SampleSH(n)*ao+sun.color*nl*atten*directAO);
                 float3 baseFresnel=f0+(1-f0)*pow(1-saturate(dot(h,v)),5);
                 lit+=baseFresnel*min(Ggx(saturate(dot(b,h)),roughness)*.25,6)*sun.color*nl*atten;
                 // Metal flake: sparse randomly tilted facets glint when they line up with the sun.
@@ -86,7 +91,8 @@ Shader "MadeInArizona/CarPaint"
                 lit+=(albedo+.35)*flake*_Flake*3*sun.color*atten*saturate(nl*4);
                 // Clear coat: Fresnel-weighted mirror of the desert sky and a sharp sun highlight.
                 float nv=saturate(dot(b,v));
-                float coat=(.06+.94*pow(1-nv,5))*_ClearCoat;
+                // Exaggerated at normal incidence (stylised gloss): from overhead, physical 4-6% read as matte plastic.
+                float coat=(.12+.88*pow(1-nv,4))*_ClearCoat;
                 float envScale=lerp(.55,1.15,saturate(dot(sun.color,float3(.2126,.7152,.0722))/2.5));
                 float3 r=reflect(-v,b);
                 float3 env=Sky(r,sun.direction,sun.color)*envScale;

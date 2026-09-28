@@ -61,6 +61,8 @@ MonoBehaviour:
   - {fileID: 4300000, guid: fd23fcd986a524d9e84cca7b9873da0a, type: 2}
   - {fileID: 4300000, guid: b1c05311acc874503aedbba0f4b533d2, type: 2}
   - {fileID: 4300000, guid: 09ec59413e0b74ddf9980d6669e9b6d4, type: 2}
+  - {fileID: 4300000, guid: 271f53b05b3b3c540a1b392a23a86b6b, type: 2}
+  - {fileID: 4300000, guid: 401c719a02b450b45a998a134dd0363d, type: 2}
   bushes:
   - {fileID: 4300000, guid: f287c26cea1d141868100e2db6e7e51c, type: 2}
   - {fileID: 4300000, guid: cbefa263dd0034fe0b1443a31ee50eec, type: 2}

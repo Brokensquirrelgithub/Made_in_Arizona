@@ -9,7 +9,7 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite;
+        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         AudioSource whine,road,wind,heartbeat,nitro,radioSource,uiSource;
         // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
         AudioSource[] engineOn,engineOff;
@@ -27,7 +27,9 @@ namespace MadeInArizona
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
-            ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));
+            ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));repair=Keep(AudioSynthesis.Repair());objective=Keep(AudioSynthesis.ObjectiveChime());
+            hitMarkers=new AudioClip[3];for(int i=0;i<hitMarkers.Length;i++)hitMarkers[i]=Keep(AudioSynthesis.HitMarker(i));killConfirm=Keep(AudioSynthesis.KillConfirm());
+            CombatFeedback.HitConfirmed+=PlayHitMarker;CombatFeedback.KillConfirmed+=PlayKillConfirm;
             uiSource=gameObject.AddComponent<AudioSource>();radioSource=gameObject.AddComponent<AudioSource>();uiSource.spatialBlend=0;radioSource.spatialBlend=0;
             pool=new AudioSource[28];
             for(int i=0;i<pool.Length;i++){var child=new GameObject("Pooled effect "+i);child.transform.SetParent(transform);pool[i]=child.AddComponent<AudioSource>();pool[i].playOnAwake=false;pool[i].spatialBlend=.5f;pool[i].minDistance=16;pool[i].maxDistance=160;pool[i].rolloffMode=AudioRolloffMode.Linear;pool[i].dopplerLevel=0;}
@@ -160,9 +162,26 @@ namespace MadeInArizona
             PlayAt(clip,position,Settings.weapons*Mathf.Clamp(.3f+strength*.055f,.35f,.93f),Random.Range(.85f,1.04f),25);
             if(size>0)duck=Mathf.Min(duck,size==2?.3f:.55f);
         }
+        /// <summary>Repair pickup: a soft ratchet, well under the hurt clang (which plays at 0.45-0.95).</summary>
+        public void PlayRepair(){if(Settings==null||!uiSource||!repair)return;uiSource.PlayOneShot(repair,Mathf.Clamp01(Settings.weapons*.28f));}
+        /// <summary>Objective progress: checkpoints passed and optional objectives completed.</summary>
+        public void PlayObjective(){if(Settings==null||!uiSource||!objective)return;uiSource.PlayOneShot(objective,Mathf.Clamp01(Settings.environment*.45f));}
         public void PlayUI(){if(Settings==null||!uiSource)return;uiSource.PlayOneShot(ui,Settings.environment*.5f);}
         public void PlayRadio(){if(Settings==null||!radioSource)return;radioSource.PlayOneShot(radio,Settings.dialogue*.32f);}
         public void SetCombat(bool enabled){if(music)music.SetCombat(enabled);}
-        void OnDestroy(){foreach(var clip in clips)if(clip)Destroy(clip);if(Instance==this)Instance=null;}
+        /// <summary>Player hit confirmation (2D, like a shooter hitmarker). Rate limited so rapid fire ticks, not buzzes.</summary>
+        void PlayHitMarker(float damage,Vector3 point)
+        {
+            if(Settings==null||!uiSource||hitMarkers==null||!CombatFeedback.LastHitByPlayer||Time.unscaledTime<hitAt)return;
+            hitAt=Time.unscaledTime+.05f;
+            uiSource.PlayOneShot(hitMarkers[hitCursor++%hitMarkers.Length],Mathf.Clamp01(Settings.weapons*Mathf.Lerp(.4f,.65f,Mathf.Clamp01(damage/40))));
+        }
+        void PlayKillConfirm(Vector3 point)
+        {
+            if(Settings==null||!uiSource||!killConfirm||!CombatFeedback.LastHitByPlayer)return;
+            hitAt=Time.unscaledTime+.12f; // the kill sound replaces the final hit tick
+            uiSource.PlayOneShot(killConfirm,Mathf.Clamp01(Settings.weapons*.75f));
+        }
+        void OnDestroy(){CombatFeedback.HitConfirmed-=PlayHitMarker;CombatFeedback.KillConfirmed-=PlayKillConfirm;foreach(var clip in clips)if(clip)Destroy(clip);if(Instance==this)Instance=null;}
     }
 }

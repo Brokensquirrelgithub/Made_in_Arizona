@@ -54,6 +54,76 @@ namespace MadeInArizona
                 Check("death sequence ends in the failure debrief at normal speed",!game.Dying&&game.State==GameState.Lost&&Mathf.Approximately(Time.timeScale,1));
                 FinishResults();yield break;
             }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDriveProbe")>=0){yield return DriveProbe.Run(Check);FinishResults();yield break;}
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaUiCapture")>=0)
+            {
+                // Visual review of the HUD, map and garage (needs a real window; run hidden, not in batch mode).
+                game.StartCampaign(1243802513,2050);yield return new WaitUntil(()=>game.State==GameState.Playing);
+                yield return new WaitForSecondsRealtime(2);
+                var uiKeyboard=InputSystem.AddDevice<Keyboard>();
+                InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState(Key.W));yield return new WaitForSecondsRealtime(1.5f);
+                InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState());
+                Capture("ui-hud-mission");yield return new WaitForSecondsRealtime(.6f);
+                {
+                    // Gamepad reticle at a HUD scale other than 1, where rotated HUD lines used to drift apart.
+                    var reticlePad=InputSystem.AddDevice<Gamepad>();float oldScale=game.Save.settings.uiScale;game.Save.settings.uiScale=1.2f;
+                    InputSystem.QueueStateEvent(reticlePad,new GamepadState{rightStick=new Vector2(.6f,.6f)});yield return new WaitForSecondsRealtime(.5f);
+                    Capture("ui-gamepad-reticle");yield return new WaitForSecondsRealtime(.4f);
+                    InputSystem.QueueStateEvent(reticlePad,new GamepadState());game.Save.settings.uiScale=oldScale;yield return null;InputSystem.RemoveDevice(reticlePad);
+                }
+                string dir=Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR");
+                if(!string.IsNullOrEmpty(dir)&&GeneratedWorld.Active)File.WriteAllBytes(Path.Combine(dir,"ui-map-texture.png"),GeneratedWorld.Active.MapTexture.EncodeToPNG());
+                game.GetComponent<GameUI>().OpenWorldMap();yield return new WaitForSecondsRealtime(.6f);Capture("ui-world-map");yield return new WaitForSecondsRealtime(.6f);
+                game.Resume();
+                {
+                    // The river from the gameplay camera at four points along its course.
+                    var cam=CameraController.Instance;var carTarget=cam.Target;var focus=new GameObject("River review");cam.Target=focus.transform;
+                    var world=GeneratedWorld.Active;float half=world.WorldBounds.size.x*.5f;
+                    // Channel audit: the carved bed must sit below the water all along the course.
+                    int dry=0;
+                    for(float z=-half*.9f;z<half*.9f;z+=8)
+                    {
+                        Vector3 c=new Vector3(world.RiverCenterX(z),0,z);float bed=GeneratedWorld.HeightAt(c),level=world.RiverLevel(z);
+                        if(GeneratedWorld.Contains(c)&&bed>level-.5f&&dry++<12)Debug.Log("MIA_RIVER_DRY z="+z.ToString("F0")+" bed="+bed.ToString("F1")+" level="+level.ToString("F1")+" "+world.RiverDebug(z));
+                    }
+                    Check("river bed stays below the water along its whole course ("+dry+" dry samples)",dry==0);
+                    for(int r=0;r<4;r++)
+                    {
+                        float z=Mathf.Lerp(-half*.7f,half*.7f,r/3f);Vector3 p=new Vector3(world.RiverCenterX(z),0,z);p.y=GeneratedWorld.HeightAt(p);
+                        game.Player.Body.position=p+new Vector3(120,20,0);focus.transform.position=p;cam.Snap();
+                        yield return new WaitForSecondsRealtime(1.2f);Capture("ui-river-"+r);yield return new WaitForSecondsRealtime(.5f);
+                    }
+                    // Road bridges over the carved channel.
+                    int shot=0;var bridges=new List<Transform>();
+                    foreach(Transform t in world.GetComponentsInChildren<Transform>(true))if(t.name=="Salt River bridge")bridges.Add(t);
+                    foreach(Transform t in bridges)
+                    {
+                        if(!t||shot>=2)continue;
+                        var renderers=t.GetComponentsInChildren<Renderer>();if(renderers.Length==0)continue;
+                        Bounds b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);
+                        focus.transform.position=b.center;cam.Snap();yield return new WaitForSecondsRealtime(1.2f);Capture("ui-bridge-"+shot++);yield return new WaitForSecondsRealtime(.5f);
+                    }
+                    cam.Target=carTarget;
+                    // Close-up of the player's paint at the tightest gameplay zoom.
+                    game.Player.Body.position=game.World.PlayerSpawn;game.Player.Body.linearVelocity=Vector3.zero;yield return new WaitForSecondsRealtime(1.5f);
+                    var dev=DevTuning.Current;float zoom=dev.cameraZoom;dev.cameraZoom=8;cam.Snap();yield return new WaitForSecondsRealtime(1.2f);
+                    Capture("ui-car-close");yield return new WaitForSecondsRealtime(.5f);dev.cameraZoom=zoom;
+                    // Paint detail: the gameplay angle zoomed right in, then a low perspective view.
+                    var ui=game.GetComponent<GameUI>();var view=Camera.main;ui.enabled=false;cam.enabled=false;Vector3 car=game.Player.transform.position+Vector3.up*.7f;
+                    view.orthographicSize=3.2f;view.transform.position=car-view.transform.forward*80;yield return new WaitForSecondsRealtime(.6f);Capture("ui-car-paint-overhead");yield return new WaitForSecondsRealtime(.4f);
+                    view.orthographic=false;view.fieldOfView=38;view.transform.position=car+new Vector3(4.6f,2.6f,-5.4f);view.transform.LookAt(car);
+                    yield return new WaitForSecondsRealtime(.6f);Capture("ui-car-paint-side");yield return new WaitForSecondsRealtime(.4f);
+                    view.orthographic=true;cam.enabled=true;ui.enabled=true;cam.Snap();
+                    // Mine warning beacon (the player's own mine, so it never triggers on the car).
+                    FieldOrdnance.PlaceMine(game.Player,WeaponRules.Find("mines"),0,game.Player.transform.position+game.Player.transform.forward*6+Vector3.up*.4f);
+                    dev.cameraZoom=10;cam.Snap();yield return new WaitForSecondsRealtime(.9f);Capture("ui-mine-beacon");yield return new WaitForSecondsRealtime(.35f);dev.cameraZoom=zoom;cam.Snap();
+                }
+                game.ReturnToGarage();yield return new WaitForSecondsRealtime(1.5f);Capture("ui-garage");yield return new WaitForSecondsRealtime(.6f);
+                // The far side of the garage orbit, looking out over the desert grounds.
+                InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState(Key.E));yield return new WaitForSecondsRealtime(1.8f);InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState());
+                yield return new WaitForSecondsRealtime(.5f);Capture("ui-garage-orbit");yield return new WaitForSecondsRealtime(.4f);
+                InputSystem.RemoveDevice(uiKeyboard);FinishResults();yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnTest")>=0)
             {
                 if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnGenerated")>=0){game.StartCampaign(173,1600);yield return new WaitUntil(()=>game.State==GameState.Playing);}
@@ -721,7 +791,7 @@ namespace MadeInArizona
             Check("loaner pursuit has four hostiles including its unique suspect",enemies.Count==4);
             Teleport(game.Mission.ObjectivePosition+Vector3.up);game.Resume();game.Mission.Tick(.01f);game.Pause();
             enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
-            Check("junkyard reinforcement adds twelve hostiles",enemies.Count==16&&game.Mission.Stage==1&&game.Mission.Objective.Contains("/ 12"));
+            Check("junkyard reinforcement adds twelve hostiles ("+enemies.Count+" hostiles, stage "+game.Mission.Stage+", "+game.Mission.Objective+")",enemies.Count==16&&game.Mission.Stage==1&&game.Mission.Objective.Contains("/ 12"));
             game.Resume();for(int i=0;i<3;i++)game.Mission.RegisterKill();game.Mission.Tick(.01f);game.Pause();
             Check("old three-kill gate no longer clears junkyard",game.Mission.Stage==1);
 
@@ -735,11 +805,11 @@ namespace MadeInArizona
             game.StartMission(bossMission);game.Pause();yield return null;
             enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
             int expected=Mathf.Max(3,ContentCatalog.Missions[bossMission].enemyCount/3)*4;
-            Check("boss security screen is four times larger",enemies.Count==expected);
+            Check("boss security screen is four times larger ("+enemies.Count+" of "+expected+")",enemies.Count==expected);
             game.Resume();DestroyHostiles();game.Mission.Tick(.01f);game.Pause();
             enemies=BalanceHostiles();FreezeBalanceEnemies(enemies);
             var bosses=enemies.FindAll(v=>v.GetComponent<EnemyAI>().Archetype==7);
-            Check("unique command rig arrives with three companions",bosses.Count==1&&enemies.Count==4);
+            Check("unique command rig arrives with three companions ("+bosses.Count+" rigs, "+enemies.Count+" hostiles)",bosses.Count==1&&enemies.Count==4);
             Check("command rig health also falls to one fifth",bosses.Count==1&&Mathf.Approximately(bosses[0].Damage.MaxHealth,Mathf.Max(60,bosses[0].Stats.maxHealth)*.2f));
 
             game.StartMission(0);game.Pause();yield return null;
@@ -868,7 +938,10 @@ namespace MadeInArizona
             DevTuning.Current.steering=steering;DevTuning.Apply();
             game.Save.settings.quality=0;game.ApplySettings();
             Check("low quality keeps bloom disabled after tuning",profile.TryGet<UnityEngine.Rendering.Universal.Bloom>(out var bloom)&&!bloom.active);
+            var urp=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            int lowAtlas=urp?urp.additionalLightsShadowmapResolution:0;
             game.Save.settings.quality=2;game.ApplySettings();
+            Check("effect-light shadow atlas is 4096 on High Octane and 1024 on the lowest preset",urp&&urp.additionalLightsShadowmapResolution==4096&&lowAtlas==1024);
             ui.enabled=true;game.Resume();
 
             player.Damage.ApplyDamage(30,player.transform.position,null);
@@ -881,7 +954,6 @@ namespace MadeInArizona
             var nitro=CombatPickup.Create(PickupKind.Nitro,origin+Vector3.forward,null,25);
             var salvage=CombatPickup.Create(PickupKind.Scrap,origin-Vector3.forward,null,2);
             var weapon=CombatPickup.Create(PickupKind.Weapon,origin+Vector3.forward*2,WeaponRules.Find("invoice"),4);
-            Vector3 weaponStart=weapon.transform.position;
             Vector3 nitroStart=nitro.transform.position;
             Check("supply drops are larger",repair.transform.localScale.x>=1.1f);
             yield return new WaitForSeconds(.15f);
@@ -892,8 +964,14 @@ namespace MadeInArizona
             Check("repair attracts and collects beyond contact range",!repair&&player.Damage.Health>health);
             Check("scrap attracts and collects beyond contact range",!salvage&&game.Save.salvage==scrap+2);
             Check("nitro attracts without wasting a full charge",nitro&&Vector3.Distance(nitro.transform.position,nitroStart)>3&&player.BoostCharge>=.99f);
-            Check("weapon stays anchored outside contact range",weapon&&Vector2.Distance(new Vector2(weapon.transform.position.x,weapon.transform.position.z),new Vector2(weaponStart.x,weaponStart.z))<.01f);
+            // The car starts this check with an empty field slot, so the nearest weapon drop flies in and equips.
+            Check("empty field slot pulls in and equips the nearest weapon drop",!weapon&&player.Weapons.FieldWeapon&&player.Weapons.FieldWeapon.id=="invoice");
             if(nitro)Destroy(nitro.gameObject);if(weapon)Destroy(weapon.gameObject);
+            // With a different field weapon held, a drop stays put: swapping is a deliberate choice.
+            var other=CombatPickup.Create(PickupKind.Weapon,player.transform.position+Vector3.right*10+Vector3.forward*2,WeaponRules.Find("grenade"),2);
+            Vector3 otherStart=other.transform.position;yield return new WaitForSeconds(1.05f);
+            Check("weapon stays anchored outside contact range while a different field weapon is held",other&&Vector2.Distance(new Vector2(other.transform.position.x,other.transform.position.z),new Vector2(otherStart.x,otherStart.z))<.01f);
+            if(other)Destroy(other.gameObject);
             var garageWeapon=player.Weapons.GarageWeapon;
             var previousSounds=garageWeapon.fireSounds;
             var audioProbe=AudioSynthesis.Shot(0);
