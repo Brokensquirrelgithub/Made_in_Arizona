@@ -15,7 +15,7 @@ MonoBehaviour:
   id: swap
   displayName: 1.8L salvage-yard engine swap
   category: Engine
-  description: 'Thimble or Juniper: +70% power, +55% torque; +96 kg, nitro recovery -16%.'
+  description: 'Thimble or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose. Mounts included.'
   contentOrder: 8
   cost: 1700
   unlockMission: 6
@@ -24,10 +24,10 @@ MonoBehaviour:
   hpMultiplier: 1.7
   torqueMultiplier: 1.55
   gripMultiplier: 1
-  coolingMultiplier: 0.84
+  coolingMultiplier: 1
   healthBonus: 0
   maxSpeedMultiplier: 1
-  turnMultiplier: 1
+  turnMultiplier: 0.94
   rideHeightBonus: 0
   suspensionMultiplier: 1
   springMultiplier: 1

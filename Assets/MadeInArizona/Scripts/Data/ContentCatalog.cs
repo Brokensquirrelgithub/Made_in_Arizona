@@ -49,14 +49,14 @@ namespace MadeInArizona
         static void BuildVehicles()
         {
             Vehicles = new[] {
-                Car(0,"thimble","1991 Thimble Sprint","Three cylinders, 760 kilos, one outstanding invoice. Low mass makes every honest horsepower count.",760,58,85,112,1.08f,112,240,Drivetrain.FWD,Differential.Open,GeoMetroGreen,0,0,.23f,.56f,2.23f,1.36f,4.1f),
-                Car(1,"juniper","1988 Juniper JX","A tiny 4x4 with a huge sense of duty. Narrow track rewards smooth inputs; dirt is its natural habitat.",980,72,110,97,1.14f,94,310,Drivetrain.AWD,Differential.LimitedSlip,new Color(.9f,.58f,.22f),0,0,.42f,.82f,2.08f,1.34f,4.56f),
-                Car(2,"sunskip","Sunskip Trophy 900","Long travel, wide stance, enough speed to discover a wash the hard way. Heavy tires cost acceleration.",1900,420,570,163,1.1f,72,450,Drivetrain.RWD,Differential.LimitedSlip,new Color(.98f,.25f,.14f),2200,3,.78f,.95f,3.15f,2.15f,4.88f),
-                Car(3,"foreclosure","Foreclosure 6.8D","Its torque curve is a mesa. Its turning circle is a county. Includes a payment schedule longer than either.",3000,290,920,109,.94f,48,640,Drivetrain.RWD,Differential.Locked,new Color(.25f,.29f,.34f),2800,5,.32f,.82f,3.55f,1.94f,3.73f),
-                Car(4,"sidehustle","Side Hustle Tradesman","Former AC van. The ladders are structural. Weapon room and armor at the expense of everything involving a corner.",2250,195,320,116,.92f,59,520,Drivetrain.RWD,Differential.Open,new Color(.86f,.82f,.67f),1800,4,.3f,.68f,3.3f,1.84f,3.9f),
-                Car(5,"perennial","Perennial Half-Ton","The odometer stopped when the mechanic graduated. Forgiving weight distribution and a frame made of stubbornness.",1770,168,285,120,1.04f,76,540,Drivetrain.RWD,Differential.LimitedSlip,new Color(.42f,.62f,.48f),1400,2,.4f,.73f,2.95f,1.76f,4.1f),
-                Car(6,"skitter","Skitter Sport 1000","A roll cage surrounding an argument. Extraordinary response, almost no protection from the consequences.",640,112,103,139,1.15f,126,180,Drivetrain.AWD,Differential.LimitedSlip,new Color(.68f,.34f,.95f),2600,7,.61f,.78f,2.2f,1.7f,5.1f),
-                Car(7,"vincent","VINcent, The Uninsurable","Four donor cars; three conflicting wheelbases; a transfer case with judicial immunity. Built from the campaign's worst ideas.",2550,520,780,147,1.03f,65,790,Drivetrain.AWD,Differential.Locked,new Color(.72f,.26f,.12f),5400,11,.57f,1.03f,3.45f,2.03f,4.56f)
+                Car(0,"thimble","1991 Thimble Sprint","Three cylinders, 760 kilos, one outstanding invoice. Low mass makes every honest horsepower count.",760,58,85,102,1.08f,112,240,Drivetrain.FWD,Differential.Open,GeoMetroGreen,0,0,.23f,.56f,2.23f,1.36f,4.1f),
+                Car(1,"juniper","1988 Juniper JX","A tiny 4x4 with a huge sense of duty. Narrow track rewards smooth inputs; dirt is its natural habitat.",980,72,110,88,1.14f,94,310,Drivetrain.AWD,Differential.LimitedSlip,new Color(.9f,.58f,.22f),0,0,.42f,.82f,2.08f,1.34f,4.56f),
+                Car(2,"sunskip","Sunskip Trophy 900","Long travel, wide stance, enough speed to discover a wash the hard way. Heavy tires cost acceleration.",1900,420,570,148,1.1f,72,450,Drivetrain.RWD,Differential.LimitedSlip,new Color(.98f,.25f,.14f),2200,3,.78f,.95f,3.15f,2.15f,4.88f),
+                Car(3,"foreclosure","Foreclosure 6.8D","Its torque curve is a mesa. Its turning circle is a county. Includes a payment schedule longer than either.",3000,290,920,99,.94f,48,640,Drivetrain.RWD,Differential.Locked,new Color(.25f,.29f,.34f),2800,5,.32f,.82f,3.55f,1.94f,3.73f),
+                Car(4,"sidehustle","Side Hustle Tradesman","Former AC van. The ladders are structural. Weapon room and armor at the expense of everything involving a corner.",2250,195,320,105,.92f,59,520,Drivetrain.RWD,Differential.Open,new Color(.86f,.82f,.67f),1800,4,.3f,.68f,3.3f,1.84f,3.9f),
+                Car(5,"perennial","Perennial Half-Ton","The odometer stopped when the mechanic graduated. Forgiving weight distribution and a frame made of stubbornness.",1770,168,285,109,1.04f,76,540,Drivetrain.RWD,Differential.LimitedSlip,new Color(.42f,.62f,.48f),1400,2,.4f,.73f,2.95f,1.76f,4.1f),
+                Car(6,"skitter","Skitter Sport 1000","A roll cage surrounding an argument. Extraordinary response, almost no protection from the consequences.",640,112,103,126,1.15f,126,180,Drivetrain.AWD,Differential.LimitedSlip,new Color(.68f,.34f,.95f),2600,7,.61f,.78f,2.2f,1.7f,5.1f),
+                Car(7,"vincent","VINcent, The Uninsurable","Four donor cars; three conflicting wheelbases; a transfer case with judicial immunity. Built from the campaign's worst ideas.",2550,520,780,134,1.03f,65,790,Drivetrain.AWD,Differential.Locked,new Color(.72f,.26f,.12f),5400,11,.57f,1.03f,3.45f,2.03f,4.56f)
             };
         }
         static VehiclePart Part(string id, string name, string category, string desc, int cost, int unlock, float mass = 0, float hp = 1, float grip = 1, float cooling = 1, float health = 0)
@@ -69,14 +69,14 @@ namespace MadeInArizona
         {
             Parts = new[] {
                 Part("intake","Sealed desert airbox","Intake","Keeps the filter out of the fan wash. +6% power; +3 kg. A real seal beats a chrome hot-air cone.",180,0,3,1.06f),
-                Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9%; nitro recovery -5%. +5 kg.",240,0,5,1.09f,1,.95f),
+                Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9% at the cost of 3% low-end torque. +5 kg.",240,0,5,1.09f),
                 Part("cam","Mild tow cam","Camshaft","More usable torque, 8% power and 12% torque. Lumpy idle remains a personality flaw. +2 kg.",350,1,2,1.08f),
-                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; nitro recovery -23%, +34 kg. Thimble only.",760,2,34,1.48f,1,.77f),
-                Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and 18% less nitro recovery. Larger RWD vehicles only.",950,4,68,1.32f,1,.82f),
-                Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +20% nitro recovery, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f,1,1.2f),
-                Part("radiator","Three-row aluminum radiator","Cooling","+42% nitro recovery, +12 kg. Keeps the boost plumbing ready for another sprint.",260,0,12,1,1,1.42f),
-                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; nitro recovery -6%.",540,3,4,1.16f,1,.94f),
-                Part("swap","1.8L salvage-yard engine swap","Engine","Thimble or Juniper: +70% power, +55% torque; +96 kg, nitro recovery -16%. Mounts included.",1700,6,96,1.7f,1,.84f),
+                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Thimble only.",760,2,34,1.48f,1,1,-25),
+                Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and -4% top speed while the belt takes its cut. Larger RWD vehicles only.",950,4,68,1.32f),
+                Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +5% torque, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f),
+                Part("radiator","Three-row aluminum radiator","Cooling","+5% power and +25 structure: the engine stays out of limp mode on a hot day. +12 kg.",260,0,12,1.05f,1,1,25),
+                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; -15 structure from the aggressive timing.",540,3,4,1.16f,1,1,-15),
+                Part("swap","1.8L salvage-yard engine swap","Engine","Thimble or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose. Mounts included.",1700,6,96,1.7f),
                 Part("lsd","Helical limited-slip carrier","Differential","Shares useful torque across the axle. +7% grip, +8 kg. Retains civilized corner exits.",380,0,8,1,1.07f),
                 Part("locker","Selectable trail locker","Differential","AWD rigs: locked axles, +15% grip, -12% turn response and +16 kg. The pavement will notice.",440,1,16,1,1.15f),
                 Part("welded","Welded spare differential","Differential","+10% grip, -18% turn response. Costs $90; the tire bill arrives separately.",90,0,3,1,1.1f),
@@ -90,8 +90,22 @@ namespace MadeInArizona
                 Part("used","Four almost matching used tires","Tires","Only $35. -12% grip and -7% damping, -8 kg. Customer states the wobble is seasonal.",35,0,-8,1,.88f),
                 Part("cage","Triangulated cage and skid plates","Armor","+160 chassis health, +95 kg. Protects occupants and underbody; slows every acceleration.",560,1,95,1,1,1,160),
                 Part("bumpers","Salvaged steel bumpers","Armor","+95 chassis health for +72 kg. Includes an extremely confident tow rating.",220,0,72,1,1,1,95),
-                Part("boards","Recovery boards and tool roll","Utility","+45 health, +8% nitro recovery, +24 kg. Tools are less cinematic than fire.",290,0,24,1,1,1.08f,45),
-                Part("nitrous","Purge-first nitrous kit","Induction","+25% power, +12% torque, -20% nitro recovery, +20 kg. Replaces other forced induction.",690,4,20,1.25f,1,.8f)
+                Part("boards","Recovery boards and tool roll","Utility","+45 health, +3% grip, +24 kg. Tools are less cinematic than fire.",290,0,24,1,1.03f,1,45),
+                Part("nitrous","Purge-first nitrous kit","Induction","+25% power, +12% torque, -20 structure, +20 kg. Replaces other forced induction.",690,4,20,1.25f,1,1,-20),
+                // Deferred maintenance: each "upgrade" just brings one part of the car up to what it should have been.
+                // Every one has its own category, so they stack; the gains are small because the bar is the floor.
+                Part("wheels","Four round wheels","Wheels","+5% grip, +3% top speed. The previous set was listed on the invoice as \"round-adjacent.\"",150,0,0,1,1.05f),
+                Part("pistons","A piston for every cylinder","Internals","+10% power, +8% torque, +3 kg. The engine had been making do with three and a good attitude.",380,1,3,1.1f),
+                Part("plugs","Spark plugs that match","Ignition","+5% power, +3% torque. One of the old plugs was a bolt with a wire taped to it.",60,0,0,1.05f),
+                Part("alignment","Wheels pointed the same way","Alignment","+10% turn response, +3% grip. The car no longer has a favorite ditch.",110,0,0,1,1.03f),
+                Part("brakes","Brake pads that contain pad","Brakes","+6% turn response, +4 kg. The old ones were backing plate and optimism, applied firmly.",140,0,4),
+                Part("radcap","A radiator cap that is a radiator cap","Radiator cap","+3% power, +15 chassis health. The engine now runs at a temperature instead of a weather event. Replaces a soda can and a hose clamp, both of which were doing their best.",45,0,0,1.03f,1,1,15),
+                Part("mounts","Engine mounts made of rubber","Engine mounts","+3% power actually reaches the wheels, +25 chassis health, +6 kg. The old mounts were rope; the engine went for walks.",190,1,6,1.03f,1,1,25),
+                Part("shocks","Shocks with fluid in them","Dampers","+18% damping, +5% grip, +2 kg. The originals were springs wearing shock absorber costumes.",230,1,2,1,1.05f),
+                Part("muffler","Muffler attached at both ends","Muffler","+3% power, +2% top speed, -3 kg. The last one was bolted on at the front and dragging at the back, which counted as a brake.",95,0,-3,1.03f),
+                Part("timing","Timing belt with all its teeth","Timing","+3% power, +6% torque, +1 kg. Valve timing is now a schedule instead of a suggestion.",210,2,1,1.03f),
+                Part("lugs","The full set of lug nuts","Hardware","+30 chassis health, +3% grip, +1 kg. Each wheel was held on by two nuts and a rumor.",40,0,1,1,1.03f,1,30),
+                Part("seat","Driver's seat bolted down","Interior","+5% turn response, +10 chassis health, +3 kg. Steering is easier when you are not also sliding toward the passenger door.",70,0,3,1,1,1,10)
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             Find("cam").torqueMultiplier = 1.12f;
@@ -109,6 +123,11 @@ namespace MadeInArizona
             Find("street").maxSpeedMultiplier = 1.05f; Find("street").suspensionMultiplier = .88f;
             Find("allterrain").suspensionMultiplier = 1.08f; Find("mud").maxSpeedMultiplier = .91f; Find("mud").suspensionMultiplier = 1.12f;
             Find("used").dampingMultiplier = .93f; Find("nitrous").torqueMultiplier = 1.12f;
+            // Nitro recovery is gone: the parts that traded it now trade something that still matters.
+            Find("headers").torqueMultiplier = .97f; Find("blower").maxSpeedMultiplier = .96f; Find("intercooler").torqueMultiplier = 1.05f; Find("swap").turnMultiplier = .94f;
+            Find("wheels").maxSpeedMultiplier = 1.03f; Find("pistons").torqueMultiplier = 1.08f; Find("plugs").torqueMultiplier = 1.03f;
+            Find("alignment").turnMultiplier = 1.1f; Find("brakes").turnMultiplier = 1.06f; Find("seat").turnMultiplier = 1.05f;
+            Find("shocks").dampingMultiplier = 1.18f; Find("muffler").maxSpeedMultiplier = 1.02f; Find("timing").torqueMultiplier = 1.06f;
         }
         static VehiclePart Find(string id) { return Array.Find(Parts, p => p.id == id); }
         static void BuildDrivers()

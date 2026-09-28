@@ -15,7 +15,7 @@ MonoBehaviour:
   id: ecu
   displayName: Wideband ECU and fuel pump
   category: Fuel & ECU
-  description: 'A calibrated map adds 16% power and 12% torque. +4 kg; nitro recovery -6%.'
+  description: 'A calibrated map adds 16% power and 12% torque. +4 kg; -15 structure from the aggressive timing.'
   contentOrder: 7
   cost: 540
   unlockMission: 3
@@ -24,8 +24,8 @@ MonoBehaviour:
   hpMultiplier: 1.16
   torqueMultiplier: 1.12
   gripMultiplier: 1
-  coolingMultiplier: 0.94
-  healthBonus: 0
+  coolingMultiplier: 1
+  healthBonus: -15
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

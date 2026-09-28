@@ -122,6 +122,15 @@ namespace MadeInArizona
                 // The far side of the garage orbit, looking out over the desert grounds.
                 InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState(Key.E));yield return new WaitForSecondsRealtime(1.8f);InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState());
                 yield return new WaitForSecondsRealtime(.5f);Capture("ui-garage-orbit");yield return new WaitForSecondsRealtime(.4f);
+                {
+                    // Parts & Tuning with one of the deferred-maintenance parts selected.
+                    var garageUi=game.GetComponent<GameUI>();var flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+                    typeof(GameUI).GetField("station",flags)?.SetValue(garageUi,2);
+                    typeof(GameUI).GetField("selectedPart",flags)?.SetValue(garageUi,Array.FindIndex(ContentCatalog.Parts,p=>p.id=="alignment"));
+                    typeof(GameUI).GetField("listScroll",flags)?.SetValue(garageUi,new Vector2(0,Array.FindIndex(ContentCatalog.Parts,p=>p.id=="wheels")*81));
+                    yield return new WaitForSecondsRealtime(.4f);Capture("ui-garage-parts");yield return new WaitForSecondsRealtime(.3f);
+                    typeof(GameUI).GetField("station",flags)?.SetValue(garageUi,0);
+                }
                 InputSystem.RemoveDevice(uiKeyboard);FinishResults();yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnTest")>=0)

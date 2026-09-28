@@ -10,23 +10,24 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: be6a073d4ec4f4eb292a5415bc305c15, type: 3}
-  m_Name: turbo
+  m_Name: wheels
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
-  id: turbo
-  displayName: Wastegated three-pot turbo
-  category: Induction
-  description: '+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Thimble only.'
-  contentOrder: 3
-  cost: 760
-  unlockMission: 2
+  id: wheels
+  displayName: Four round wheels
+  category: Wheels
+  description: +5% grip, +3% top speed. The previous set was listed on the invoice
+    as "round-adjacent."
+  contentOrder: 24
+  cost: 150
+  unlockMission: 0
   salvageCost: 0
-  mass: 34
-  hpMultiplier: 1.48
-  torqueMultiplier: 1.32
-  gripMultiplier: 1
+  mass: 0
+  hpMultiplier: 1
+  torqueMultiplier: 1
+  gripMultiplier: 1.05
   coolingMultiplier: 1
-  healthBonus: -25
-  maxSpeedMultiplier: 1
+  healthBonus: 0
+  maxSpeedMultiplier: 1.03
   turnMultiplier: 1
   rideHeightBonus: 0
   suspensionMultiplier: 1
@@ -37,5 +38,4 @@ MonoBehaviour:
   changesDifferential: 0
   drivetrain: 0
   differential: 0
-  compatibleVehicles:
-  - thimble
+  compatibleVehicles: []

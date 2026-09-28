@@ -165,8 +165,8 @@ namespace MadeInArizona
         }
         public void SetAIInput(Vector2 move, Vector3 aim, bool fire, bool reverse = false) { aiMove = move; aiAim = aim; aiFire = fire; aiReverse = reverse; }
         public void Repair(float amount) { Damage?.Repair(amount); }
-        /// <summary>Adds a share of the tank; nitro-recovery parts scale what a pickup restores.</summary>
-        public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount * Mathf.Clamp(Stats != null ? Stats.cooling : 1, .25f, 3)); }
+        /// <summary>Adds a share of the tank. Pickups are the only refill; no part changes how much they restore.</summary>
+        public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount); }
         /// <summary>The player and any friendly AI are one side; hostile crews are the other.</summary>
         public bool FriendlyToPlayer { get { if (IsPlayer) return true; var ai = GetComponent<EnemyAI>(); return ai != null && ai.IsFriendly; } }
         public static bool Allied(VehicleController a, VehicleController b) => a && b && a.FriendlyToPlayer == b.FriendlyToPlayer;

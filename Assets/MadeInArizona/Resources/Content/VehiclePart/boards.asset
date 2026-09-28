@@ -15,7 +15,7 @@ MonoBehaviour:
   id: boards
   displayName: Recovery boards and tool roll
   category: Utility
-  description: '+45 health, +8% nitro recovery, +24 kg.'
+  description: '+45 health, +3% grip, +24 kg. Tools are less cinematic than fire.'
   contentOrder: 22
   cost: 290
   unlockMission: 0
@@ -23,8 +23,8 @@ MonoBehaviour:
   mass: 24
   hpMultiplier: 1
   torqueMultiplier: 1
-  gripMultiplier: 1
-  coolingMultiplier: 1.08
+  gripMultiplier: 1.03
+  coolingMultiplier: 1
   healthBonus: 45
   maxSpeedMultiplier: 1
   turnMultiplier: 1

@@ -22,7 +22,7 @@ MonoBehaviour:
   mass: 640
   horsepower: 112
   torque: 103
-  maxSpeed: 139
+  maxSpeed: 126
   grip: 1.15
   turnSpeed: 126
   maxHealth: 180

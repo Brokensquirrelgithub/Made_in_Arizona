@@ -259,7 +259,7 @@ namespace MadeInArizona
             Rect(x, y, w, 200, Ink);
             Tag(x + 24, y + 20, "DYNO SHEET / INSTALLED CONFIGURATION", Orange);
             Text(x + 24, y + 57, w - 48, 31, Mathf.RoundToInt(s.horsepower) + " HP     " + Mathf.RoundToInt(s.torque) + " NM     " + Mathf.RoundToInt(s.mass) + " KG", 24, Cream, true);
-            Text(x + 24, y + 104, w - 48, 75, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL\n" + s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + s.cooling.ToString("0.00") + " NITRO RECOVERY", 17, Muted);
+            Text(x + 24, y + 104, w - 48, 75, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL\n" + s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + Mathf.RoundToInt(s.maxSpeed * .621371f) + " MPH TOP SPEED", 17, Muted);
         }
 
         void DrawParts(float top, float panelHeight)
@@ -280,7 +280,7 @@ namespace MadeInArizona
             Tag(x + 24, top + 20, part.category.ToUpperInvariant() + " / SHOP NOTES", Orange);
             Text(x + 24, top + 51, 455, 78, part.displayName.ToUpperInvariant(), 32, Cream, true);
             Text(x + 24, top + 142, 455, 102, part.description, 18, Cream);
-            Text(x + 24, top + 251, 455, 42, "+" + part.mass + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nNITRO RECOVERY ×" + part.coolingMultiplier.ToString("0.00") + "   •   STRUCTURE +" + part.healthBonus, 14, Muted);
+            Text(x + 24, top + 251, 455, 42, "+" + part.mass + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nTORQUE ×" + part.torqueMultiplier.ToString("0.00") + "   •   STRUCTURE " + (part.healthBonus < 0 ? "" : "+") + part.healthBonus, 14, Muted);
             bool ownedPart = game.Save.ownedParts.Contains(part.id), isInstalled = game.Save.installedParts.Contains(part.id);
             bool compatible = GarageManager.Compatible(part, ContentCatalog.Vehicles[game.Save.selectedVehicle]);
             bool available = part.unlockMission <= game.Save.unlockedMission && compatible;
