@@ -225,12 +225,75 @@ namespace MadeInArizona.Editor
             if (!string.IsNullOrEmpty(buildRoot)) destination = Path.Combine(buildRoot, destination);
             if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, target)) throw new BuildFailedException("Install Unity Hub module for " + target + " before building.");
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ScenePath }, locationPathName = destination, target = target, options = BuildOptions.Development });
+            BuildReport report;
+            WriteBuildStamp(target);
+            try { report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ScenePath }, locationPathName = destination, target = target, options = BuildOptions.Development }); }
+            finally { RemoveBuildStamp(); }
             string summary = target + " " + report.summary.result + " | " + report.summary.totalErrors + " errors | " + report.summary.totalSize + " bytes | " + report.summary.totalTime;
             string reportDirectory = string.IsNullOrEmpty(buildRoot) ? "Builds" : Path.Combine(buildRoot, "Builds");
             Directory.CreateDirectory(reportDirectory); File.WriteAllText(Path.Combine(reportDirectory, target + "-report.txt"), summary);
             Debug.Log("MIA_BUILD: " + summary);
             if (report.summary.result != BuildResult.Succeeded) throw new BuildFailedException(summary);
+        }
+
+        /// <summary>
+        /// Entry point for CI (GameCI's unity-builder <c>buildMethod</c>). Reads <c>-buildTarget</c> and <c>-customBuildPath</c>
+        /// from the command line, and the commit from <c>-miaCommit</c> or <c>GITHUB_SHA</c>.
+        /// </summary>
+        public static void BuildForCI()
+        {
+            string targetName = Argument("-buildTarget") ?? "StandaloneWindows64";
+            var target = (BuildTarget)Enum.Parse(typeof(BuildTarget), targetName);
+            string path = Argument("-customBuildPath") ?? (target == BuildTarget.StandaloneOSX ? "build/StandaloneOSX/Made in Arizona.app" : "build/StandaloneWindows64/Made in Arizona.exe");
+            if (target == BuildTarget.StandaloneOSX && !path.EndsWith(".app")) path += ".app";
+            if (target == BuildTarget.StandaloneWindows64 && !path.EndsWith(".exe")) path += ".exe";
+            Prepare();
+            Build(target, path);
+        }
+        static string Argument(string name)
+        {
+            var args = Environment.GetCommandLineArgs();
+            int index = Array.IndexOf(args, name);
+            return index >= 0 && index + 1 < args.Length && !args[index + 1].StartsWith("-") ? args[index + 1] : null;
+        }
+
+        // Every player carries StreamingAssets/build.json so the in-game updater knows which published build it is.
+        // The file only exists for the duration of the build; it is never committed.
+        const string StampFolder = "Assets/StreamingAssets";
+        static bool createdStampFolder;
+        static void WriteBuildStamp(BuildTarget target)
+        {
+            createdStampFolder = !Directory.Exists(StampFolder);
+            Directory.CreateDirectory(StampFolder);
+            string commit = Argument("-miaCommit") ?? Environment.GetEnvironmentVariable("GITHUB_SHA") ?? Git("rev-parse HEAD");
+            var stamp = new BuildStamp {
+                commit = commit ?? "", date = Git("log -1 --format=%cI " + (commit ?? "HEAD")) ?? "", message = Git("log -1 --format=%s " + (commit ?? "HEAD")) ?? "",
+                platform = target == BuildTarget.StandaloneOSX ? "macOS" : "Windows", builtAt = DateTime.UtcNow.ToString("o"), protocol = GameUpdater.Protocol };
+            File.WriteAllText(Path.Combine(StampFolder, GameUpdater.StampFile), JsonUtility.ToJson(stamp, true));
+            Debug.Log("MIA_BUILD_STAMP: " + stamp.platform + " " + stamp.commit + " protocol " + stamp.protocol);
+        }
+        static void RemoveBuildStamp()
+        {
+            string file = Path.Combine(StampFolder, GameUpdater.StampFile);
+            foreach (string path in new[] { file, file + ".meta" }) if (File.Exists(path)) File.Delete(path);
+            if (createdStampFolder && Directory.Exists(StampFolder) && Directory.GetFileSystemEntries(StampFolder).Length == 0)
+            {
+                Directory.Delete(StampFolder);
+                if (File.Exists(StampFolder + ".meta")) File.Delete(StampFolder + ".meta");
+            }
+        }
+        static string Git(string arguments)
+        {
+            try
+            {
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", "-c safe.directory=* " + arguments) {
+                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+                    WorkingDirectory = Directory.GetCurrentDirectory() });
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit(10000);
+                return process.ExitCode == 0 && output.Length > 0 ? output : null;
+            }
+            catch { return null; }
         }
 
         [MenuItem("Made in Arizona/Validate content and systems")]

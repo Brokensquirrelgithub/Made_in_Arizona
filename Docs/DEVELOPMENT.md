@@ -54,6 +54,10 @@ Run `Tools/build.sh mac`, `Tools/build.sh windows`, or `Tools/build.sh all`. Set
 
 For external drives with database/locking issues, use a local working copy. Do not share the same Unity Library between simultaneously running editors. Library, package caches and native binaries are ignored by Git. The temporary compilation workspace used during development is not required to run either native build.
 
+## Playtest builds and updates
+
+Every player carries `StreamingAssets/build.json` (written by `BuildGame` during the build). `GameUpdater` lists GitHub Releases tagged `build-<sha>` whose notes declare `mia-updater: 1`, downloads and verifies the chosen platform zip, then hands off to a PowerShell (Windows) or bash (macOS) script that swaps the files after the game quits and relaunches it. Releases come from `.github/workflows/playtest-builds.yml` (GameCI, needs Unity license secrets) or `Tools/publish-playtest.sh`. See [playtest builds and updates](UPDATES.md).
+
 ## Save files
 
 macOS: `~/Library/Application Support/117 Degree Games/Made in Arizona/made-in-arizona.save.json`

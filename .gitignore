@@ -22,3 +22,6 @@ Assets/Resources/PerformanceTestRunSettings.json*
 .idea/
 mono_crash.*
 *.dmp
+
+# Build identity for the in-game updater (written only while a player builds)
+/Assets/StreamingAssets/build.json*

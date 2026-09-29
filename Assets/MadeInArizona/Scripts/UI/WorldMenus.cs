@@ -37,6 +37,7 @@ namespace MadeInArizona
             if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP")){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
             Text(x+25,y+575,panelW-50,38,"Starting a world preserves garage upgrades and completed jobs.",13,Muted);
+            DrawUpdateEntry(x,y+640,panelW);
             Text(x,height-65,width-x-40,40,"JSON world editing: "+WorldConfigStore.Path,12,Muted);
             if(WorldConfigStore.LastError!=null)Text(x,height-105,width-x-40,35,WorldConfigStore.LastError,14,Orange);
         }

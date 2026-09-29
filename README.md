@@ -6,6 +6,7 @@
 
 - **macOS:** open `Builds/macOS/Made in Arizona.app`.
 - **Windows:** copy the complete `Builds/Windows` folder to a PC and open `Made in Arizona.exe`. Keep the Data folder and DLLs beside it.
+- **Playtesters:** install once from the [Releases page](https://github.com/Brokensquirrelgithub/Made_in_Arizona/releases), then use **Versions & Updates** in the main menu (or **UPDATES** in the garage) to move to any newer or older published build without reinstalling. Publishing and tester setup: [playtest builds and updates](Docs/UPDATES.md).
 - **Unity:** open this folder with **Unity 6000.5.5f1**, open `Assets/MadeInArizona/Scenes/Main.unity`, and press Play. Packages restore automatically. If using an external drive causes Unity asset-database errors, put a working copy on an APFS/NTFS volume.
 
 From the main menu, choose a **seed** and **map width (0.8–3.2 km)**, then click **Start Campaign**. Generation creates an Arizona-shaped world with towns, winding roads, hills, forest, rivers and hidden salvage. Saved upgrades and completed jobs are retained. Open **Garage** for vehicle selection, parts and Dispatch. The first job takes you from chasing a delinquent customer through a junkyard fight to recovering evidence and returning it to the garage. Follow the gold objective ring; turquoise rings mark optional salvage.
