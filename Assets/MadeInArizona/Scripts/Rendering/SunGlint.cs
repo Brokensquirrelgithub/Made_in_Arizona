@@ -108,7 +108,7 @@ namespace MadeInArizona
             }
         }
 
-        static float Hash(int x, int y, int seed)
+        internal static float Hash(int x, int y, int seed)
         {
             unchecked
             {
@@ -118,7 +118,7 @@ namespace MadeInArizona
             }
         }
         /// <summary>Value noise that repeats every <paramref name="period"/> cells, so the maps tile seamlessly.</summary>
-        static float Value(float x, float y, int period, int seed)
+        internal static float Value(float x, float y, int period, int seed)
         {
             int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
             float fx = x - x0, fy = y - y0;
@@ -127,7 +127,7 @@ namespace MadeInArizona
             int bx = (ax + 1) % period, by = (ay + 1) % period;
             return Mathf.Lerp(Mathf.Lerp(Hash(ax, ay, seed), Hash(bx, ay, seed), fx), Mathf.Lerp(Hash(ax, by, seed), Hash(bx, by, seed), fx), fy);
         }
-        static float Fbm(float u, float v, int period, int octaves, int seed)
+        internal static float Fbm(float u, float v, int period, int octaves, int seed)
         {
             float sum = 0, amplitude = .55f, norm = 0;
             for (int o = 0; o < octaves; o++)

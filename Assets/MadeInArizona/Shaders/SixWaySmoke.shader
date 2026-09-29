@@ -6,6 +6,7 @@ Shader "MadeInArizona/SixWaySmoke"
   _Emission("Fire intensity",Float)=0
   _Density("Optical density",Float)=1.5
   _Softness("Depth intersection fade",Float)=.65
+  _Bright("Pale smoke albedo, scaling the particle colour (0 = soot and dust ramp)",Float)=0
  }
  SubShader {
  Tags { "RenderPipeline"="UniversalPipeline" "Queue"="Transparent" "RenderType"="Transparent" }
@@ -22,11 +23,12 @@ Shader "MadeInArizona/SixWaySmoke"
  #pragma multi_compile_fog
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+ #include "CloudShadows.hlsl"
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
  TEXTURE2D(_Positive); SAMPLER(sampler_Positive);
  TEXTURE2D(_Negative); SAMPLER(sampler_Negative);
  CBUFFER_START(UnityPerMaterial)
- float _Emission,_Density,_Softness;
+ float _Emission,_Density,_Softness,_Bright;
  CBUFFER_END
  struct A { float4 positionOS:POSITION;float3 normalOS:NORMAL;float4 tangentOS:TANGENT;half4 color:COLOR;float4 uv:TEXCOORD0;float blend:TEXCOORD1; };
  struct V { float4 positionCS:SV_POSITION;float4 uv:TEXCOORD0;float3 world:TEXCOORD1;half4 color:COLOR;float3 tangent:TEXCOORD2;float3 bitangent:TEXCOORD3;float3 normal:TEXCOORD4;float blend:TEXCOORD5;float fog:TEXCOORD6; };
@@ -52,7 +54,7 @@ Shader "MadeInArizona/SixWaySmoke"
   float sceneEye=-TransformWorldToView(scene).z,particleEye=-TransformWorldToView(i.world).z;
   alpha*=saturate((sceneEye-particleEye)/max(.05,_Softness));
   float3 n=normalize(i.normal),t=normalize(i.tangent),b=normalize(i.bitangent);
-  Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+  Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
   float3 light=sun.color*Response(sun.direction,t,b,n,p.rgb,m.rgb)*lerp(.8,1,sun.shadowAttenuation);
   uint count=GetAdditionalLightsCount();
   for(uint k=0;k<min(count,8u);k++) {
@@ -67,7 +69,8 @@ Shader "MadeInArizona/SixWaySmoke"
   ember=lerp(ember,float3(1,.86,.45),saturate((temperature-.48)*2.4));
   float3 emission=ember*pow(temperature,1.6)*_Emission;
   float tint=saturate(dot(i.color.rgb,float3(.333,.333,.333)));
-  float3 albedo=_Emission>0?float3(.045,.041,.035):lerp(float3(.035,.033,.03),float3(.17,.155,.13),tint);
+  // Tyre smoke is pale vapourised rubber: its albedo follows the particle colour instead of the dark soot ramp.
+  float3 albedo=_Emission>0?float3(.045,.041,.035):_Bright>0?i.color.rgb*_Bright:lerp(float3(.035,.033,.03),float3(.17,.155,.13),tint);
   float3 color=albedo*light*1.8+emission;
   return half4(MixFog(color,i.fog),alpha);
  }

@@ -13,6 +13,7 @@ Shader "MadeInArizona/Scattering"
  #pragma multi_compile_fog
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
  #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+ #include "CloudShadows.hlsl"
  struct A { float4 positionOS:POSITION;float3 normalOS:NORMAL; };
  struct V { float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float fog:TEXCOORD2; };
  CBUFFER_START(UnityPerMaterial)
@@ -22,7 +23,7 @@ Shader "MadeInArizona/Scattering"
  V vert(A i){ V o;o.world=TransformObjectToWorld(i.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);o.normal=TransformObjectToWorldNormal(i.normalOS);o.fog=ComputeFogFactor(o.positionCS.z);return o; }
  half4 frag(V i):SV_Target {
  float3 n=normalize(i.normal),v=GetWorldSpaceNormalizeViewDir(i.world);
- Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+ Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
  float wrap=saturate((dot(n,sun.direction)+.35)/1.35);
  float forward=pow(saturate(dot(v,-sun.direction)),4);
  float transmission=(forward*.8+.2)*saturate(-dot(n,sun.direction))*_Transmission*_ArizonaDetail;

@@ -15,6 +15,7 @@ Shader "MadeInArizona/FlowRiver"
    #pragma multi_compile_fragment _ _SHADOWS_SOFT
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+   #include "CloudShadows.hlsl"
    #include "SunGlint.hlsl"
    TEXTURE2D(_BumpMap);SAMPLER(sampler_BumpMap);
    struct A {float4 p:POSITION;float2 uv:TEXCOORD0;};
@@ -25,7 +26,7 @@ Shader "MadeInArizona/FlowRiver"
     float2 uv=i.world.xz*.22+float2(.03,-.17)*_Time.y;
     float3 r=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,uv));
     float3 r2=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,i.world.xz*.53+float2(-.04,-.11)*_Time.y));
-    float3 n=normalize(float3(r.x*.85+r2.x*.35,1,r.y*.85+r2.y*.35));Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+    float3 n=normalize(float3(r.x*.85+r2.x*.35,1,r.y*.85+r2.y*.35));Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
     float3 view=GetWorldSpaceNormalizeViewDir(i.world);float fresnel=pow(1-saturate(dot(n,view)),4);
     float edge=smoothstep(.86,1,abs(i.uv.x-.5)*2);
     float pulse=.5+.5*sin(i.world.z*2+i.world.x*.8-_Time.y*2.6);

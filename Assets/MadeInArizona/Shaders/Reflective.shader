@@ -19,10 +19,14 @@ Shader "MadeInArizona/Reflective"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+        #include "CloudShadows.hlsl"
         #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
         half4 _BaseColor;half _Metallic;half _Smoothness;half _GlintType;half _Wear;half _Micro;
+        // Per-car dust (VehicleDust.cs sets these on a car's own copy of the material; zero means clean).
+        float4 _DustRow0,_DustRow1,_DustRow2,_DustState,_DustAxles,_DustTint;
         CBUFFER_END
+        #include "CarDust.hlsl"
         struct A {float4 p:POSITION;float3 n:NORMAL;};
         struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 local:TEXCOORD2;float3 objN:TEXCOORD3;float fog:TEXCOORD4;};
         V vert(A v)
@@ -49,7 +53,7 @@ Shader "MadeInArizona/Reflective"
             {
                 float3 n=normalize(i.n);
                 float3 v=GetWorldSpaceNormalizeViewDir(i.world);
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
                 float atten=sun.shadowAttenuation*sun.distanceAttenuation;
                 float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
@@ -64,6 +68,10 @@ Shader "MadeInArizona/Reflective"
                 float3 albedo=_BaseColor.rgb;
                 // Oxidation shows as a dull, warm film on metals.
                 albedo=lerp(albedo,albedo*float3(.82,.7,.58)+float3(.05,.03,.015),saturate(wear.a*_Wear*_GlintSurface.y)*metal*.6);
+                // Road dust on car parts (bumpers, tyres, trim): matte and tan, it takes the shine where it sits.
+                float dust=CarDust(i.world,n);
+                albedo=lerp(albedo,CarDustColor(i.world),dust);
+                metal*=1-dust;roughness=lerp(roughness,.95,dust);clean*=1-dust;
                 float3 f0=lerp(float3(.04,.04,.04),albedo,metal);
                 float nl=saturate(dot(n,sun.direction));
                 float3 lit=albedo*(1-metal)*(SampleSH(n)*ao+sun.color*nl*atten*directAO);

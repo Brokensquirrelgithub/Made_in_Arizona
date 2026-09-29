@@ -38,6 +38,7 @@ Shader "MadeInArizona/TrailBlend"
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "CloudShadows.hlsl"
 
             TEXTURE2D(_Diffuse); SAMPLER(sampler_Diffuse); TEXTURE2D(_Normal); TEXTURE2D(_Height); TEXTURE2D(_AO);
             CBUFFER_START(UnityPerMaterial)
@@ -107,13 +108,14 @@ Shader "MadeInArizona/TrailBlend"
 
                 float3 tn=UnpackNormal(SAMPLE_TEXTURE2D(_Normal,sampler_Diffuse,soilUV));
                 float3 n=normalize(i.n+float3(tn.x,0,tn.y)*(.55-rut*.25));
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1,directAO=1;
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 ao*=lerp(.66,1,SAMPLE_TEXTURE2D(_AO,sampler_Diffuse,soilUV).r);
                 float cloud=Fbm(p*.006+_Time.y*float2(.0021,.0013));
-                float cloudShade=lerp(.91,1.0,smoothstep(.38,.68,cloud));
+                // Faint ground-only mottling, replaced by the real drifting cloud shadows (CloudShadows.hlsl) when they are on.
+                float cloudShade=lerp(lerp(.91,1.0,smoothstep(.38,.68,cloud)),1,saturate(_CloudShadowParams.x));
                 float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade*directAO);
                 #if defined(_ADDITIONAL_LIGHTS)
                 uint count=GetAdditionalLightsCount();

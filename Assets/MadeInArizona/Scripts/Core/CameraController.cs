@@ -45,7 +45,12 @@ namespace MadeInArizona
         }
         public void Shake(float amount) { shake = Mathf.Min(1.5f, shake + amount); }
         public void Snap() { velocity = Vector3.zero; dynamicZoom = 1; dynamicZoomVelocity = 0; Position(true); }
-        void LateUpdate() { Position(false); }
+        void LateUpdate()
+        {
+            Position(false);
+            var game = GameManager.Instance;
+            CloudShadows.Tick(game && game.State != GameState.Garage && game.State != GameState.MainMenu);
+        }
         void Position(bool snap)
         {
             if (!Target || !view || !GameManager.Instance) return;

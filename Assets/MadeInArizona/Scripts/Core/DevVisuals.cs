@@ -46,6 +46,9 @@ namespace MadeInArizona
             bloom.scatter.Override(.72f);
             bloom.highQualityFiltering.Override(GameManager.Instance.Save.settings.quality>=2);
             bloom.maxIterations.Override(5);
+            // Lens dirt is scaled by the bloom itself, so it only appears in the halo of explosions and sun glints.
+            bloom.dirtTexture.Override(LensDirt.Texture);
+            bloom.dirtIntensity.Override(Mathf.Clamp(tuning.lensDirt, 0f, 10f));
 
             var color = GetOrAdd<ColorAdjustments>(profile);
             color.active = true;

@@ -7,7 +7,7 @@ namespace MadeInArizona
         int devTab;
         Vector2 devScroll;
         float devSaveAt;
-        readonly string[] devTabs={"DRIVING","DRIFT","COMBAT","CAMERA","LIGHT & COLOR","REFLECTIONS"};
+        readonly string[] devTabs={"DRIVING","DRIFT","COMBAT","CAMERA","LIGHT & COLOR","REFLECTIONS","DIRT & SKY"};
         float StylesRadioHeight(string message,float w) => Style(14,Cream).CalcHeight(new GUIContent(message),w)+5;
         public void OpenDevMenu() { if(game.IsPlaying)game.Pause();devMenu=true;settings=false; }
         void SaveDev()
@@ -20,7 +20,7 @@ namespace MadeInArizona
         void OnApplicationFocus(bool focused){if(!focused)SaveDev();}
         void DrawDevMenu()
         {
-            float w=820,h=Mathf.Min(height-40,820),x=width-w-20,y=20;
+            float w=900,h=Mathf.Min(height-40,820),x=width-w-20,y=20;
             Rect(x,y,w,h,new Color(.055f,.081f,.09f,1));
             Text(x+24,y+20,w-48,38,"LIVE DEV TUNING",27,Cream,true);
             if(Button(x+w-250,y+22,226,34,"+10,000 SCRAP & $")){game.Save.salvage+=10000;game.Save.money+=10000;SaveSystem.Save(game.Save);game.Notify("DEV • +10,000 SCRAP AND $10,000");}

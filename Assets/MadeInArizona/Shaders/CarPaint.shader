@@ -20,10 +20,14 @@ Shader "MadeInArizona/CarPaint"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+        #include "CloudShadows.hlsl"
         #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
         half4 _BaseColor;half _Metallic;half _Smoothness;half _ClearCoat;half _Flake;half _Pillow;half _GlintType;half _Wear;
+        // Per-car dust (VehicleDust.cs sets these on the car's own copy of the material; zero means clean).
+        float4 _DustRow0,_DustRow1,_DustRow2,_DustState,_DustAxles,_DustTint;
         CBUFFER_END
+        #include "CarDust.hlsl"
         struct A {float4 p:POSITION;float3 n:NORMAL;};
         struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 bent:TEXCOORD2;float3 local:TEXCOORD3;float fog:TEXCOORD4;float3 objN:TEXCOORD5;};
         V vert(A v)
@@ -72,7 +76,7 @@ Shader "MadeInArizona/CarPaint"
             {
                 float3 n=normalize(i.n),b=normalize(i.bent);
                 float3 v=GetWorldSpaceNormalizeViewDir(i.world);
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
                 float atten=sun.shadowAttenuation*sun.distanceAttenuation;
                 float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
@@ -88,6 +92,11 @@ Shader "MadeInArizona/CarPaint"
                 // Micro-surface waviness and orange peel tilt the clear coat slightly, fragmenting sun highlights.
                 float3 micro=TransformObjectToWorldNormal(MicroNormalOffset(i.local,i.objN,glass?.35:1),false);
                 float3 coatNormal=normalize(b+micro);
+                // Desert dust caked on by driving: matte and tan, and it takes the gloss and clear coat where it sits.
+                float dust=CarDust(i.world,n);
+                albedo=lerp(albedo,CarDustColor(i.world),dust);
+                metal*=1-dust;roughness=lerp(roughness,.92,dust);coatRoughness=lerp(coatRoughness,.9,dust);clean*=1-dust;
+                float coatLeft=1-dust*.97;
                 float3 f0=lerp(float3(.04,.04,.04),albedo,metal);
                 float nl=saturate(dot(n,sun.direction));
                 float3 h=normalize(sun.direction+v);
@@ -99,11 +108,11 @@ Shader "MadeInArizona/CarPaint"
                 float3 cell=floor(i.local*150);
                 float3 tilt=float3(Hash(cell),Hash(cell+17.3),Hash(cell+41.9))*2-1;
                 float flake=pow(saturate(dot(normalize(n+tilt*.6),h)),500)*step(.6,Hash(cell+7.1));
-                lit+=(albedo+.35)*flake*_Flake*3*sun.color*atten*saturate(nl*4);
+                lit+=(albedo+.35)*flake*_Flake*coatLeft*3*sun.color*atten*saturate(nl*4);
                 // Clear coat: Fresnel-weighted mirror of the desert sky and a sharp sun highlight.
                 float nv=saturate(dot(b,v));
                 // Exaggerated at normal incidence (stylised gloss): from overhead, physical 4-6% read as matte plastic.
-                float coat=(.12+.88*pow(1-nv,4))*_ClearCoat*lerp(.55,1,clean);
+                float coat=(.12+.88*pow(1-nv,4))*_ClearCoat*lerp(.55,1,clean)*coatLeft;
                 float envScale=lerp(.55,1.15,saturate(dot(sun.color,float3(.2126,.7152,.0722))/2.5));
                 float3 r=reflect(-v,b);
                 float3 env=Sky(r,sun.direction,sun.color)*envScale;
@@ -112,7 +121,7 @@ Shader "MadeInArizona/CarPaint"
                 // Sun on the clear coat: an unclamped HDR GGX highlight, tiny and intense on clean gloss, broad and weak
                 // where dust has roughened it, plus the stylised glint when the mirrored sun lines up with the eye.
                 float3 eye=GlintView(i.world,v),radiance=sun.color*atten;
-                lit+=SunSpecular(coatNormal,eye,sun.direction,coatRoughness,float3(.04,.04,.04),radiance)*_ClearCoat;
+                lit+=SunSpecular(coatNormal,eye,sun.direction,coatRoughness,float3(.04,.04,.04),radiance)*_ClearCoat*coatLeft;
                 lit+=SunGlint(coatNormal,eye,sun.direction,radiance,coatRoughness,clean,_GlintType)*_ClearCoat;
                 #if defined(_ADDITIONAL_LIGHTS)
                     uint count=GetAdditionalLightsCount();
@@ -122,7 +131,7 @@ Shader "MadeInArizona/CarPaint"
                         float ln=saturate(dot(n,local.direction));
                         float3 lh=normalize(local.direction+v);
                         float3 glow=local.color*local.distanceAttenuation*local.shadowAttenuation;
-                        lit+=albedo*glow*ln+glow*(.04+_ClearCoat*.08)*min(Ggx(saturate(dot(b,lh)),.18)*.25,20)*ln;
+                        lit+=albedo*glow*ln+glow*(.04+_ClearCoat*.08)*coatLeft*min(Ggx(saturate(dot(b,lh)),.18)*.25,20)*ln;
                     }
                 #endif
                 return half4(MixFog(lit,i.fog),1);

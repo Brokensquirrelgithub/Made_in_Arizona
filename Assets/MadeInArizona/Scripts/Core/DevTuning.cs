@@ -15,6 +15,9 @@ namespace MadeInArizona
         public float bloomThreshold=1.9f, specularPeak=60f, surfaceWear=1f, microNormal=1f;
         public float glint=1f, glintTolerance=1.2f, glintBloom=.7f, glintFade=5f;
         public float glintPaint=.8f, glintChrome=1f, glintGlass=1f, glintSigns=.6f, glintWater=.5f, glintMetal=.5f, glintPlastic=.15f;
+        // Weather and grime: cloud shadows, lens dirt, tire smoke and marks, gravel spray, dust on cars.
+        public float cloudShadows=.5f, cloudCover=.14f, cloudSpeed=7f, lensDirt=.8f;
+        public float tireSmoke=1f, skidMarks=1f, gravelSpray=1f, carDust=1f;
         public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
         public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
@@ -42,6 +45,12 @@ namespace MadeInArizona
                 glintPaint=defaults.glintPaint; glintChrome=defaults.glintChrome; glintGlass=defaults.glintGlass; glintSigns=defaults.glintSigns;
                 glintWater=defaults.glintWater; glintMetal=defaults.glintMetal; glintPlastic=defaults.glintPlastic;
                 presentationVersion=2;
+            }
+            if (presentationVersion < 3)
+            {
+                cloudShadows=defaults.cloudShadows; cloudCover=defaults.cloudCover; cloudSpeed=defaults.cloudSpeed; lensDirt=defaults.lensDirt;
+                tireSmoke=defaults.tireSmoke; skidMarks=defaults.skidMarks; gravelSpray=defaults.gravelSpray; carDust=defaults.carDust;
+                presentationVersion=3;
             }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;
@@ -114,7 +123,15 @@ namespace MadeInArizona
             new DevControl("REFLECTIONS","glintSigns","Glints on signs and reflectors",0,1),
             new DevControl("REFLECTIONS","glintWater","Glints on water",0,1),
             new DevControl("REFLECTIONS","glintMetal","Glints on raw metal and debris",0,1),
-            new DevControl("REFLECTIONS","glintPlastic","Glints on plastic",0,1)
+            new DevControl("REFLECTIONS","glintPlastic","Glints on plastic",0,1),
+            new DevControl("DIRT & SKY","cloudShadows","Cloud shadow darkness (0 = no clouds)",0,.9f),
+            new DevControl("DIRT & SKY","cloudCover","Cloud cover (share of the sky)",0,.6f),
+            new DevControl("DIRT & SKY","cloudSpeed","Cloud drift speed (m/s)",0,30),
+            new DevControl("DIRT & SKY","lensDirt","Lens dirt in bloom (explosions and glints only)",0,6),
+            new DevControl("DIRT & SKY","tireSmoke","Tire smoke on pavement",0,3),
+            new DevControl("DIRT & SKY","skidMarks","Skid marks and rubber buildup",0,2),
+            new DevControl("DIRT & SKY","gravelSpray","Gravel and dirt thrown by tires",0,3),
+            new DevControl("DIRT & SKY","carDust","Dust buildup on cars (1 = filthy after ~10 min off-road)",0,30)
         };
     }
 }
