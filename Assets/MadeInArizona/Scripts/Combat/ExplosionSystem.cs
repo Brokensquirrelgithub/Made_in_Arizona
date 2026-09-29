@@ -94,8 +94,19 @@ namespace MadeInArizona
             var unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             waveMaterial = new Material(unlit) { name = "Pressure wave", enableInstancing = true };
             waveMaterial.SetColor("_BaseColor", new Color(2.3f, 1.2f, .3f));
-            debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
-            debrisMaterial.SetFloat("_Smoothness", .22f);
+            // Tumbling scraps flash in the sun: reflective metal that the wear map dulls in patches.
+            var reflective = Shader.Find("MadeInArizona/Reflective");
+            if (reflective && reflective.isSupported)
+            {
+                debrisMaterial = new Material(reflective) { name = "Fractured steel and adobe" };
+                debrisMaterial.SetFloat("_GlintType", SunGlint.Metal); debrisMaterial.SetFloat("_Metallic", .7f);
+                debrisMaterial.SetFloat("_Smoothness", .72f); debrisMaterial.SetFloat("_Wear", 1.3f);
+            }
+            else
+            {
+                debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
+                debrisMaterial.SetFloat("_Smoothness", .22f);
+            }
             scorchMaterial = new Material(particleMaterial) { name = "Explosion scorch" };
             scorchMaterial.SetTexture("_BaseMap", scorchTexture); scorchMaterial.SetTexture("_MainTex", scorchTexture);
             scorchMaterial.SetColor("_BaseColor", new Color(.12f, .07f, .045f, .68f));

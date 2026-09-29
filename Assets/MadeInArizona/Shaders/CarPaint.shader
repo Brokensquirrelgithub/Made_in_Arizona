@@ -11,6 +11,8 @@ Shader "MadeInArizona/CarPaint"
         _ClearCoat("Clear coat",Range(0,1))=1
         _Flake("Flake sparkle",Range(0,1))=.5
         _Pillow("Panel curvature for reflections",Range(0,3))=1.9
+        _GlintType("Glint material type (0 paint, 2 glass)",Float)=0
+        _Wear("Dust and wear response",Range(0,2))=1
     }
     SubShader
     {
@@ -18,11 +20,12 @@ Shader "MadeInArizona/CarPaint"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+        #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
-        half4 _BaseColor;half _Metallic;half _Smoothness;half _ClearCoat;half _Flake;half _Pillow;
+        half4 _BaseColor;half _Metallic;half _Smoothness;half _ClearCoat;half _Flake;half _Pillow;half _GlintType;half _Wear;
         CBUFFER_END
         struct A {float4 p:POSITION;float3 n:NORMAL;};
-        struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 bent:TEXCOORD2;float3 local:TEXCOORD3;float fog:TEXCOORD4;};
+        struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 bent:TEXCOORD2;float3 local:TEXCOORD3;float fog:TEXCOORD4;float3 objN:TEXCOORD5;};
         V vert(A v)
         {
             V o;o.world=TransformObjectToWorld(v.p.xyz);o.p=TransformWorldToHClip(o.world);
@@ -30,7 +33,7 @@ Shader "MadeInArizona/CarPaint"
             o.bent=TransformObjectToWorldNormal(normalize(v.n+v.p.xyz*_Pillow));
             // Metric object-space position keeps flakes fixed to the panel while the car moves.
             float3 scale=float3(length(UNITY_MATRIX_M._m00_m10_m20),length(UNITY_MATRIX_M._m01_m11_m21),length(UNITY_MATRIX_M._m02_m12_m22));
-            o.local=v.p.xyz*scale;o.fog=ComputeFogFactor(o.p.z);return o;
+            o.local=v.p.xyz*scale;o.objN=v.n;o.fog=ComputeFogFactor(o.p.z);return o;
         }
         ENDHLSL
         Pass
@@ -76,7 +79,15 @@ Shader "MadeInArizona/CarPaint"
                     AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 float3 albedo=_BaseColor.rgb;
-                float metal=_Metallic,roughness=max(.12,1-_Smoothness);
+                // Dust, scratches, fingerprints and oxidation roughen the paint and clear coat in patches.
+                float4 wear=SampleWear(i.local,i.objN);
+                float clean;
+                float metal=_Metallic,roughness=WornRoughness(max(.12,1-_Smoothness),wear,_Wear,clean);
+                bool glass=_GlintType>1.5;
+                float coatRoughness=WornRoughness(glass?.03:.06,wear,_Wear*(glass?.7:1),clean);
+                // Micro-surface waviness and orange peel tilt the clear coat slightly, fragmenting sun highlights.
+                float3 micro=TransformObjectToWorldNormal(MicroNormalOffset(i.local,i.objN,glass?.35:1),false);
+                float3 coatNormal=normalize(b+micro);
                 float3 f0=lerp(float3(.04,.04,.04),albedo,metal);
                 float nl=saturate(dot(n,sun.direction));
                 float3 h=normalize(sun.direction+v);
@@ -92,13 +103,17 @@ Shader "MadeInArizona/CarPaint"
                 // Clear coat: Fresnel-weighted mirror of the desert sky and a sharp sun highlight.
                 float nv=saturate(dot(b,v));
                 // Exaggerated at normal incidence (stylised gloss): from overhead, physical 4-6% read as matte plastic.
-                float coat=(.12+.88*pow(1-nv,4))*_ClearCoat;
+                float coat=(.12+.88*pow(1-nv,4))*_ClearCoat*lerp(.55,1,clean);
                 float envScale=lerp(.55,1.15,saturate(dot(sun.color,float3(.2126,.7152,.0722))/2.5));
                 float3 r=reflect(-v,b);
                 float3 env=Sky(r,sun.direction,sun.color)*envScale;
                 float3 blurry=Sky(normalize(lerp(r,b,roughness)),sun.direction,sun.color*.25)*envScale;
                 lit=lit*(1-coat)+env*coat+blurry*f0*(1-coat)*(.35+.65*metal)*ao;
-                lit+=_ClearCoat*.06*min(Ggx(saturate(dot(b,h)),.1)*.25,40)*sun.color*atten*saturate(nl*3);
+                // Sun on the clear coat: an unclamped HDR GGX highlight, tiny and intense on clean gloss, broad and weak
+                // where dust has roughened it, plus the stylised glint when the mirrored sun lines up with the eye.
+                float3 eye=GlintView(i.world,v),radiance=sun.color*atten;
+                lit+=SunSpecular(coatNormal,eye,sun.direction,coatRoughness,float3(.04,.04,.04),radiance)*_ClearCoat;
+                lit+=SunGlint(coatNormal,eye,sun.direction,radiance,coatRoughness,clean,_GlintType)*_ClearCoat;
                 #if defined(_ADDITIONAL_LIGHTS)
                     uint count=GetAdditionalLightsCount();
                     for(uint lightIndex=0;lightIndex<count;lightIndex++)

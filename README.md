@@ -45,7 +45,7 @@ Edit the live `world-generation.json` path shown in the main menu to change terr
 
 ## Developer tuning
 
-During a mission, press **Escape → Dev Tuning / Mouse**. Four tabs expose driving, combat, camera, and light/color controls. Changes apply immediately and save automatically across launches. Use **Save & Resume** to drive with the new values. **Reset All Defaults** restores the nimble baseline and default effects. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
+During a mission, press **Escape → Dev Tuning / Mouse**. Tabs expose driving, drift, combat, camera, light/color and reflection controls (sun glints: intensity, angular tolerance, bloom contribution, fade and which materials can flash). Changes apply immediately and save automatically across launches. Use **Save & Resume** to drive with the new values. **Reset All Defaults** restores the nimble baseline and default effects. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
 
 Suzuki is your white husky girl and senior recovery specialist. She leaves her bed and wanders a garage route, pausing to sniff.
 

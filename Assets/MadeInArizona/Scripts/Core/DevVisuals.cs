@@ -25,6 +25,7 @@ namespace MadeInArizona
             ApplyPostProcessing(tuning);
             ApplyLighting(tuning);
             ApplyAmbientOcclusion(tuning.ao);
+            SunGlint.Apply(tuning);
         }
 
         static void ApplyPostProcessing(DevTuning tuning)
@@ -40,7 +41,8 @@ namespace MadeInArizona
             var bloom = GetOrAdd<Bloom>(profile);
             bloom.active = GameManager.Instance.Save.settings.quality > 0 && tuning.bloom > 0f;
             bloom.intensity.Override(Mathf.Clamp(tuning.bloom, 0f, 10f));
-            bloom.threshold.Override(.95f);
+            // High threshold: ordinary sunlit surfaces stay crisp and only HDR highlights (sun glints, fire) bloom.
+            bloom.threshold.Override(Mathf.Clamp(tuning.bloomThreshold, .1f, 10f));
             bloom.scatter.Override(.72f);
             bloom.highQualityFiltering.Override(GameManager.Instance.Save.settings.quality>=2);
             bloom.maxIterations.Override(5);

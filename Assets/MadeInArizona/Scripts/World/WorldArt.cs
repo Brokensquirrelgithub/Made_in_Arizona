@@ -39,8 +39,48 @@ namespace MadeInArizona
             if (!shader || !shader.isSupported) return Material(color, metallic * .6f, .86f);
             result = new Material(shader) { name = "MIA_CarPaint_" + key };
             result.SetColor("_BaseColor", color); result.SetFloat("_Metallic", metallic); result.SetFloat("_ClearCoat", clearCoat);
+            result.SetFloat("_GlintType", SunGlint.Paint);
             Materials[key] = result;
             return result;
+        }
+        /// <summary>Vehicle window glass: the car-paint shader with a near-mirror coat, no flake and lighter wear.</summary>
+        public static Material CarGlass(Color color)
+        {
+            string key = "carglass/" + ColorUtility.ToHtmlStringRGBA(color);
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("MadeInArizona/CarPaint");
+            if (!shader || !shader.isSupported) return Material(color, 0, .92f);
+            result = new Material(shader) { name = "MIA_CarGlass_" + key };
+            result.SetColor("_BaseColor", color); result.SetFloat("_Metallic", 0); result.SetFloat("_Flake", 0); result.SetFloat("_Smoothness", .95f);
+            result.SetFloat("_GlintType", SunGlint.Glass); result.SetFloat("_Wear", .6f);
+            Materials[key] = result;
+            return result;
+        }
+        /// <summary>
+        /// Sun-reflective material (MadeInArizona/Reflective) for chrome, window glass, signs, metal and glossy plastic.
+        /// <paramref name="type"/> is one of the SunGlint material types; <paramref name="wear"/> scales dust, scratches
+        /// and oxidation (weathered props above 1, fresh parts below).
+        /// </summary>
+        public static Material Reflective(Color color, int type, float smoothness, float metallic, float wear = 1, float micro = 1)
+        {
+            string key = "reflect/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + type + "/" + smoothness + "/" + metallic + "/" + wear + "/" + micro;
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("MadeInArizona/Reflective");
+            if (!shader || !shader.isSupported) return Material(color, metallic, Mathf.Min(smoothness, .9f));
+            result = new Material(shader) { name = "MIA_Reflective_" + key };
+            result.color = color; result.SetColor("_BaseColor", color);
+            result.SetFloat("_GlintType", type); result.SetFloat("_Smoothness", smoothness); result.SetFloat("_Metallic", metallic);
+            result.SetFloat("_Wear", wear); result.SetFloat("_Micro", micro);
+            Materials[key] = result;
+            return result;
+        }
+        public static Material Chrome(Color color, float smoothness = .9f, float wear = 1) => Reflective(color, SunGlint.Chrome, smoothness, 1, wear);
+        public static Material Glass(Color color, float wear = 1) => Reflective(color, SunGlint.Glass, .94f, 0, wear, .4f);
+        /// <summary>Assigns <paramref name="material"/> to a primitive built by Box/Shape/Cylinder/Beam and returns it.</summary>
+        public static GameObject Use(GameObject part, Material material)
+        {
+            if (part && material) part.GetComponent<Renderer>().sharedMaterial = material;
+            return part;
         }
         public static Material GroundMaterial(Color color, int textureIndex = 0)
         {

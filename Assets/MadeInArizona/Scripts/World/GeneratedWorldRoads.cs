@@ -144,7 +144,7 @@ namespace MadeInArizona
                 Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+3.7f);if(OverRiver(XZ(p)))continue;p.y=HeightAt(p);
                 Transform g=Group("Weathered roadside marker",roads,p);
                 Box("Marker post",g,new Vector3(0,.48f,0),new Vector3(.10f,.96f,.10f),new Color(.62f,.58f,.47f));
-                Box("Amber reflector",g,new Vector3(0,.76f,0),new Vector3(.14f,.13f,.035f),new Color(.92f,.56f,.12f));
+                Use(Box("Amber reflector",g,new Vector3(0,.76f,0),new Vector3(.14f,.13f,.035f),new Color(.92f,.56f,.12f)),Reflective(new Color(.92f,.56f,.12f),SunGlint.Sign,.92f,0,.9f));
             }
         }
 

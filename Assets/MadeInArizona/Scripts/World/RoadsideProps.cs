@@ -31,7 +31,7 @@ namespace MadeInArizona
             Transform g=Group(large?"Propane bulk tank":"Propane cylinder",parent,pos);
             if(large)
             {
-                var tank=Shape("Pressure vessel",g,PrimitiveType.Capsule,new Vector3(0,1.45f,0),new Vector3(1.8f,2.8f,1.8f),Cream);
+                var tank=Use(Shape("Pressure vessel",g,PrimitiveType.Capsule,new Vector3(0,1.45f,0),new Vector3(1.8f,2.8f,1.8f),Cream),Reflective(Cream,SunGlint.Paint,.72f,0,1.6f));
                 tank.transform.localRotation=Quaternion.Euler(0,0,90);
                 Box("Left cradle",g,new Vector3(-1.65f,.45f,0),new Vector3(.5f,.9f,1.7f),Rust);
                 Box("Right cradle",g,new Vector3(1.65f,.45f,0),new Vector3(.5f,.9f,1.7f),Rust);
@@ -40,7 +40,7 @@ namespace MadeInArizona
             }
             else
             {
-                Shape("Tank",g,PrimitiveType.Capsule,new Vector3(0,.63f,0),new Vector3(.62f,.62f,.62f),Cream);
+                Use(Shape("Tank",g,PrimitiveType.Capsule,new Vector3(0,.63f,0),new Vector3(.62f,.62f,.62f),Cream),Reflective(Cream,SunGlint.Paint,.7f,0,1.6f));
                 Cylinder("Foot",g,new Vector3(0,.08f,0),.32f,.16f,Ink);
                 Cylinder("Valve",g,new Vector3(0,1.29f,0),.08f,.19f,Rust);
                 Box("Warning band",g,new Vector3(0,.63f,-.312f),new Vector3(.35f,.19f,.025f),Orange);
@@ -51,8 +51,8 @@ namespace MadeInArizona
         public static Transform Barrel(Transform parent,Vector3 pos, Color color,bool explosive = false)
         {
             Transform g=Group(explosive?"Fuel drum":"Used oil drum",parent,pos);
-            Cylinder("Drum",g,new Vector3(0,.55f,0),.45f,1.1f,color);
-            for(int i=0;i<3;i++) Cylinder("Steel ring",g,new Vector3(0,.08f+i*.46f,0),.465f,.055f,Ink);
+            Use(Cylinder("Drum",g,new Vector3(0,.55f,0),.45f,1.1f,color),Reflective(color,SunGlint.Paint,.5f,.2f,1.8f));
+            for(int i=0;i<3;i++) Use(Cylinder("Steel ring",g,new Vector3(0,.08f+i*.46f,0),.465f,.055f,Ink),Reflective(Ink,SunGlint.Metal,.45f,1,1.5f));
             Cylinder("Cap",g,new Vector3(.2f,1.115f,0),.055f,.02f,Ink);
             BoundsCollider(g,new Vector3(0,.55f,0),new Vector3(.92f,1.1f,.92f));
             MakeBreakable(g,24,explosive,ExplosionKind.Gasoline,30); return g;
@@ -77,8 +77,8 @@ namespace MadeInArizona
         {
             Transform g=Group("Roadside sign " + title,parent,pos);
             for(int i=-1;i<=1;i+=2) Box("Sign post",g,new Vector3(i*width*.32f,2.8f,0),new Vector3(.22f,5.6f,.22f),Rust);
-            Box("Steel frame",g,new Vector3(0,4.8f,0),new Vector3(width+.24f,3.2f,.28f),Ink);
-            Box("Painted board",g,new Vector3(0,4.8f,-.17f),new Vector3(width,2.95f,.07f),paint);
+            Use(Box("Steel frame",g,new Vector3(0,4.8f,0),new Vector3(width+.24f,3.2f,.28f),Ink),Reflective(Ink,SunGlint.Metal,.5f,1,1.3f));
+            Use(Box("Painted board",g,new Vector3(0,4.8f,-.17f),new Vector3(width,2.95f,.07f),paint),Reflective(paint,SunGlint.Sign,.82f,0,1.2f));
             Text(title,g,new Vector3(0,5.15f,-.23f),Mathf.Min(.65f,width/Mathf.Max(title.Length,1)*1.55f),Cream);
             Text(subtitle,g,new Vector3(0,4.18f,-.235f),.23f,Cream);
             BoundsCollider(g,new Vector3(0,3,0),new Vector3(width,6,.3f)); MakeBreakable(g,40,false,ExplosionKind.Electrical,40); return g;
@@ -90,8 +90,8 @@ namespace MadeInArizona
             ApplyWall(shell,wall,Mathf.Abs(Mathf.RoundToInt(wall.r*17+wall.g*11+wall.b*7))%WallTextureSet.TextureCount,new Vector3(width,height,depth));
             Box("Flat roof",g,new Vector3(0,height+.12f,0),new Vector3(width+.6f,.35f,depth+.6f),Cream);
             Box("Roof lip",g,new Vector3(0,height+.48f,-depth*.5f),new Vector3(width+.7f,.6f,.32f),Rust);
-            Box("Shopfront window",g,new Vector3(-width*.21f,1.8f,-depth*.5f-.04f),new Vector3(width*.31f,2.4f,.08f),new Color(.12f,.28f,.31f));
-            Box("Shopfront window",g,new Vector3(width*.25f,1.8f,-depth*.5f-.04f),new Vector3(width*.25f,2.4f,.08f),new Color(.12f,.28f,.31f));
+            Use(Box("Shopfront window",g,new Vector3(-width*.21f,1.8f,-depth*.5f-.04f),new Vector3(width*.31f,2.4f,.08f),new Color(.12f,.28f,.31f)),Glass(new Color(.12f,.28f,.31f)));
+            Use(Box("Shopfront window",g,new Vector3(width*.25f,1.8f,-depth*.5f-.04f),new Vector3(width*.25f,2.4f,.08f),new Color(.12f,.28f,.31f)),Glass(new Color(.12f,.28f,.31f)));
             Box("Door",g,new Vector3(.5f,1.3f,-depth*.5f-.08f),new Vector3(1.55f,2.6f,.13f),Ink);
             Box("Awning",g,new Vector3(0,height-.75f,-depth*.5f-1.1f),new Vector3(width+.4f,.15f,2.6f),Turquoise);
             Text(name,g,new Vector3(0,height-.23f,-depth*.5f-.22f),Mathf.Min(.5f,width/name.Length*1.6f),Cream);
@@ -102,9 +102,9 @@ namespace MadeInArizona
         public static Transform JunkCar(Transform parent,Vector3 pos,Color paint,float yaw=0)
         {
             Transform g=Group("Unclear title history",parent,pos); g.localRotation=Quaternion.Euler(0,yaw,0);
-            Box("Abandoned chassis",g,new Vector3(0,.4f,0),new Vector3(1.8f,.7f,3.9f),paint);
+            Use(Box("Abandoned chassis",g,new Vector3(0,.4f,0),new Vector3(1.8f,.7f,3.9f),paint),Reflective(paint,SunGlint.Paint,.45f,.1f,2));
             Box("Crushed cabin",g,new Vector3(0,.92f,-.25f),new Vector3(1.58f,.5f,1.8f),Rust);
-            Box("Opaque windshield",g,new Vector3(0,1.05f,.68f),new Vector3(1.36f,.27f,.03f),Ink);
+            Use(Box("Opaque windshield",g,new Vector3(0,1.05f,.68f),new Vector3(1.36f,.27f,.03f),Ink),Glass(Ink,1.8f));
             for(int x=-1;x<=1;x+=2) for(int z=-1;z<=1;z+=2) { var tire=Cylinder("Flat tyre",g,new Vector3(x*.93f,.3f,z*1.25f),.34f,.22f,Ink); tire.transform.localRotation=Quaternion.Euler(0,0,90); }
             BoundsCollider(g,new Vector3(0,.6f,0),new Vector3(2,1.2f,4)); MakeBreakable(g,65,true,ExplosionKind.Vehicle,75); return g;
         }
@@ -113,14 +113,14 @@ namespace MadeInArizona
             Transform g=Group("Utility pole",parent,pos);
             Cylinder("Creosote pole",g,new Vector3(0,4.7f,0),.18f,9.4f,new Color(.24f,.17f,.11f));
             Box("Crossarm",g,new Vector3(0,8.6f,0),new Vector3(3.1f,.18f,.23f),Rust);
-            for(int i=-1;i<=1;i++) Cylinder("Insulator",g,new Vector3(i*1.22f,8.88f,0),.12f,.4f,Cream);
-            Cylinder("Transformer",g,new Vector3(.5f,7.1f,0),.43f,1.4f,new Color(.41f,.51f,.48f));
+            for(int i=-1;i<=1;i++) Use(Cylinder("Insulator",g,new Vector3(i*1.22f,8.88f,0),.12f,.4f,Cream),Reflective(Cream,SunGlint.Plastic,.88f,0,.8f));
+            Use(Cylinder("Transformer",g,new Vector3(.5f,7.1f,0),.43f,1.4f,new Color(.41f,.51f,.48f)),Reflective(new Color(.41f,.51f,.48f),SunGlint.Metal,.55f,.6f,1.4f));
             BoundsCollider(g,new Vector3(0,4.7f,0),new Vector3(.4f,9.4f,.4f)); MakeBreakable(g,60,true,ExplosionKind.Electrical,65); return g;
         }
         public static Transform PortaPotty(Transform parent,Vector3 pos)
         {
             Transform g=Group("Portable consequences",parent,pos);
-            Box("Plastic shell",g,new Vector3(0,1.2f,0),new Vector3(1.5f,2.4f,1.5f),Turquoise);
+            Use(Box("Plastic shell",g,new Vector3(0,1.2f,0),new Vector3(1.5f,2.4f,1.5f),Turquoise),Reflective(Turquoise,SunGlint.Plastic,.6f,0,1.3f));
             Box("Pale lid",g,new Vector3(0,2.48f,0),new Vector3(1.65f,.22f,1.65f),Cream);
             Box("Door",g,new Vector3(0,1.17f,-.77f),new Vector3(1.16f,2.07f,.04f),new Color(.09f,.43f,.42f));
             Text("EXECUTIVE\nSUITE",g,new Vector3(0,1.64f,-.80f),.19f,Cream);

@@ -85,6 +85,7 @@ namespace MadeInArizona
             desired -= forward * extra;
             transform.position = snap ? desired : Vector3.SmoothDamp(transform.position, desired, ref velocity, garage ? .22f : .13f, Mathf.Infinity, Time.unscaledDeltaTime);
             transform.rotation = rotation;
+            SunGlint.UpdateEye(transform);
             view.farClipPlane = 450 + extra;
             if (listener) listener.SetPositionAndRotation(transform.position + forward * extra, rotation);
             ApplyDepthOffset(extra);
