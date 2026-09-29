@@ -42,6 +42,7 @@ Shader "MadeInArizona/BiomeTerrain"
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "CloudShadows.hlsl"
 
             TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap);
             // All fourteen Outdoor Ground Textures live in two arrays built at load (see WorldArt.GroundArrays).
@@ -197,12 +198,13 @@ Shader "MadeInArizona/BiomeTerrain"
                 float2 nx0=n0.xy*2-1,nx1=n1.xy*2-1,nx2=n2.xy*2-1;
                 float2 packNormal=(nx0*layerWeight.x+float2(nx1.y,-nx1.x)*layerWeight.y+float2(-nx2.y,nx2.x)*layerWeight.z)*_UseGroundTextures;
                 float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22));
-                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));float ao=1,directAO=1;
+                Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
                 #endif
                 float cloud=Fbm(p*.006+_Time.y*float2(.0021,.0013));
-                float cloudShade=lerp(.91,1.0,smoothstep(.38,.68,cloud));
+                // Faint ground-only mottling, replaced by the real drifting cloud shadows (CloudShadows.hlsl) when they are on.
+                float cloudShade=lerp(lerp(.91,1.0,smoothstep(.38,.68,cloud)),1,saturate(_CloudShadowParams.x));
                 float packAO=n0.b*layerWeight.x+n1.b*layerWeight.y+n2.b*layerWeight.z;
                 ao*=lerp(1,lerp(.62,1,packAO),_UseGroundTextures*.72);
                 float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade*directAO);

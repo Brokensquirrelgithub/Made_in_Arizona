@@ -6,6 +6,7 @@
 
 - **macOS:** open `Builds/macOS/Made in Arizona.app`.
 - **Windows:** copy the complete `Builds/Windows` folder to a PC and open `Made in Arizona.exe`. Keep the Data folder and DLLs beside it.
+- **Playtesters:** install once from the [Releases page](https://github.com/Brokensquirrelgithub/Made_in_Arizona/releases), then use **Versions & Updates** in the main menu (or **UPDATES** in the garage) to move to any newer or older published build without reinstalling. Publishing and tester setup: [playtest builds and updates](Docs/UPDATES.md).
 - **Unity:** open this folder with **Unity 6000.5.5f1**, open `Assets/MadeInArizona/Scenes/Main.unity`, and press Play. Packages restore automatically. If using an external drive causes Unity asset-database errors, put a working copy on an APFS/NTFS volume.
 
 From the main menu, choose a **seed** and **map width (0.8–3.2 km)**, then click **Start Campaign**. Generation creates an Arizona-shaped world with towns, winding roads, hills, forest, rivers and hidden salvage. Saved upgrades and completed jobs are retained. Open **Garage** for vehicle selection, parts and Dispatch. The first job takes you from chasing a delinquent customer through a junkyard fight to recovering evidence and returning it to the garage. Follow the gold objective ring; turquoise rings mark optional salvage.
@@ -44,7 +45,7 @@ Edit the live `world-generation.json` path shown in the main menu to change terr
 
 ## Developer tuning
 
-During a mission, press **Escape → Dev Tuning / Mouse**. Four tabs expose driving, combat, camera, and light/color controls. Changes apply immediately and save automatically across launches. Use **Save & Resume** to drive with the new values. **Reset All Defaults** restores the nimble baseline and default effects. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
+During a mission, press **Escape → Dev Tuning / Mouse**. Tabs expose driving, drift, combat, camera, light/color, reflection controls (sun glints: intensity, angular tolerance, bloom contribution, fade and which materials can flash), and Dirt & Sky (cloud shadows, lens dirt, tyre smoke, skid marks, gravel spray and how fast dust builds up on cars). Changes apply immediately and save automatically across launches. Use **Save & Resume** to drive with the new values. **Reset All Defaults** restores the nimble baseline and default effects. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
 
 Suzuki is your white husky girl and senior recovery specialist. She leaves her bed and wanders a garage route, pausing to sniff.
 

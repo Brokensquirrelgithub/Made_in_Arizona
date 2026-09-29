@@ -8,6 +8,7 @@ Shader "MadeInArizona/LivingScenery"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+        #include "CloudShadows.hlsl"
         TEXTURE2D(_NeedleAtlas);SAMPLER(sampler_NeedleAtlas);
         struct A {float4 p:POSITION;float3 n:NORMAL;float4 c:COLOR;float2 uv:TEXCOORD0;};
         struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float4 c:COLOR;float fog:TEXCOORD2;float2 uv:TEXCOORD3;};
@@ -34,7 +35,7 @@ Shader "MadeInArizona/LivingScenery"
             float grain=frac(sin(dot(floor(i.world*24),float3(127.1,311.7,74.7)))*43758.5453);
             float strata=sin(i.world.y*15+sin(i.world.x*4)+sin(i.world.z*5));
             float3 albedo=i.c.rgb*needle*(.89+grain*.14+strata*.045*(1-i.c.a));
-            Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));
+            Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);
             float ao=1,directAO=1;
             #if defined(_SCREEN_SPACE_OCCLUSION)
                 AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;

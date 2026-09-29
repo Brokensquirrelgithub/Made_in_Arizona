@@ -48,7 +48,7 @@ namespace MadeInArizona
         void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; }
         void ResetFocus()
         {
-            worldSeed=null; worldMap=false; devMenu=false; settings=false; menuFocus=0;
+            worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; menuFocus=0;
             if (game != null && game.Save != null)
             {
                 selectedWeapon=Array.FindIndex(garageWeapons,i=>ContentCatalog.Weapons[i].id==game.Save.selectedWeapon);
@@ -59,7 +59,7 @@ namespace MadeInArizona
 
         void Update()
         {
-            TickDevSave();WorldMenuInput();
+            TickDevSave();UpdatesInput();if(updatesMenu)return;WorldMenuInput();
             if(game.State==GameState.MainMenu||game.State==GameState.Generating||worldMap)return;
             smoothedFps = Mathf.Lerp(smoothedFps, 1f / Mathf.Max(.001f, Time.unscaledDeltaTime), .05f);
             if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame) { if (game.IsPlaying) { game.Pause(); settings = true; } else settings = !settings; }
@@ -143,9 +143,10 @@ namespace MadeInArizona
             scale = Mathf.Max(.45f, scale);
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * scale);
             width = Screen.width / scale; height = Screen.height / scale;
-            if(game.State==GameState.MainMenu){DrawMainMenu();GUI.matrix=Matrix4x4.identity;return;}
+            if(game.State==GameState.MainMenu){if(updatesMenu)DrawUpdates();else DrawMainMenu();GUI.matrix=Matrix4x4.identity;return;}
             if(game.State==GameState.Generating){DrawGeneration();GUI.matrix=Matrix4x4.identity;return;}
             if(worldMap&&GeneratedWorld.Active){DrawWorldMap();GUI.matrix=Matrix4x4.identity;return;}
+            if(updatesMenu){DrawUpdates();GUI.matrix=Matrix4x4.identity;return;}
             // Settings covers the screen: nothing underneath is drawn, so its buttons cannot take the click (IMGUI gives
             // it to the first control drawn). The dynamic zoom toggle was landing on the pause menu's map regenerate.
             if (settings) DrawSettings();
@@ -189,6 +190,8 @@ namespace MadeInArizona
             if (station == 4) DrawDog(top, panelHeight);
             Rect(0, height - 62, width, 62, Ink);
             Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB / RB  STATION     D-PAD  SELECT     A  CONFIRM     RIGHT STICK  ROTATE VIEW     Y  SETTINGS" : "TAB  CHANGE STATION     ENTER  CONFIRM     RMB DRAG / Q E  ROTATE VIEW     F1  SETTINGS", 12, Muted, true);
+            bool freshBuild = GameUpdater.Instance && GameUpdater.Instance.UpdateAvailable;
+            if (Button(width - 545, height - 48, 190, 34, freshBuild ? "NEW BUILD READY" : "UPDATES", freshBuild)) OpenUpdates();
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
             if (Button(width - 155, height - 48, 120, 34, "QUIT")) Application.Quit();
         }

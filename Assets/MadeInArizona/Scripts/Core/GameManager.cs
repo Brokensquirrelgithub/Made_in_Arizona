@@ -76,6 +76,7 @@ namespace MadeInArizona
             Sun.shadows = LightShadows.Soft;
             sunObj.transform.rotation = Quaternion.Euler(68, -35, 0);
             CreatePostProcessing();
+            gameObject.AddComponent<GameUpdater>();
             gameObject.AddComponent<GameUI>();
             gameObject.AddComponent<SmokeTestRunner>();
             if (TelemetryRecorder.Enabled) gameObject.AddComponent<TelemetryRecorder>();

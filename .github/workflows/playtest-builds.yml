@@ -1,0 +1,107 @@
+# Builds Windows and macOS players for every push to main and publishes them as a GitHub Release that the
+# in-game updater (Versions & Updates) can install. Needs Unity license secrets; see Docs/UPDATES.md.
+name: Playtest builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playtest-builds
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || [ -n "$UNITY_SERIAL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Unity license secret is set, so no playtest build was published. See Docs/UPDATES.md or use Tools/publish-playtest.sh."
+          fi
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - targetPlatform: StandaloneWindows64
+            asset: MadeInArizona-Windows.zip
+          - targetPlatform: StandaloneOSX
+            asset: MadeInArizona-macOS.zip
+    steps:
+      - name: Free disk space for the Unity image
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-${{ matrix.targetPlatform }}-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildName: Made in Arizona
+          buildMethod: MadeInArizona.Editor.BuildGame.BuildForCI
+          customParameters: -miaCommit ${{ github.sha }}
+          versioning: None
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          cd "build/${{ matrix.targetPlatform }}"
+          # -y keeps the symlinks inside the macOS bundle; the Windows zip holds the player folder's contents.
+          zip -q -r -y -X "$GITHUB_WORKSPACE/${{ matrix.asset }}" . -x '*_BurstDebugInformation_DoNotShip*' '*_BackUpThisFolder_ButDontShipItWithYourGame*'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          retention-days: 3
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA::7}"
+          subject="$(git log -1 --format=%s)"
+          # Keep in step with GameUpdater.Protocol: builds without this line are never offered in game.
+          protocol="$(grep -o 'Protocol = [0-9]*' Assets/MadeInArizona/Scripts/Core/GameUpdater.cs | head -n 1 | grep -o '[0-9]*')"
+          printf '%s\n\nmia-updater: %s\ncommit: %s\n' "$subject" "$protocol" "$GITHUB_SHA" > notes.md
+          gh release create "build-$short" dist/MadeInArizona-Windows.zip dist/MadeInArizona-macOS.zip \
+            --target "$GITHUB_SHA" --title "Playtest $short • $subject" --notes-file notes.md

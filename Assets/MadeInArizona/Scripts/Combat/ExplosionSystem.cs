@@ -30,8 +30,8 @@ namespace MadeInArizona
         readonly List<Flash> flashes = new List<Flash>();
         readonly List<Wave> waves = new List<Wave>();
         readonly List<Scorch> scorches = new List<Scorch>();
-        ParticleSystem fire, smoke, sparks;
-        Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, waveMaterial, scorchMaterial;
+        ParticleSystem fire, smoke, sparks, tireSmoke;
+        Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, waveMaterial, scorchMaterial, tireSmokeMaterial;
         Texture2D softTexture, scorchTexture;
         MaterialPropertyBlock block;
         int quality;
@@ -94,8 +94,19 @@ namespace MadeInArizona
             var unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             waveMaterial = new Material(unlit) { name = "Pressure wave", enableInstancing = true };
             waveMaterial.SetColor("_BaseColor", new Color(2.3f, 1.2f, .3f));
-            debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
-            debrisMaterial.SetFloat("_Smoothness", .22f);
+            // Tumbling scraps flash in the sun: reflective metal that the wear map dulls in patches.
+            var reflective = Shader.Find("MadeInArizona/Reflective");
+            if (reflective && reflective.isSupported)
+            {
+                debrisMaterial = new Material(reflective) { name = "Fractured steel and adobe" };
+                debrisMaterial.SetFloat("_GlintType", SunGlint.Metal); debrisMaterial.SetFloat("_Metallic", .7f);
+                debrisMaterial.SetFloat("_Smoothness", .72f); debrisMaterial.SetFloat("_Wear", 1.3f);
+            }
+            else
+            {
+                debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
+                debrisMaterial.SetFloat("_Smoothness", .22f);
+            }
             scorchMaterial = new Material(particleMaterial) { name = "Explosion scorch" };
             scorchMaterial.SetTexture("_BaseMap", scorchTexture); scorchMaterial.SetTexture("_MainTex", scorchTexture);
             scorchMaterial.SetColor("_BaseColor", new Color(.12f, .07f, .045f, .68f));
@@ -105,6 +116,11 @@ namespace MadeInArizona
             fire = Bank("Six-way fluid fireballs", 100 + quality * 100, 1.15f, false);
             smoke = Bank("Six-way rolling smoke", 200 + quality * 200, 1.6f, true);
             sparks = Bank("Incandescent fragments", 2000 + quality * 2200, .15f, false);
+            // Tyre smoke has its own budget, so a long burnout never starves explosions of smoke.
+            tireSmokeMaterial = SixWayMaterial("Smoke", 0, 1.35f); tireSmokeMaterial.name = "Tyre smoke • baked six-direction fluid lighting";
+            tireSmokeMaterial.SetFloat("_Bright", .62f);
+            tireSmoke = Bank("Six-way tyre smoke", 160 + quality * 150, 3f, true);
+            tireSmoke.GetComponent<ParticleSystemRenderer>().sharedMaterial = tireSmokeMaterial;
         }
         Material SixWayMaterial(string name,float emission,float density)
         {
@@ -176,6 +192,17 @@ namespace MadeInArizona
             if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .06f; AudioManager.Instance?.PlayExplosion(position, 1.5f, ExplosionKind.Ammunition); }
         }
         float popSoundAt;
+        /// <summary>
+        /// One puff of pale tyre smoke from a burnout or a slide on pavement. It billows up to about three times its start
+        /// size and lingers; <paramref name="opacity"/> is 0-1.
+        /// </summary>
+        public static void TireSmoke(Vector3 position, Vector3 velocity, float size, float life, float opacity)
+        {
+            var system = Get();
+            if (system.tireSmoke == null) return;
+            var tint = new Color(.93f, .92f, .9f, Mathf.Clamp01(opacity));
+            system.tireSmoke.Emit(new ParticleSystem.EmitParams { position = position, velocity = velocity, startColor = tint, startSize = size, startLifetime = life, rotation = Random.Range(-30, 30) }, 1);
+        }
         public static void Burst(Vector3 position, Color color, int count, float speed)
         {
             var system = Get();
@@ -461,7 +488,7 @@ namespace MadeInArizona
         void OnDestroy()
         {
             if (instance == this) instance = null;
-            if(smokeMaterial)Destroy(smokeMaterial);if(fireMaterial)Destroy(fireMaterial);
+            if(smokeMaterial)Destroy(smokeMaterial);if(fireMaterial)Destroy(fireMaterial);if(tireSmokeMaterial)Destroy(tireSmokeMaterial);
             if (particleMaterial != null) Destroy(particleMaterial);
             if (waveMaterial != null) Destroy(waveMaterial);
             if (debrisMaterial != null) Destroy(debrisMaterial);

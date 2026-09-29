@@ -54,6 +54,10 @@ Run `Tools/build.sh mac`, `Tools/build.sh windows`, or `Tools/build.sh all`. Set
 
 For external drives with database/locking issues, use a local working copy. Do not share the same Unity Library between simultaneously running editors. Library, package caches and native binaries are ignored by Git. The temporary compilation workspace used during development is not required to run either native build.
 
+## Playtest builds and updates
+
+Every player carries `StreamingAssets/build.json` (written by `BuildGame` during the build). `GameUpdater` lists GitHub Releases tagged `build-<sha>` whose notes declare `mia-updater: 1`, downloads and verifies the chosen platform zip, then hands off to a PowerShell (Windows) or bash (macOS) script that swaps the files after the game quits and relaunches it. Releases come from `.github/workflows/playtest-builds.yml` (GameCI, needs Unity license secrets) or `Tools/publish-playtest.sh`. See [playtest builds and updates](UPDATES.md).
+
 ## Save files
 
 macOS: `~/Library/Application Support/117 Degree Games/Made in Arizona/made-in-arizona.save.json`
@@ -88,11 +92,24 @@ The opt-in `-miaHandlingTest` flag adds camera-motion captures of the reported r
 
 ## Persistent developer tuning
 
-Escape opens the pause menu; Dev Tuning opens a mouse-operated panel with Driving, Combat, Camera, and Light & Color tabs. Values live in GameSettings.dev, serialize with the existing checksummed save, clamp finite ranges on load, and migrate old saves to defaults. Slider edits apply immediately, debounce disk saves, and flush on close, loss of focus, or quit. Reset All Defaults changes only developer tuning. Health capacity changes preserve current health fraction.
+Escape opens the pause menu; Dev Tuning opens a mouse-operated panel with Driving, Drift, Combat, Camera, Light & Color, Reflections, and Dirt & Sky tabs. Values live in GameSettings.dev, serialize with the existing checksummed save, clamp finite ranges on load, and migrate old saves to defaults. Slider edits apply immediately, debounce disk saves, and flush on close, loss of focus, or quit. Reset All Defaults changes only developer tuning. Health capacity changes preserve current health fraction.
 
 The baseline player now has 1.6× steering agility and 1.2× acceleration. Small broken props retain 85% of pre-impact velocity through the collision handler; large props and solid walls are excluded. Prop damage and retained momentum are exposed separately. Enemy capacity, outgoing player damage to vehicles, and incoming player damage can be adjusted independently.
 
 DevVisuals is the sole writer of the session-owned post-processing profile and applies the renderer's SSAO feature. Startup and slider edits share the same path; settings also reapply when URP finishes creating its render pipeline, and camera volumes update every frame. Effects include bloom, exposure, contrast, saturation, chromatic aberration, camera-only motion blur, orthographic depth blur, vignette, sunlight, ambient light and haze. DOF starts disabled. Low quality keeps bloom disabled. Existing shipped visual defaults migrate to the brighter look once, preserving custom slider values. Camera zoom/shake are live. Masked procedural albedo adds dust/pitting over existing surface normals.
+
+Sun glints come from HDR specular, not from global bloom. Car paint and glass (`CarPaint`), chrome, metal, signs, windows and glossy plastic (`Reflective`), and the river (`FlowRiver`) share `Shaders/SunGlint.hlsl`: an unclamped GGX sun highlight (tiny and very bright on smooth surfaces, broad and weak on rough ones, capped only by a high ceiling), a procedural wear map (dust, scratches, fingerprints, oxidation and chips) that roughens the gloss in patches, and a micro-normal map that fragments highlights. On top of that sits an optional stylised glint: a brief HDR spike where the mirrored sun lines up with the eye within a small angular window. It is added to the surface pixel only and lights nothing around it. Because the gameplay camera is orthographic and its view direction never changes, both are evaluated from a virtual eye 70 m behind the camera (`SunGlint.UpdateEye`), so reflections slide and flash as the camera travels. The bloom threshold defaults to 1.9, so sunlit sand and white paint stay crisp and only these HDR peaks bloom. Dev Tuning → Reflections exposes bloom threshold, specular ceiling, surface wear, micro-normal strength, glint intensity, angular tolerance, bloom contribution, fade sharpness and per-material eligibility (paint, chrome, glass, signs, water, metal, plastic). `SunGlint.cs` feeds the shader globals and builds both maps at start-up.
+
+Weather and grime (Dev Tuning → Dirt & Sky):
+
+- **Cloud shadows.** `CloudShadows.cs` sets a tileable cloud map as the sun's URP light cookie and drifts it with a slowly veering wind. URP Lit materials apply the cookie themselves. The custom shaders sample the same cookie through `Shaders/CloudShadows.hlsl`, so terrain, roads, scenery, cars and smoke all darken under the same clouds. Clouds are large (roughly 120–300 m), soft-edged and cover about 14% of the sky, so one sweeps over the car now and then. They are off in the garage.
+- **Lens dirt.** `LensDirt.cs` generates a faint dirt texture (specks, out-of-focus blobs, smudges and fibres) for URP bloom's lens-dirt slot. Bloom scales it, so it shows only in the halo of explosions, fire and sun glints.
+- **Tyres.** `VehicleController` reports wheelspin (drive demand above the surface's grip, mostly at launch or when pinned against something), side slip and per-wheel ground contacts. `TireEffects` turns these into effects by surface:
+  - **Pavement:** pale tyre smoke (its own six-way smoke pool) and dark rubber marks. The marks multiply onto the ground, so repeated passes and on-the-spot burnouts build up darker rubber.
+  - **Loose ground:** bouncing, tumbling pebbles, grit and clods (`Shaders/Grit.shader` mesh particles with world collisions), plus ruts. Sand and mud keep faint tracks behind the rear tyres.
+
+  Paved ground no longer throws generic dust. `TireMarks` holds marks in a ring of mesh chunks; they fade after about four minutes (`Shaders/SkidMarks.shader`).
+- **Dust on cars.** `VehicleDust` gives each car its own copies of its materials and feeds `Shaders/CarDust.hlsl` the body transform and a dust amount. Parts that used URP Lit switch to the Reflective shader so they can take dust too. Dust builds with speed, slides and wheelspin: sand and mud fastest, pavement barely, and fording water rinses some off. The mask starts at the wheel wells, sills and bumpers, climbs the lower body, coats rear-facing surfaces, and leaves a light film on horizontal panels. It takes the gloss and clear coat where it sits and takes its colour from the ground. At the default rate, about ten minutes off-road makes a car filthy. The player's dust lasts the session per vehicle; hostile cars spawn already dusty.
 
 Garage, mission and combat-trial transitions also apply DevVisuals instead of overwriting the sun with legacy dark intensity values. This closes the transition-specific version of the slider-refresh brightness bug.
 

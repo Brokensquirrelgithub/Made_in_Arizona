@@ -22,6 +22,12 @@ namespace MadeInArizona
         /// <summary>True on physics steps where nitro is actually firing (held, charged, driving forward).</summary>
         public bool Boosting { get; private set; }
         public float DriftAmount { get; private set; }
+        /// <summary>0-1 wheelspin of the driven wheels: the drive asking for more than the surface grips, mostly at launch.</summary>
+        public float WheelSpin { get; private set; }
+        /// <summary>0-1 sideways scrub of the tyres (drifts, slides, flat-out U-turns).</summary>
+        public float SideSlip { get; private set; }
+        /// <summary>Surface under the car's centre, from the last physics step.</summary>
+        public SurfaceKind Surface { get; private set; } = SurfaceKind.Dirt;
         public bool Grounded { get; private set; }
         public int Gear { get; private set; } = 1;
         /// <summary>0–1 blend of the player's drift handling; eases out over the tuned recovery time.</summary>
@@ -91,6 +97,9 @@ namespace MadeInArizona
         Transform[] wheels;
         readonly Vector3[] suspensionPoints = new Vector3[4];
         readonly RaycastHit[] groundHits = new RaycastHit[12];
+        /// <summary>Per wheel (FL, FR, RL, RR): ground under the suspension in the last physics step, for tyre effects.</summary>
+        readonly bool[] wheelOnGround = new bool[4];
+        readonly Vector3[] wheelGroundPoint = new Vector3[4], wheelGroundNormal = new Vector3[4];
         float[] gears = { 3.5f, 2.25f, 1.55f, 1.12f, .86f, .68f };
         bool initialized;
         const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
@@ -151,6 +160,13 @@ namespace MadeInArizona
             Weapons.Initialize(this);
             ExplosionSystem.IgnoreVehicleCollisions(this);
             VehicleDamage.IgnoreWrecks(this);
+            // Tyre smoke, skid marks and gravel spray; dust that builds up on the body.
+            var tires = GetComponent<TireEffects>();
+            if (tires == null) tires = gameObject.AddComponent<TireEffects>();
+            tires.Bind(this);
+            var dust = GetComponent<VehicleDust>();
+            if (dust == null) dust = gameObject.AddComponent<VehicleDust>();
+            dust.Bind(this, definition);
             initialized = true;
         }
         public static Transform FindChild(Transform parent, string childName)
@@ -163,6 +179,16 @@ namespace MadeInArizona
             }
             return null;
         }
+        /// <summary>Visual wheel <paramref name="index"/> (FL, FR, RL, RR).</summary>
+        public Transform Wheel(int index) => wheels != null && index >= 0 && index < wheels.Length ? wheels[index] : null;
+        /// <summary>Whether wheel <paramref name="index"/> had ground under it in the last physics step, and where.</summary>
+        public bool WheelContact(int index, out Vector3 point, out Vector3 normal)
+        {
+            point = wheelGroundPoint[index]; normal = wheelGroundNormal[index];
+            return wheelOnGround[index];
+        }
+        /// <summary>Wheels the engine drives: the rear pair, the front pair, or all four.</summary>
+        public bool Driven(int index) => Stats == null || Stats.drivetrain == Drivetrain.AWD || (Stats.drivetrain == Drivetrain.FWD ? index < 2 : index >= 2);
         public void SetAIInput(Vector2 move, Vector3 aim, bool fire, bool reverse = false) { aiMove = move; aiAim = aim; aiFire = fire; aiReverse = reverse; }
         public void Repair(float amount) { Damage?.Repair(amount); }
         /// <summary>Adds a share of the tank. Pickups are the only refill; no part changes how much they restore.</summary>
@@ -239,6 +265,8 @@ namespace MadeInArizona
             DriftBlend = drifting && speed > 3 ? Mathf.MoveTowards(DriftBlend, 1, Time.fixedDeltaTime / .08f)
                 : Mathf.MoveTowards(DriftBlend, 0, Time.fixedDeltaTime / Mathf.Max(.05f, tuning.driftRecovery));
             SurfaceKind surface = WorldBuilder.SurfaceAt(transform.position);
+            Surface = surface;
+            float spin = 0;
             float surfaceGrip = SurfaceGrip(surface);
             float wheelGrip = Mathf.Lerp(.5f, 1f, Damage.Wheels);
             float diffGrip = Stats.differential == Differential.Locked ? 1.13f : Stats.differential == Differential.LimitedSlip ? 1.07f : .92f;
@@ -298,6 +326,11 @@ namespace MadeInArizona
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
                 float directionalAcceleration = driveDirection < 0 ? acceleration * .78f : acceleration;
+                // Wheelspin for the tyre effects: the drive asks for more than the surface can grip, mostly from a
+                // standstill or pinned against something. Strong cars smoke their tyres on asphalt, everyone roosts dirt.
+                float gripLimit = 9.81f * surfaceGrip * (Stats.drivetrain == Drivetrain.AWD ? 1.45f : 1f);
+                float launchSpin = 1 - Mathf.Clamp01(speed / (boosting ? 17f : 11f));
+                if (traction && driveDirection > 0) spin = Mathf.Clamp01((directionalAcceleration * targetThrottle / gripLimit - 1.5f) * .5f) * launchSpin;
                 if (traction && speedInDriveDirection < directionalMaxSpeed)
                     Body.AddForce(driveForward * directionalAcceleration * targetThrottle * (Grounded ? 1 : BeachedTraction), ForceMode.Acceleration);
                 if (Damage.Wheels < .45f && Grounded) Body.AddTorque(Vector3.up * Mathf.Sin(Time.time * 6) * 1.4f * (1 - Damage.Wheels) * speed / 12, ForceMode.Acceleration);
@@ -324,6 +357,8 @@ namespace MadeInArizona
                 if (surface == SurfaceKind.Water || surface == SurfaceKind.Mud) Body.AddForce(-planar * .65f, ForceMode.Acceleration);
             }
             DriftAmount = Mathf.Clamp01(Mathf.Abs(lateralSpeed) / 12);
+            WheelSpin = Mathf.MoveTowards(WheelSpin, Grounded || Beached ? spin : 0, Time.fixedDeltaTime * 5);
+            SideSlip = Grounded ? Mathf.Clamp01((Mathf.Abs(lateralSpeed) - 1.5f) / 5f) : 0;
             wasDrifting = drifting;
             if(GeneratedWorld.Active)
             {
@@ -343,7 +378,8 @@ namespace MadeInArizona
             {
                 dustTimer = Time.time + (surface == SurfaceKind.Asphalt ? .18f : .065f);
                 Color dust = surface == SurfaceKind.Water ? new Color(.38f, .65f, .7f, .5f) : new Color(.7f, .49f, .28f, .4f);
-                if (surface != SurfaceKind.Asphalt || DriftAmount > .18f) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
+                // Pavement throws no dust: sliding and burnouts there make tyre smoke instead (TireEffects).
+                if (surface != SurfaceKind.Asphalt && surface != SurfaceKind.Oil) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
             SweepScenery(speed);
             preCollisionVelocity = Body.linearVelocity;
@@ -364,6 +400,7 @@ namespace MadeInArizona
             int front = 0, rear = 0, left = 0, right = 0;
             for (int i = 0; i < 4; i++)
             {
+                wheelOnGround[i] = false;
                 Vector3 origin = Body.position + chassis * suspensionPoints[i];
                 int count = Physics.RaycastNonAlloc(origin, down, groundHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue;
@@ -375,6 +412,7 @@ namespace MadeInArizona
                 }
                 if (nearest == float.MaxValue || nearest > reach) continue;
                 contacts++;
+                wheelOnGround[i] = true; wheelGroundPoint[i] = point; wheelGroundNormal[i] = normal;
                 float spring = Mathf.Clamp(Stats.springStiffness / Body.mass, 20, 100) * Mathf.Lerp(.45f, 1, Damage.Suspension);
                 float damp = Mathf.Clamp(Stats.damping / Body.mass, 2, 16);
                 float compression = restLength - nearest;

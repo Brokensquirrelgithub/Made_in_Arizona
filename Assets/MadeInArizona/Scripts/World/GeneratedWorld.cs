@@ -176,7 +176,7 @@ namespace MadeInArizona
             Color c=i%3==0?new Color(.61f,.27f,.15f):i%3==1?new Color(.30f,.42f,.39f):new Color(.72f,.60f,.40f);
             var shell=Box("Stucco roadside business",p,Vector3.up*h*.5f,new Vector3(w,h,d),c,true);ApplyWall(shell,c,(i*5+8)%WallTextureSet.TextureCount,new Vector3(w,h,d));
             Box("Sun bleached roof",p,Vector3.up*(h+.14f),new Vector3(w+1,.28f,d+1),Cream);
-            Box("Dark storefront",p,new Vector3(0,h*.48f,-d*.505f),new Vector3(w*.55f,h*.56f,.08f),Ink);
+            Use(Box("Dark storefront",p,new Vector3(0,h*.48f,-d*.505f),new Vector3(w*.55f,h*.56f,.08f),Ink),WorldArt.Glass(Ink));
             Box("Shade awning",p,new Vector3(0,h*.78f,-d*.58f),new Vector3(w*.7f,.16f,1.1f),i%2==0?Orange:Turquoise);
             p.gameObject.AddComponent<DestructionSystem>().Configure(260,ExplosionKind.Gasoline,false,150);
         }
