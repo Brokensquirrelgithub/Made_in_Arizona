@@ -128,6 +128,9 @@ namespace MadeInArizona
                 var generated = GeneratedWorld.Active;
                 Debug.Log($"MIA_ELEVATION seed={seed} size={mapSize} towns={generated.Towns.Count} seconds={Time.realtimeSinceStartup - t0:F2} cliffs={generated.FindCliffs(50).Count} rampOpenings={generated.RampOpenings} unreachableVertices={generated.UnreachableVertices}");
                 check($"seed {seed} at {mapSize} m fully reachable", generated.UnreachableVertices == 0);
+                string landformIssue = generated.LandformIssue();
+                Debug.Log($"MIA_LANDFORMS seed={seed} size={mapSize} landforms={generated.LandformCount} cover={generated.CoverCount} issue={landformIssue ?? "none"}");
+                check($"seed {seed} at {mapSize} m landforms keep roads, objectives and routes open", landformIssue == null && generated.LandformCount <= GeneratedWorld.MaxLandforms);
             }
         }
 

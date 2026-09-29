@@ -29,7 +29,7 @@ namespace MadeInArizona
                 if(GeneratedWorld.Contains(p))EnemySpawns.Add(Ground(p,1));
             }
         }
-        static Vector3 Ground(Vector3 p,float lift){p.y=GeneratedWorld.HeightAt(p)+lift;return p;}
+        static Vector3 Ground(Vector3 p,float lift){if(GeneratedWorld.Active)p=GeneratedWorld.Active.ClearOfObstacles(p);p.y=GeneratedWorld.HeightAt(p)+lift;return p;}
         /// <summary>A trail junction clear of towns, among the few nearest a point; the pick rotates with the mission.</summary>
         static Vector3? Junction(GeneratedWorld world,Vector3 near,int pick,List<Vector3> used)
         {

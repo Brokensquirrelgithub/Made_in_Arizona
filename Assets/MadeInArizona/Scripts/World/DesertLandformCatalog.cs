@@ -1,0 +1,34 @@
+using UnityEngine;
+
+namespace MadeInArizona
+{
+    /// <summary>
+    /// Art for the generated world's large landforms and cover rocks. Every list may stay empty: the world then builds
+    /// procedural placeholders of the same size, so the desert packs can be linked later without touching placement.
+    /// A model is scaled to the planned footprint (its largest horizontal extent) and sunk into the ground; models
+    /// without colliders get mesh colliders.
+    /// </summary>
+    [CreateAssetMenu(menuName = "Made in Arizona/Desert Landform Catalog", fileName = "DesertLandformCatalog")]
+    public sealed class DesertLandformCatalog : ScriptableObject
+    {
+        [Tooltip("Broad flat-topped mesas, roughly round, 30-60 m across.")] public GameObject[] mesas;
+        [Tooltip("Tall narrow buttes and spires, 16-26 m across.")] public GameObject[] buttes;
+        [Tooltip("Long cliff walls and ridges; the longest horizontal axis follows the wall.")] public GameObject[] cliffs;
+        [Tooltip("Large boulders and boulder piles that cars cannot cross.")] public GameObject[] boulders;
+        [Tooltip("Medium rocks, about 4-6 m across and 2-3.5 m tall, that stop gunfire.")] public GameObject[] coverRocks;
+        [Tooltip("Render the models with the terrain's rock shader (matches the ground and turns see-through when it hides the car).")]
+        public bool useTerrainMaterial = true;
+
+        public const string ResourcePath = "Landforms/DesertLandformCatalog";
+        public static DesertLandformCatalog Load() => Resources.Load<DesertLandformCatalog>(ResourcePath);
+
+        public GameObject Pick(GeneratedWorld.LandformKind kind, System.Random random)
+        {
+            var choices = kind == GeneratedWorld.LandformKind.Mesa ? mesas : kind == GeneratedWorld.LandformKind.Butte ? buttes
+                : kind == GeneratedWorld.LandformKind.Cliff ? cliffs : kind == GeneratedWorld.LandformKind.Boulders ? boulders : coverRocks;
+            if (choices == null || choices.Length == 0) return null;
+            var pick = choices[random.Next(choices.Length)];
+            return pick ? pick : null;
+        }
+    }
+}

@@ -1,6 +1,6 @@
 Shader "MadeInArizona/LivingScenery"
 {
-    Properties { _NeedleAtlas("Needle silhouette",2D)="white"{} }
+    Properties { _NeedleAtlas("Needle silhouette",2D)="white"{} [HideInInspector]_Dissolve("Dissolve",Range(0,1))=0 }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" }
@@ -12,6 +12,9 @@ Shader "MadeInArizona/LivingScenery"
         struct A {float4 p:POSITION;float3 n:NORMAL;float4 c:COLOR;float2 uv:TEXCOORD0;};
         struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float4 c:COLOR;float fog:TEXCOORD2;float2 uv:TEXCOORD3;};
         float4 _SceneryVehicle;
+        // Per renderer (property block): 0 solid, 1 gone. Fallen trees dither away with it instead of popping out.
+        float _Dissolve;
+        void Dissolve(float4 positionCS){if(_Dissolve>0)clip(frac(52.9829189*frac(dot(positionCS.xy,float2(.06711056,.00583715))))-_Dissolve);}
         float3 Wind(float3 p,float bend)
         {
             float gust=sin(p.x*.18+p.z*.13+_Time.y*1.7)*.13+sin(p.x*.73-p.z*.46+_Time.y*3.1)*.045;
@@ -24,6 +27,7 @@ Shader "MadeInArizona/LivingScenery"
         V vert(A v){V o;o.world=Wind(TransformObjectToWorld(v.p.xyz),v.c.a);o.p=TransformWorldToHClip(o.world);o.n=TransformObjectToWorldNormal(v.n);o.c=v.c;o.uv=v.uv;o.fog=ComputeFogFactor(o.p.z);return o;}
         half4 frag(V i,FRONT_FACE_TYPE face:FRONT_FACE_SEMANTIC):SV_Target
         {
+            Dissolve(i.p);
             float3 needle=1;
             if(i.uv.x>=0){float4 tex=SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv);clip(tex.a-.35);needle=tex.rgb;}
             float3 n=normalize(i.n)*IS_FRONT_VFACE(face,1,-1);
@@ -89,7 +93,7 @@ Shader "MadeInArizona/LivingScenery"
                 #endif
                 return o;
             }
-            half4 depth(V i):SV_Target{if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return 0;}
+            half4 depth(V i):SV_Target{Dissolve(i.p);if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return 0;}
             ENDHLSL
         }
         Pass
@@ -99,7 +103,7 @@ Shader "MadeInArizona/LivingScenery"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment depth
-            half4 depth(V i):SV_Target{if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return 0;}
+            half4 depth(V i):SV_Target{Dissolve(i.p);if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return 0;}
             ENDHLSL
         }
         Pass
@@ -109,7 +113,7 @@ Shader "MadeInArizona/LivingScenery"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment normals
-            half4 normals(V i):SV_Target{if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return half4(normalize(i.n),0);}
+            half4 normals(V i):SV_Target{Dissolve(i.p);if(i.uv.x>=0)clip(SAMPLE_TEXTURE2D(_NeedleAtlas,sampler_NeedleAtlas,i.uv).a-.35);return half4(normalize(i.n),0);}
             ENDHLSL
         }
     }

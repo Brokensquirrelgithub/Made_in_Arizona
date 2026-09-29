@@ -260,7 +260,7 @@ namespace MadeInArizona
             {
                 var damage = hit.collider.GetComponentInParent<VehicleDamage>();
                 if (damage != null) damage.ApplyDamage(round.damage, hit.point, round.source);
-                else hit.collider.GetComponentInParent<DestructionSystem>()?.ApplyDamage(round.damage, hit.point, round.source);
+                else hit.collider.GetComponentInParent<DestructionSystem>()?.ApplyProjectileHit(round.damage, hit.point, round.source, round.direction);
             }
             if (fx != null && fx.effect != ShotEffect.None) Afflict(round, vehicle, hit.point);
             ExplosionSystem.Burst(hit.point, round.color, 4, 2);
@@ -376,7 +376,7 @@ namespace MadeInArizona
                     continue;
                 }
                 var prop = hit.collider.GetComponentInParent<DestructionSystem>();
-                if (prop && propDamage > 0) prop.ApplyDamage(propDamage, hit.point, source);
+                if (prop && propDamage > 0) prop.ApplyProjectileHit(propDamage, hit.point, source, direction);
                 end = hit.distance > 0 ? hit.point : origin;
                 break;
             }

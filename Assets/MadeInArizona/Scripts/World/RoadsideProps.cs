@@ -16,8 +16,10 @@ namespace MadeInArizona
             Beam("East arm",g,new Vector3(0,2.2f,0),new Vector3(.8f,2.2f,0),.19f,green);
             Shape("East finger",g,PrimitiveType.Capsule,new Vector3(.8f,2.6f,0),new Vector3(.38f,.6f,.38f),green);
             for(int i=0;i<5;i++) { float a=i*Mathf.PI*2/5; Beam("Saguaro ridge",g,new Vector3(Mathf.Sin(a)*.3f,.35f,Mathf.Cos(a)*.3f),new Vector3(Mathf.Sin(a)*.3f,2.95f,Mathf.Cos(a)*.3f),.025f,new Color(.38f,.43f,.21f)); }
-            BoundsCollider(g,new Vector3(0,1.5f,0),new Vector3(.7f,3,.7f));
-            if(destructible) MakeBreakable(g,24,false,ExplosionKind.Gasoline,5); return g;
+            // A capsule (a line with a radius) is the cheapest collider after a sphere.
+            var trunk=g.gameObject.AddComponent<CapsuleCollider>(); trunk.center=new Vector3(0,1.5f,0); trunk.height=3; trunk.radius=.35f;
+            if(destructible) { g.gameObject.layer=DestructionSystem.BrittleLayer; MakeBreakable(g,24,false,ExplosionKind.Gasoline,5); g.GetComponent<DestructionSystem>().MakeBrittle(); }
+            return g;
         }
         public static Transform Rock(Transform parent,Vector3 pos,Vector3 scale,float hue=0)
         {

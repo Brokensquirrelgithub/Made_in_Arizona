@@ -381,6 +381,7 @@ namespace MadeInArizona
             Check("dense streamed ecology generates plants and stones",ecology&&ecology.PlantClumps>500&&ecology.Stones>80&&ecology.Trees>20);
             Check("ecology streaming stays within bounded tile budget",ecology&&ecology.LoadedTiles<=121);
             Debug.Log("MIA_ECOLOGY: loaded tiles="+ecology.LoadedTiles+" generated plants="+ecology.PlantClumps+" trees="+ecology.Trees+" stones="+ecology.Stones);
+            yield return TestLandformsAndBrittleScenery(focus);
             bool upwardMarks=true;int marks=0;
             foreach(var filter in GeneratedWorld.Active.GetComponentsInChildren<MeshFilter>())if(filter.name=="Worn center markings")
             {marks++;foreach(var n in filter.sharedMesh.normals)if(n.y<.5f)upwardMarks=false;}
@@ -396,6 +397,81 @@ namespace MadeInArizona
             Application.logMessageReceived-=OnLog;
             string result=string.Join("\n",checks)+"\n"+string.Join("\n",failures)+"\nRESULT: "+(failures.Count==0?"PASS":"FAIL");
             Debug.Log("MIA_WORLD_RESULTS\n"+result);Application.Quit(failures.Count==0?0:1);
+        }
+        /// <summary>
+        /// Landforms and cover obey their placement rules and are captured; cacti break within two weak hits and throw their
+        /// pieces along the shot; a felled tree keeps its look, falls as a body rounds pass through, then fades.
+        /// </summary>
+        IEnumerator TestLandformsAndBrittleScenery(GameObject focus)
+        {
+            var game=GameManager.Instance;var world=GeneratedWorld.Active;var camera=CameraController.Instance;
+            string issue=world.LandformIssue();
+            Debug.Log("MIA_LANDFORMS: landforms="+world.LandformCount+" cover="+world.CoverCount+" issue="+(issue??"none"));
+            Check("landforms stay within the conservative count",world.LandformCount>=8&&world.LandformCount<=GeneratedWorld.MaxLandforms);
+            Check("cover rocks placed for gunfights",world.CoverCount>=20);
+            Check("landforms and cover keep roads, towns, objectives, trails and routes open",issue==null);
+            // Review captures: the first large landform and the first cover rock, from the gameplay camera.
+            int shots=0;
+            for(int i=0;i<world.LandformEntries&&shots<2;i++)
+            {
+                Vector3 at=world.LandformCenter(i,out var kind,out float reach);bool cover=kind==GeneratedWorld.LandformKind.Cover;
+                if((shots==0)==cover)continue;
+                focus.transform.position=world.ClearOfObstacles(at,cover?4:10);camera.Snap();
+                yield return new WaitForSecondsRealtime(2.5f);Capture(shots==0?"36-landform-"+kind.ToString().ToLowerInvariant():"37-cover-rock");shots++;
+                yield return new WaitForSecondsRealtime(.35f);
+            }
+            // The car parked on the far side of a tall landform: the rock between it and the camera dithers open.
+            for(int i=0;i<world.LandformEntries;i++)
+            {
+                Vector3 at=world.LandformCenter(i,out var kind,out float reach);
+                if(kind!=GeneratedWorld.LandformKind.Mesa&&kind!=GeneratedWorld.LandformKind.Butte)continue;
+                Vector3 behind=world.ClearOfObstacles(at+Vector3.forward*(reach+2.5f),2.5f);behind.y=GeneratedWorld.HeightAt(behind)+1;
+                Teleport(behind);camera.Target=game.Player.transform;camera.Snap();
+                yield return new WaitForSecondsRealtime(2.5f);Capture("39-landform-see-through");yield return new WaitForSecondsRealtime(.35f);
+                camera.Target=focus.transform;break;
+            }
+            Check("brittle scenery never makes contact with cars",Physics.GetIgnoreLayerCollision(0,DestructionSystem.BrittleLayer));
+            // Cacti near the starter town.
+            focus.transform.position=game.World.PlayerSpawn;camera.Snap();yield return new WaitForSecondsRealtime(2.5f);
+            DestructionSystem cactus=null;
+            foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))if(!prop.IsDestroyed&&prop.name=="Breakable saguaro"){cactus=prop;break;}
+            Check("desert cacti are brittle props on their own layer",cactus&&cactus.Brittle&&cactus.gameObject.layer==DestructionSystem.BrittleLayer&&cactus.GetComponent<CapsuleCollider>());
+            if(cactus)
+            {
+                var before=new HashSet<Rigidbody>();foreach(var body in FindObjectsByType<Rigidbody>(FindObjectsSortMode.None))if(body.name=="Pooled debris"&&body.gameObject.activeInHierarchy)before.Add(body);
+                Vector3 hit=cactus.transform.position+Vector3.up;
+                cactus.ApplyProjectileHit(1,hit,null,Vector3.right);bool survivedFirst=!cactus.IsDestroyed;
+                cactus.ApplyProjectileHit(1,hit,null,Vector3.right);
+                Check("a cactus stops one weak round and breaks on the second",survivedFirst&&cactus.IsDestroyed);
+                yield return new WaitForFixedUpdate();
+                float along=0;int pieces=0;
+                foreach(var body in FindObjectsByType<Rigidbody>(FindObjectsSortMode.None))if(body.name=="Pooled debris"&&body.gameObject.activeInHierarchy&&!before.Contains(body)){along+=body.linearVelocity.x;pieces++;}
+                Debug.Log("MIA_CACTUS_DEBRIS pieces="+pieces+" mean x velocity="+(pieces>0?along/pieces:0).ToString("F2"));
+                Check("cactus pieces fly on along the shot",pieces>0&&along/pieces>1.5f);
+            }
+            // Pines in the northern forest.
+            Vector3 forest=world.Towns[world.Towns.Count-1]+new Vector3(-72,0,55);forest.y=GeneratedWorld.HeightAt(forest);
+            focus.transform.position=forest;camera.Snap();yield return new WaitForSecondsRealtime(3f);
+            DestructionSystem tree=null;float nearest=float.MaxValue;
+            foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))
+                if(!prop.IsDestroyed&&prop.name=="Breakable ponderosa"){float d=(prop.transform.position-forest).sqrMagnitude;if(d<nearest){nearest=d;tree=prop;}}
+            Check("forest pines are breakable",tree);
+            if(tree)
+            {
+                var trunk=tree.gameObject;Vector3 start=trunk.transform.position;
+                tree.SmashFromVehicle(start+Vector3.up,null,new Vector3(12,0,0));
+                var body=trunk.GetComponent<Rigidbody>();var renderer=trunk.GetComponentInChildren<Renderer>();
+                Check("a felled tree keeps its look and falls as a heavy body",body&&!body.isKinematic&&body.mass>=300&&renderer&&renderer.enabled&&trunk.layer==2);
+                Physics.Raycast(start+new Vector3(-6,2,0),Vector3.right,out var ray,12,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore);
+                Check("rounds pass through a falling tree",!ray.collider||!ray.collider.transform.IsChildOf(trunk.transform));
+                Capture("38-tree-falling");
+                yield return new WaitForSecondsRealtime(.9f);
+                float tilt=trunk?Vector3.Angle(trunk.transform.up,Vector3.up):0;
+                Debug.Log("MIA_TREE_FALL tilt="+tilt.ToString("F1")+" moved="+(trunk?(trunk.transform.position-start).magnitude:0).ToString("F2"));
+                Check("a felled tree tips over away from the push",trunk&&tilt>25&&Vector3.Dot(trunk.transform.up,Vector3.right)>0);
+                yield return new WaitForSecondsRealtime(1.8f);
+                Check("a fallen tree fades away",!trunk);
+            }
         }
         IEnumerator TestNatureModelReview()
         {

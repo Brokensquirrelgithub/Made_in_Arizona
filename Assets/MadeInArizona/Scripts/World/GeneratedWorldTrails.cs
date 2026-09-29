@@ -43,7 +43,8 @@ namespace MadeInArizona
             for (int attempt = 0; attempt < target * 30 && nodes.Count < target; attempt++)
             {
                 var p = new Vector2(Rand(random, -half * .95f, half * .95f), Rand(random, -half * .95f, half * .95f));
-                if (!InOutline(p / size) || TownDistance(p) < TownTrailClearance + 15) continue;
+                // Junctions are mission objectives: none beside a landform.
+                if (!InOutline(p / size) || TownDistance(p) < TownTrailClearance + 15 || ObstacleDistance(p) < JunctionLandformClearance) continue;
                 if (nodes.Exists(n => (n - p).sqrMagnitude < spacing * spacing)) continue;
                 nodes.Add(p);
             }
@@ -92,14 +93,21 @@ namespace MadeInArizona
             for (float damping = 1; damping > .2f; damping *= .5f)
             {
                 var points = new Vector2[count];
-                bool valid = true;
-                for (int i = 0; i < count && valid; i++)
+                bool bent = false;
+                for (int i = 0; i < count; i++)
                 {
                     float u = i / (float)(count - 1), envelope = Mathf.Sin(u * Mathf.PI);
                     float offset = envelope * (bow + sway * Mathf.Sin(u * Mathf.PI * 2 * swayFreq + phase)) + envelope * wiggle * Mathf.Sin(u * Mathf.PI * 2 * wiggleFreq + phase2);
                     points[i] = Vector2.Lerp(a, b, u) + normal * offset * damping;
-                    // Trails skirt town centres and stay inside the state outline.
-                    valid = InOutline(points[i] / size) && TownDistance(points[i]) > TownTrailClearance;
+                    if (SkirtLandforms(ref points[i], a, dir, normal)) bent = true;
+                }
+                // A detour round a landform meets the trail at an angle; relax it into a curve (the ends stay on their junctions).
+                if (bent) for (int pass = 0; pass < 4; pass++) for (int i = 1; i < count - 1; i++) points[i] = Vector2.Lerp(points[i], (points[i - 1] + points[i + 1]) * .5f, .5f);
+                bool valid = true;
+                for (int i = 0; i < count && valid; i++)
+                {
+                    // Trails skirt town centres and landforms and stay inside the state outline.
+                    valid = InOutline(points[i] / size) && TownDistance(points[i]) > TownTrailClearance && ObstacleDistance(points[i]) > TrailLandformClearance - 1;
                     // Trails never climb a cliff wall; they follow the ramps between elevation levels.
                     if (valid && i > 0)
                     {

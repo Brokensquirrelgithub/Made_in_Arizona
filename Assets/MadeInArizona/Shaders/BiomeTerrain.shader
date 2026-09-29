@@ -6,10 +6,26 @@ Shader "MadeInArizona/BiomeTerrain"
         _GroundAlbedoArray("Ground albedo (RGB) + height (A) array",2DArray)=""{}
         _GroundNormalArray("Ground normal (RG) + AO (B) array",2DArray)=""{}
         _UseGroundTextures("Use Outdoor Ground Textures",Range(0,1))=0
+        _OccluderCut("See-through where it hides the car",Range(0,1))=0
     }
     SubShader
     {
         Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" "Queue"="Geometry" }
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        float _OccluderCut;
+        float4 _SceneryVehicle; // player car position, w = 1 while it exists (set by LivingWorldDetail)
+        // Landforms (not the ground itself) dither open where they stand between the camera and the player's car and rise
+        // above it, so a car tucked behind a mesa or cover rock stays visible from the overhead camera.
+        void OccluderCut(float3 world,float4 positionCS)
+        {
+            if(_OccluderCut<=0||_SceneryVehicle.w<=0)return;
+            float3 d=world-_SceneryVehicle.xyz,forward=-UNITY_MATRIX_V[2].xyz;float along=dot(d,forward);
+            float lateral=length(d-forward*along);
+            float cut=saturate((-along-1.5)*.5)*saturate((world.y-_SceneryVehicle.y-.6)/1.2)*(1-smoothstep(6,10,lateral))*.85*_OccluderCut;
+            if(cut>0)clip(frac(52.9829189*frac(dot(positionCS.xy,float2(.06711056,.00583715))))-cut);
+        }
+        ENDHLSL
         Pass
         {
             Name "ForwardLit"
@@ -50,6 +66,7 @@ Shader "MadeInArizona/BiomeTerrain"
             V vert(A v){V o;VertexPositionInputs p=GetVertexPositionInputs(v.p.xyz);o.p=p.positionCS;o.world=p.positionWS;o.n=TransformObjectToWorldNormal(v.n);o.uv=v.uv;o.c=v.c;o.fog=ComputeFogFactor(o.p.z);return o;}
             half4 frag(V i):SV_Target
             {
+                OccluderCut(i.world,i.p);
                 float2 p=i.world.xz;float slope=1-saturate(i.n.y),macro=Fbm(p*.045+float2(13,-5)),veins=Fbm(p*.18+float2(-23,8)),grit=Fbm(p*.72),colorVariation=Fbm(p*.95);
                 float e,h,stoneDistance=Voronoi(p*.58,e,h);float stoneRadius=lerp(.050,.135,frac(h*13.7));
                 float stoneShape=stoneDistance+(grit-.5)*.042;
@@ -210,6 +227,19 @@ Shader "MadeInArizona/BiomeTerrain"
             ENDHLSL
         }
         UsePass "Universal Render Pipeline/Lit/ShadowCaster"
-        UsePass "Universal Render Pipeline/Lit/DepthOnly"
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode"="DepthOnly" }
+            ZWrite On ColorMask R
+            HLSLPROGRAM
+            #pragma vertex depthVert
+            #pragma fragment depthFrag
+            struct DA { float4 p:POSITION; };
+            struct DV { float4 p:SV_POSITION; float3 world:TEXCOORD0; };
+            DV depthVert(DA v){DV o;o.world=TransformObjectToWorld(v.p.xyz);o.p=TransformWorldToHClip(o.world);return o;}
+            half depthFrag(DV i):SV_Target{OccluderCut(i.world,i.p);return i.p.z;}
+            ENDHLSL
+        }
     }
 }

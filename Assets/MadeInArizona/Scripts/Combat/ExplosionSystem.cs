@@ -171,7 +171,7 @@ namespace MadeInArizona
                 if (vehicle != null && system.damagedVehicles.Add(vehicle))
                     vehicle.ApplyDamage(damage * falloff * (source != null && vehicle.gameObject == source ? .18f : 1), position, source, true);
                 var prop = collider.GetComponentInParent<DestructionSystem>();
-                if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source);
+                if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source, BlastPush(prop, position, falloff));
             }
             if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .06f; AudioManager.Instance?.PlayExplosion(position, 1.5f, ExplosionKind.Ammunition); }
         }
@@ -296,7 +296,7 @@ namespace MadeInArizona
             // Expanding dust and refraction replace the neon-ring blast outline.
             Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*.7f);
             MakeScorch(blast.point, radius * .5f);
-            Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f));
+            Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
             AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (player != null)
@@ -326,13 +326,22 @@ namespace MadeInArizona
                     vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source, true);
                 }
                 var prop = collider.GetComponentInParent<DestructionSystem>();
-                if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source);
+                if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source, BlastPush(prop, blast.point, falloff));
                 var body = collider.attachedRigidbody;
                 if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390, blast.point, radius, radius * .18f, ForceMode.Impulse);
             }
         }
-        public static void ScatterDebris(Vector3 point, float force, int count, Color color) { Get().Scatter(point, force, count, color); }
-        void Scatter(Vector3 point, float force, int count, Color color)
+        public static void ScatterDebris(Vector3 point, float force, int count, Color color) { Get().Scatter(point, force, count, color, Vector3.zero); }
+        /// <summary>Debris thrown by a hit: <paramref name="push"/> (m/s) carries the pieces along a shot, away from a blast or with a car.</summary>
+        public static void ScatterDebris(Vector3 point, float force, int count, Color color, Vector3 push) { Get().Scatter(point, force, count, color, push); }
+        /// <summary>Velocity a blast gives the pieces of a prop it breaks: outwards and a little upwards, stronger close in.</summary>
+        static Vector3 BlastPush(DestructionSystem prop, Vector3 center, float falloff)
+        {
+            Vector3 away = prop.WorldBounds.center - center; away.y = Mathf.Max(0, away.y);
+            if (away.sqrMagnitude < .01f) away = Vector3.up;
+            return (away.normalized + Vector3.up * .35f) * (4 + 9 * falloff);
+        }
+        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push)
         {
             count = Mathf.Min(count, quality == 0 ? 5 : quality == 1 ? 12 : quality==3?48:24);
             for (int i = 0; i < count; i++)
@@ -357,6 +366,7 @@ namespace MadeInArizona
                 f.t.localScale = f.scale;
                 f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * .3f, Random.rotation);
                 Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + 2;
+                velocity += push * Random.Range(.55f, 1.1f);
                 f.body.linearVelocity = velocity; f.body.angularVelocity = Random.insideUnitSphere * 18;
                 f.born = Time.time; f.until = Time.time + 2.8f + Random.value * 1.4f;
                 block.SetColor("_BaseColor", color * Random.Range(.75f, 1.3f)); f.renderer.SetPropertyBlock(block);

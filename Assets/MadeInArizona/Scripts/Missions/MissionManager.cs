@@ -419,6 +419,7 @@ namespace MadeInArizona
             Bounds bounds=generated.WorldBounds;
             point.x=Mathf.Clamp(point.x,bounds.min.x+3,bounds.max.x-3);
             point.z=Mathf.Clamp(point.z,bounds.min.z+3,bounds.max.z-3);
+            point=generated.ClearOfObstacles(point);
             point.y=GeneratedWorld.HeightAt(point)+.1f;return point;
         }
         void CheckCaches()

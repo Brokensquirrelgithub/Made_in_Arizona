@@ -49,6 +49,7 @@ namespace MadeInArizona.Editor
             var input = settings.FindProperty("activeInputHandler"); if (input != null) input.intValue = 2;
             settings.ApplyModifiedPropertiesWithoutUndo();
             PandazoleNatureCatalogBuilder.Build();
+            EnsureLandformCatalog();
             SetPipeline();
             ContentCatalog.EnsureLoaded();
             Persist(ContentCatalog.Vehicles); Persist(ContentCatalog.Parts); Persist(ContentCatalog.Weapons); Persist(ContentCatalog.Missions); Persist(ContentCatalog.Drivers);
@@ -59,6 +60,16 @@ namespace MadeInArizona.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets(); AssetDatabase.Refresh();
             Debug.Log("MIA_PREPARE_OK: content, prefabs, URP, Main scene, native platform configuration authored.");
+        }
+
+        /// <summary>Creates the empty landform catalog, where desert pack models can be assigned later; an existing one is kept.</summary>
+        [MenuItem("Made in Arizona/Create desert landform catalog")]
+        static void EnsureLandformCatalog()
+        {
+            string path = Root + "/Resources/" + DesertLandformCatalog.ResourcePath + ".asset";
+            if (AssetDatabase.LoadAssetAtPath<DesertLandformCatalog>(path)) return;
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<DesertLandformCatalog>(), path);
         }
 
         static void SetPipeline()

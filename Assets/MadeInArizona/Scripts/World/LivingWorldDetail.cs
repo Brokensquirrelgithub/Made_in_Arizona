@@ -161,7 +161,7 @@ namespace MadeInArizona
                 else if(density>0&&bank&&i%3==0)
                 {float h=Next(random,5,10);BreakableTree(root,p,h,false,random);Trees++;}
                 else if(density>0&&north<config.biomeThresholds.lowland&&i%5==0)
-                {float h=Next(random,1.8f,4.5f);if(!mesh.Nature(nature?nature.Pick(nature.cacti,random):null,p,h,random,Color.white))mesh.Cactus(p,h,random);}
+                {float h=Next(random,1.8f,4.5f);BreakableCactus(root,p,h,random);}
                 else if(density>0)
                 {float h=Next(random,.5f,1.4f);Color c=forest?new Color(.24f,.34f,.12f):new Color(.37f,.41f,.19f);if(!mesh.Nature(nature?nature.Pick(nature.bushes,random):null,p,h,random,c))mesh.Bush(p,h,c,random);}
                 DetailInstances++;
@@ -178,6 +178,7 @@ namespace MadeInArizona
             shape.Build(root,"Fractured stone",material);
             var collider=root.AddComponent<BoxCollider>();collider.center=Vector3.up*size*.2f;collider.size=new Vector3(size*1.7f,size*.75f,size*1.5f);
             WorldArt.MakeBreakable(root.transform,Mathf.Clamp(12+size*6,18,28),false,ExplosionKind.Ammunition,3);
+            var prop=root.GetComponent<DestructionSystem>();prop.MakeBrittle();prop.SetDebrisColor(color);
         }
         void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random)
         {
@@ -193,6 +194,37 @@ namespace MadeInArizona
             var collider=root.AddComponent<CapsuleCollider>();
             collider.center=Vector3.up*(pine?height*.325f:2f);collider.height=pine?height*.65f:4f;collider.radius=pine?height*.023f:.24f;
             WorldArt.MakeBreakable(root.transform,pine?26:22,false,ExplosionKind.Ammunition,5);
+            // Trees fall over rather than shatter; the mass only sets how little a blast or car can shove the trunk.
+            root.GetComponent<DestructionSystem>().MakeTopple(pine?height*60:450);
+        }
+        const float CactusReference=2;
+        readonly Dictionary<Mesh,Mesh> cactusMeshes=new Dictionary<Mesh,Mesh>();readonly List<Mesh> cactusVariants=new List<Mesh>();
+        /// <summary>
+        /// Saguaros are individual brittle props, so they can be shot apart or run down. Meshes are shared (one per model,
+        /// built at a 2 m reference height and scaled). The collider is a capsule, a line with a radius and the cheapest
+        /// shape after a sphere, on a layer that never makes contact with cars; with no rigidbody it costs nothing per frame.
+        /// </summary>
+        void BreakableCactus(GameObject tile,Vector3 at,float height,System.Random random)
+        {
+            Mesh shape=CactusMesh(nature?nature.Pick(nature.cacti,random):null,random);
+            var root=new GameObject("Breakable saguaro",typeof(MeshFilter),typeof(MeshRenderer));root.layer=DestructionSystem.BrittleLayer;
+            root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;root.transform.localRotation=Quaternion.Euler(0,Next(random,0,360),0);root.transform.localScale=Vector3.one*(height/CactusReference);
+            root.GetComponent<MeshFilter>().sharedMesh=shape;root.GetComponent<MeshRenderer>().sharedMaterial=material;
+            var trunk=root.AddComponent<CapsuleCollider>();trunk.direction=1;trunk.height=CactusReference;trunk.center=Vector3.up*CactusReference*.5f;trunk.radius=CactusReference*.09f;
+            WorldArt.MakeBreakable(root.transform,12,false,ExplosionKind.Ammunition,2);
+            var prop=root.GetComponent<DestructionSystem>();prop.MakeBrittle();prop.SetDebrisColor(new Color(.27f,.39f,.2f));
+        }
+        Mesh CactusMesh(Mesh source,System.Random random)
+        {
+            if(source&&cactusMeshes.TryGetValue(source,out var cached))return cached;
+            if(!source&&cactusVariants.Count>=4)return cactusVariants[random.Next(cactusVariants.Count)];
+            var shape=propMesh;shape.Clear();
+            // A fixed stream: a shared mesh must not depend on which tile asked for it first.
+            var fixedRandom=new System.Random(17+cactusVariants.Count);
+            if(!shape.Nature(source,Vector3.zero,CactusReference,fixedRandom,Color.white))shape.Cactus(Vector3.zero,CactusReference,fixedRandom);
+            var mesh=shape.ToMesh(source?source.name:"Saguaro "+cactusVariants.Count);
+            if(source)cactusMeshes.Add(source,mesh);else cactusVariants.Add(mesh);
+            return mesh;
         }
         /// <summary>Cliff faces stay bare; plants and rocks would hang off them.</summary>
         static bool Steep(Vector3 p)
@@ -223,7 +255,7 @@ namespace MadeInArizona
             }
             texture.SetPixels(pixels);texture.Apply(true,false);return texture;
         }
-        void OnDestroy(){SceneryMesh.ClearNatureCache();if(material)Destroy(material);if(needles)Destroy(needles);}
+        void OnDestroy(){foreach(var mesh in cactusMeshes.Values)Destroy(mesh);foreach(var mesh in cactusVariants)Destroy(mesh);SceneryMesh.ClearNatureCache();if(material)Destroy(material);if(needles)Destroy(needles);}
     }
 
     /// <summary>Shared mesh batches keep rich procedural geometry to one renderer per ecology tile.</summary>

@@ -318,7 +318,7 @@ namespace MadeInArizona
             if (speed > .1f && Blocked(direction, speed * dt + .35f, .4f, out RaycastHit wall))
             {
                 var prop = wall.collider.GetComponentInParent<DestructionSystem>();
-                if (prop && !prop.IsDestroyed && prop.Size < 3.5f) prop.SmashFromVehicle(wall.point, source);
+                if (prop && !prop.IsDestroyed && prop.Size < 3.5f) prop.SmashFromVehicle(wall.point, source, flat * .7f);
                 else if (wall.normal.y < .6f) { flat = Vector3.Reflect(flat, Vector3.ProjectOnPlane(wall.normal, Vector3.up).normalized) * .75f; velocity = flat + Vector3.up * velocity.y; ExplosionSystem.Burst(wall.point, new Color(.8f, .8f, .9f), 5, 3); }
             }
             foreach (var vehicle in VehicleController.Active)

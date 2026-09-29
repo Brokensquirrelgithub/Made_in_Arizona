@@ -32,7 +32,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanTrails();BuildTrails();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanTrails();BuildTrails();PlanCover();BuildLandforms();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan()
         {
@@ -191,6 +191,7 @@ namespace MadeInArizona
             float c=Mathf.Min(RoadDistance(XZ(p))-9,TownDistance(XZ(p))-38);
             // Grass may brush a trail edge; larger plants (clearance 3) stand a few metres back.
             c=Mathf.Min(c,TrailEdgeDistance(XZ(p))+.3f);
+            c=Mathf.Min(c,ObstacleDistance(XZ(p))-.5f);
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
             return c;
         }
@@ -220,6 +221,7 @@ namespace MadeInArizona
                 Color c=BiomeColor(p)*Mathf.Lerp(.72f,1.18f,Mathf.InverseLerp(-amp*.3f,amp,h))*shade;c.a=1;
                 if(riverWidth>0&&Mathf.Abs(p.x-RiverX(p.z))<riverWidth)c=new Color(.05f,.48f,.57f);
                 if(TrailEdgeDistance(XZ(p))<2)c=Color.Lerp(c,new Color(.72f,.55f,.36f),.75f);
+                c=MapLandform(XZ(p),c);
                 if(RoadDistance(XZ(p))<7)c=new Color(.86f,.68f,.38f);
                 if(!Contains(p))c=Color.clear;px[y*res+x]=c;
             }
@@ -309,6 +311,6 @@ namespace MadeInArizona
         }
         void Tree(Transform p,Vector3 a,float h){Cylinder("Cottonwood trunk",p,a+Vector3.up*h*.35f,h*.08f,h*.7f,new Color(.27f,.18f,.1f));Shape("Cottonwood crown",p,PrimitiveType.Sphere,a+Vector3.up*h*.78f,new Vector3(h*.62f,h*.42f,h*.62f),new Color(.25f,.43f,.18f));}void Mesa(Vector3 p,float s,bool crag){Transform g=Group(crag?"Northern crag":"Layered mesa",Detail(p),p);for(int i=0;i<(crag?3:4);i++){float k=1-i/(float)((crag?3:4)+1);Cylinder("Eroded rock tier",g,new Vector3(0,i*s*.16f,0),s*k,s*.22f,i%2==0?new Color(.49f,.26f,.17f):new Color(.58f,.31f,.19f));}}
         void Update(){if(details.Count==0||!Camera.main)return;Vector3 p=CameraController.HasFocus?CameraController.FocusPoint:Camera.main.transform.position;float cs=size/Chunks,distance=Mathf.Max(360,size*.34f),sq=distance*distance;for(int i=0;i<details.Count;i++){Transform d=details[i];if(!d)continue;int x=i%Chunks,z=i/Chunks;Vector3 center=new Vector3(-half+(x+.5f)*cs,0,-half+(z+.5f)*cs);bool show=(center-p).sqrMagnitude<sq;if(d.gameObject.activeSelf!=show)d.gameObject.SetActive(show);}}
-        void OnDisable(){if(Active==this)Active=null;}void OnDestroy(){if(MapTexture)Destroy(MapTexture);if(desert)Destroy(desert);if(water)Destroy(water);if(townScenery)Destroy(townScenery);}
+        void OnDisable(){if(Active==this)Active=null;}void OnDestroy(){if(MapTexture)Destroy(MapTexture);if(desert)Destroy(desert);if(landformMaterial)Destroy(landformMaterial);if(water)Destroy(water);if(townScenery)Destroy(townScenery);}
     }
 }

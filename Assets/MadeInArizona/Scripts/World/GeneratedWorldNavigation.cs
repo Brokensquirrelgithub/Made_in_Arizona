@@ -41,6 +41,9 @@ namespace MadeInArizona
                     else if (TrailEdgeDistance(p) < 0) cost = TrailCost;
                     else cost = OpenCost;
                     if (cost > RoadCost && riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < riverWidth) cost = WaterCost;
+                    // Landforms and cover rocks are solid; the margin keeps routes from clipping their edges. Landforms also
+                    // block half a cell round them, so one lying between nodes on a coarse (large-map) grid is still avoided.
+                    if (ObstacleDistance(p) < 2.5f || LandformDistance(p) < Mathf.Max(2.5f, navStep * .5f)) cost = -1;
                     navCost[i] = cost;
                 }
         }
