@@ -107,6 +107,9 @@ MonoBehaviour:
   <Explosive>k__BackingField: 1
   <Kind>k__BackingField: 1
   score: 150
+  brittle: 0
+  toppleMass: 0
+  debrisColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!1 &6262374252307509136
 GameObject:
   m_ObjectHideFlags: 0
