@@ -114,6 +114,20 @@ The soundtrack audit also found legacy sun-intensity assignments in mission, com
 
 The updated build also passed the existing **22-check** pickup/terrain/presentation suite again. Sunny rendering remains stable across an unrelated slider refresh; the refreshed screenshots above are from this build.
 
+## Soundtrack playback revision — 1 October 2026
+
+The Windows x64 build succeeded with zero errors. Native verification (`-miaSmokeTest -miaMusicExistingTest`) passed all **17 checks** for the 14 currently available recordings: import settings, menu and garage loops, automatic playback through all 12 combat tracks, no immediate repeat at the shuffle boundary, priority over combat effects, pause/mute/ducking behavior, and silence on death while the reserved death recordings are absent. [Exact results](Validation/music-existing-2026-10-01-results.txt). The 12-track check seeks near each recording's end; subjective listening through the entire album remains a manual playtest.
+
+Arizona Highlands and Arizona Lowlands have not been found among the supplied audio files, so their death-screen playback has not been validated. `-miaSmokeTest -miaMusicTest` is the full 16-track check to run after those files are imported.
+
+## Temporary mountain chains — 1 October 2026
+
+Existing desert cliff prefabs now repeat along longer interior impassable ridges and around the entire Arizona outline. Mesas, buttes, and boulder formations are larger, with smaller cover-rock models at their bases. Overlapping box colliders bridge gaps between cliff meshes. The Windows x64 build succeeded with zero errors. Focused native verification (`-miaSmokeTest -miaMountainTest`) passed all six checks across 800 m, 1.6 km, and 3.2 km maps: continuous boundary coverage, solid barriers, open town routes, and retained interior landforms and cover. [Exact results](Validation/mountain-results-2026-10-01.txt). The 1.6 km map generated 246 boundary rocks, 244 base rocks, and 251 chain barriers. Native top-down captures were inspected; the temporary oversized rocks remain visually simple until a better pack is imported.
+
+Follow-up ridge-shape adjustment: interior mountains now favor longer, bent cliff spines over round mesas and boulder piles; the boundary spine wanders slightly, and the minimap shades cliff crests as continuous ridges. Ridge lengths scale down on the 800 m map, and spawn push-out finds a clear opening when overlapping ridge footprints defeat direct projection. The revised Windows x64 build succeeded with zero errors. Focused native verification passed all six checks across 800 m, 1.6 km, and 3.2 km maps; the separate minimap capture check passed. [Exact ridge results](Validation/ridge-results-2026-10-01.txt). See the [current in-game minimap screenshot](Screenshots/mountain-minimap-screen.png) and [larger minimap graphic](Screenshots/mountain-minimap-detail.png).
+
+The proposed [Customizable Rocks and Cliffs PBR - Sample](https://assetstore.unity.com/packages/3d/environments/landscapes/customizable-rocks-and-cliffs-pbr-sample-305629) has not yet been imported because the Windows desktop was locked during this run. The existing desert pack remains assigned in `DesertLandformCatalog`.
+
 ## Enemy density and weapon recordings — 26 September 2026
 
 The Windows x64 build succeeded with zero errors. The native enemy-balance suite passed **20 checks**, including fourfold mission/trial/hideout populations, 0.2 enemy health, preserved player/escort health, live health tuning, larger kill gates, unique boss companions and off-screen patrol squads capped at eight. [Enemy results](Validation/enemy-balance-results.txt). Fixtures pause/freeze encounters, unlock missions in the isolated test save and use controlled kills; these checks verify rules and progression gates rather than natural combat balance.

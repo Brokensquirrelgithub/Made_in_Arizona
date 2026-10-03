@@ -12,7 +12,18 @@ namespace MadeInArizona
         AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         AudioSource whine,road,wind,heartbeat,nitro,radioSource,uiSource;
         // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
-        AudioSource[] engineOn,engineOff;
+        AudioSource[] engineOn,engineOff,engineBOn,engineBOff;
+        struct EngineShape
+        {
+            public float pulse,pressure,attack,decay,body,rasp,saturation;
+            public static EngineShape From(DevTuning tuning) => new EngineShape
+            {pulse=tuning.enginePulseVariation,pressure=tuning.enginePulsePressure,attack=tuning.enginePulseAttack,
+                decay=tuning.enginePulseDecay,body=tuning.engineBody,rasp=tuning.engineRasp,saturation=tuning.engineSaturation};
+            public bool Matches(EngineShape other) => pulse==other.pulse&&pressure==other.pressure&&attack==other.attack
+                &&decay==other.decay&&body==other.body&&rasp==other.rasp&&saturation==other.saturation;
+        }
+        EngineShape generatedShape,targetShape;
+        float engineShapeChangedAt,engineModeBlend;
         AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,nitroLevel,nitroOffAt=-10;
         bool wasBoosting;
         MusicManager music;
@@ -20,8 +31,22 @@ namespace MadeInArizona
         {
             Instance=this;
             shift=Keep(AudioSynthesis.Mechanical(false));release=Keep(AudioSynthesis.Mechanical(true));backfire=Keep(AudioSynthesis.Backfire());
-            int layers=AudioSynthesis.EngineLayerHz.Length;engineOn=new AudioSource[layers];engineOff=new AudioSource[layers];
-            for(int i=0;i<layers;i++){engineOn[i]=Loop(AudioSynthesis.EngineLayer(i,true),70);engineOff[i]=Loop(AudioSynthesis.EngineLayer(i,false),75);}
+            var engineTuning=DevTuning.Current;
+            generatedShape=targetShape=EngineShape.From(engineTuning);
+            engineModeBlend=engineTuning.enginePreserveEdges?1:0;
+            int layers=AudioSynthesis.EngineLayerHz.Length;
+            engineOn=new AudioSource[layers];engineOff=new AudioSource[layers];engineBOn=new AudioSource[layers];engineBOff=new AudioSource[layers];
+            for(int i=0;i<layers;i++)
+            {
+                var aOn=AudioSynthesis.EngineLayer(i,true,engineTuning);
+                var aOff=AudioSynthesis.EngineLayer(i,false,engineTuning);
+                var bOn=AudioSynthesis.EngineLayer(i,true,engineTuning,true);
+                var bOff=AudioSynthesis.EngineLayer(i,false,engineTuning,true);
+                AudioSynthesis.MatchEngineLevel(aOn,bOn);AudioSynthesis.MatchEngineLevel(aOff,bOff);
+                engineOn[i]=Loop(aOn,70);engineOff[i]=Loop(aOff,75);
+                engineBOn[i]=Loop(bOn,70);engineBOff[i]=Loop(bOff,75);
+                engineBOn[i].timeSamples=engineOn[i].timeSamples;engineBOff[i].timeSamples=engineOff[i].timeSamples;
+            }
             hurts=new AudioClip[3];for(int i=0;i<hurts.Length;i++)hurts[i]=Keep(AudioSynthesis.Hurt(i));heartbeat=Loop(AudioSynthesis.Heartbeat(),20);
             whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
@@ -38,6 +63,36 @@ namespace MadeInArizona
         AudioClip Keep(AudioClip clip){clips.Add(clip);return clip;}
         AudioSource Loop(AudioClip clip,int priority)
         {var source=gameObject.AddComponent<AudioSource>();source.clip=Keep(clip);source.spatialBlend=0;source.priority=priority;source.loop=true;source.volume=0;source.Play();return source;}
+        void RefreshEngineShape(DevTuning tuning)
+        {
+            var shape=EngineShape.From(tuning);
+            if(!shape.Matches(targetShape)){targetShape=shape;engineShapeChangedAt=Time.unscaledTime;}
+            if(shape.Matches(generatedShape)||Time.unscaledTime-engineShapeChangedAt<.25f)return;
+            // Render only when the user pauses on a value, never for every slider movement or audio frame.
+            var on=new AudioClip[engineOn.Length];var off=new AudioClip[engineOff.Length];
+            var bOn=new AudioClip[engineBOn.Length];var bOff=new AudioClip[engineBOff.Length];
+            for(int i=0;i<on.Length;i++)
+            {
+                on[i]=AudioSynthesis.EngineLayer(i,true,tuning);off[i]=AudioSynthesis.EngineLayer(i,false,tuning);
+                bOn[i]=AudioSynthesis.EngineLayer(i,true,tuning,true);bOff[i]=AudioSynthesis.EngineLayer(i,false,tuning,true);
+                AudioSynthesis.MatchEngineLevel(on[i],bOn[i]);AudioSynthesis.MatchEngineLevel(off[i],bOff[i]);
+            }
+            for(int i=0;i<on.Length;i++)
+            {
+                SwapEngineClip(engineOn[i],on[i]);SwapEngineClip(engineOff[i],off[i]);
+                SwapEngineClip(engineBOn[i],bOn[i]);SwapEngineClip(engineBOff[i],bOff[i]);
+            }
+            generatedShape=shape;
+        }
+        void SwapEngineClip(AudioSource source,AudioClip replacement)
+        {
+            var previous=source.clip;
+            int sample=source.timeSamples;
+            source.Stop();source.clip=Keep(replacement);
+            source.timeSamples=Mathf.Clamp(sample,0,replacement.samples-1);
+            source.Play();
+            clips.Remove(previous);if(previous)Destroy(previous);
+        }
         GameSettings Settings { get { return GameManager.Instance?.Save?.settings; } }
         void Update()
         {
@@ -45,19 +100,22 @@ namespace MadeInArizona
             duck=Mathf.MoveTowards(duck,1,Time.unscaledDeltaTime*1.5f);if(music)music.Duck=duck;
             bool active=game.State==GameState.Playing;var player=game.Player;
             float gain=Settings.engines*duck;
+            var tuning=DevTuning.Current;
+            RefreshEngineShape(tuning);
+            engineModeBlend=Mathf.MoveTowards(engineModeBlend,tuning.enginePreserveEdges?1:0,Time.unscaledDeltaTime*20);
             if(player&&player.Damage!=null)
             {
                 float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.Throttle;
                 UpdateEngineBank(rpm,load,player.Damage.IsDead?0:active?1:.3f,gain);
                 if(active&&!player.Damage.IsDead)UpdateCrackle(player,rpm,load,gain);
-                if(active&&player.Gear!=previousGear){previousGear=player.Gear;PlayAt(shift,player.transform.position,.24f*gain,Random.Range(.9f,1.1f),70);}
+                if(active&&player.Gear!=previousGear){previousGear=player.Gear;PlayAt(shift,player.transform.position,.24f*gain*tuning.shiftLevel,Random.Range(.9f,1.1f),70);}
                 float boost=active&&player.Boosting&&!player.Damage.IsDead?1:0;
                 UpdateNitro(player,active,boost>0,rpm,gain);
-                whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f):0;
+                whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f)*tuning.turboWhineLevel:0;
                 road.pitch=.6f+player.SpeedKph/80;
                 float rough=WorldBuilder.SurfaceAt(player.transform.position)==SurfaceKind.Asphalt?.12f:.36f;
                 road.volume=active?Settings.environment*(Mathf.Clamp01(player.SpeedKph/80)*rough+player.DriftAmount*.13f)*duck:0;
-                if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain,1+rpm*.3f,75);}
+                if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain*tuning.exhaustPopLevel,1+rpm*.3f,75);}
                 lastThrottle=load;
             }
             else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;}
@@ -71,6 +129,7 @@ namespace MadeInArizona
         /// </summary>
         void UpdateEngineBank(float rpm,float load,float presence,float gain)
         {
+            var tuning=DevTuning.Current;
             var rates=AudioSynthesis.EngineLayerHz;
             float firing=40+rpm*190,position=0;
             float octave=Mathf.Log(firing,2);
@@ -84,9 +143,13 @@ namespace MadeInArizona
             for(int i=0;i<rates.Length;i++)
             {
                 float distance=Mathf.Abs(position-i),weight=distance>=1?0:Mathf.Cos(distance*Mathf.PI*.5f);
-                float pitch=Mathf.Clamp(firing/rates[i],.3f,3f);
+                float pitch=Mathf.Clamp(firing/rates[i]*tuning.enginePitch,.3f,3f);
                 engineOn[i].pitch=pitch;engineOff[i].pitch=pitch;
-                engineOn[i].volume=level*weight*onGain;engineOff[i].volume=level*weight*offGain*.85f;
+                engineBOn[i].pitch=pitch;engineBOff[i].pitch=pitch;
+                float onVolume=level*weight*onGain*tuning.engineLoadLevel;
+                float offVolume=level*weight*offGain*.85f*tuning.engineOverrunLevel;
+                engineOn[i].volume=onVolume*(1-engineModeBlend);engineOff[i].volume=offVolume*(1-engineModeBlend);
+                engineBOn[i].volume=onVolume*engineModeBlend;engineBOff[i].volume=offVolume*engineModeBlend;
             }
         }
         /// <summary>
@@ -96,11 +159,11 @@ namespace MadeInArizona
         void UpdateNitro(VehicleController player,bool active,bool boosting,float rpm,float gain)
         {
             if(player&&boosting&&!wasBoosting&&Time.time-nitroOffAt>.3f)PlayAt(nitroIgnite,player.transform.position-player.transform.forward*2,.6f*gain,Random.Range(.95f,1.05f),40);
-            if(player&&active&&!boosting&&wasBoosting)PlayAt(release,player.transform.position-player.transform.forward*2,.24f*gain,.85f,75);
+            if(player&&active&&!boosting&&wasBoosting)PlayAt(release,player.transform.position-player.transform.forward*2,.24f*gain*DevTuning.Current.exhaustPopLevel,.85f,75);
             if(boosting)nitroOffAt=Time.time;
             wasBoosting=boosting;
             nitroLevel=Mathf.MoveTowards(nitroLevel,boosting?1:0,Time.unscaledDeltaTime*(boosting?10:4));
-            nitro.volume=nitroLevel*gain*.5f;
+            nitro.volume=nitroLevel*gain*.5f*DevTuning.Current.nitroRoarLevel;
             if(player)nitro.pitch=.88f+Mathf.Clamp01(player.SpeedKph/140)*.32f+rpm*.08f;
         }
         /// <summary>Lifting off at high RPM dumps unburnt fuel into the exhaust: a short run of irregular pops.</summary>
@@ -110,7 +173,7 @@ namespace MadeInArizona
             if(load>.45f)crackleUntil=0;
             if(Time.time>crackleUntil||Time.time<crackleAt)return;
             crackleAt=Time.time+Random.Range(.045f,.16f);
-            PlayAt(backfire,player.transform.position-player.transform.forward*2,Random.Range(.12f,.3f)*gain,Random.Range(.8f,1.25f),72);
+            PlayAt(backfire,player.transform.position-player.transform.forward*2,Random.Range(.12f,.3f)*gain*DevTuning.Current.exhaustPopLevel,Random.Range(.8f,1.25f),72);
         }
         /// <summary>Metal hull impact for the player, scaled by the share of health lost. Rapid fire is rate limited.</summary>
         public void PlayHurt(float healthFraction)

@@ -6,9 +6,9 @@ namespace MadeInArizona
     /// <summary>Streamed soundtrack with shuffled driving tracks and two-source crossfades.</summary>
     public sealed class MusicManager : MonoBehaviour
     {
-        enum Context { Menu, Garage, Combat }
+        enum Context { Menu, Garage, Combat, GameOver }
         const float FadeSeconds = 3f;
-        readonly Playlist[] playlists = { new Playlist(), new Playlist(), new Playlist() };
+        readonly Playlist[] playlists = { new Playlist(), new Playlist(), new Playlist(), new Playlist() };
         readonly AudioSource[] sources = new AudioSource[2];
         Context context;
         int current;
@@ -21,7 +21,10 @@ namespace MadeInArizona
             foreach (var clip in Resources.LoadAll<AudioClip>("Audio/Music"))
             {
                 if (!clip || clip.length <= 0) continue;
-                var group = clip.name == "Arizona Nation" ? Context.Menu : clip.name == "Arizonaland" ? Context.Garage : Context.Combat;
+                var group = clip.name == "Arizona Nation" ? Context.Menu : clip.name == "Arizonaland" ? Context.Garage :
+                    clip.name == "Arizona Highlands" || clip.name == "Arizona Lowlands" ? Context.GameOver : Context.Combat;
+                // Streaming keeps decoded memory small; preload makes the next source audible as soon as its fade starts.
+                if (clip.loadState != AudioDataLoadState.Loaded) clip.LoadAudioData();
                 playlists[(int)group].Add(clip);
             }
             for (int i = 0; i < sources.Length; i++)
@@ -30,7 +33,8 @@ namespace MadeInArizona
                 sources[i].playOnAwake = false;
                 sources[i].spatialBlend = 0;
                 sources[i].volume = 0;
-                sources[i].priority = 128;
+                // Combat can exhaust the 32 real voices. Never let gunshots virtualize the soundtrack.
+                sources[i].priority = 0;
             }
             foreach (var playlist in playlists)
                 if (playlist.Count == 0) Debug.LogWarning("MIA_MUSIC: a soundtrack playlist is missing imported tracks.");
@@ -44,16 +48,18 @@ namespace MadeInArizona
         {
             var game = GameManager.Instance;
             if (!game || game.Save == null) return;
-            fade = Mathf.MoveTowards(fade, 1f, Time.unscaledDeltaTime / FadeSeconds);
+            var desired = game.Dying || game.State == GameState.Lost ? Context.GameOver :
+                game.State == GameState.MainMenu || game.State == GameState.Generating ? Context.Menu :
+                fighting && (game.State == GameState.Playing || game.State == GameState.Paused) ? Context.Combat : Context.Garage;
+            // A death or menu transition should not wait for the previous fade to finish.
+            if (desired != context) Begin(desired);
+            else fade = Mathf.MoveTowards(fade, 1f, Time.unscaledDeltaTime / FadeSeconds);
             if (fade >= 1f)
             {
                 var outgoing = sources[1 - current];
                 if (outgoing.clip) { outgoing.Stop(); outgoing.clip = null; }
-                var desired = fighting ? Context.Combat :
-                    game.State == GameState.MainMenu || game.State == GameState.Generating ? Context.Menu : Context.Garage;
                 var playing = sources[current];
-                if (desired != context) Begin(desired);
-                else if (playing.clip && !playing.loop &&
+                if (playing.clip && !playing.loop &&
                     (playing.time >= playing.clip.length - FadeSeconds ||
                     (!playing.isPlaying && Time.unscaledTime - startedAt > 1f && playing.clip.loadState != AudioDataLoadState.Loading)))
                     Begin(context);
@@ -68,7 +74,24 @@ namespace MadeInArizona
         {
             var playlist = playlists[(int)nextContext];
             var clip = playlist.Next();
-            if (!clip) return;
+            if (!clip)
+            {
+                // An unavailable death playlist must not leave combat music running over the death screen.
+                if (nextContext == Context.GameOver)
+                {
+                    foreach (var source in sources) { source.Stop(); source.clip = null; }
+                    context = nextContext;
+                    fade = 1f;
+                }
+                return;
+            }
+            // Unity can release an inactive streamed clip after a scene transition.
+            // Restore its playback buffer before starting the incoming fade.
+            if (clip.loadState != AudioDataLoadState.Loaded && !clip.LoadAudioData())
+            {
+                Debug.LogWarning("MIA_MUSIC: could not load " + clip.name);
+                return;
+            }
             bool hadTrack = sources[current].clip;
             int next = 1 - current;
             sources[next].Stop();

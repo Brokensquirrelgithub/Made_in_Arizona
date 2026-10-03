@@ -7,7 +7,7 @@ namespace MadeInArizona
         int devTab;
         Vector2 devScroll;
         float devSaveAt;
-        readonly string[] devTabs={"DRIVING","DRIFT","COMBAT","CAMERA","LIGHT & COLOR","REFLECTIONS","DIRT & SKY"};
+        readonly string[] devTabs={"DRIVING","DRIFT","COMBAT","ENGINE","CAMERA","LIGHT & COLOR","REFLECTIONS","DIRT & SKY"};
         float StylesRadioHeight(string message,float w) => Style(14,Cream).CalcHeight(new GUIContent(message),w)+5;
         public void OpenDevMenu() { if(game.IsPlaying)game.Pause();devMenu=true;settings=false; }
         void SaveDev()
@@ -24,11 +24,23 @@ namespace MadeInArizona
             Rect(x,y,w,h,new Color(.055f,.081f,.09f,1));
             Text(x+24,y+20,w-48,38,"LIVE DEV TUNING",27,Cream,true);
             if(Button(x+w-250,y+22,226,34,"+10,000 SCRAP & $")){game.Save.salvage+=10000;game.Save.money+=10000;SaveSystem.Save(game.Save);game.Notify("DEV • +10,000 SCRAP AND $10,000");}
-            Text(x+24,y+60,w-48,42,"Mouse controls • changes apply immediately and save automatically. Resume to test handling.",14,Muted);
+            Text(x+24,y+60,w-48,42,devTabs[devTab]=="ENGINE"
+                ?"Choose A or B, then Save & Resume to compare while driving. Pulse edits rebuild both versions."
+                :"Mouse controls • changes apply immediately and save automatically. Resume to test handling.",14,Muted);
             float tabW=(w-40)/devTabs.Length;
-            for(int i=0;i<devTabs.Length;i++) if(Button(x+20+i*tabW,y+110,tabW-8,36,devTabs[i],devTab==i)) {devTab=i;devScroll=Vector2.zero;}
+            for(int i=0;i<devTabs.Length;i++) if(Button(x+20+i*tabW,y+110,tabW-8,36,devTabs[i],devTab==i,size:13)) {devTab=i;devScroll=Vector2.zero;}
+            bool engineTab=devTabs[devTab]=="ENGINE";
+            if(engineTab)
+            {
+                var tuning=DevTuning.Current;
+                Text(x+24,y+163,220,24,"ENGINE FILTER A/B",15,Cream,true);
+                if(Button(x+245,y+159,217,32,"A • ORIGINAL",!tuning.enginePreserveEdges,size:14) && tuning.enginePreserveEdges)
+                {tuning.enginePreserveEdges=false;devDirty=true;devSaveAt=Time.unscaledTime+.35f;}
+                if(Button(x+470,y+159,217,32,"B • PRESERVED EDGES",tuning.enginePreserveEdges,size:14) && !tuning.enginePreserveEdges)
+                {tuning.enginePreserveEdges=true;devDirty=true;devSaveAt=Time.unscaledTime+.35f;}
+            }
             int count=0;foreach(var c in DevControl.All)if(c.group==devTabs[devTab])count++;
-            devScroll=GUI.BeginScrollView(new Rect(x+20,y+160,w-40,h-252),devScroll,new Rect(0,0,w-62,count*68));
+            devScroll=GUI.BeginScrollView(new Rect(x+20,y+(engineTab?202:160),w-40,h-(engineTab?294:252)),devScroll,new Rect(0,0,w-62,count*68));
             int row=0;
             foreach(var control in DevControl.All)
             {
@@ -46,7 +58,8 @@ namespace MadeInArizona
             Text(x+24,y+h-85,w-48,23,SaveSystem.LastError!=null?SaveSystem.LastError:devDirty?"Saving…":"Saved locally • health changes preserve current health percentage",12,Muted);
             if(Button(x+20,y+h-53,210,36,"RESET ALL DEFAULTS")) {game.Save.settings.dev=new DevTuning();DevTuning.Apply();devDirty=true;SaveDev();}
             if(Button(x+242,y+h-53,210,36,"BACK TO PAUSE")){SaveDev();devMenu=false;}
-            if(Button(x+464,y+h-53,236,36,"SAVE & RESUME",true)){SaveDev();devMenu=false;game.Resume();}
+            string resumeLabel=engineTab?(DevTuning.Current.enginePreserveEdges?"RESUME WITH B":"RESUME WITH A"):"SAVE & RESUME";
+            if(Button(x+464,y+h-53,236,36,resumeLabel,true)){SaveDev();devMenu=false;game.Resume();}
         }
     }
 }

@@ -122,13 +122,13 @@ namespace MadeInArizona
         }
         void Text(float x, float y, float w, float h, string text, int size = 18, Color? color = null, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
         { GUI.Label(new Rect(x, y, w, h), text, Style(size, color ?? Cream, bold, anchor)); }
-        bool Button(float x, float y, float w, float h, string text, bool accent = false, bool enabled = true)
+        bool Button(float x, float y, float w, float h, string text, bool accent = false, bool enabled = true, int size = 16)
         {
             var rect = new Rect(x, y, w, h);
             bool hover = rect.Contains(Event.current.mousePosition);
             Rect(x, y, w, h, enabled ? accent ? Orange : hover ? new Color(.22f, .29f, .3f) : new Color(.15f, .20f, .21f) : new Color(.11f, .14f, .15f));
             var oldEnabled = GUI.enabled; GUI.enabled = enabled;
-            bool result = GUI.Button(rect, text, Style(16, enabled ? accent ? Ink : Cream : Muted, true, TextAnchor.MiddleCenter));
+            bool result = GUI.Button(rect, text, Style(size, enabled ? accent ? Ink : Cream : Muted, true, TextAnchor.MiddleCenter));
             GUI.enabled = oldEnabled;
             if (result && AudioManager.Instance) AudioManager.Instance.PlayUI();
             return result;

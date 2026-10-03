@@ -1,0 +1,18 @@
+PASS expected soundtrack recordings packaged
+PASS all soundtrack streams preload at original stereo sample rate
+PASS garage plays looping Arizonaland
+PASS main menu plays looping Arizona Nation
+PASS combat excludes both death-screen songs
+PASS music has priority over dense combat effects
+PASS track endings advance automatically through all twelve driving tracks
+PASS new shuffle does not immediately repeat its last track
+PASS combat trial keeps sunny lighting before slider refresh
+PASS pause keeps music playing at reduced gain
+PASS music slider mutes both crossfade sources
+PASS explosions duck recorded music
+PASS return to garage crossfades back to Arizonaland
+PASS garage keeps sunny lighting before slider refresh
+PASS mission lighting matches slider refresh
+PASS death screen does not retain combat music without reserved recordings
+PASS music cleanup retains imported recordings
+RESULT: PASS

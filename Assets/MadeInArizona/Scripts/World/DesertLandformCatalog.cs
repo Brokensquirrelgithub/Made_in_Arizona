@@ -5,8 +5,9 @@ namespace MadeInArizona
     /// <summary>
     /// Art for the generated world's large landforms and cover rocks. Every list may stay empty: the world then builds
     /// procedural placeholders of the same size, so the desert packs can be linked later without touching placement.
-    /// A model is scaled to the planned footprint (its largest horizontal extent) and sunk into the ground; models
-    /// without colliders get mesh colliders.
+    /// Models are scaled to the planned footprint and sunk into the ground. Cliff prefabs repeat along long interior
+    /// chains and the world boundary; cover-rock prefabs add smaller stones at their bases. Models without colliders
+    /// get mesh colliders.
     /// </summary>
     [CreateAssetMenu(menuName = "Made in Arizona/Desert Landform Catalog", fileName = "DesertLandformCatalog")]
     public sealed class DesertLandformCatalog : ScriptableObject

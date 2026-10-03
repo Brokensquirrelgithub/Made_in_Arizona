@@ -30,7 +30,13 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
-            { yield return TestSoundtrack(); FinishResults(); yield break; }
+            { yield return TestSoundtrack(true); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicExistingTest")>=0)
+            { yield return TestSoundtrack(false); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMountainTest")>=0)
+            { yield return TestMountainWorld(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMinimapCapture")>=0)
+            { yield return TestMinimapCapture(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEnemyBalanceTest")>=0)
             { yield return TestEnemyBalance(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponAudioTest")>=0)
@@ -297,6 +303,51 @@ namespace MadeInArizona
             Debug.Log("MIA_SMOKE_RESULTS\n" + result + "\n" + output);
             Application.Quit(failures.Count == 0 ? 0 : 1);
         }
+        IEnumerator TestMountainWorld()
+        {
+            var game=GameManager.Instance;
+            foreach(int mapSize in new[]{800,1600,3200})
+            {
+                game.StartCampaign(173,mapSize);
+                yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active&&Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,mapSize));
+                var world=GeneratedWorld.Active;
+                string issue=world.LandformIssue();
+                Debug.Log("MIA_MOUNTAINS: size="+mapSize+" landforms="+world.LandformCount+" cover="+world.CoverCount+
+                    " boundary="+world.BoundaryRockCount+" rubble="+world.BaseRockCount+" barriers="+world.MountainBarrierCount+" issue="+(issue??"none"));
+                Check(mapSize+" m mountain ring and route placement",issue==null&&world.BoundaryRockCount>=80&&
+                    world.MountainBarrierCount>=world.BoundaryRockCount-8&&world.BaseRockCount>=world.BoundaryRockCount/2);
+                Check(mapSize+" m retains interior impassable formations and cover",world.LandformCount>=(mapSize==800?5:8)&&world.CoverCount>=20);
+                if(mapSize!=1600)continue;
+                var camera=CameraController.Instance;var oldTarget=camera.Target;
+                var focus=new GameObject("Mountain review focus");var ui=game.GetComponent<GameUI>();bool oldUi=ui.enabled;ui.enabled=false;
+                game.Pause();
+                Vector3 mountain=world.LandformCenter(0,out var kind,out float reach);
+                focus.transform.position=mountain;camera.Target=focus.transform;camera.Snap();
+                yield return new WaitForSecondsRealtime(.3f);SceneLuminance("mountain-interior");
+                focus.transform.position=new Vector3(0,0,world.WorldBounds.size.x*.47f);
+                focus.transform.position=new Vector3(0,GeneratedWorld.HeightAt(focus.transform.position),focus.transform.position.z);
+                camera.Snap();yield return new WaitForSecondsRealtime(.3f);SceneLuminance("mountain-boundary");
+                camera.Target=oldTarget;camera.Snap();ui.enabled=oldUi;game.Resume();Destroy(focus);
+            }
+        }
+        IEnumerator TestMinimapCapture()
+        {
+            var game=GameManager.Instance;
+            game.StartCampaign(173,1600);
+            yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active);
+            string directory=Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR");
+            if(string.IsNullOrEmpty(directory)){Check("minimap capture directory supplied",false);yield break;}
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(Path.Combine(directory,"mountain-minimap-texture.png"),GeneratedWorld.Active.MapTexture.EncodeToPNG());
+            Screen.SetResolution(512,512,FullScreenMode.Windowed);
+            yield return new WaitForSecondsRealtime(.7f);
+            yield return new WaitForEndOfFrame();
+            Capture("mountain-minimap-screen");
+            yield return new WaitForSecondsRealtime(.7f);
+            Check("current generated map exported for minimap review",File.Exists(Path.Combine(directory,"mountain-minimap-texture.png")));
+            Debug.Log("MIA_MINIMAP_CAPTURE: screen="+Screen.width+"x"+Screen.height+" screenshot="+
+                File.Exists(Path.Combine(directory,"mountain-minimap-screen.png")));
+        }
         IEnumerator TestWorldGeneration()
         {
             var game=GameManager.Instance;
@@ -406,9 +457,10 @@ namespace MadeInArizona
         {
             var game=GameManager.Instance;var world=GeneratedWorld.Active;var camera=CameraController.Instance;
             string issue=world.LandformIssue();
-            Debug.Log("MIA_LANDFORMS: landforms="+world.LandformCount+" cover="+world.CoverCount+" issue="+(issue??"none"));
+            Debug.Log("MIA_LANDFORMS: landforms="+world.LandformCount+" cover="+world.CoverCount+" boundary="+world.BoundaryRockCount+" base="+world.BaseRockCount+" barriers="+world.MountainBarrierCount+" issue="+(issue??"none"));
             Check("landforms stay within the conservative count",world.LandformCount>=8&&world.LandformCount<=GeneratedWorld.MaxLandforms);
             Check("cover rocks placed for gunfights",world.CoverCount>=20);
+            Check("large rock chains enclose the entire map with solid barriers",world.BoundaryRockCount>=80&&world.MountainBarrierCount>=world.BoundaryRockCount-8&&world.BaseRockCount>=world.BoundaryRockCount/2);
             Check("landforms and cover keep roads, towns, objectives, trails and routes open",issue==null);
             // Review captures: the first large landform and the first cover rock, from the gameplay camera.
             int shots=0;
@@ -933,21 +985,26 @@ namespace MadeInArizona
         {
             foreach(var enemy in enemies){enemy.GetComponent<EnemyAI>().enabled=false;enemy.Body.isKinematic=true;}
         }
-        IEnumerator TestSoundtrack()
+        IEnumerator TestSoundtrack(bool withDeathTracks)
         {
             var game=GameManager.Instance;
             var music=game.GetComponent<MusicManager>();
             var tracks=Resources.LoadAll<AudioClip>("Audio/Music");
-            Check("all fourteen soundtrack recordings packaged",tracks.Length==14);
-            Check("music streams at original stereo sample rate",Array.TrueForAll(tracks,c=>c&&c.loadType==AudioClipLoadType.Streaming&&c.channels==2&&c.frequency==48000&&c.length>120));
+            Check("expected soundtrack recordings packaged",tracks.Length==(withDeathTracks?16:14)&&(!withDeathTracks||Array.Exists(tracks,c=>c.name=="Arizona Highlands")&&Array.Exists(tracks,c=>c.name=="Arizona Lowlands")));
+            bool imported=Array.TrueForAll(tracks,c=>c&&c.loadType==AudioClipLoadType.Streaming&&c.preloadAudioData&&c.channels==2&&c.frequency==48000&&c.length>30);
+            if(!imported)foreach(var clip in tracks)Debug.Log("MIA_MUSIC_IMPORT: "+clip.name+" type="+clip.loadType+" preload="+clip.preloadAudioData+" state="+clip.loadState+" channels="+clip.channels+" frequency="+clip.frequency+" length="+clip.length);
+            Check("all soundtrack streams preload at original stereo sample rate",imported);
             yield return new WaitForSecondsRealtime(3.2f);
             var source=SoundtrackSource(music);
             Check("garage plays looping Arizonaland",music.CurrentTrack=="Arizonaland"&&source&&source.isPlaying&&source.loop&&source.time>0);
             game.ShowMainMenu();yield return new WaitForSecondsRealtime(3.2f);
             source=SoundtrackSource(music);
             Check("main menu plays looping Arizona Nation",music.CurrentTrack=="Arizona Nation"&&source&&source.isPlaying&&source.loop);
-            AudioManager.Instance.SetCombat(true);yield return new WaitForSecondsRealtime(3.2f);
-            Check("combat switches to supplied driving soundtrack",music.CurrentTrack!="Arizonaland"&&music.CurrentTrack!="Arizona Nation"&&Array.Exists(tracks,c=>c.name==music.CurrentTrack));
+            game.StartCombatTrial();
+            foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)){ai.enabled=false;ai.GetComponent<VehicleController>().Body.isKinematic=true;}
+            yield return new WaitForSecondsRealtime(3.2f);
+            Check("combat excludes both death-screen songs",music.CurrentTrack!="Arizonaland"&&music.CurrentTrack!="Arizona Nation"&&music.CurrentTrack!="Arizona Highlands"&&music.CurrentTrack!="Arizona Lowlands"&&Array.Exists(tracks,c=>c.name==music.CurrentTrack));
+            Check("music has priority over dense combat effects",SoundtrackSource(music).priority==0);
             var played=new HashSet<string>();bool advanced=true;string last="";
             for(int i=0;i<12;i++)
             {
@@ -980,6 +1037,26 @@ namespace MadeInArizona
             game.StartMission(0);
             float sunlight=game.Sun.intensity;DevTuning.Apply();
             Check("mission lighting matches slider refresh",Mathf.Approximately(sunlight,game.Sun.intensity)&&Mathf.Approximately(sunlight,2.6f*DevTuning.Current.sunlight));
+            if(withDeathTracks)
+            {
+                game.Player.Damage.ApplyDamage(game.Player.Damage.MaxHealth*2,game.Player.transform.position,null);
+                yield return new WaitForSecondsRealtime(.3f);
+                string firstDeathTrack=music.CurrentTrack;
+                Check("death overlay immediately starts one reserved song",game.Dying&&(firstDeathTrack=="Arizona Highlands"||firstDeathTrack=="Arizona Lowlands")&&SoundtrackSource(music).isPlaying);
+                yield return new WaitForSecondsRealtime(3.1f);
+                Check("death-screen music continues through failure debrief",game.State==GameState.Lost&&music.CurrentTrack==firstDeathTrack&&SoundtrackSource(music).isPlaying);
+                game.RetryMission();yield return new WaitForSecondsRealtime(.2f);
+                Check("retry leaves death-only playlist",game.State==GameState.Playing&&music.CurrentTrack!="Arizona Highlands"&&music.CurrentTrack!="Arizona Lowlands");
+                game.Player.Damage.ApplyDamage(game.Player.Damage.MaxHealth*2,game.Player.transform.position,null);
+                yield return new WaitForSecondsRealtime(.3f);
+                Check("second death plays the other reserved song",game.Dying&&music.CurrentTrack!=firstDeathTrack&&(music.CurrentTrack=="Arizona Highlands"||music.CurrentTrack=="Arizona Lowlands"));
+            }
+            else
+            {
+                game.Player.Damage.ApplyDamage(game.Player.Damage.MaxHealth*2,game.Player.transform.position,null);
+                yield return new WaitForSecondsRealtime(.3f);
+                Check("death screen does not retain combat music without reserved recordings",game.Dying&&music.CurrentTrack=="");
+            }
             var lifetimeProbe=new GameObject("Music lifecycle probe").AddComponent<MusicManager>();
             Destroy(lifetimeProbe.gameObject);yield return null;
             Check("music cleanup retains imported recordings",Array.TrueForAll(tracks,c=>c&&c.length>120));

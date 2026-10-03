@@ -1,0 +1,10 @@
+MIA_MOUNTAINS: size=800 landforms=7 cover=21 boundary=201 rubble=180 barriers=193 issue=none
+MIA_MOUNTAINS: size=1600 landforms=21 cover=61 boundary=246 rubble=244 barriers=251 issue=none
+MIA_MOUNTAINS: size=3200 landforms=21 cover=97 boundary=419 rubble=358 barriers=428 issue=none
+PASS 800 m mountain ring and route placement
+PASS 800 m retains interior impassable formations and cover
+PASS 1600 m mountain ring and route placement
+PASS 1600 m retains interior impassable formations and cover
+PASS 3200 m mountain ring and route placement
+PASS 3200 m retains interior impassable formations and cover
+RESULT: PASS

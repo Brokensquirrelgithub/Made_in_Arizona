@@ -32,7 +32,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanTrails();BuildTrails();PlanCover();BuildLandforms();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
         }
         void Plan()
         {

@@ -18,6 +18,13 @@ namespace MadeInArizona
         // Weather and grime: cloud shadows, lens dirt, tire smoke and marks, gravel spray, dust on cars.
         public float cloudShadows=.5f, cloudCover=.14f, cloudSpeed=7f, lensDirt=.8f;
         public float tireSmoke=1f, skidMarks=1f, gravelSpray=1f, carDust=1f;
+        // Engine sound mix. Separate versioning preserves older visual migrations and initializes pre-audio saves.
+        public float enginePitch=1f, engineLoadLevel=1f, engineOverrunLevel=1f;
+        public float turboWhineLevel=1f, nitroRoarLevel=1f, exhaustPopLevel=1f, shiftLevel=1f;
+        public float enginePulseVariation=1f, engineBody=1f, engineRasp=1f, engineSaturation=1f;
+        public float enginePulsePressure=1f, enginePulseAttack=1f, enginePulseDecay=1f;
+        public bool enginePreserveEdges;
+        public int audioVersion=2;
         public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
         public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
@@ -51,6 +58,22 @@ namespace MadeInArizona
                 cloudShadows=defaults.cloudShadows; cloudCover=defaults.cloudCover; cloudSpeed=defaults.cloudSpeed; lensDirt=defaults.lensDirt;
                 tireSmoke=defaults.tireSmoke; skidMarks=defaults.skidMarks; gravelSpray=defaults.gravelSpray; carDust=defaults.carDust;
                 presentationVersion=3;
+            }
+            if (audioVersion < 1)
+            {
+                enginePitch=defaults.enginePitch; engineLoadLevel=defaults.engineLoadLevel; engineOverrunLevel=defaults.engineOverrunLevel;
+                turboWhineLevel=defaults.turboWhineLevel; nitroRoarLevel=defaults.nitroRoarLevel;
+                exhaustPopLevel=defaults.exhaustPopLevel; shiftLevel=defaults.shiftLevel;
+                enginePulseVariation=defaults.enginePulseVariation; engineBody=defaults.engineBody;
+                engineRasp=defaults.engineRasp; engineSaturation=defaults.engineSaturation;
+                audioVersion=1;
+            }
+            if (audioVersion < 2)
+            {
+                enginePulsePressure=defaults.enginePulsePressure; enginePulseAttack=defaults.enginePulseAttack;
+                enginePulseDecay=defaults.enginePulseDecay;
+                enginePreserveEdges=false; // Existing saves retain the original sound until B is selected.
+                audioVersion=2;
             }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;
@@ -92,6 +115,20 @@ namespace MadeInArizona
             new DevControl("DRIFT","driftSpeedLoss","Speed scrubbed while drifting (m/s²)",0,5),
             new DevControl("DRIFT","driftThrottle","Engine drive while drifting",0,1.5f),
             new DevControl("DRIFT","driftRecovery","Grip recovery after release (s)",.05f,1.5f),
+            new DevControl("ENGINE","enginePulseVariation","Combustion variation / V8 lope",0,2),
+            new DevControl("ENGINE","enginePulsePressure","Source pulse pressure (relative to resonances)",.25f,2.5f),
+            new DevControl("ENGINE","enginePulseAttack","Source pulse attack (higher = sharper edge)",.4f,2.5f),
+            new DevControl("ENGINE","enginePulseDecay","Source pulse decay (higher = shorter hit)",.4f,2.5f),
+            new DevControl("ENGINE","engineBody","Low engine body resonance",0,2.5f),
+            new DevControl("ENGINE","engineRasp","High exhaust rasp",0,3),
+            new DevControl("ENGINE","engineSaturation","Combustion saturation / growl",.25f,2.5f),
+            new DevControl("ENGINE","enginePitch","Engine pitch (1 = default)",.5f,1.5f),
+            new DevControl("ENGINE","engineLoadLevel","On-throttle engine level",0,2.5f),
+            new DevControl("ENGINE","engineOverrunLevel","Off-throttle engine level",0,2.5f),
+            new DevControl("ENGINE","turboWhineLevel","Turbo whine level",0,3),
+            new DevControl("ENGINE","nitroRoarLevel","Nitro roar level",0,2.5f),
+            new DevControl("ENGINE","exhaustPopLevel","Exhaust pops and lift-off hiss",0,2.5f),
+            new DevControl("ENGINE","shiftLevel","Gear shift sound level",0,2.5f),
             new DevControl("CAMERA","cameraZoom","Camera distance / orthographic size",13,32),
             new DevControl("CAMERA","dynamicZoomOut","Dynamic zoom maximum pull-back",1,2.2f),
             new DevControl("CAMERA","dynamicZoomMargin","Dynamic zoom screen-edge margin",.05f,.35f),

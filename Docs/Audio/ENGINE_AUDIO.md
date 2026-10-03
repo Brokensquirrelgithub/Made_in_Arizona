@@ -24,3 +24,11 @@ The new bank (`AudioSynthesis.EngineLayer`, `AudioManager.UpdateEngineBank`) app
 Offline measurement of the drive above: energy in the 150–1500 Hz "growl" band rose from 28% to 42% of the total. The loop seams are smaller than ordinary sample-to-sample steps, so they don't click.
 
 Tuning points: `BankPulse` (imbalance, which controls lope), the resonance frequencies and decays in `EngineLayer`, `drive` (saturation), and the `level` line in `UpdateEngineBank`.
+
+The in-game Dev Tuning → Engine tab exposes the synthesis parameters for combustion variation, low body resonance, high exhaust rasp and saturation. These regenerate the six engine loops after slider movement settles, keeping synthesis out of the audio update loop. Pitch, on-load and overrun levels, turbo whine, nitro roar, exhaust pops and shift levels update live. All values are saved with developer tuning; older saves receive the original sound as their default.
+
+## Pulse and smoothing A/B
+
+Dev Tuning → Engine now has **A • Original** and **B • Preserved Edges** buttons. A keeps the original one-pole smoothing applied to the whole generated waveform. B generates the same source pulse at 44.1 kHz, skips that broad smoothing, applies the same saturation, then downsamples to the 22.05 kHz clip rate with a 63-tap windowed-sinc low-pass filter. The filter passes the audible edge below roughly 8 kHz and rejects frequencies above the output Nyquist to avoid aliasing. B is RMS-matched to A per RPM/load layer, and the two banks crossfade briefly when switched. Pulse/tone edits regenerate both banks after movement stops; A/B switching itself requires no regeneration. Select A or B and use Save & Resume to compare while driving.
+
+**Source pulse pressure** changes the pressure front relative to body, pipe, rasp and noise. **Source pulse attack** sets how quickly the front rises; higher values make a sharper edge. **Source pulse decay** sets how quickly it dies away; higher values make a shorter hit. The existing **Combustion variation / V8 lope** control changes firing timing, strength variation and bank imbalance. Set these with A selected to hear the underlying pulse, then switch between A and B at the same RPM and throttle to judge what the smoothing removes. Older saves start on A so their sound is preserved.

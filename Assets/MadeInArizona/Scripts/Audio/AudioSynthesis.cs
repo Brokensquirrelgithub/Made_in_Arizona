@@ -18,46 +18,106 @@ namespace MadeInArizona
         // Cross-plane V8 firing order 1-8-4-3-6-5-7-2 alternates banks L R R L R L R L. The listener sits
         // nearer the left pipe, so the uneven bank pulses create the cycle-rate lope heard as "burble" and growl.
         static readonly float[] BankPulse={1,.62f,.62f,1,.62f,1,.62f,1};
+        // The B path renders the nonlinear waveform at 2x rate, then removes energy above the output Nyquist.
+        // This keeps the audible pulse edge without the original full-band one-pole smoothing.
+        static readonly float[] EngineDownsampleFilter=MakeEngineDownsampleFilter();
+        static float[] MakeEngineDownsampleFilter()
+        {
+            const int taps=63; const float cutoff=.22f; // 9.7 kHz at 44.1 kHz; 11 kHz stop band.
+            var filter=new float[taps];float sum=0;
+            for(int i=0;i<taps;i++)
+            {
+                int offset=i-taps/2;
+                float sinc=offset==0?2*cutoff:Mathf.Sin(2*Mathf.PI*cutoff*offset)/(Mathf.PI*offset);
+                float window=.54f-.46f*Mathf.Cos(2*Mathf.PI*i/(taps-1));
+                filter[i]=sinc*window;sum+=filter[i];
+            }
+            for(int i=0;i<taps;i++)filter[i]/=sum;
+            return filter;
+        }
+        static float[] DownsampleEngine(float[] oversampled)
+        {
+            var output=new float[oversampled.Length/2];int length=oversampled.Length,half=EngineDownsampleFilter.Length/2;
+            for(int i=0;i<output.Length;i++)
+            {
+                float value=0;int center=i*2;
+                for(int tap=0;tap<EngineDownsampleFilter.Length;tap++)
+                {
+                    int index=(center+tap-half+length)%length;
+                    value+=oversampled[index]*EngineDownsampleFilter[tap];
+                }
+                output[i]=value;
+            }
+            return output;
+        }
+        public static void MatchEngineLevel(AudioClip reference,AudioClip candidate)
+        {
+            var original=new float[reference.samples];var changed=new float[candidate.samples];
+            if(!reference.GetData(original,0)||!candidate.GetData(changed,0))return;
+            double originalEnergy=0,changedEnergy=0;float peak=0;
+            for(int i=0;i<original.Length;i++)originalEnergy+=original[i]*original[i];
+            for(int i=0;i<changed.Length;i++){changedEnergy+=changed[i]*changed[i];peak=Mathf.Max(peak,Mathf.Abs(changed[i]));}
+            if(changedEnergy<=0||peak<=0)return;
+            float gain=Mathf.Min((float)System.Math.Sqrt(originalEnergy/changedEnergy),.98f/peak);
+            for(int i=0;i<changed.Length;i++)changed[i]*=gain;
+            candidate.SetData(changed,0);
+        }
         /// <summary>
         /// One RPM layer of the engine bank, built the way recorded car audio is: a loop captured at a fixed
         /// firing rate under load (on) or on overrun (off). The game crossfades neighbouring layers by RPM,
         /// so each clip is only pitch-shifted a little and its exhaust resonances stay put.
         /// </summary>
-        public static AudioClip EngineLayer(int layer,bool onLoad)
+        public static AudioClip EngineLayer(int layer,bool onLoad,DevTuning tuning,bool preserveEdges=false)
         {
             float firing=EngineLayerHz[Mathf.Clamp(layer,0,EngineLayerHz.Length-1)],cycleHz=firing/8;
-            int length=Rate*2,cycles=Mathf.RoundToInt(cycleHz*2),tail=Mathf.RoundToInt(Rate*.09f);
+            int renderRate=preserveEdges?Rate*2:Rate;
+            int length=renderRate*2,cycles=Mathf.RoundToInt(cycleHz*2),tail=Mathf.RoundToInt(renderRate*.09f);
             var samples=new float[length];uint seed=(uint)(5101+layer*977+(onLoad?0:31));
+            var pulse=new float[tail];var noiseWeight=new float[tail];
+            for(int j=0;j<tail;j++)
+            {
+                float t=j/(float)renderRate;
+                float front=Mathf.Exp(-t*260*tuning.enginePulseDecay)
+                    *(1-Mathf.Exp(-t*2400*tuning.enginePulseAttack))*1.4f*tuning.enginePulsePressure;
+                float body=Wave(68*t)*Mathf.Exp(-t*34)*tuning.engineBody;
+                float pipe=Wave(185*t+.08f)*Mathf.Exp(-t*52)*.62f;
+                float rasp=Wave(540*t)*Mathf.Exp(-t*120)*(onLoad?.34f:.14f)*tuning.engineRasp;
+                pulse[j]=front+body+pipe+rasp;
+                noiseWeight[j]=Mathf.Exp(-t*170)*(onLoad?.42f:.2f);
+            }
             for(int c=0;c<cycles;c++)for(int k=0;k<8;k++)
             {
                 // Real combustion is never perfectly even: small timing and strength variation adds roughness.
-                float start=(c+(k+Noise(ref seed)*.035f)/8)/cycleHz;
-                float strength=BankPulse[k]*(1+Noise(ref seed)*.12f)*(onLoad?1:.72f);
+                float start=(c+(k+Noise(ref seed)*.035f*tuning.enginePulseVariation)/8)/cycleHz;
+                float strength=Mathf.LerpUnclamped(1,BankPulse[k],tuning.enginePulseVariation)
+                    *(1+Noise(ref seed)*.12f*tuning.enginePulseVariation)*(onLoad?1:.72f);
                 // Jitter can nudge the very first pulse before zero; wrap it to the loop end like every other tail.
-                int first=((Mathf.RoundToInt(start*Rate)%length)+length)%length;
+                int first=((Mathf.RoundToInt(start*renderRate)%length)+length)%length;
                 for(int j=0;j<tail;j++)
                 {
-                    float t=j/(float)Rate,n=Noise(ref seed);
-                    // A sharp pressure front followed by fixed exhaust-system resonances.
-                    float front=Mathf.Exp(-t*260)*(1-Mathf.Exp(-t*2400))*1.4f;
-                    float body=Wave(68*t)*Mathf.Exp(-t*34);
-                    float pipe=Wave(185*t+.08f)*Mathf.Exp(-t*52)*.62f;
-                    float rasp=Wave(540*t)*Mathf.Exp(-t*120)*(onLoad?.34f:.14f);
-                    float crackle=n*Mathf.Exp(-t*170)*(onLoad?.42f:.2f);
-                    samples[(first+j)%length]+=strength*(front+body+pipe+rasp+crackle);
+                    float n=Noise(ref seed);
+                    samples[(first+j)%length]+=strength*(pulse[j]+n*noiseWeight[j]);
                 }
             }
             float mean=0;foreach(float v in samples)mean+=v;mean/=length;
-            float low=0,energy=0;
-            // Two passes around the loop settle the filter state so the wrap point is seamless.
-            float smoothing=onLoad?.62f:.3f;
-            for(int pass=0;pass<2;pass++)for(int i=0;i<length;i++){low=Mathf.Lerp(low,samples[i]-mean,smoothing);if(pass==1)samples[i]=low;}
+            float energy=0;
+            if(preserveEdges)
+            {
+                for(int i=0;i<length;i++)samples[i]-=mean;
+            }
+            else
+            {
+                // Original A path. The first traversal warms the state across the loop seam.
+                float low=0,smoothing=onLoad?.62f:.3f;
+                for(int pass=0;pass<2;pass++)for(int i=0;i<length;i++){low=Mathf.Lerp(low,samples[i]-mean,smoothing);if(pass==1)samples[i]=low;}
+            }
             foreach(float v in samples)energy+=v*v;
             float scale=1/Mathf.Sqrt(Mathf.Max(1e-6f,energy/length));
             // Saturation is where "growl" lives: it adds dense harmonics above each firing pulse, more under load.
-            float drive=onLoad?.95f:.5f;
+            float drive=(onLoad?.95f:.5f)*tuning.engineSaturation;
             for(int i=0;i<length;i++)samples[i]=SoftLimit(samples[i]*scale*drive)*(onLoad?.78f:.72f);
-            return Clip("Original • V8 bank "+firing+"Hz "+(onLoad?"on load":"overrun"),samples);
+            if(preserveEdges)samples=DownsampleEngine(samples);
+            return Clip((preserveEdges?"Preserved edges":"Original smoothing")+" • V8 bank "+firing+"Hz "+(onLoad?"on load":"overrun"),samples);
         }
         /// <summary>A single unburnt-fuel overrun pop for crackle after lifting off the throttle.</summary>
         public static AudioClip Backfire()
