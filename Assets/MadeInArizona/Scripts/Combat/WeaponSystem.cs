@@ -137,7 +137,9 @@ namespace MadeInArizona
                         float reach = ((i * 5 + 3) % 9) / 8f;
                         float angle = (i - 4) * 7.5f + Random.Range(-2f, 2f);
                         Vector3 shot = Quaternion.AngleAxis(angle, Vector3.up) * forward;
-                        Vector3 velocity = shot * Mathf.Lerp(15f, 37f, reach) + Vector3.up * Mathf.Lerp(10f, 19f, reach);
+                        // Launch speed is relative to the car so a fast drive-by does not leave the whole fan behind.
+                        Vector3 velocity = shot * Mathf.Lerp(15f, 37f, reach) + Vector3.up * Mathf.Lerp(10f, 19f, reach) +
+                            (owner.Body ? owner.Body.linearVelocity : Vector3.zero);
                         FieldOrdnance.Bomblet(owner, muzzle + shot * .7f, velocity, damage, weapon.blastRadius,
                             color, 3f, 0);
                     }
@@ -163,7 +165,7 @@ namespace MadeInArizona
                 case "deathray": DeathRay(weapon, muzzle, damage); break;
                 case "aircannon":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, .5f,
-                        new ShotFx { effect = ShotEffect.Knockback, power = 15, castRadius = .9f });
+                        new ShotFx { effect = ShotEffect.Knockback, power = 75, castRadius = .9f });
                     ExplosionSystem.Burst(muzzle + aimDirection, new Color(.85f, .85f, .8f, .55f), 8, 6);
                     break;
                 case "pinata":
@@ -233,18 +235,21 @@ namespace MadeInArizona
             Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, 48, owner.gameObject, false, damage * 2, scanHits);
             VehicleController target = scanHits.Count > 0 ? scanHits[0].collider.GetComponentInParent<VehicleController>() : null;
             float gap = Time.time - rayLastShot; rayLastShot = Time.time;
-            rayHeat = target && target == rayTarget && gap < .3f ? Mathf.Min(1, rayHeat + gap / 2) : 0;
+            bool continuing = target && target == rayTarget && gap < .3f;
+            rayContact = continuing ? rayContact + gap : 0;
+            rayHeat = continuing ? Mathf.Min(1, rayHeat + gap / 2) : 0;
             rayTarget = target;
             if (target)
             {
                 var hit = scanHits[0];
                 target.Damage.ApplyDamage(damage * Mathf.Lerp(1, 4, rayHeat * rayHeat), hit.point, owner.gameObject);
+                if (rayContact >= .5f) VehicleAfflictions.For(target).Ignite(12f, 2.5f, owner.gameObject);
                 ExplosionSystem.Burst(hit.point, Color.Lerp(weapon.projectileColor, new Color(1, .4f, .1f), rayHeat), 2 + Mathf.RoundToInt(rayHeat * 5), 2 + rayHeat * 3);
             }
-            WeaponFx.Beam(muzzle, end, Color.Lerp(weapon.projectileColor, new Color(1, .45f, .15f), rayHeat), Mathf.Lerp(.08f, .3f, rayHeat), .1f);
+            WeaponFx.Ray(muzzle, end, rayHeat);
         }
         readonly List<RaycastHit> scanHits = new List<RaycastHit>();
-        VehicleController rayTarget; float rayHeat, rayLastShot;
+        VehicleController rayTarget; float rayHeat, rayLastShot, rayContact;
         Vector3 Muzzle(Vector3 direction)
         {
             if (muzzleTransform != null) return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);

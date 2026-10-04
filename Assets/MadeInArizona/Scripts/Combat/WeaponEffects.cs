@@ -63,6 +63,9 @@ namespace MadeInArizona
             marker.transform.SetParent(transform, true); marker.transform.position = point;
             marker.transform.localScale = new Vector3(.16f, .35f, .16f);
             marker.GetComponent<Renderer>().sharedMaterial = WorldArt.Material(new Color(.85f, .12f, .08f), 0, .3f, 2.5f);
+            var shooter = source ? source.GetComponentInParent<VehicleController>() : null;
+            if (shooter && !shooter.FriendlyToPlayer)
+                marker.AddComponent<AttackWarningVisual>().BeginImpact(point, radius, delay, marker.transform);
             charges.Add(new Charge { marker = marker.transform, at = Time.time + delay, damage = damage, radius = radius, source = source });
         }
         bool Dead => !vehicle || vehicle.Damage == null || vehicle.Damage.IsDead;
@@ -89,7 +92,7 @@ namespace MadeInArizona
                 Vector3 at = charge.marker ? charge.marker.position : transform.position;
                 if (charge.marker) Destroy(charge.marker.gameObject);
                 charges.RemoveAt(i);
-                ExplosionSystem.Detonate(at, charge.radius, charge.damage, charge.source, ExplosionKind.Grenade);
+                ExplosionSystem.Detonate(at, charge.radius, charge.damage, charge.source, ExplosionKind.Grenade, falloffPower: 2f);
             }
         }
     }
@@ -122,6 +125,19 @@ namespace MadeInArizona
         }
         /// <summary>A straight beam (railgun, death ray) that fades over <paramref name="duration"/>.</summary>
         public static void Beam(Vector3 a, Vector3 b, Color color, float width, float duration) => Get().Show(a, b, null, null, color, width, duration, 0);
+        /// <summary>Layered sunlight ray with a moving hot pulse and a narrow white core.</summary>
+        public static void Ray(Vector3 a, Vector3 b, float heat)
+        {
+            var fx = Get();
+            const float duration = .13f;
+            fx.Show(a, b, null, null, new Color(1.1f, .42f, .08f, .2f), .48f + heat * .22f, duration, 0);
+            fx.Show(a, b, null, null, new Color(1.5f, .72f, .18f, .58f), .17f + heat * .07f, duration, 0);
+            fx.Show(a, b, null, null, new Color(1.8f, 1.7f, 1.25f, .95f), .055f + heat * .025f, duration, 0);
+            float phase = Mathf.Repeat(Time.time * 5.5f, 1);
+            Vector3 pulseStart = Vector3.Lerp(a, b, phase);
+            Vector3 pulseEnd = Vector3.Lerp(a, b, Mathf.Min(1, phase + .16f));
+            fx.Show(pulseStart, pulseEnd, null, null, new Color(2.4f, 1.5f, .42f, .85f), .23f + heat * .08f, duration, 0);
+        }
         /// <summary>A jagged electric arc between two points.</summary>
         public static void Lightning(Vector3 a, Vector3 b, Color color, float duration = .18f) => Get().Show(a, b, null, null, color, .09f, duration, .7f);
         /// <summary>A cable that follows two moving transforms (harpoon winch).</summary>
@@ -165,7 +181,7 @@ namespace MadeInArizona
         void Paint(Line line, float strength)
         {
             line.renderer.widthMultiplier = line.width * Mathf.Lerp(.35f, 1, strength);
-            Color c = line.color; c.a = strength;
+            Color c = line.color; c.a *= strength;
             line.renderer.startColor = c; line.renderer.endColor = c;
         }
         void LateUpdate()

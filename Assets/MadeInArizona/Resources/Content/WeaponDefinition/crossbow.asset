@@ -17,13 +17,13 @@ MonoBehaviour:
   description: PRECISION RIFLE + STICKY BOMB. A garage-door-spring crossbow firing
     dynamite bolts that stick, fizz and blow.
   role: STICKY DELAYED BLAST
-  strength: A hit guarantees a heavy explosion on that car.
+  strength: A wide blast hits hardest near the dynamite.
   weakness: A second's fuse, and misses stick to the ground instead.
   contentOrder: 22
   damage: 20
   fireRate: 0.9
   speed: 170
-  blastRadius: 5.5
+  blastRadius: 16.5
   projectileColor: {r: 1, g: 0.3, b: 0.2, a: 1}
   fireSounds:
   - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}

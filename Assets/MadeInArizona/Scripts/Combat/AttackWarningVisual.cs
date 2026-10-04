@@ -14,6 +14,7 @@ namespace MadeInArizona
         LineRenderer beamGlow, beamHalo, beamCore, impactRing, timerRing;
         float beamFadeLength = -1f;
         Vector3 impact;
+        Transform impactFollow;
         float radius, impactAt, impactDuration;
         bool hasImpact;
 
@@ -113,9 +114,10 @@ namespace MadeInArizona
             if (beamCore) beamCore.enabled = false;
         }
 
-        public void BeginImpact(Vector3 point, float blastRadius, float timeToImpact)
+        public void BeginImpact(Vector3 point, float blastRadius, float timeToImpact, Transform follow = null)
         {
             impact = Ground(point);
+            impactFollow = follow;
             radius = blastRadius;
             impactDuration = Mathf.Max(.1f, timeToImpact);
             impactAt = Time.time + impactDuration;
@@ -156,6 +158,11 @@ namespace MadeInArizona
             bool playing = GameManager.Instance && GameManager.Instance.IsPlaying;
             impactRing.enabled = timerRing.enabled = playing;
             if (!playing) return;
+            if (impactFollow)
+            {
+                impact = Ground(impactFollow.position);
+                DrawRing(impactRing, radius);
+            }
             float remaining = Mathf.Clamp01((impactAt - Time.time) / impactDuration);
             DrawRing(timerRing, Mathf.Max(.12f, radius * remaining));
             float pulse = .7f + .3f * Mathf.Sin(Time.time * 9f);

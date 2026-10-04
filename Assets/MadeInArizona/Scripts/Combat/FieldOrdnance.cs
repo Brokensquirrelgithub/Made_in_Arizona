@@ -16,6 +16,7 @@ namespace MadeInArizona
         readonly RaycastHit[] hits = new RaycastHit[16];
         static readonly List<FieldOrdnance> sentries = new List<FieldOrdnance>();
         static readonly ShotFx SentryRound = new ShotFx { detached = true };
+        const float BowlingHitRadius = 2.88f; // 20% wider than the original 2.4 m sweep.
         VehicleController owner, assistedTarget, quarry;
         GameObject source;
         bool ownerFriendly;
@@ -166,6 +167,8 @@ namespace MadeInArizona
             var charge = Create("Stuck dynamite", point, color, owner, PrimitiveType.Cylinder);
             charge.mode = Mode.Fuse; charge.damage = damage; charge.radius = radius; charge.expiresAt = Time.time + delay;
             charge.transform.localScale = new Vector3(.18f, .32f, .18f);
+            if (owner && !owner.FriendlyToPlayer)
+                charge.gameObject.AddComponent<AttackWarningVisual>().BeginImpact(point, radius, delay);
         }
         /// <summary>A small bouncing charge thrown out by a cluster payload.</summary>
         public static void Bomblet(VehicleController owner, Vector3 point, Vector3 velocity, float damage, float radius, Color color, float fuse = 2.2f, int bounces = 1)
@@ -181,7 +184,7 @@ namespace MadeInArizona
             Vector3 flat = Vector3.ProjectOnPlane(aim, Vector3.up); if (flat.sqrMagnitude < .01f) flat = owner.transform.forward; flat.Normalize();
             var ball = Create("Bowling ball", origin + flat, new Color(.18f, .2f, .32f), owner, PrimitiveType.Sphere);
             ball.mode = Mode.Roller; ball.damage = damage; ball.velocity = flat * weapon.speed + Vector3.ProjectOnPlane(owner.Body.linearVelocity, Vector3.up) * .5f;
-            ball.expiresAt = Time.time + 3.4f; ball.transform.localScale = Vector3.one * .9f;
+            ball.expiresAt = Time.time + 3.4f; ball.transform.localScale = Vector3.one * 1.08f;
             ball.ownMaterial.SetFloat("_Smoothness", .9f); ball.ownMaterial.SetColor("_EmissionColor", weapon.projectileColor * .6f);
         }
         /// <summary>Dynamite go-kart: drives off ahead of the car and hunts the nearest hostile.</summary>
@@ -353,7 +356,7 @@ namespace MadeInArizona
             Vector3 flat = Vector3.ProjectOnPlane(velocity, Vector3.up);
             float speed = flat.magnitude, dt = Time.deltaTime;
             Vector3 direction = speed > .1f ? flat / speed : transform.forward;
-            if (speed > .1f && Blocked(direction, speed * dt + .35f, .4f, out RaycastHit wall))
+            if (speed > .1f && Blocked(direction, speed * dt + .42f, .48f, out RaycastHit wall))
             {
                 var prop = wall.collider.GetComponentInParent<DestructionSystem>();
                 if (prop && !prop.IsDestroyed && prop.Size < 3.5f) prop.SmashFromVehicle(wall.point, source, flat * .7f);
@@ -363,17 +366,17 @@ namespace MadeInArizona
             {
                 if (!Hostile(vehicle) || struck.Contains(vehicle)) continue;
                 Vector3 delta = vehicle.transform.position - transform.position;
-                if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > 2.4f * 2.4f || Mathf.Abs(delta.y) > 2.5f) continue;
+                if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > BowlingHitRadius * BowlingHitRadius || Mathf.Abs(delta.y) > 3f) continue;
                 struck.Add(vehicle);
                 vehicle.Damage.ApplyDamage(damage, transform.position, source);
-                if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * 11 + Vector3.up * 4, ForceMode.VelocityChange);
+                if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * 20 + Vector3.up * 5, ForceMode.VelocityChange);
                 ExplosionSystem.Burst(transform.position + Vector3.up * .5f, new Color(1, .75f, .3f), 14, 5);
                 velocity *= .82f;
                 if (owner && owner.IsPlayer) CameraController.Instance?.Shake(.12f);
             }
-            GroundFollow(.45f, true);
+            GroundFollow(.54f, true);
             velocity *= 1 - .12f * dt;
-            transform.Rotate(Vector3.Cross(Vector3.up, direction), speed * dt / .45f * Mathf.Rad2Deg, Space.World);
+            transform.Rotate(Vector3.Cross(Vector3.up, direction), speed * dt / .54f * Mathf.Rad2Deg, Space.World);
             if (Time.time >= expiresAt || speed < 2) { ExplosionSystem.Burst(transform.position, new Color(.5f, .45f, .4f, .6f), 8, 2); Destroy(gameObject); }
         }
         void UpdateCrawler()
@@ -468,15 +471,26 @@ namespace MadeInArizona
         {
             Vector3 at = transform.position;
             var kind = mode == Mode.Mine ? ExplosionKind.Ammunition : mode == Mode.Crawler ? ExplosionKind.Gasoline : mode == Mode.Vortex ? ExplosionKind.Massive : ExplosionKind.Grenade;
-            ExplosionSystem.Detonate(at, radius, damage, source, kind);
+            ExplosionSystem.Detonate(at, radius, damage, source, kind, falloffPower: mode == Mode.Fuse ? 2f : 0f);
             if (payload == Payload.FireRing && source)
             {
                 // Sprinkler firebomb: a spinning ring of burning fuel sprays out from the landing point.
+                // Start at car-body height above the ground so the flame jets reach cars before terrain.
+                Vector3 fireOrigin = at + Vector3.up * 1.05f;
+                int groundCount = Physics.RaycastNonAlloc(at + Vector3.up * 3f, Vector3.down, hits, 10f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                float groundDistance = float.MaxValue;
+                for (int h = 0; h < groundCount; h++)
+                {
+                    var hit = hits[h];
+                    if (!hit.collider || hit.normal.y < .5f || hit.collider.GetComponentInParent<VehicleController>()) continue;
+                    if (hit.distance < groundDistance) { groundDistance = hit.distance; fireOrigin = hit.point + Vector3.up * 1.05f; }
+                }
                 for (int i = 0; i < 16; i++)
                 {
                     float angle = (i + Random.value * .4f) / 16f * Mathf.PI * 2;
-                    var burn = new ShotFx { effect = ShotEffect.Burn, power = 12, duration = 3.5f, detached = true, flame = true, castRadius = .4f };
-                    ProjectileSystem.Fire(at + Vector3.up * .6f, new Vector3(Mathf.Cos(angle), .05f, Mathf.Sin(angle)), 22, 5, 0, source, new Color(1, .5f, .1f), ExplosionKind.Ammunition, .75f, burn);
+                    var burn = new ShotFx { effect = ShotEffect.Burn, power = 12, duration = 3.5f, detached = true, flame = true, castRadius = .5f };
+                    ProjectileSystem.Fire(fireOrigin, new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)), 22, 5, 0, source, new Color(1, .5f, .1f), ExplosionKind.Ammunition, .75f, burn);
                 }
             }
             sentries.Remove(this);

@@ -17,7 +17,7 @@ Garage weapons are bought with **scrap** and have unlimited ammunition (right tr
 | **Jumper-Cable Zapper** | 220 | Plasma Pistol overcharge / Shock Rifle (vehicle EMP, arcs) | Stalls engines and guns; arcs through a pack. | Barely scratches the paint on its own. |
 | **Weed-Burner Torch** | 260 | Flamethrower / Ravager (burn) | Burning damage keeps ticking after contact. | Fourteen metres of reach and nothing more. |
 | **Arc-Welder Railgun** | 320 | Spartan Laser / Skewer (heavy one-shot) | Instant hit at long range that passes through whole convoys. | Two seconds to recharge; a miss hurts. |
-| **Leaf-Blower Air Cannon** | 200 | Concussion Rifle / Gravity Hammer (knockback) | Shoves cars into hazards, each other and off ledges. | Low damage; it moves problems rather than ending them. |
+| **Leaf-Blower Air Cannon** | 200 | Concussion Rifle / Gravity Hammer (knockback) | Five times the original blast force shoves cars into hazards and off ledges. | Low damage; it moves problems rather than ending them. |
 
 ## Scrap weapons: oddballs
 
@@ -25,13 +25,14 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 
 | Weapon | Scrap | Combination | Strength | Weakness |
 |---|---|---|---|---|
-| **Lawn-Sprinkler Firebomb** | 300 | Grenade + Flamethrower | Sets every car around the landing point on fire. | Weak blast and a slow lob; the burn does the work. |
+| **Lawn-Sprinkler Firebomb** | 300 | Grenade + Flamethrower | Radial fire jets ignite cars they hit. | Weak blast and a slow lob; the burn does the work. |
 | **Piñata Bottle Rocket** | 340 | Rocket + Cluster bomb | One hit carpets a wide area with bomblets. | Bomblets scatter randomly; poor against a single fast car. |
 | **Shop-Vac Black Hole** | 380 | Grenade + Gravity well | Pulls a whole pack together for one big blast. | Long recharge and a short delay before it pays off. |
-| **Satellite-Dish Death Ray** | 360 | Beam rifle + Focus ramp | Melts a target you can keep it on for two seconds. | Weak until it warms up; switching targets resets it. |
-| **Dynamite Crossbow** | 280 | Precision rifle + Sticky bomb | A hit guarantees a heavy explosion on that car. | A second's fuse, and misses stick to the ground instead. |
-| **Bowling-Ball Cannon** | 260 | Shell + Ram | Rolls through several cars and knocks them aside. | Only goes where the ground goes; hills and walls deflect it. |
-| **Hubcap Boomerang** | 240 | Sawblade + Return trip | Hits everything twice: once out, once back. | Useless beyond its turn-around point. |
+| **Satellite-Dish Death Ray** | 360 | Beam rifle + Focus ramp | A layered ray burns a car after half a second of continuous contact. | Weak until it warms up; switching targets resets it. |
+| **Dynamite Crossbow** | 280 | Precision rifle + Sticky bomb | Triple the original blast radius, with damage falling off toward the edge. | A second's fuse, and misses stick to the ground instead. |
+| **Bowling-Ball Cannon** | 260 | Shell + Ram | A 20% wider sweep and stronger impact shove cars aside. | Only goes where the ground goes; hills and walls deflect it. |
+| **Hubcap Boomerang** | 240 | Sawblade + Return trip | Triple damage on both passes; grows to double size on return. | Useless beyond its turn-around point. |
+| **Scatter Mortar** | 360 | Shotgun + Mortar | Nine bomblets spread near and far while inheriting the car's velocity. | No target assist; each charge needs to land near its target. |
 | **Tow-Hook Harpoon** | 260 | Sniper + Winch | Drags runners and snipers into ram and shotgun range. | Single target and pulls danger toward you. |
 | **Firecracker Blunderbuss** | 300 | Shotgun + Explosive rounds | Splash on every pellet rewards near misses. | Short range, and the pops hurt you up close. |
 | **Lawn-Chair Sentry** | 400 | Mine + Auto-turret | Keeps shooting while you drive elsewhere; two at a time. | Stationary; slow to redeploy; light damage per nail. |
@@ -54,7 +55,7 @@ The **Dynamite Go-Kart** replaces the old Lien Mines as a field weapon: it drive
 ## Mechanics
 
 - **Friendly fire:** rounds, rams, burns and arcs never hurt a vehicle on the attacker's own side (hostile crews on each other, or the player and the escort). Explosions hurt everyone in range, so a crew's rockets and pipe bombs can still catch its own cars.
-- **Burn** (Weed-Burner Torch, Sprinkler Firebomb) keeps damaging a car for three seconds after contact.
+- **Burn** (Weed-Burner Torch, Sprinkler Firebomb, Death Ray) keeps damaging a car after contact; the ray needs half a second of continuous focus first.
 - **Stall** (Jumper-Cable Zapper, Tow-Hook Harpoon) cuts a car's engine and guns for about a second; zapper bolts arc to two more hostiles within 14 m.
 - **Spines** (Cactus-Spine Needler) stick; seven within a few seconds rupture together in a large blast.
 - **Sticky dynamite** (Dynamite Crossbow) fizzes for a second, then explodes on whatever it hit.

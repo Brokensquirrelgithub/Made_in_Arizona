@@ -37,8 +37,11 @@ namespace MadeInArizona
             public Transform transform;
             public Renderer renderer;
             public TrailRenderer trail;
+            public Transform hubcap;
+            public Renderer hubcapRenderer;
+            public Renderer[] hubcapSpokes;
             public Vector3 position, direction;
-            public float speed, damage, radius, remaining, trailAt, born;
+            public float speed, damage, radius, remaining, trailAt, born, returnAt;
             public GameObject source;
             public bool friendly, returning;
             public Color color;
@@ -104,7 +107,8 @@ namespace MadeInArizona
             else
             {
                 var view = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                view.name = "Pooled tracer"; Destroy(view.GetComponent<Collider>());
+                view.name = "Pooled tracer";
+                var viewCollider = view.GetComponent<Collider>(); viewCollider.enabled = false; Destroy(viewCollider);
                 view.transform.SetParent(transform);
                 var renderer = view.GetComponent<Renderer>(); renderer.sharedMaterial = material;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false;
@@ -119,19 +123,28 @@ namespace MadeInArizona
             round.position = position; round.direction = direction.sqrMagnitude > .0001f ? direction.normalized : fallback;
             round.speed = speed; round.damage = damage; round.radius = radius; round.source = source;
             round.color = color; round.kind = kind; round.remaining = lifetime; round.trailAt = 0; round.born = Time.time;
-            round.fx = fx; round.returning = false; round.struck.Clear();
+            round.fx = fx; round.returning = false; round.returnAt = 0; round.struck.Clear();
             var vehicle = source != null ? source.GetComponentInParent<VehicleController>() : null;
             var ai = vehicle != null ? vehicle.GetComponent<EnemyAI>() : null;
             round.friendly = vehicle != null && (vehicle.IsPlayer || (ai != null && ai.IsFriendly));
             round.transform.SetPositionAndRotation(position, Quaternion.LookRotation(round.direction));
             bool heavy = radius > .1f || (fx != null && (fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback));
-            round.transform.localScale = heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
+            bool hubcap = fx != null && fx.boomerang;
+            round.transform.localScale = hubcap ? Vector3.one : heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
             if (fx != null && fx.coneBlast) round.transform.localScale *= 1.1f;
+            round.renderer.enabled = !hubcap;
+            if (round.hubcap) round.hubcap.gameObject.SetActive(hubcap);
+            if (hubcap)
+            {
+                EnsureHubcap(round);
+                round.hubcap.localRotation = Quaternion.identity;
+                round.hubcap.localScale = new Vector3(1, .08f, 1);
+            }
             block.SetColor("_BaseColor", color * 2.4f); block.SetColor("_Color", color * 2.4f); round.renderer.SetPropertyBlock(block);
             round.view.SetActive(true);
             round.trail.Clear();
             round.trail.time = heavy ? .24f : kind == ExplosionKind.Ammunition ? .075f : .12f;
-            round.trail.startWidth = heavy ? .18f : .065f;
+            round.trail.startWidth = hubcap ? .26f : heavy ? .18f : .065f;
             round.trail.endWidth = 0;
             round.trail.startColor = new Color(color.r, color.g, color.b, .82f);
             round.trail.endColor = new Color(color.r, color.g, color.b, 0);
@@ -146,6 +159,37 @@ namespace MadeInArizona
                 }
             }
         }
+        void EnsureHubcap(Round round)
+        {
+            if (round.hubcap) return;
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "Spinning hubcap";
+            var discCollider = disc.GetComponent<Collider>(); discCollider.enabled = false; Destroy(discCollider);
+            disc.transform.SetParent(round.transform, false);
+            round.hubcap = disc.transform;
+            round.hubcapRenderer = disc.GetComponent<Renderer>();
+            round.hubcapRenderer.sharedMaterial = material;
+            round.hubcapRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            round.hubcapRenderer.receiveShadows = false;
+            round.hubcapSpokes = new Renderer[3];
+            for (int i = 0; i < 3; i++)
+            {
+                float angle = i * 120f;
+                var spoke = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                spoke.name = "Hubcap cutting glint";
+                var spokeCollider = spoke.GetComponent<Collider>(); spokeCollider.enabled = false; Destroy(spokeCollider);
+                spoke.transform.SetParent(round.hubcap, false);
+                Vector3 radial = Quaternion.Euler(0, angle, 0) * Vector3.forward;
+                spoke.transform.localPosition = radial * .25f + Vector3.up * 1.08f;
+                spoke.transform.localRotation = Quaternion.Euler(0, angle, 0);
+                spoke.transform.localScale = new Vector3(.09f, .12f, .37f);
+                var renderer = spoke.GetComponent<Renderer>();
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                round.hubcapSpokes[i] = renderer;
+            }
+        }
         void Update()
         {
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
@@ -154,6 +198,7 @@ namespace MadeInArizona
                 if (i >= active.Count) continue;
                 var r = active[i];
                 Steer(r);
+                if (r.fx != null && r.fx.boomerang) AnimateHubcap(r);
                 // Do not travel beyond the configured lifetime on a long frame.
                 float stepTime = Mathf.Min(Time.deltaTime, Mathf.Max(0, r.remaining));
                 float distance = r.speed * stepTime;
@@ -184,12 +229,39 @@ namespace MadeInArizona
                 }
             }
         }
+        void AnimateHubcap(Round round)
+        {
+            float growth = round.returning ? Mathf.SmoothStep(0, 1, Mathf.Clamp01((Time.time - round.returnAt) / .18f)) : 0;
+            round.hubcap.localScale = new Vector3(1 + growth, .08f * (1 + growth), 1 + growth);
+            round.hubcap.Rotate(Vector3.up, (round.returning ? 1600f : 950f) * Time.deltaTime, Space.Self);
+            Color steel = round.color * 1.6f;
+            Color hot = new Color(2.6f, 1.05f, .18f);
+            Color tint = Color.Lerp(steel, hot, growth);
+            block.SetColor("_BaseColor", tint); block.SetColor("_Color", tint);
+            round.hubcapRenderer.SetPropertyBlock(block);
+            foreach (var spoke in round.hubcapSpokes) spoke.SetPropertyBlock(block);
+            round.trail.startWidth = Mathf.Lerp(.26f, .52f, growth);
+            round.trail.startColor = Color.Lerp(round.color, new Color(1, .65f, .12f), growth);
+            if (Time.time >= round.trailAt)
+            {
+                round.trailAt = Time.time + .055f;
+                ExplosionSystem.Burst(round.position, Color.Lerp(new Color(.7f, .85f, 1), hot, growth), 3, Mathf.Lerp(.9f, 1.6f, growth));
+            }
+        }
+        void StartReturn(Round round)
+        {
+            if (round.returning) return;
+            round.returning = true;
+            round.returnAt = Time.time;
+            round.struck.Clear();
+            ExplosionSystem.Burst(round.position, new Color(1.8f, .8f, .18f), 12, 3);
+        }
         /// <summary>Homing spines curve toward their target; boomerangs turn for home halfway through their flight.</summary>
         void Steer(Round r)
         {
             var fx = r.fx;
             if (fx == null) return;
-            if (fx.boomerang && !r.returning && Time.time - r.born >= fx.returnAfter) { r.returning = true; r.struck.Clear(); }
+            if (fx.boomerang && !r.returning && Time.time - r.born >= fx.returnAfter) StartReturn(r);
             Vector3 goal; float rate;
             if (fx.boomerang && r.returning && r.source) { goal = r.source.transform.position + Vector3.up * .9f; rate = 900; }
             else if (fx.homing && fx.homing.Damage != null && !fx.homing.Damage.IsDead) { goal = fx.homing.transform.position + Vector3.up * .8f; rate = fx.turnRate; }
@@ -203,6 +275,8 @@ namespace MadeInArizona
             closest = default;
             if (distance < .0001f) return false;
             float width = round.fx != null && round.fx.castRadius > 0 ? round.fx.castRadius : round.radius > .1f ? .18f : .075f;
+            if (round.fx != null && round.fx.boomerang && round.returning)
+                width *= 1 + Mathf.Clamp01((Time.time - round.returnAt) / .18f);
             int count = Physics.SphereCastNonAlloc(origin, width, direction, hits, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float nearest = float.MaxValue;
             for (int h = 0; h < count; h++)
@@ -239,7 +313,7 @@ namespace MadeInArizona
             if (!vehicle && fx != null && fx.boomerang && !round.returning)
             {
                 // Hubcaps glance off walls and head home early.
-                round.returning = true; round.struck.Clear();
+                StartReturn(round);
                 ExplosionSystem.Burst(hit.point, round.color, 6, 3);
                 return false;
             }

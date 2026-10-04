@@ -10,7 +10,7 @@ namespace MadeInArizona
     /// <summary>World-scoped effect pools with a bounded chain-reaction queue and quality-dependent budgets.</summary>
     public sealed class ExplosionSystem : MonoBehaviour
     {
-        struct Blast { public Vector3 point, direction; public float radius, damage; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
+        struct Blast { public Vector3 point, direction; public float radius, damage, falloffPower; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
         sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float born, until; public Vector3 scale; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
@@ -168,10 +168,10 @@ namespace MadeInArizona
             renderer.receiveShadows = false; renderer.sortMode = ParticleSystemSortMode.Distance;
             ps.Play(); return ps;
         }
-        public static void Detonate(Vector3 position, float radius, float damage, GameObject source, ExplosionKind kind, bool environmental = false)
+        public static void Detonate(Vector3 position, float radius, float damage, GameObject source, ExplosionKind kind, bool environmental = false, float falloffPower = 0)
         {
             var system = Get();
-            if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind, environmental = environmental });
+            if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind, environmental = environmental, falloffPower = falloffPower });
         }
         /// <summary>Forward 90-degree bazooka blast. Radius is measured from the impact to the cone tip.</summary>
         public static void DetonateCone(Vector3 position, Vector3 direction, float radius, float damage, GameObject source)
@@ -402,7 +402,8 @@ namespace MadeInArizona
                     Vector3 toward = point - blast.point; toward.y = 0;
                     if (toward.sqrMagnitude > .04f && Vector3.Dot(toward.normalized, blast.direction) < .7071068f) continue;
                 }
-                float falloff = Mathf.Lerp(.15f, 1, 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / radius));
+                float remaining = 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / radius);
+                float falloff = blast.falloffPower > 0 ? Mathf.Pow(remaining, blast.falloffPower) : Mathf.Lerp(.15f, 1, remaining);
                 var weakpoint = collider.GetComponentInParent<BossWeakPoint>();
                 if (weakpoint != null && damagedPoints.Add(weakpoint)) weakpoint.ApplyDamage(blast.damage * falloff * .6f, point, blast.source, true);
                 var vehicle = collider.GetComponentInParent<VehicleDamage>();
