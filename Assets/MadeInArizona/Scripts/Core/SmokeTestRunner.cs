@@ -14,6 +14,7 @@ namespace MadeInArizona
         public static bool Active => Array.IndexOf(Environment.GetCommandLineArgs(), "-miaSmokeTest") >= 0;
         readonly List<string> checks = new List<string>();
         readonly List<string> failures = new List<string>();
+        readonly List<string> fixtureTrace = new List<string>();
         void Update()
         {
             if (Active && Time.realtimeSinceStartup > 240) { Debug.LogError("MIA_SMOKE_TIMEOUT: test did not finish; inspect earlier exceptions."); Application.Quit(2); }
@@ -168,9 +169,13 @@ namespace MadeInArizona
             SaveSystem.Save(game.Save);
             Check("save round trip", SaveSystem.Load().money == game.Save.money && File.Exists(SaveSystem.Path));
             bool devProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDevTest") >= 0;
-            bool isolatedProbe = devProbe || Array.IndexOf(Environment.GetCommandLineArgs(), "-miaHandlingTest") >= 0;
             game.StartMission(0);
-            if (isolatedProbe) QuietMissionHostiles();
+            // The opening job spawns four hostiles about 18 m away that close in within two seconds. Left active they
+            // killed the player before the weapon checks, or died beside it and magneted a drop into the empty field
+            // slot. These checks cover the player's own driving, weapons, pickups and the mission state machine;
+            // AI combat is covered by -miaCombatTest. Hostiles stay in place and remain damageable.
+            QuietMissionHostiles();
+            var trace = StartCoroutine(TraceFixture());
             yield return new WaitForSecondsRealtime(1);
             Check("mission startup", game.State == GameState.Playing && game.Mission.Stage == 0);
             Check("destructible scene", FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None).Length > 30);
@@ -184,9 +189,10 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaHandlingTest")>=0) { yield return ReviewGround(); yield return VehicleHandlingRegression.Run(keyboard,Check); }
             if(devProbe)yield return TestDevTuning();
             var begin = game.Player.transform.position;
-            // Longer probes reverse away from the first mission objective so their movement check cannot spawn a wave.
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(isolatedProbe ? Key.S : Key.W));
-            yield return new WaitForSecondsRealtime(isolatedProbe ? 1.2f : 2.5f);
+            // Reverse away from the first objective: driving forward reaches the parked suspect, which advances the job
+            // and spawns the junkyard wave on top of the weapon checks. The gamepad check below covers driving forward.
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S));
+            yield return new WaitForSecondsRealtime(1.2f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             Check("keyboard driving moves rigidbody", Vector3.Distance(begin, game.Player.transform.position) > 2f);
             var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -246,7 +252,7 @@ namespace MadeInArizona
             // Advance via the same proximity, combat and interaction conditions used during normal play.
             Teleport(game.Mission.ObjectivePosition + new Vector3(0, 1, -5));
             yield return new WaitForSecondsRealtime(.3f);
-            if (isolatedProbe) QuietMissionHostiles();
+            QuietMissionHostiles(); // the junkyard wave; it is destroyed directly by the combat check below
             Check("recovery reaches junkyard phase", game.Mission.Stage >= 1);
             foreach (var enemy in new List<VehicleController>(VehicleController.Active)) if (enemy && !enemy.IsPlayer) enemy.Damage.ApplyDamage(10000, enemy.transform.position, game.Player.gameObject);
             yield return new WaitForSecondsRealtime(.5f);
@@ -265,6 +271,7 @@ namespace MadeInArizona
             Capture("04-completion");
             yield return new WaitForSecondsRealtime(.35f);
             Check("progression saved", SaveSystem.Load().completedMissions.Contains(0));
+            StopCoroutine(trace);
             game.ReturnToGarage();
             yield return new WaitForSecondsRealtime(.5f);
             Check("garage return", game.State == GameState.Garage);
@@ -307,6 +314,7 @@ namespace MadeInArizona
             string output = Path.Combine(Application.temporaryCachePath, "mia-smoke-results.txt");
             string result = string.Join("\n", checks) + "\n" + string.Join("\n", failures) + "\nRESULT: " + (failures.Count == 0 ? "PASS" : "FAIL");
             File.WriteAllText(output, result);
+            if (failures.Count > 0 && fixtureTrace.Count > 0) Debug.Log("MIA_SMOKE_TRACE\n" + string.Join("\n", fixtureTrace));
             Debug.Log("MIA_SMOKE_RESULTS\n" + result + "\n" + output);
             Application.Quit(failures.Count == 0 ? 0 : 1);
         }
@@ -1291,7 +1299,33 @@ namespace MadeInArizona
                 {var pixel=pixels[y*width+x];total+=(pixel.r*.2126f+pixel.g*.7152f+pixel.b*.0722f)/255f;count++;}
             Destroy(texture);return total/Mathf.Max(1,count);
         }
-        void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); }
+        void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); if (!passed) fixtureTrace.Add("MIA_SMOKE_FAIL_AT " + name); }
+        /// <summary>Samples the mission fixture every 0.25 s; printed with the results only when a check fails.</summary>
+        IEnumerator TraceFixture()
+        {
+            float start=Time.realtimeSinceStartup;
+            while(true){fixtureTrace.Add(FixtureState("t+"+(Time.realtimeSinceStartup-start).ToString("0.0")+"s"));yield return new WaitForSecondsRealtime(.25f);}
+        }
+        /// <summary>One line of fixture state, so an intermittent failure can be traced to what the world did.</summary>
+        static string FixtureState(string label)
+        {
+            var game=GameManager.Instance;var player=game?game.Player:null;
+            if(!player)return "MIA_SMOKE_STATE "+label+": no player, state="+(game?game.State.ToString():"none");
+            int alive=0,dead=0;float nearest=float.MaxValue;
+            foreach(var vehicle in VehicleController.Active)
+            {
+                if(!vehicle||vehicle.IsPlayer||!vehicle.Damage)continue;
+                if(vehicle.Damage.IsDead){dead++;continue;}
+                alive++;nearest=Mathf.Min(nearest,Vector3.Distance(vehicle.transform.position,player.transform.position));
+            }
+            int weaponDrops=0;float nearestDrop=float.MaxValue;
+            foreach(var pickup in CombatPickup.Active)
+                if(pickup&&pickup.Kind==PickupKind.Weapon){weaponDrops++;nearestDrop=Mathf.Min(nearestDrop,Vector3.Distance(pickup.transform.position,player.transform.position));}
+            return "MIA_SMOKE_STATE "+label+": state="+game.State+" stage="+game.Mission.Stage+" health="+player.Damage.Health.ToString("0")+"/"+player.Damage.MaxHealth.ToString("0")
+                +" dead="+player.Damage.IsDead+" field="+(player.Weapons&&player.Weapons.FieldWeapon?player.Weapons.FieldWeapon.id+"x"+player.Weapons.FieldAmmo:"none")
+                +" hostiles alive="+alive+" dead="+dead+" nearest="+(alive>0?nearest.ToString("0"):"-")+"m weaponDrops="+weaponDrops+" nearestDrop="+(weaponDrops>0?nearestDrop.ToString("0"):"-")+"m"
+                +" pos="+player.transform.position.ToString("0")+" generated="+(GeneratedWorld.Active!=null);
+        }
         void QuietMissionHostiles()
         {
             foreach (var vehicle in VehicleController.Active)
