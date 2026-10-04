@@ -88,6 +88,19 @@ namespace MadeInArizona
                     escort.Damage.ApplyDamage(40, escort.transform.position, arena);
                     escort.Damage.ApplyDamage(40, escort.transform.position, null, true);
                     check("escort ignores environment damage", Mathf.Approximately(escort.Damage.Health, full));
+                    escort.Damage.ApplyDamage(40, escort.transform.position, player.gameObject, true);
+                    check("escort ignores allied blast damage", Mathf.Approximately(escort.Damage.Health, full));
+                    // The enemy caused this canister to explode, but the blast itself is scenery damage.
+                    escort.Body.isKinematic = true;
+                    var canister = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    canister.name = "Handling regression explosive canister";
+                    canister.transform.SetParent(arena.transform);
+                    canister.transform.position = escort.transform.position + Vector3.right;
+                    var canisterDamage = canister.AddComponent<DestructionSystem>();
+                    canisterDamage.Configure(1, ExplosionKind.Propane, true, 0);
+                    canisterDamage.ApplyDamage(2, canister.transform.position, enemy.gameObject);
+                    yield return new WaitForSeconds(.15f);
+                    check("escort ignores hostile-triggered scenery blast", Mathf.Approximately(escort.Damage.Health, full));
                     escort.Damage.ApplyDamage(20, escort.transform.position, enemy.gameObject);
                     check("escort still takes hostile damage", escort.Damage.Health < full);
                     UnityEngine.Object.Destroy(escort.gameObject);

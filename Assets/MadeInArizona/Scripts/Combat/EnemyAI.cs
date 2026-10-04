@@ -30,6 +30,7 @@ namespace MadeInArizona
         public bool IsTelegraphingAttack => AttackTelegraph != EnemyAttackTelegraph.None && TelegraphRemaining > 0;
 
         VehicleController vehicle;
+        AttackWarningVisual sniperWarning;
         float phase, specialAt, primaryAt, primaryBurstUntil, stuckTime, hazardAt, telegraphFireAt, ramUntil;
         Vector3 avoidance, committedAim;
         float committedDistance;
@@ -292,6 +293,30 @@ namespace MadeInArizona
             telegraphFireAt = Time.time + warning;
             // Aim is locked at the warning start, so player movement produces a real dodge window.
             specialAt = telegraphFireAt + SpecialRecovery(attack);
+        }
+
+        void LateUpdate()
+        {
+            if (AttackTelegraph != EnemyAttackTelegraph.Sniper || !IsTelegraphingAttack ||
+                vehicle == null || vehicle.Damage == null || vehicle.Damage.IsDead ||
+                GameManager.Instance == null || !GameManager.Instance.IsPlaying)
+            {
+                if (sniperWarning) sniperWarning.HideSniper();
+                return;
+            }
+            if (!sniperWarning) sniperWarning = gameObject.AddComponent<AttackWarningVisual>();
+            Vector3 muzzle = transform.position + Vector3.up * .85f + committedAim * 2.5f;
+            Vector3 end = muzzle + committedAim * 105f;
+            int count = Physics.RaycastNonAlloc(muzzle, committedAim, hits, 105f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = hits[i];
+                if (!hit.collider || hit.collider.transform.IsChildOf(transform)) continue;
+                if (hit.distance < nearest) { nearest = hit.distance; end = hit.point; }
+            }
+            sniperWarning.ShowSniper(muzzle, end, TelegraphRemaining, .9f);
         }
 
         void FireCommittedAttack(bool clearShot)

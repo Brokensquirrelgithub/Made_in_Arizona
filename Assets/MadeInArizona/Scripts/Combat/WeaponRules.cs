@@ -5,12 +5,12 @@ namespace MadeInArizona
     /// <summary>Loadout and drop rules are keyed by weapon ID so authored weapon assets can still tune damage.</summary>
     public static class WeaponRules
     {
-        /// <summary>Scrap weapons bought in the garage: ten core sandbox roles, then ten oddball hybrids.</summary>
+        /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
             "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "torch", "railgun", "aircannon",
-            "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry" };
+            "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
-        static readonly string[] Oddballs = { "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry" };
+        static readonly string[] Oddballs = { "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
         public static bool GarageWeapon(string id) => System.Array.IndexOf(Garage, id) >= 0;
         public static bool Oddball(string id) => System.Array.IndexOf(Oddballs, id) >= 0;
@@ -38,6 +38,7 @@ namespace MadeInArizona
                 case "deathray": return 360;
                 case "shopvac": return 380;
                 case "sentry": return 400;
+                case "scattermortar": return 360;
                 default: return 0;
             }
         }
@@ -52,7 +53,7 @@ namespace MadeInArizona
                 case "railgun": case "crossbow": case "harpoon": return "sniper";
                 case "aircannon": case "firecracker": return "boomstick";
                 case "sprinkler": return "grenade";
-                case "shopvac": case "bowling": return "mortar";
+                case "shopvac": case "bowling": case "scattermortar": return "mortar";
                 case "pinata": return "invoice";
                 case "boomerang": return "shredder";
                 case "gokart": return "mines";
@@ -78,6 +79,7 @@ namespace MadeInArizona
                 case "gokart": return new Vector2Int(3, 6);       // seeking go-kart bombs
                 case "mortar": return new Vector2Int(3, 6);
                 case "cluster": return new Vector2Int(3, 6);
+                case "scattermortar": return new Vector2Int(4, 8);
                 default: return new Vector2Int(0, 0);
             }
         }
@@ -91,7 +93,7 @@ namespace MadeInArizona
         {
             if (faction == EnemyFaction.CourtesyCompliance)
             {
-                if (archetype == 3 || archetype == 7) return Random.value < .28f ? "mortar" : "grenade";
+                if (archetype == 3 || archetype == 7) return Random.value < .18f ? "scattermortar" : Random.value < .28f ? "mortar" : "grenade";
                 return archetype == 1 || archetype == 4 ? (Random.value < .6f ? "grenade" : "gokart") : "gokart";
             }
             if (faction == EnemyFaction.RoadScavengers)

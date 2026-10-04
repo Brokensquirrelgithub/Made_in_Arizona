@@ -30,7 +30,7 @@ namespace MadeInArizona
         bool ended, midwaySaid, finalStand, collecting;
         GameObject marker;
         VehicleController escort, suspect, boss;
-        const float EscortSpeedMultiplier=3;
+        const float EscortSpeedMultiplier=3, EscortHealthMultiplier=2.5f;
         readonly List<GameObject> cacheMarkers=new List<GameObject>();
         readonly List<Vector3> cachePositions=new List<Vector3>();
         GameManager Game { get { return GameManager.Instance; } }
@@ -107,13 +107,13 @@ namespace MadeInArizona
                     if(escort)
                     {
                         // Three times the van's former 50 km/h pace, with the power to reach it.
-                        escort.Damage.Repair(10000);escort.Stats.maxSpeed=50*EscortSpeedMultiplier;escort.Stats.horsepower*=.65f*EscortSpeedMultiplier;escort.Stats.torque*=EscortSpeedMultiplier;
+                        escort.Stats.maxSpeed=50*EscortSpeedMultiplier;escort.Stats.horsepower*=.65f*EscortSpeedMultiplier;escort.Stats.torque*=EscortSpeedMultiplier;
                         // The van turns round rather than reversing, and follows the roads (never up a cliff) to each drop.
                         escort.AutoReverse=false;
                         var ai=escort.GetComponent<EnemyAI>();
                         if(ai)
                         {
-                            ai.IsFriendly=true;escort.Damage.ApplyHealthTuning();ai.UseDestination=true;ai.FollowRoads=true;ai.Destination=Point(0);
+                            ai.IsFriendly=true;escort.Damage.SetDurabilityMultiplier(EscortHealthMultiplier);ai.UseDestination=true;ai.FollowRoads=true;ai.Destination=Point(0);
                             ai.PlanRoute();Quaternion facing=Quaternion.LookRotation(ai.RouteHeading(),Vector3.up);
                             escort.transform.rotation=facing;escort.Body.rotation=facing;
                         }

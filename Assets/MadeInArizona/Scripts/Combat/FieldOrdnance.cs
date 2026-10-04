@@ -56,6 +56,44 @@ namespace MadeInArizona
             }
             if (shell.bounces > 0) shell.expiresAt += 1.2f;
             shell.armedAt = Time.time + .12f;
+            // Only large, slow hostile shells get a ground warning. Fast rockets and small
+            // bomblets keep their own readable projectile trails without covering the map.
+            if (owner && !owner.FriendlyToPlayer && weapon.blastRadius >= 8f &&
+                (weapon.id == "mortar" || weapon.id == "grenade") &&
+                PredictGroundImpact(origin, shell.velocity, out Vector3 landing, out float predictedFlightTime))
+                shell.gameObject.AddComponent<AttackWarningVisual>().BeginImpact(landing, weapon.blastRadius, predictedFlightTime);
+        }
+        static bool PredictGroundImpact(Vector3 origin, Vector3 initialVelocity, out Vector3 landing, out float flightTime)
+        {
+            var candidates = new RaycastHit[16];
+            Vector3 point = origin, velocity = initialVelocity;
+            flightTime = 0;
+            for (int stepIndex = 0; stepIndex < 65; stepIndex++)
+            {
+                const float interval = .08f;
+                Vector3 step = velocity * interval;
+                int count = Physics.SphereCastNonAlloc(point, .22f, step.normalized, candidates, step.magnitude,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                float nearest = float.MaxValue; Vector3 hitPoint = Vector3.zero;
+                if (flightTime >= .12f)
+                    for (int i = 0; i < count; i++)
+                    {
+                        var hit = candidates[i];
+                        if (!hit.collider || hit.collider.GetComponentInParent<VehicleController>()) continue;
+                        if (hit.distance < nearest) { nearest = hit.distance; hitPoint = hit.point; }
+                    }
+                if (nearest < float.MaxValue)
+                {
+                    flightTime += interval * Mathf.Clamp01(nearest / Mathf.Max(.001f, step.magnitude));
+                    landing = hitPoint;
+                    return true;
+                }
+                point += step;
+                velocity += Vector3.down * 32f * interval;
+                flightTime += interval;
+            }
+            landing = point;
+            return false;
         }
         public static Vector3 PredictLandingPoint(VehicleController target, Vector3 origin, WeaponDefinition weapon)
         {
@@ -130,11 +168,11 @@ namespace MadeInArizona
             charge.transform.localScale = new Vector3(.18f, .32f, .18f);
         }
         /// <summary>A small bouncing charge thrown out by a cluster payload.</summary>
-        public static void Bomblet(VehicleController owner, Vector3 point, Vector3 velocity, float damage, float radius, Color color)
+        public static void Bomblet(VehicleController owner, Vector3 point, Vector3 velocity, float damage, float radius, Color color, float fuse = 2.2f, int bounces = 1)
         {
             var bomb = Create("Bomblet", point, color, owner, PrimitiveType.Sphere);
             bomb.mode = Mode.Bomblet; bomb.damage = damage; bomb.radius = radius; bomb.velocity = velocity;
-            bomb.armedAt = Time.time + .15f; bomb.expiresAt = Time.time + 2.2f; bomb.bounces = 1;
+            bomb.armedAt = Time.time + .15f; bomb.expiresAt = Time.time + fuse; bomb.bounces = bounces;
             bomb.transform.localScale = Vector3.one * .3f;
         }
         /// <summary>Bowling-ball cannon: a heavy ball that rolls along the ground through every hostile car in its lane.</summary>

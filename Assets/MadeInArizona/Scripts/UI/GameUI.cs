@@ -121,7 +121,12 @@ namespace MadeInArizona
             var previous = GUI.color; GUI.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color; GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture); GUI.color = previous;
         }
         void Text(float x, float y, float w, float h, string text, int size = 18, Color? color = null, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
-        { GUI.Label(new Rect(x, y, w, h), text, Style(size, color ?? Cream, bold, anchor)); }
+        {
+            var rect = new Rect(x, y, w, h);
+            var shadow = Style(size, new Color(0, 0, 0, .42f), bold, anchor);
+            GUI.Label(new Rect(x + 1, y + 1, w, h), text, shadow);
+            GUI.Label(rect, text, Style(size, color ?? Cream, bold, anchor));
+        }
         bool Button(float x, float y, float w, float h, string text, bool accent = false, bool enabled = true, int size = 16)
         {
             var rect = new Rect(x, y, w, h);
@@ -394,9 +399,13 @@ namespace MadeInArizona
             Bar(weaponsX + 232, height - 34, 186, 4, 1 - p.Weapons.FieldCooldown, Orange);
             var nearbyWeapon = CombatPickup.NearbyWeapon(p);
             if (nearbyWeapon)
-                Text(410, height - 180, 530, 27, p.Weapons.FieldWeapon ?
-                    (padControls ? "Y" : "F") + " SWAP FOR " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
-                    "DRIVE OVER " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() + " TO EQUIP", 16, Lime, true);
+            {
+                Rect(weaponsX, height - 191, 430, 42, new Color(.04f, .07f, .08f, .92f));
+                Rect(weaponsX, height - 191, 4, 42, Orange);
+                Text(weaponsX + 14, height - 185, 400, 30, p.Weapons.FieldWeapon ?
+                    (padControls ? "Y" : "F") + "  SWAP  •  " + nearbyWeapon.Weapon.displayName.ToUpperInvariant() :
+                    "PICK UP  •  " + nearbyWeapon.Weapon.displayName.ToUpperInvariant(), 17, Cream, true, TextAnchor.MiddleLeft);
+            }
             // Backing panel: the control hints were unreadable over pale sand.
             Rect(weaponsX, height - 142, 430, 28, new Color(Ink.r, Ink.g, Ink.b, .85f));
             Text(weaponsX + 12, height - 142, 418, 28, padControls ? "RB BOOST    B DRIFT    Y SWAP" : "SHIFT BOOST    SPACE DRIFT    F SWAP", 12, Cream, true, TextAnchor.MiddleLeft);
@@ -429,14 +438,20 @@ namespace MadeInArizona
             if(!Camera.main || !game.Player || game.State!=GameState.Playing)return;
             foreach(var pickup in CombatPickup.Active)
             {
-                if(!pickup || (pickup.transform.position-game.Player.transform.position).sqrMagnitude>6400)continue;
+                if(!pickup || pickup.IsMagnetized || (pickup.transform.position-game.Player.transform.position).sqrMagnitude>6400)continue;
                 var view=Camera.main.WorldToViewportPoint(pickup.transform.position+Vector3.up*1.1f);
                 if(view.z<=0||view.x<0||view.x>1||view.y<0||view.y>1)continue;
                 var point=ScreenPoint(pickup.transform.position+Vector3.up*1.1f);
                 string label=pickup.Kind==PickupKind.Weapon ? pickup.Weapon.displayName.ToUpperInvariant()+"  "+pickup.Amount :
                     pickup.Kind==PickupKind.Health ? "+HEALTH" : pickup.Kind==PickupKind.Nitro ? "+NITRO" : "+SCRAP";
                 Color color=pickup.Kind==PickupKind.Health?Lime:pickup.Kind==PickupKind.Nitro?Blue:pickup.Kind==PickupKind.Scrap?Orange:Cream;
-                Text(point.x-82,point.y-10,164,24,label,12,color,true,TextAnchor.MiddleCenter);
+                if (pickup.Kind == PickupKind.Weapon)
+                {
+                    Rect(point.x - 99, point.y - 13, 198, 30, new Color(.04f, .07f, .08f, .87f));
+                    Rect(point.x - 99, point.y - 13, 3, 30, Orange);
+                    Text(point.x - 90, point.y - 10, 180, 24, label, 13, color, true, TextAnchor.MiddleCenter);
+                }
+                else Text(point.x-82,point.y-10,164,24,label,12,color,true,TextAnchor.MiddleCenter);
             }
             string[] names={"FLANKER","TECHNICAL","RAMMER","SNIPER","ROCKET CARRIER","JUNK BOMB","HEAVY","COMMAND"};
             foreach(var vehicle in VehicleController.Active) {
@@ -450,9 +465,6 @@ namespace MadeInArizona
                 if(!ai.IsFriendly)Text(point.x-110,point.y-43,220,16,FactionRules.Name(ai.Faction),9,color,true,TextAnchor.MiddleCenter);
                 Text(point.x-80,point.y-28,160,20,ai.IsFriendly?"ESCORT":names[Mathf.Clamp(ai.Archetype,0,7)],10,color,true,TextAnchor.MiddleCenter);
                 if(ai.IsTelegraphingAttack) {
-                    var start=ScreenPoint(vehicle.transform.position+Vector3.up*.6f);
-                    var end=ScreenPoint(vehicle.transform.position+ai.TelegraphDirection*35+Vector3.up*.6f);
-                    CombatLine(start,end,2,Orange);
                     Text(point.x-110,point.y+20,220,25,ai.AttackTelegraph.ToString().ToUpperInvariant()+"  "+ai.TelegraphRemaining.ToString("0.0")+"s",13,Orange,true,TextAnchor.MiddleCenter);
                 }
             }

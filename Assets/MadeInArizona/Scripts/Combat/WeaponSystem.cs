@@ -127,6 +127,26 @@ namespace MadeInArizona
                     for (int i = -1; i <= 1; i++)
                         ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(i * 8, Vector3.up) * aimDirection, weapon.speed, damage, weapon.blastRadius, source, color, ExplosionKind.Rocket, 2.6f);
                     break;
+                case "scattermortar":
+                    // Independent shells in a forward fan. Lower near arcs hit the ground first; no target assist.
+                    Vector3 forward = Vector3.ProjectOnPlane(aimDirection, Vector3.up).normalized;
+                    if (forward.sqrMagnitude < .01f) forward = owner.transform.forward;
+                    for (int i = 0; i < 9; i++)
+                    {
+                        // Permute distance across lanes so near and far impacts fill the whole fan.
+                        float reach = ((i * 5 + 3) % 9) / 8f;
+                        float angle = (i - 4) * 7.5f + Random.Range(-2f, 2f);
+                        Vector3 shot = Quaternion.AngleAxis(angle, Vector3.up) * forward;
+                        Vector3 velocity = shot * Mathf.Lerp(15f, 37f, reach) + Vector3.up * Mathf.Lerp(10f, 19f, reach);
+                        FieldOrdnance.Bomblet(owner, muzzle + shot * .7f, velocity, damage, weapon.blastRadius,
+                            color, 3f, 0);
+                    }
+                    break;
+                case "invoice":
+                    float bazookaRadius = weapon.blastRadius * 1.2f * (owner.IsPlayer ? WorldExploration.PlayerRocketRadiusMultiplier() : 1f);
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, bazookaRadius, source, color,
+                        ExplosionKind.Rocket, 1.5f, new ShotFx { coneBlast = true, castRadius = .198f });
+                    break;
                 case "needler":
                     ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(Random.Range(-3f, 3f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.6f,
                         new ShotFx { homing = AcquireTarget(aimDirection, 75, 32), turnRate = 170, effect = ShotEffect.Spine, power = 110, effectRadius = 4.5f });

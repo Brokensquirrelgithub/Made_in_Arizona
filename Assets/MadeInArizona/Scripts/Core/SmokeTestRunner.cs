@@ -165,7 +165,10 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(.35f);
             SaveSystem.Save(game.Save);
             Check("save round trip", SaveSystem.Load().money == game.Save.money && File.Exists(SaveSystem.Path));
+            bool devProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDevTest") >= 0;
+            bool isolatedProbe = devProbe || Array.IndexOf(Environment.GetCommandLineArgs(), "-miaHandlingTest") >= 0;
             game.StartMission(0);
+            if (isolatedProbe) QuietMissionHostiles();
             yield return new WaitForSecondsRealtime(1);
             Check("mission startup", game.State == GameState.Playing && game.Mission.Stage == 0);
             Check("destructible scene", FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None).Length > 30);
@@ -177,10 +180,11 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(.35f);
             var keyboard = InputSystem.AddDevice<Keyboard>();
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaHandlingTest")>=0) { yield return ReviewGround(); yield return VehicleHandlingRegression.Run(keyboard,Check); }
-            if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaDevTest")>=0)yield return TestDevTuning();
+            if(devProbe)yield return TestDevTuning();
             var begin = game.Player.transform.position;
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
-            yield return new WaitForSecondsRealtime(2.5f);
+            // Longer probes reverse away from the first mission objective so their movement check cannot spawn a wave.
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(isolatedProbe ? Key.S : Key.W));
+            yield return new WaitForSecondsRealtime(isolatedProbe ? 1.2f : 2.5f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             Check("keyboard driving moves rigidbody", Vector3.Distance(begin, game.Player.transform.position) > 2f);
             var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -240,6 +244,7 @@ namespace MadeInArizona
             // Advance via the same proximity, combat and interaction conditions used during normal play.
             Teleport(game.Mission.ObjectivePosition + new Vector3(0, 1, -5));
             yield return new WaitForSecondsRealtime(.3f);
+            if (isolatedProbe) QuietMissionHostiles();
             Check("recovery reaches junkyard phase", game.Mission.Stage >= 1);
             foreach (var enemy in new List<VehicleController>(VehicleController.Active)) if (enemy && !enemy.IsPlayer) enemy.Damage.ApplyDamage(10000, enemy.transform.position, game.Player.gameObject);
             yield return new WaitForSecondsRealtime(.5f);
@@ -868,7 +873,7 @@ namespace MadeInArizona
             var game=GameManager.Instance;var audio=AudioManager.Instance;
             var bank=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             Check("pack grenade explosion is packaged",bank&&bank.ordnanceExplosion&&bank.ordnanceExplosion.name=="GL_explosion");
-            Check("every weapon references imported recordings (own or borrowed)",ContentCatalog.Weapons.Length==29&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
+            Check("every weapon references imported recordings (own or borrowed)",ContentCatalog.Weapons.Length==30&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
             float oldVolume=game.Save.settings.weapons;game.Save.settings.weapons=1;
             foreach(var weapon in ContentCatalog.Weapons)
             {
@@ -936,7 +941,7 @@ namespace MadeInArizona
             game.StartMission(convoy);game.Pause();yield return null;
             var friend=Array.Find(FindObjectsByType<EnemyAI>(FindObjectsSortMode.None),ai=>ai.IsFriendly);
             var escort=friend?friend.GetComponent<VehicleController>():null;
-            Check("escort keeps full health while its hostile screen quadruples",escort&&Mathf.Approximately(escort.Damage.MaxHealth,Mathf.Max(60,escort.Stats.maxHealth))&&BalanceHostiles().Count==12);
+            Check("escort has reinforced health while its hostile screen quadruples",escort&&Mathf.Approximately(escort.Damage.MaxHealth,Mathf.Max(60,escort.Stats.maxHealth)*2.5f)&&BalanceHostiles().Count==12);
 
             int bossMission=Array.FindIndex(ContentCatalog.Missions,m=>m.mode==MissionMode.Boss);
             game.StartMission(bossMission);game.Pause();yield return null;
@@ -1169,6 +1174,18 @@ namespace MadeInArizona
             Destroy(texture);return total/Mathf.Max(1,count);
         }
         void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); }
+        void QuietMissionHostiles()
+        {
+            foreach (var vehicle in VehicleController.Active)
+            {
+                if (!vehicle || vehicle.IsPlayer) continue;
+                var ai = vehicle.GetComponent<EnemyAI>();
+                if (!ai || ai.IsFriendly) continue;
+                ai.enabled = false;
+                vehicle.SetAIInput(Vector2.zero, Vector3.forward, false);
+                vehicle.Body.isKinematic = true;
+            }
+        }
         void Capture(string name)
         {
             string directory = Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR");

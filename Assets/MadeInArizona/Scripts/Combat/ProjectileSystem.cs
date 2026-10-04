@@ -25,6 +25,7 @@ namespace MadeInArizona
         public bool detached;
         /// <summary>Leaves a flame trail (weed burner).</summary>
         public bool flame;
+        public bool coneBlast;
     }
 
     /// <summary>Shared, swept projectiles. Pool lifetime is scoped to the current world.</summary>
@@ -125,6 +126,7 @@ namespace MadeInArizona
             round.transform.SetPositionAndRotation(position, Quaternion.LookRotation(round.direction));
             bool heavy = radius > .1f || (fx != null && (fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback));
             round.transform.localScale = heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
+            if (fx != null && fx.coneBlast) round.transform.localScale *= 1.1f;
             block.SetColor("_BaseColor", color * 2.4f); block.SetColor("_Color", color * 2.4f); round.renderer.SetPropertyBlock(block);
             round.view.SetActive(true);
             round.trail.Clear();
@@ -249,7 +251,8 @@ namespace MadeInArizona
             var fx = round.fx;
             if (round.radius > .1f)
             {
-                ExplosionSystem.Detonate(hit.point, round.radius, round.damage, round.source, round.kind);
+                if (fx != null && fx.coneBlast) ExplosionSystem.DetonateCone(hit.point, round.direction, round.radius, round.damage, round.source);
+                else ExplosionSystem.Detonate(hit.point, round.radius, round.damage, round.source, round.kind);
                 Payload(round, hit.point);
                 return;
             }
@@ -328,7 +331,8 @@ namespace MadeInArizona
         {
             if (round.radius > .1f)
             {
-                ExplosionSystem.Detonate(round.position, round.radius, round.damage, round.source, round.kind);
+                if (round.fx != null && round.fx.coneBlast) ExplosionSystem.DetonateCone(round.position, round.direction, round.radius, round.damage, round.source);
+                else ExplosionSystem.Detonate(round.position, round.radius, round.damage, round.source, round.kind);
                 Payload(round, round.position);
             }
             else if (round.fx != null && round.fx.effect == ShotEffect.Pop) ExplosionSystem.Pop(round.position, round.fx.effectRadius, round.fx.power, round.source, round.color);

@@ -10,17 +10,21 @@ namespace MadeInArizona
     /// <summary>World-scoped effect pools with a bounded chain-reaction queue and quality-dependent budgets.</summary>
     public sealed class ExplosionSystem : MonoBehaviour
     {
-        struct Blast { public Vector3 point; public float radius, damage; public GameObject source; public ExplosionKind kind; }
+        struct Blast { public Vector3 point, direction; public float radius, damage; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
         sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float born, until; public Vector3 scale; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
         sealed class Burn { public Vector3 point;public Color flame;public float until,radius,next;public Light light; }
+        sealed class GroundFire { public GameObject view; public ParticleSystem[] particles; public float until, scale; }
         readonly List<Burn> burns=new List<Burn>();
+        readonly List<GroundFire> groundFires = new List<GroundFire>();
+        readonly Stack<GroundFire> groundFirePool = new Stack<GroundFire>();
         readonly List<Light> burnLights=new List<Light>();
         sealed class Scorch { public Transform t; public Renderer renderer; public float born, fadeAt, until; public Color color; public Vector3 scale; }
         static ExplosionSystem instance;
         readonly Queue<Blast> queued = new Queue<Blast>();
         readonly Collider[] overlaps = new Collider[384];
+        readonly RaycastHit[] groundHits = new RaycastHit[24];
         readonly HashSet<VehicleDamage> damagedVehicles = new HashSet<VehicleDamage>();
         readonly HashSet<DestructionSystem> damagedProps = new HashSet<DestructionSystem>();
         readonly HashSet<Rigidbody> pushed = new HashSet<Rigidbody>();
@@ -31,6 +35,7 @@ namespace MadeInArizona
         readonly List<Wave> waves = new List<Wave>();
         readonly List<Scorch> scorches = new List<Scorch>();
         ParticleSystem fire, smoke, sparks, tireSmoke;
+        GameObject groundFirePrefab;
         Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, waveMaterial, scorchMaterial, tireSmokeMaterial;
         Texture2D softTexture, scorchTexture;
         MaterialPropertyBlock block;
@@ -114,6 +119,8 @@ namespace MadeInArizona
             // HDR flame values deliberately clear the post-process bloom threshold during a blast.
             fireMaterial=SixWayMaterial("Fireball",20,3.8f);
             fire = Bank("Six-way fluid fireballs", 100 + quality * 100, 1.15f, false);
+            groundFirePrefab = Resources.Load<GameObject>("VFX/ExplosionGroundFire");
+            if (!groundFirePrefab) Debug.LogWarning("Explosion ground fire prefab is missing from Resources/VFX.");
             smoke = Bank("Six-way rolling smoke", 200 + quality * 200, 1.6f, true);
             sparks = Bank("Incandescent fragments", 2000 + quality * 2200, .15f, false);
             // Tyre smoke has its own budget, so a long burnout never starves explosions of smoke.
@@ -161,10 +168,19 @@ namespace MadeInArizona
             renderer.receiveShadows = false; renderer.sortMode = ParticleSystemSortMode.Distance;
             ps.Play(); return ps;
         }
-        public static void Detonate(Vector3 position, float radius, float damage, GameObject source, ExplosionKind kind)
+        public static void Detonate(Vector3 position, float radius, float damage, GameObject source, ExplosionKind kind, bool environmental = false)
         {
             var system = Get();
-            if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind });
+            if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind, environmental = environmental });
+        }
+        /// <summary>Forward 90-degree bazooka blast. Radius is measured from the impact to the cone tip.</summary>
+        public static void DetonateCone(Vector3 position, Vector3 direction, float radius, float damage, GameObject source)
+        {
+            var system = Get();
+            direction.y = 0;
+            if (direction.sqrMagnitude < .01f) direction = Vector3.forward;
+            if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, direction = direction.normalized,
+                radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = ExplosionKind.Rocket, cone = true });
         }
         /// <summary>
         /// A small, immediate blast (firecracker pellets): sparks, a puff of flame and explosive damage to every car
@@ -236,6 +252,21 @@ namespace MadeInArizona
                     if(quality==3)Emit(sparks,p,new Vector3(Random.Range(-1f,1f),3,Random.Range(-1f,1f)),new Color(2,1,.2f),.06f,2);
                 }
             }
+            for (int i = groundFires.Count - 1; i >= 0; i--)
+            {
+                var groundFire = groundFires[i];
+                if (Time.time >= groundFire.until)
+                {
+                    foreach (var particle in groundFire.particles)
+                        particle.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+                    groundFire.view.SetActive(false);
+                    groundFires.RemoveAt(i);
+                    groundFirePool.Push(groundFire);
+                    continue;
+                }
+                groundFire.view.transform.localScale = Vector3.one * groundFire.scale *
+                    Mathf.Clamp01((groundFire.until - Time.time) * 2.5f);
+            }
             int count = Mathf.Min(12, queued.Count);
             // New chain reactions wait until the next frame, making the propagation readable.
             for (int i = 0; i < count; i++) Perform(queued.Dequeue());
@@ -281,6 +312,7 @@ namespace MadeInArizona
         void Perform(Blast blast)
         {
             float radius = blast.radius;
+            float visualRadius = blast.cone ? radius * .3f : radius;
             Color flame = new Color(1.6f, .56f, .08f, .9f);
             Color dust = new Color(.35f, .27f, .2f, .58f);
             float fireScale = 1, smokeScale = 1, sparkScale = 1, upward = 1;
@@ -302,14 +334,14 @@ namespace MadeInArizona
             int sparkCount = Mathf.RoundToInt((12 + radius * 5) * multiplier * sparkScale);
             for (int i = 0; i < fireCount; i++)
             {
-                Vector3 velocity = Random.insideUnitSphere * radius * .32f;
+                Vector3 velocity = Random.insideUnitSphere * visualRadius * .32f;
                 velocity.y = Mathf.Abs(velocity.y) * upward + 1;
-                Emit(fire, blast.point + Random.insideUnitSphere * radius * .13f, velocity, Color.Lerp(flame, new Color(2, 1.7f, .6f), Random.value * .45f), Random.Range(.8f, 1.2f) * radius * 1.6f, Random.Range(1.6f, 2.7f));
+                Emit(fire, blast.point + Random.insideUnitSphere * visualRadius * .13f, velocity, Color.Lerp(flame, new Color(2, 1.7f, .6f), Random.value * .45f), Random.Range(.8f, 1.2f) * visualRadius * 1.6f, Random.Range(1.6f, 2.7f));
             }
             for (int i = 0; i < smokeCount; i++)
             {
-                Vector3 velocity = Random.insideUnitSphere * radius * .24f; velocity.y = Mathf.Abs(velocity.y) + .8f;
-                Emit(smoke, blast.point + Random.insideUnitSphere, velocity, Color.Lerp(dust, new Color(.24f, .23f, .21f, .92f), Random.value), Random.Range(.85f, 1.5f) * radius, Random.Range(3.5f, 5.5f + quality * .5f));
+                Vector3 velocity = Random.insideUnitSphere * visualRadius * .24f; velocity.y = Mathf.Abs(velocity.y) + .8f;
+                Emit(smoke, blast.point + Random.insideUnitSphere, velocity, Color.Lerp(dust, new Color(.24f, .23f, .21f, .92f), Random.value), Random.Range(.85f, 1.5f) * visualRadius, Random.Range(3.5f, 5.5f + quality * .5f));
             }
             for (int i = 0; i < sparkCount; i++)
             {
@@ -319,10 +351,32 @@ namespace MadeInArizona
             AtmosphereSystem.Heat(blast.point,radius*.75f,quality==3?7:4);
             bool fuel=blast.kind==ExplosionKind.Gasoline||blast.kind==ExplosionKind.FuelTank||blast.kind==ExplosionKind.Vehicle||blast.kind==ExplosionKind.Massive;
             if(fuel && quality>0 && burns.Count<(quality==3?32:12)) burns.Add(new Burn{point=blast.point,flame=flame,radius=Mathf.Min(radius,8),until=Time.time+3+quality*2,light=BurnLight(blast.point,radius)});
-            MakeFlash(blast.point + Vector3.up * 2, radius, flame);
+            if (blast.kind != ExplosionKind.Electrical)
+            {
+                if (radius >= 4f)
+                {
+                    float angle = Random.Range(0f, Mathf.PI * 2f);
+                    Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius * .6f;
+                    StartGroundFire(blast.point + offset, radius, fuel);
+                    StartGroundFire(blast.point - offset, radius, fuel);
+                }
+                else StartGroundFire(blast.point, radius, fuel);
+            }
+            MakeFlash(blast.point + Vector3.up * 2, blast.cone ? radius * .45f : radius, flame);
             // Expanding dust and refraction replace the neon-ring blast outline.
-            Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*.7f);
-            MakeScorch(blast.point, radius * .5f);
+            Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*(blast.cone ? .22f : .7f));
+            if (blast.cone)
+            {
+                // Trace both edges and the centre so the damaging footprint reads from the overhead camera.
+                for (int row = 1; row <= 5; row++) for (int lane = -2; lane <= 2; lane++)
+                {
+                    float reach = radius * row / 5f;
+                    Vector3 ray = Quaternion.AngleAxis(lane * 22.5f, Vector3.up) * blast.direction;
+                    Vector3 at = blast.point + ray * reach + Vector3.up * .35f;
+                    Burst(at, lane == 0 ? new Color(1, .38f, .08f, .8f) : new Color(.65f, .43f, .22f, .7f), 3, 1.4f + row * .4f);
+                }
+            }
+            MakeScorch(blast.point, radius * (blast.cone ? .18f : .5f));
             Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
             AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
@@ -343,6 +397,11 @@ namespace MadeInArizona
                 // Their overlap is already confirmed; use bounds for the distance estimate.
                 Vector3 point = collider is MeshCollider meshCollider&&!meshCollider.convex
                     ? collider.bounds.ClosestPoint(blast.point) : collider.ClosestPoint(blast.point);
+                if (blast.cone)
+                {
+                    Vector3 toward = point - blast.point; toward.y = 0;
+                    if (toward.sqrMagnitude > .04f && Vector3.Dot(toward.normalized, blast.direction) < .7071068f) continue;
+                }
                 float falloff = Mathf.Lerp(.15f, 1, 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / radius));
                 var weakpoint = collider.GetComponentInParent<BossWeakPoint>();
                 if (weakpoint != null && damagedPoints.Add(weakpoint)) weakpoint.ApplyDamage(blast.damage * falloff * .6f, point, blast.source, true);
@@ -350,13 +409,63 @@ namespace MadeInArizona
                 if (vehicle != null && damagedVehicles.Add(vehicle))
                 {
                     float self = blast.source != null && vehicle.gameObject == blast.source ? .18f : 1;
-                    vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source, true);
+                    vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source, true, blast.environmental);
                 }
                 var prop = collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source, BlastPush(prop, blast.point, falloff));
                 var body = collider.attachedRigidbody;
                 if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390, blast.point, radius, radius * .18f, ForceMode.Impulse);
             }
+        }
+        void StartGroundFire(Vector3 point, float radius, bool fuel)
+        {
+            int limit = quality == 0 ? 4 : quality == 1 ? 8 : quality == 2 ? 12 : 18;
+            if (!groundFirePrefab || groundFires.Count >= limit) return;
+            float height = Mathf.Max(5f, radius + 2f);
+            Vector3 origin = point + Vector3.up * height;
+            int count = Physics.RaycastNonAlloc(origin, Vector3.down, groundHits, height * 2f + 8f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            Vector3 ground = point;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = groundHits[i];
+                if (!hit.collider || hit.normal.y < .35f || hit.collider.GetComponentInParent<VehicleController>()) continue;
+                if (hit.distance < nearest) { nearest = hit.distance; ground = hit.point; }
+            }
+            GroundFire effect;
+            if (groundFirePool.Count > 0) effect = groundFirePool.Pop();
+            else
+            {
+                var view = Instantiate(groundFirePrefab, transform);
+                view.name = "Pooled Vefects explosion ground fire";
+                foreach (var audio in view.GetComponentsInChildren<AudioSource>(true))
+                {
+                    audio.Stop(); audio.playOnAwake = false; audio.enabled = false;
+                }
+                foreach (var child in view.GetComponentsInChildren<Transform>(true))
+                    if (child.name == "Distortion" || child.name == "Light") child.gameObject.SetActive(false);
+                var particles = view.GetComponentsInChildren<ParticleSystem>();
+                foreach (var particle in particles)
+                {
+                    var lights = particle.lights; lights.enabled = false;
+                    if (particle.name == "Fire Quad")
+                        particle.GetComponent<ParticleSystemRenderer>().renderMode = ParticleSystemRenderMode.Billboard;
+                }
+                effect = new GroundFire { view = view, particles = particles };
+            }
+            effect.scale = Mathf.Clamp(radius * .18f, .55f, 1.5f);
+            effect.view.transform.SetPositionAndRotation(ground + Vector3.up * effect.scale * .85f,
+                Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up));
+            effect.view.transform.localScale = Vector3.one * effect.scale;
+            effect.view.SetActive(true);
+            foreach (var particle in effect.particles)
+            {
+                particle.Clear(false);
+                particle.Play(false);
+            }
+            effect.until = Time.time + (fuel ? 2.8f : Mathf.Clamp(2.15f + radius * .04f, 2.2f, 2.8f));
+            groundFires.Add(effect);
         }
         public static void ScatterDebris(Vector3 point, float force, int count, Color color) { Get().Scatter(point, force, count, color, Vector3.zero); }
         /// <summary>Debris thrown by a hit: <paramref name="push"/> (m/s) carries the pieces along a shot, away from a blast or with a car.</summary>

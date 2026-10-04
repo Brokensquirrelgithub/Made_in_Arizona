@@ -9,8 +9,8 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
-        AudioSource whine,road,wind,heartbeat,nitro,radioSource,uiSource;
+        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        AudioSource whine,road,wind,heartbeat,nitro,drift,radioSource,uiSource;
         // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
         AudioSource[] engineOn,engineOff,engineBOn,engineBOff;
         struct EngineShape
@@ -48,12 +48,12 @@ namespace MadeInArizona
                 engineBOn[i].timeSamples=engineOn[i].timeSamples;engineBOff[i].timeSamples=engineOff[i].timeSamples;
             }
             hurts=new AudioClip[3];for(int i=0;i<hurts.Length;i++)hurts[i]=Keep(AudioSynthesis.Hurt(i));heartbeat=Loop(AudioSynthesis.Heartbeat(),20);
-            whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
+            whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);drift=Loop(AudioSynthesis.DriftScrub(),95);
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));repair=Keep(AudioSynthesis.Repair());objective=Keep(AudioSynthesis.ObjectiveChime());
-            hitMarkers=new AudioClip[3];for(int i=0;i<hitMarkers.Length;i++)hitMarkers[i]=Keep(AudioSynthesis.HitMarker(i));killConfirm=Keep(AudioSynthesis.KillConfirm());
+            hitMarkers=new AudioClip[3];for(int i=0;i<hitMarkers.Length;i++)hitMarkers[i]=Keep(AudioSynthesis.HitMarker(i));killConfirm=Keep(AudioSynthesis.KillConfirm());weaponPickup=Keep(AudioSynthesis.WeaponPickup());
             CombatFeedback.HitConfirmed+=PlayHitMarker;CombatFeedback.KillConfirmed+=PlayKillConfirm;
             uiSource=gameObject.AddComponent<AudioSource>();radioSource=gameObject.AddComponent<AudioSource>();uiSource.spatialBlend=0;radioSource.spatialBlend=0;
             pool=new AudioSource[28];
@@ -115,14 +115,19 @@ namespace MadeInArizona
                 road.pitch=.6f+player.SpeedKph/80;
                 float rough=WorldBuilder.SurfaceAt(player.transform.position)==SurfaceKind.Asphalt?.12f:.36f;
                 road.volume=active?Settings.environment*(Mathf.Clamp01(player.SpeedKph/80)*rough+player.DriftAmount*.13f)*duck:0;
+                var tyres = player.GetComponent<TireEffects>();
+                float scrub = active && tyres && tyres.IsSkidding ? Mathf.Clamp01(player.SideSlip * 1.2f + player.WheelSpin * .5f) : 0;
+                drift.volume = Mathf.MoveTowards(drift.volume, Settings.environment * scrub * .42f * duck, Time.unscaledDeltaTime * 3);
+                drift.pitch = pavedScrub(player) ? 1.15f : .82f;
                 if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain*tuning.exhaustPopLevel,1+rpm*.3f,75);}
                 lastThrottle=load;
             }
-            else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;}
+            else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;drift.volume=0;}
             UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
             AudioListener.volume=OutputVolume(Settings.master);
         }
+        static bool pavedScrub(VehicleController player) => player.Surface == SurfaceKind.Asphalt || player.Surface == SurfaceKind.Oil;
         /// <summary>
         /// Equal-power crossfade between the neighbouring RPM layers (in log-frequency, as pitch is heard) and
         /// between on-load and overrun loops. Each layer is only pitch-shifted around its recorded rate.
@@ -230,6 +235,7 @@ namespace MadeInArizona
         /// <summary>Objective progress: checkpoints passed and optional objectives completed.</summary>
         public void PlayObjective(){if(Settings==null||!uiSource||!objective)return;uiSource.PlayOneShot(objective,Mathf.Clamp01(Settings.environment*.45f));}
         public void PlayUI(){if(Settings==null||!uiSource)return;uiSource.PlayOneShot(ui,Settings.environment*.5f);}
+        public void PlayWeaponPickup(){if(Settings==null||!uiSource||!weaponPickup)return;uiSource.PlayOneShot(weaponPickup,Mathf.Clamp01(Settings.weapons*.72f));}
         public void PlayRadio(){if(Settings==null||!radioSource)return;radioSource.PlayOneShot(radio,Settings.dialogue*.32f);}
         public void SetCombat(bool enabled){if(music)music.SetCombat(enabled);}
         /// <summary>Player hit confirmation (2D, like a shooter hitmarker). Rate limited so rapid fire ticks, not buzzes.</summary>
@@ -237,7 +243,7 @@ namespace MadeInArizona
         {
             if(Settings==null||!uiSource||hitMarkers==null||!CombatFeedback.LastHitByPlayer||Time.unscaledTime<hitAt)return;
             hitAt=Time.unscaledTime+.05f;
-            uiSource.PlayOneShot(hitMarkers[hitCursor++%hitMarkers.Length],Mathf.Clamp01(Settings.weapons*Mathf.Lerp(.4f,.65f,Mathf.Clamp01(damage/40))));
+            uiSource.PlayOneShot(hitMarkers[hitCursor++%hitMarkers.Length],Mathf.Clamp01(Settings.weapons*Mathf.Lerp(.58f,.86f,Mathf.Clamp01(damage/40))));
         }
         void PlayKillConfirm(Vector3 point)
         {

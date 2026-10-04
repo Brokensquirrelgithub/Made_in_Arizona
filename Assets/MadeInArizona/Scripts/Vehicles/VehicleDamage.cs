@@ -13,7 +13,7 @@ namespace MadeInArizona
         public float Wheels { get; private set; } = 1;
         public float Suspension { get; private set; } = 1;
         VehicleController vehicle;
-        float smokeAt, baseHealth;
+        float smokeAt, baseHealth, durabilityMultiplier = 1;
         public float LastDamageTime { get; private set; } = float.NegativeInfinity;
         /// <summary>When hull health was last restored, and by how much, for the heal tell.</summary>
         public float LastRepairTime { get; private set; } = float.NegativeInfinity;
@@ -25,14 +25,19 @@ namespace MadeInArizona
 
         public void Initialize(VehicleController owner, float health)
         {
-            vehicle = owner; baseHealth=health; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false;
+            vehicle = owner; baseHealth=health; durabilityMultiplier=1; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false;
             Engine = Radiator = Transmission = Wheels = Suspension = 1;
+        }
+        public void SetDurabilityMultiplier(float multiplier)
+        {
+            durabilityMultiplier=Mathf.Max(1,multiplier);
+            ApplyHealthTuning();
         }
         public void ApplyHealthTuning()
         {
             if(vehicle==null||IsDead)return;
             float fraction=Health/Mathf.Max(1,MaxHealth);
-            MaxHealth=Mathf.Max(1,baseHealth*HealthMultiplier);
+            MaxHealth=Mathf.Max(1,baseHealth*HealthMultiplier*durabilityMultiplier);
             Health=MaxHealth*fraction;
         }
         float HealthMultiplier
@@ -45,16 +50,16 @@ namespace MadeInArizona
             }
         }
         /// <summary>
-        /// Friendly fire: rounds, rams and burns never hurt a vehicle on the attacker's own side (hostile crews on each
-        /// other, or the player and the escort). Explosions hurt everyone, so pass <paramref name="explosive"/> for blasts.
+        /// Friendly fire: rounds, rams and burns never hurt a vehicle on the attacker's own side. Explosions can hurt
+        /// allies except the escort, which only takes direct hostile attacks. Environmental blasts carry their own flag.
         /// </summary>
-        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false)
+        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false, bool environmental = false)
         {
             if (IsDead || amount <= 0 || vehicle == null) return;
             var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
+            // Escort health is a mission objective. Scenery, wrecks, self damage and allied splash never deplete it.
+            if (!vehicle.IsPlayer && vehicle.FriendlyToPlayer && (environmental || !attacker || attacker.FriendlyToPlayer)) return;
             if (!explosive && attacker && attacker != vehicle && VehicleController.Allied(attacker, vehicle)) return;
-            // Escorts only suffer hostile attacks: walls, rocks, trees, terrain and explosions no vehicle set off never wear them down.
-            if (!vehicle.IsPlayer && vehicle.FriendlyToPlayer && (attacker == null || attacker == vehicle)) return;
             if (vehicle.IsPlayer && GameManager.Instance != null && GameManager.Instance.Save != null)
             {
                 int difficulty = GameManager.Instance.Save.settings.difficulty;
@@ -172,7 +177,7 @@ namespace MadeInArizona
                 GameManager.Instance?.Mission?.RegisterKill();
                 CombatPickup.DropFromEnemy(vehicle, ai != null ? ai.Archetype : 0, ai != null ? ai.Faction : EnemyFaction.Sunsprawl);
             }
-            ExplosionSystem.Detonate(transform.position + Vector3.up * .9f, vehicle.IsPlayer ? 7 : 6, 65, source != null ? source : gameObject, ExplosionKind.Vehicle);
+            ExplosionSystem.Detonate(transform.position + Vector3.up * .9f, vehicle.IsPlayer ? 7 : 6, 65, source != null ? source : gameObject, ExplosionKind.Vehicle, environmental:true);
             if (vehicle.Visual != null)
             {
                 foreach (var renderer in vehicle.Visual.GetComponentsInChildren<Renderer>())

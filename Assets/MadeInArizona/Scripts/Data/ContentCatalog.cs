@@ -205,7 +205,9 @@ namespace MadeInArizona
                     "DEPLOYABLE TURRET","Keeps shooting while you drive elsewhere; two at a time.","Stationary; slow to redeploy; light damage per nail."),
                 // ---- Field replacement for the old Lien Mines ----
                 Weapon(28,"gokart","Dynamite Go-Kart","A toy go-kart with a car-alarm brain and a bundle of dynamite. It hunts down the nearest hostile and hugs it.",140,.8f,24,7,new Color(1,.62f,.1f),
-                    "SEEKING BOMB","Chases targets around cover and corners.","Slow; can be outrun or blocked by walls; three a drop.")
+                    "SEEKING BOMB","Chases targets around cover and corners.","Slow; can be outrun or blocked by walls; three a drop."),
+                Weapon(29,"scattermortar","Scatter Mortar","Nine mini charges arc out in a shotgun fan. The near shells burst first, then the far shells rain down.",24,.65f,36,2.6f,new Color(1,.57f,.18f),
+                    "ARCING SHOTGUN","A directed shower of explosives blankets near and far ground.","No tracking; moving targets can slip between the bursts.")
             };
         }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color,string role,string strength,string weakness)

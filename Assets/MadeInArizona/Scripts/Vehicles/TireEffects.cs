@@ -14,6 +14,7 @@ namespace MadeInArizona
     {
         sealed class Track { public bool active; public Vector3 left, right, center; public float along, strength, patchAt; }
         VehicleController vehicle;
+        public bool IsSkidding { get; private set; }
         readonly Track[] tracks = { new Track(), new Track(), new Track(), new Track() };
         readonly float[] smokeCarry = new float[4], gritCarry = new float[4];
         const float TyreWidth = .27f, MinSegment = .3f, EffectRange = 90;
@@ -27,6 +28,7 @@ namespace MadeInArizona
 
         void FixedUpdate()
         {
+            IsSkidding = false;
             var game = GameManager.Instance;
             if (!vehicle || vehicle.Body == null || vehicle.Damage == null || vehicle.Damage.IsDead || vehicle.Body.isKinematic || !game || !game.IsPlaying) { EndAll(); return; }
             if (CameraController.HasFocus && (vehicle.Body.position - CameraController.FocusPoint).sqrMagnitude > EffectRange * EffectRange) { EndAll(); return; }
@@ -64,6 +66,7 @@ namespace MadeInArizona
                 strength = Mathf.Max(soft && rear && pointVelocity.sqrMagnitude > 1 ? .26f : 0, slip > .2f ? Mathf.Lerp(.3f, .6f, slip) : 0);
             }
             if (strength <= 0 || tuning.skidMarks <= 0) { End(i); return; }
+            if (slip > .2f && pointVelocity.sqrMagnitude > 25f) IsSkidding = true;
             Vector3 heading = Vector3.ProjectOnPlane(vehicle.transform.forward, normal).normalized;
             Vector3 direction = pointVelocity.sqrMagnitude > .3f ? pointVelocity.normalized : heading;
             // A tyre sliding sideways scrubs a patch as long as its contact, not just as wide as its tread.

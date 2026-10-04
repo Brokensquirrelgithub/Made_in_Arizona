@@ -171,6 +171,32 @@ namespace MadeInArizona
             }
             return Clip("Original • hit marker "+variant,samples);
         }
+        /// <summary>Two metallic rack clicks and a rising confirmation tone for a field weapon pickup.</summary>
+        public static AudioClip WeaponPickup()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .32f)]; uint seed = 6173;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, n = Noise(ref seed);
+                float rack = n * (Mathf.Exp(-t * 125) + (t > .075f ? Mathf.Exp(-(t - .075f) * 120) : 0)) * .36f;
+                float tone = (Wave((610 + t * 1450) * t) + Wave((920 + t * 1200) * t) * .4f) * Mathf.Exp(-t * 13) * .38f;
+                samples[i] = SoftLimit(rack + tone) * Mathf.Min(1, t * 3000);
+            }
+            return Clip("Original • weapon pickup", samples);
+        }
+        /// <summary>Seamless, gritty tyre scrub loop, shaped for a sustained slide.</summary>
+        public static AudioClip DriftScrub()
+        {
+            var samples = new float[Rate]; uint seed = 4497; float filtered = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, n = Noise(ref seed);
+                filtered = Mathf.Lerp(filtered, n, .12f);
+                float seam = Mathf.Sin(Mathf.PI * t); seam = Mathf.Clamp01(seam * 12);
+                samples[i] = SoftLimit(((n - filtered) * .43f + Wave(750 * t + .7f * Wave(13 * t)) * .16f) * seam);
+            }
+            return Clip("Original • tyre scrub", samples);
+        }
         /// <summary>
         /// Kill confirmation: a heavy punched thunk with a short crunch, topped by a bright two-note ding, so a kill
         /// lands clearly above the ordinary hit tick.

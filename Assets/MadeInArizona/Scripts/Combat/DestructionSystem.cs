@@ -98,7 +98,7 @@ namespace MadeInArizona
             if (Explosive)
             {
                 float radius = Kind == ExplosionKind.FuelTank ? 12 : Kind == ExplosionKind.Massive ? 22 : Kind == ExplosionKind.Propane ? 8 : Kind == ExplosionKind.Electrical ? 7 : 6;
-                ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind);
+                ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind, environmental:true);
             }
             if (!hostileCaused) GetComponent<WorldDiscovery>()?.OnDestroyed(source);
             Destroy(gameObject, .05f);

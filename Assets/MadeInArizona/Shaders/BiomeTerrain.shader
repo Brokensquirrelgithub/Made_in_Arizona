@@ -168,6 +168,22 @@ Shader "MadeInArizona/BiomeTerrain"
                     float foot=smoothstep(.1,.3,slope)*(1-smoothstep(.3,.5,slope));
                     albedo*=1-foot*.18*saturate(dot(i.n.xz,i.n.xz)*4);
                 }
+                // Grades above the car's 0.65 climb limit (normal.y < 0.84) use a dark,
+                // side-projected fractured face with bright horizontal seams. This begins at
+                // the actual traversal threshold, including slopes too shallow for cliffWeight.
+                float blockedGrade=smoothstep(.14,.17,slope);
+                UNITY_BRANCH if(blockedGrade>.001)
+                {
+                    float3 an=abs(normalize(i.n));float2 side=an.xz/max(an.x+an.z,.001);
+                    float3 faceX=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.zy*.18,13).rgb;
+                    float3 faceZ=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.xy*.18+.41,13).rgb;
+                    float grain=dot(faceX*side.x+faceZ*side.y,float3(.299,.587,.114));
+                    float strata=sin(i.world.y*4.2+Fbm(p*.12)*3.5);
+                    float seam=smoothstep(.58,.88,strata);
+                    float3 warningRock=lerp(float3(.105,.12,.13),float3(.27,.29,.27),saturate(grain*1.8));
+                    warningRock=lerp(warningRock,float3(.65,.47,.24),seam*.72);
+                    albedo=lerp(albedo,warningRock,blockedGrade*(.82+.18*_UseGroundTextures));
+                }
                 // River bed (vertex alpha: 1 dry, .5 waterline, 0 deepest): rounded wet gravel with silt drifts under the
                 // water, darkening and turning olive with depth, plus a darker wet band just above the waterline.
                 float wet=saturate((1-i.c.a)*2),underwater=saturate((.5-i.c.a)*2);

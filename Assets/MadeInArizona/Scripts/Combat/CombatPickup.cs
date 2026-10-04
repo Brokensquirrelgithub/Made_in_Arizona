@@ -16,14 +16,14 @@ namespace MadeInArizona
         public PickupKind Kind { get; private set; }
         public WeaponDefinition Weapon { get; private set; }
         public int Amount { get; private set; }
-        const float MagnetRadius = 14, MagnetCollect = 2.2f;
+        const float MagnetRadius = 18.2f, MagnetCollect = 2.86f;
         float availableAt, magnetSpeed;
         Vector3 basePosition;
         const float SupplyMagnetRadius = 12f;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
             if (!player) return null;
-            CombatPickup closest = null; float nearest = 16;
+            CombatPickup closest = null; float nearest = 27.04f;
             foreach (var pickup in active)
             {
                 if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.SameAsHeld(player)) continue;
@@ -36,8 +36,11 @@ namespace MadeInArizona
         {
             if (!vehicle || !GameManager.Instance || !GameManager.Instance.IsPlaying) return;
             bool boss = archetype == 7;
-            bool health = boss || Random.value < .8f;
-            bool nitro = boss || Random.value < .65f;
+            var player = GameManager.Instance.Player;
+            float healthNeed = player && player.Damage ? 1f - player.Damage.Health / Mathf.Max(1, player.Damage.MaxHealth) : .5f;
+            float nitroNeed = player ? 1f - player.BoostCharge : .5f;
+            bool health = boss || Random.value < Mathf.Clamp(.3f + .6f * healthNeed + .18f * (healthNeed - nitroNeed), .2f, .95f);
+            bool nitro = boss || Random.value < Mathf.Clamp(.3f + .6f * nitroNeed + .18f * (nitroNeed - healthNeed), .2f, .95f);
             bool scrap = boss || Random.value < .65f;
             Vector3 origin = vehicle.transform.position;
             if (health) Create(PickupKind.Health, origin + new Vector3(-2, 0, -1), null, boss ? 120 : 55);
@@ -102,7 +105,7 @@ namespace MadeInArizona
             {
                 if (equip) { player.Weapons.EquipField(Weapon, Amount); GameManager.Instance.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped"); }
                 else { player.Weapons.AddFieldAmmo(Amount); GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo); }
-                AudioManager.Instance?.PlayUI();
+                AudioManager.Instance?.PlayWeaponPickup();
                 Destroy(gameObject);
                 return true;
             }
@@ -111,6 +114,8 @@ namespace MadeInArizona
             return true;
         }
         void OnEnable() { if (!active.Contains(this)) active.Add(this); }
+        public bool IsMagnetized => magnetSpeed > 0 || (Kind != PickupKind.Weapon && GameManager.Instance && GameManager.Instance.Player &&
+            (transform.position - GameManager.Instance.Player.transform.position).sqrMagnitude < 20);
         void OnDisable() { active.Remove(this); }
         void OnDestroy() { var renderer = GetComponent<Renderer>(); if (renderer && renderer.sharedMaterial) Destroy(renderer.sharedMaterial); }
         void Update()
@@ -119,6 +124,10 @@ namespace MadeInArizona
             transform.Rotate(Vector3.up, 85 * Time.deltaTime);
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
+            // A full resource must stay on the ground. Otherwise its magnet holds an uncollectable
+            // pickup over the player's roof, with the world label following it indefinitely.
+            if (Kind == PickupKind.Health && game.Player.Damage.Health >= game.Player.Damage.MaxHealth) return;
+            if (Kind == PickupKind.Nitro && game.Player.BoostCharge >= .99f) return;
             if (IsAmmoFor(game.Player)) { MagnetToAmmo(game.Player); return; }
             if (ClaimsEmptySlot(game.Player)) { MagnetToAmmo(game.Player, true); return; }
             if (SameAsHeld(game.Player)) { magnetSpeed = 0; return; } // full: leave it for later
@@ -133,7 +142,7 @@ namespace MadeInArizona
                 transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
                 delta = transform.position - game.Player.transform.position; delta.y = 0;
             }
-            if (delta.sqrMagnitude > 13 || Mathf.Abs(transform.position.y - game.Player.transform.position.y) > 4) return;
+            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? 21.97f : 13f) || Mathf.Abs(transform.position.y - game.Player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)
             {
                 if (NearbyWeapon(game.Player) != this) return;
@@ -141,6 +150,8 @@ namespace MadeInArizona
                 if (current && (InputManager.Instance == null || !InputManager.Instance.SwapPressed)) return;
                 int oldAmmo = game.Player.Weapons.FieldAmmo;
                 game.Player.Weapons.EquipField(Weapon, Amount);
+                game.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped");
+                AudioManager.Instance?.PlayWeaponPickup();
                 if (current && oldAmmo > 0)
                 {
                     var discarded = Create(PickupKind.Weapon, game.Player.transform.position + game.Player.transform.right * 3.5f, current, oldAmmo);
