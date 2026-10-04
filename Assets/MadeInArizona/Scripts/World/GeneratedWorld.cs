@@ -13,7 +13,9 @@ namespace MadeInArizona
         public List<Vector3> Towns{get;private set;}=new List<Vector3>();
         public Texture2D MapTexture{get;private set;}
         public int Seed=>seed;
-        const int Chunks=8,Cells=48;
+        // Chunks scale with the map (8x8 at 1.6 km, 16x16 at 4.8 km) so terrain cells stay 4-6 m on every size.
+        const int Cells=48;int Chunks=8;
+        public const float MinSize=1600,MaxSize=4800;
         static readonly Vector2[] Outline={new Vector2(-.47f,.49f),new Vector2(.45f,.49f),new Vector2(.49f,.18f),new Vector2(.48f,-.48f),new Vector2(-.08f,-.48f),new Vector2(-.47f,-.18f),new Vector2(-.43f,.08f),new Vector2(-.50f,.12f)};
         // Normalised town sites inside the outline; the first MinTowns are always used. The south-east site comes early
         // so the southern third of the state has towns besides the starter town.
@@ -29,7 +31,7 @@ namespace MadeInArizona
 
         public void Configure(WorldGenConfig config,Transform parent)
         {
-            cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,800,3200);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
+            cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,MinSize,MaxSize);Chunks=Mathf.Clamp(Mathf.RoundToInt(4+size/400),8,16);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
             Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();BuildEcology();BuildMap();gameObject.AddComponent<RoadPatrolDirector>();
@@ -275,11 +277,11 @@ namespace MadeInArizona
         {
             float nx=x/size,nz=z/size;
             float broad=Noise(nx*3.1f+2,nz*3.1f)*.48f+Noise(nx*8.7f-2,nz*8.7f+7)*.18f;
-            float north=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.02f,.5f,nz));
-            float crags=Mathf.Pow(Noise(nx*19+5,nz*17-3),2.4f)*north;
+            // Crags follow the biomes (rugged plateau and Rim, smooth Sonoran floor), not a north-south ramp.
+            float crags=Mathf.Pow(Noise(nx*19+5,nz*17-3),2.4f)*Ruggedness(x,z);
             // Broad gentle grades read better at gameplay camera height. Elevation levels (and their occasional
-            // cliffs) replace the old mesa steps; see GeneratedWorldElevation.
-            return ((broad-.35f)*.65f+crags*.28f)*amp+LevelOffset(x,z);
+            // cliffs) replace the old mesa steps; see GeneratedWorldElevation. The San Francisco Peaks rise on top.
+            return ((broad-.35f)*.65f+crags*.28f)*amp+LevelOffset(x,z)+PeakOffset(x,z);
         }
         float Noise(float x,float y)=>Mathf.Clamp01(Mathf.PerlinNoise(x+(seed%10007)*.071f,y-(seed%9973)*.053f));public float RiverCenterX(float z)=>RiverX(z);float RiverX(float z)=>-size*.10f+Mathf.Sin(z/size*8.2f+SeedOffset(seed,.01,SinePeriod))*size*.055f+Mathf.Sin(z/size*21)*size*.018f;
         /// <summary>

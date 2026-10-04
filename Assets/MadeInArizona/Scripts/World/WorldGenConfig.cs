@@ -27,9 +27,10 @@ namespace MadeInArizona
         /// <summary>Validates external JSON before it can replace a live world.</summary>
         public bool Validate(out string error)
         {
-            if (size < 800f || size > 3200f || !Finite(size))
+            // Files from before 0.8 km maps were retired still load; the generator raises them to the 1.6 km minimum.
+            if (size < 800f || size > GeneratedWorld.MaxSize || !Finite(size))
             {
-                error = "size must be a finite value from 800 to 3200.";
+                error = "size must be a finite value up to 4800 (sizes under 1600 are generated at 1600).";
                 return false;
             }
 

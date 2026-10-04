@@ -56,6 +56,9 @@ namespace MadeInArizona
                 redRock = north * (1 - forest) * east,
                 plateau = north * (1 - forest) * (1 - east),
             };
+            // The San Francisco Peaks carry forest up their flanks, whichever side of the Rim they stand on.
+            float peak = PeakFactor(p);
+            if (peak > .01f) { float lift = peak * .9f; w.forest += lift * (w.sonoran + w.redRock + w.plateau); w.sonoran *= 1 - lift; w.redRock *= 1 - lift; w.plateau *= 1 - lift; }
             // Sedona: red rock spilling below the Rim.
             float pocket = (1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.025f, .065f, Vector2.Distance(new Vector2(wx, wz), SedonaPocket)))) * .85f;
             if (pocket > 0) { w.redRock += pocket * (w.sonoran + w.forest); w.sonoran *= 1 - pocket; w.forest *= 1 - pocket; }
@@ -90,6 +93,33 @@ namespace MadeInArizona
             return best;
         }
 
+        // The San Francisco Peaks: a broad volcanic cone north of Flagstaff, east of the river's range so it is never cut.
+        static readonly Vector2 PeaksSite = new Vector2(.05f, .26f);
+        const float PeaksSpread = .055f, PeaksRise = .45f; // spread in map widths; rise as a share of terrain height
+        /// <summary>0 away from the San Francisco Peaks, 1 at the summit (a Gaussian, so the slopes stay drivable).</summary>
+        public float PeakFactor(Vector3 p)
+        {
+            // At least 90 m of spread, so on small maps the cone stays broad and every slope stays drivable.
+            float spread = Mathf.Max(PeaksSpread, 90f / size), dx = p.x / size - PeaksSite.x, dz = p.z / size - PeaksSite.y;
+            return Mathf.Exp(-(dx * dx + dz * dz) / (2 * spread * spread));
+        }
+        public static float PeakAt(Vector3 p) => Active ? Active.PeakFactor(p) : 0;
+        /// <summary>
+        /// Height added by the peaks. The steepest grade of a Gaussian is 0.61 × rise / spread, about 0.2 on the default
+        /// map and 0.4 on the smallest: well under the 0.65 a car can climb.
+        /// </summary>
+        float PeakOffset(float x, float z) => PeakFactor(new Vector3(x, 0, z)) * amp * PeaksRise;
+        /// <summary>
+        /// How rugged the raw terrain is: the plateau and the Rim country are craggy, red rock somewhat less, and the
+        /// Sonoran floor stays smooth apart from a little relief.
+        /// </summary>
+        float Ruggedness(float x, float z)
+        {
+            var w = BiomeAt(new Vector3(x, 0, z));
+            // Small maps squeeze the same crag noise into a shorter distance, so its slopes steepen: scale it down there.
+            return (w.plateau * .7f + w.forest * .55f + w.redRock * .4f + w.sonoran * .1f) * Mathf.Sqrt(Mathf.Clamp01(size / 1600f));
+        }
+
         static float RimZ(float x)
         {
             if (x <= RimLine[0].x) return RimLine[0].y;
@@ -103,7 +133,10 @@ namespace MadeInArizona
         {
             var w = BiomeAt(p);
             Color sonoran = Color.Lerp(SonoranGround, new Color(.66f, .45f, .28f), Mathf.SmoothStep(0, 1, Noise(p.x / size * 6 + 41, p.z / size * 6 - 3)) * .6f);
-            return sonoran * w.sonoran + RedRockGround * w.redRock + ForestGround * w.forest + PlateauGround * w.plateau;
+            Color ground = sonoran * w.sonoran + RedRockGround * w.redRock + ForestGround * w.forest + PlateauGround * w.plateau;
+            // Snow on the summit of the peaks.
+            // Kept below white: the map brightens high ground and would blow a pure snow colour out to a glare.
+            return Color.Lerp(ground, new Color(.66f, .68f, .7f), Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.62f, .88f, PeakFactor(p))) * .7f);
         }
     }
 }

@@ -171,7 +171,7 @@ namespace MadeInArizona
             int tiltEvents = 0, stuckEvents = 0; float worstTilt = 0;
             foreach (int mapSeed in new[] { 173, 42 })
             {
-                game.StartCampaign(mapSeed, mapSeed == 42 ? 800 : 1600);
+                game.StartCampaign(mapSeed, 1600);
                 yield return new WaitUntil(() => game.State == GameState.Playing);
                 yield return new WaitForSecondsRealtime(1);
                 player = game.Player; wheels = (Transform[])typeof(VehicleController).GetField("wheels", Private).GetValue(player);

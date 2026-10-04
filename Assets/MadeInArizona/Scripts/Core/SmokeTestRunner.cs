@@ -322,7 +322,7 @@ namespace MadeInArizona
         IEnumerator TestMountainWorld()
         {
             var game=GameManager.Instance;
-            foreach(int mapSize in new[]{800,1600,3200})
+            foreach(int mapSize in new[]{1600,3200,4800})
             {
                 game.StartCampaign(173,mapSize);
                 yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active&&Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,mapSize));
@@ -332,7 +332,7 @@ namespace MadeInArizona
                     " boundary="+world.BoundaryRockCount+" rubble="+world.BaseRockCount+" barriers="+world.MountainBarrierCount+" issue="+(issue??"none"));
                 Check(mapSize+" m mountain ring and route placement",issue==null&&world.BoundaryRockCount>=80&&
                     world.MountainBarrierCount>=world.BoundaryRockCount-8&&world.BaseRockCount>=world.BoundaryRockCount/2);
-                Check(mapSize+" m retains interior impassable formations and cover",world.LandformCount>=(mapSize==800?5:8)&&world.CoverCount>=20);
+                Check(mapSize+" m retains interior impassable formations and cover",world.LandformCount>=8&&world.CoverCount>=20);
                 // Interior ridges may have car-sized passes; nothing built may clog them. (The boundary seal is in LandformIssue.)
                 var landformsRoot=world.transform.Find("Landforms and cover");int blocked=0;float narrowest=float.MaxValue;
                 for(int i=0;i<world.PassPoints.Count;i++)
@@ -453,7 +453,7 @@ namespace MadeInArizona
             Check("licensed ground textures and height maps linked",groundTextures&&groundTextures.Diffuse(1)&&groundTextures.Height(1));
             var nature=PandazoleNatureCatalog.Load();
             Check("Pandazole nature meshes and atlas packaged",nature&&nature.atlas&&nature.pines.Length>0&&nature.rocks.Length>0&&nature.grasses.Length>0);
-            Check("biome nature picks packaged (saguaros, desert trees, junipers, red-rock plants and stones)",nature&&nature.saguaros?.Length==5&&nature.desertTrees?.Length==3&&nature.junipers?.Length==2&&nature.redRockPlants?.Length==5&&nature.redRocks?.Length==16&&nature.cacti?.Length==19);
+            Check("biome nature picks packaged (saguaros, desert trees, junipers, red-rock plants and stones)",nature&&nature.saguaros?.Length==5&&nature.desertTrees?.Length==3&&nature.junipers?.Length==2&&nature.redRockPlants?.Length==5&&nature.redRocks?.Length==16&&nature.cacti?.Length==19&&nature.aspens?.Length==4&&nature.snowPines?.Length==4&&nature.agaves?.Length==1&&nature.deadTrees?.Length==1);
             yield return TestNatureModelReview();
             yield return TestPresentationControls();
             Check("Arizona outline excludes rectangular corners",GeneratedWorld.Contains(game.World.PlayerSpawn)&&!GeneratedWorld.Contains(new Vector3(-790,0,-790))&&world.MapTexture.GetPixel(0,0).a<.1f);
@@ -474,6 +474,7 @@ namespace MadeInArizona
             var old=GeneratedWorld.Active;
             File.WriteAllText(WorldConfigStore.Path,"{");float invalidDeadline=Time.realtimeSinceStartup+4;while(WorldConfigStore.LastError==null&&Time.realtimeSinceStartup<invalidDeadline)yield return null;
             Check("partial JSON retains playable last-valid world",GeneratedWorld.Active==old&&WorldConfigStore.LastError!=null);
+            // A retired 0.8 km size still loads (and generates at the 1.6 km minimum).
             var edited=new WorldGenConfig{seed=271,size=800};
             edited.pins.Add(new WorldPin{id="test-cache",label="Test relay cache",kind="salvage-tech",position=Vector3.zero});
             File.WriteAllText(WorldConfigStore.Path,JsonUtility.ToJson(edited,true));
@@ -481,6 +482,7 @@ namespace MadeInArizona
             while(GeneratedWorld.Active==old&&Time.realtimeSinceStartup<deadline)yield return null;
             yield return new WaitForSecondsRealtime(.7f);
             Check("valid JSON automatically regenerates changed seed",GeneratedWorld.Active&&GeneratedWorld.Active!=old&&GeneratedWorld.Active.Seed==271);
+            Check("a retired 0.8 km config loads at the 1.6 km minimum",GeneratedWorld.Active&&Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,GeneratedWorld.MinSize));
             Check("different seed changes terrain",Mathf.Abs(first-GeneratedWorld.HeightAt(new Vector3(170,0,210)))>.01f);
             var pin=GeneratedWorld.Active.Pins.Find(p=>p.id=="test-cache");
             Check("JSON authored location placed",pin!=null);
@@ -491,8 +493,8 @@ namespace MadeInArizona
             game.Save.collectibles.Add("world-material:271:alloy:test-a");game.Save.collectibles.Add("world-material:271:alloy:test-b");
             float enemyBase=ContentCatalog.Weapons[0].damage;
             Check("specialty material crafts player-only weapon upgrade",WorldExploration.TryCraft(0)&&WorldExploration.PlayerWeaponMultiplier(0)>1&&ContentCatalog.Weapons[0].damage==enemyBase&&WorldExploration.Alloy==0);
-            game.WorldConfig.size=3200;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
-            Check("maximum world size generates with bounded geometry",Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,3200)&&GeneratedWorld.Active.transform.Find("Chunked terrain").GetComponentsInChildren<MeshCollider>().Length<=64);
+            game.WorldConfig.size=GeneratedWorld.MaxSize;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
+            Check("maximum world size generates with bounded geometry",Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,GeneratedWorld.MaxSize)&&GeneratedWorld.Active.transform.Find("Chunked terrain").GetComponentsInChildren<MeshCollider>().Length<=256);
             game.WorldConfig.size=1600;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
             // Biomes follow Arizona: Sonoran south (the starter town), red rock north-east, plateau north-west, Rim forest between.
             var active=GeneratedWorld.Active;float span=active.WorldBounds.size.x;
@@ -502,6 +504,11 @@ namespace MadeInArizona
                 &&active.BiomeAt(new Vector3(-.3f*span,0,-.3f*span)).Dominant==Biome.Sonoran;
             bool allBiomes=active.FindBiomeSpot(Biome.Sonoran)!=null&&active.FindBiomeSpot(Biome.RedRock)!=null&&active.FindBiomeSpot(Biome.Forest)!=null&&active.FindBiomeSpot(Biome.Plateau)!=null;
             Check("biomes follow Arizona geography and all four appear",geography&&allBiomes);
+            // The San Francisco Peaks: a broad cone north of the Rim.
+            Vector3 peakSite=new Vector3(.05f*span,0,.26f*span);float summit=GeneratedWorld.HeightAt(peakSite),ring=0;
+            for(int k=0;k<8;k++){float a=k*Mathf.PI/4;ring+=GeneratedWorld.HeightAt(peakSite+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*span*.15f);}ring/=8;
+            Debug.Log("MIA_PEAKS: summit "+summit.ToString("0.0")+" m, surrounding ring "+ring.ToString("0.0")+" m");
+            Check("San Francisco Peaks rise above the surrounding country",summit-ring>12);
             // Inspect the biomes and river using camera-only targets, leaving physics untouched.
             var camera=CameraController.Instance;var target=camera.Target;var focus=new GameObject("World visual review");camera.Target=focus.transform;
             foreach(var biome in new[]{Biome.RedRock,Biome.Plateau,Biome.Sonoran})
@@ -514,6 +521,9 @@ namespace MadeInArizona
                     if(prop&&!prop.IsDestroyed&&(prop.transform.position-spot.Value).sqrMagnitude<60*60){names.TryGetValue(prop.name,out int n);names[prop.name]=n+1;}
                 Debug.Log("MIA_BIOME_PROPS "+biome+" (within 60 m): "+string.Join(", ",names.Select(pair=>pair.Key+" x"+pair.Value)));
             }
+            // The peaks' upper slopes (snowy pines on a pale summit).
+            Vector3 slope=peakSite+new Vector3(0,0,-span*.04f);slope.y=GeneratedWorld.HeightAt(slope);
+            focus.transform.position=slope;camera.Snap();yield return new WaitForSecondsRealtime(3f);Capture("23-biome-peaks");yield return new WaitForSecondsRealtime(.35f);
             for(int i=0;i<2;i++)
             {
                 Vector3 p=Vector3.zero;

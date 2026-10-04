@@ -28,7 +28,7 @@ namespace MadeInArizona
             worldSeed=GUI.TextField(new Rect(x+235,y+248,250,36),worldSeed,11);
             if(Button(x+505,y+248,170,36,"RANDOM SEED"))worldSeed=Random.Range(1,int.MaxValue).ToString();
             Text(x+25,y+308,180,25,"MAP WIDTH",15,Muted);
-            worldSize=GUI.HorizontalSlider(new Rect(x+235,y+311,320,26),worldSize,800,3200);
+            worldSize=GUI.HorizontalSlider(new Rect(x+235,y+311,320,26),Mathf.Max(worldSize,GeneratedWorld.MinSize),GeneratedWorld.MinSize,GeneratedWorld.MaxSize);
             Text(x+580,y+305,120,28,(worldSize/1000).ToString("0.0")+" km",19,Lime,true);
             Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);

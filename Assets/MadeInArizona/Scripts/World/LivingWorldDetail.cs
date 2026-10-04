@@ -152,7 +152,12 @@ namespace MadeInArizona
                     Vector3 grove=new Vector3((cx+.2f+.6f*CellHash(cx,cz,config.seed+17))*GroveCell,0,(cz+.2f+.6f*CellHash(cx,cz,config.seed+31))*GroveCell);
                     Vector3 pulled=Vector3.Lerp(world,grove,GrovePull);
                     if(GeneratedWorld.Active.SceneryClearance(pulled)>=3&&GeneratedWorld.Contains(pulled)&&!Steep(pulled)){pulled.y=GeneratedWorld.HeightAt(pulled);p=pulled-origin;}
-                    float h=Next(random,7,15);BreakableTree(root,p,h,true,random);Trees++;
+                    // Snow-laden conifers high on the San Francisco Peaks; elsewhere ponderosa with stands of aspen.
+                    float peak=GeneratedWorld.PeakAt(world);
+                    if(peak>.6f&&nature&&nature.snowPines!=null&&nature.snowPines.Length>0)BreakableTree(root,p,Next(random,6,12),true,random,nature.snowPines,"Breakable snowy pine");
+                    else if(Next(random,0,1)<.2f&&nature&&nature.aspens!=null&&nature.aspens.Length>0)BreakableTree(root,p,Next(random,7,12),false,random,nature.aspens,"Breakable aspen");
+                    else BreakableTree(root,p,Next(random,7,15),true,random);
+                    Trees++;
                     if(Next(random,0,1)<CompanionChance)
                     {
                         float angle=Next(random,0,Mathf.PI*2),gap=Next(random,3.2f,5.5f);Vector3 mate=origin+p+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*gap;
@@ -166,7 +171,7 @@ namespace MadeInArizona
                 {float h=Next(random,5,10);BreakableTree(root,p,h,false,random);Trees++;}
                 // Plateau woodland: scattered pinyon-juniper.
                 else if(density>0&&plateau&&patch>.52f&&i%3==0)
-                {float h=Next(random,3,6.5f);BreakableTree(root,p,h,true,random,nature?nature.junipers:null,"Breakable juniper",new Color(.3f,.4f,.34f));Trees++;}
+                {float h=Next(random,3,6.5f);BreakableTree(root,p,h,true,random,nature?nature.junipers:null,"Breakable juniper");Trees++;}
                 // Sonoran: saguaros among organ pipes, barrels and prickly pear, and the odd mesquite or palo verde.
                 else if(density>0&&sonoran&&i%5==0)
                 {
@@ -176,6 +181,12 @@ namespace MadeInArizona
                 }
                 else if(density>0&&sonoran&&patch>.6f&&i%4==0)
                 {float h=Next(random,4,7);BreakableTree(root,p,h,false,random,nature?nature.desertTrees:null,"Breakable mesquite");Trees++;}
+                // Agave on the desert floors and the plateau, batched like the bushes.
+                else if(density>0&&(red||plateau||sonoran)&&i%7==3&&nature&&nature.agaves!=null&&nature.agaves.Length>0)
+                {float h=Next(random,.6f,1.2f);mesh.Nature(nature.Pick(nature.agaves,random),p,h,random,Color.white);}
+                // Weathered dead snags in red rock and the Sonoran.
+                else if(density>0&&(red||sonoran)&&i%11==5&&patch<.4f&&nature&&nature.deadTrees!=null&&nature.deadTrees.Length>0)
+                {float h=Next(random,3,5.5f);BreakableTree(root,p,h,false,random,nature.deadTrees,"Breakable snag");Trees++;}
                 // Red sand: prickly pear and small barrels, otherwise little more than scattered brush.
                 else if(density>0&&red&&i%4==0)
                 {float h=Next(random,.8f,1.8f);BreakableCactus(root,p,h,random,nature?nature.redRockPlants:null,"Breakable prickly pear");}

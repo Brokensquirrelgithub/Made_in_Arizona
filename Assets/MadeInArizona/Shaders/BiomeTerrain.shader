@@ -160,7 +160,9 @@ Shader "MadeInArizona/BiomeTerrain"
                 photo=lerp(photo,photo*albedo/paletteLuma*.5+photo*.5,.4);
                 albedo=lerp(albedo,lerp(detailOnly,photo,.7),_UseGroundTextures);
                 // Warm the photo textures on red sand so the biome reads red on the ground, not only on the map.
-                albedo=lerp(albedo,albedo*float3(1.26,.8,.52),redSand*.85);
+                // Rebuilt from brightness as an orange-red: tinting the textures alone left them salmon-pink.
+                float sandLuma=dot(albedo,float3(.299,.587,.114));
+                albedo=lerp(albedo,sandLuma*float3(1.55,.8,.45),redSand*.75);
                 // Cliff walls: side-projected rock (no smearing down the face) with horizontal sandstone strata.
                 float cliffWeight=smoothstep(.22,.42,slope)*_UseGroundTextures*(1-_UseModelAlbedo);
                 UNITY_BRANCH if(cliffWeight>.001)

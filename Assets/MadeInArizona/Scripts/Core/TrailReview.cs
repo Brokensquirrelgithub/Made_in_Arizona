@@ -119,7 +119,7 @@ namespace MadeInArizona
         public static IEnumerator Reachability(Action<string, bool> check)
         {
             var game = GameManager.Instance;
-            var cases = new[] { (173, 1600f), (1, 1600f), (42, 800f), (7, 800f), (1234, 800f), (5, 1200f), (999, 2400f), (2024, 3200f), (77, 1600f), (31337, 800f), (88, 2000f), (600, 1000f) };
+            var cases = new[] { (173, 1600f), (1, 1600f), (42, 1600f), (7, 2000f), (1234, 2400f), (5, 1800f), (999, 3200f), (2024, 4800f), (77, 3600f), (31337, 1600f), (88, 4000f), (600, 2800f) };
             foreach (var (seed, mapSize) in cases)
             {
                 float t0 = Time.realtimeSinceStartup;
@@ -130,7 +130,7 @@ namespace MadeInArizona
                 check($"seed {seed} at {mapSize} m fully reachable", generated.UnreachableVertices == 0);
                 string landformIssue = generated.LandformIssue();
                 Debug.Log($"MIA_LANDFORMS seed={seed} size={mapSize} landforms={generated.LandformCount} cover={generated.CoverCount} issue={landformIssue ?? "none"}");
-                check($"seed {seed} at {mapSize} m landforms keep roads, objectives and routes open", landformIssue == null && generated.LandformCount <= GeneratedWorld.MaxLandforms);
+                check($"seed {seed} at {mapSize} m landforms keep roads, objectives and routes open", landformIssue == null && generated.LandformCount <= GeneratedWorld.MaxLandforms * Mathf.Clamp(mapSize * mapSize / (1600f * 1600f), 1, 4));
             }
         }
 

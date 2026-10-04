@@ -96,8 +96,8 @@ MonoBehaviour:
   - {fileID: 4300000, guid: 9a89f94d3913e264794bea39a4274c6b, type: 2}
   - {fileID: 4300000, guid: 9ff4125d13dcfef40bf8e96bb30e0614, type: 2}
   junipers:
-  - {fileID: 4300000, guid: cd757afc727b39e479b069c65d95cfbe, type: 2}
-  - {fileID: 4300000, guid: 78e3b133c337fbd41bbb092313e69cc2, type: 2}
+  - {fileID: 4300000, guid: f92aa6b1ba5ad7941a32bfc06a1fb57c, type: 2}
+  - {fileID: 4300000, guid: 329b1b0eac9446040a4640ec4cf41d97, type: 2}
   redRocks:
   - {fileID: 4300000, guid: 6bb5b7454c27d8f45ae660765a1237fd, type: 2}
   - {fileID: 4300000, guid: 51a484b503d12394fa6517170fb0a1cb, type: 2}
@@ -115,3 +115,17 @@ MonoBehaviour:
   - {fileID: 4300000, guid: 1f16b60516df13a4885567c7266b361b, type: 2}
   - {fileID: 4300000, guid: 7ee99f9c4d61cd34788eb6bf15e57f00, type: 2}
   - {fileID: 4300000, guid: 2ec27d4da6b5e5040964270b22b124c5, type: 2}
+  aspens:
+  - {fileID: 4300000, guid: f1887ecce2d86604b9bf164d9be0abea, type: 2}
+  - {fileID: 4300000, guid: 36d84bc7d3263184f8a2370981a63357, type: 2}
+  - {fileID: 4300000, guid: 76c995b95b2a81747b6faa89752faee5, type: 2}
+  - {fileID: 4300000, guid: 304bbae9bca4b7743b2935c45508251b, type: 2}
+  snowPines:
+  - {fileID: 4300000, guid: 75d6a21b5e96a274b9557d7a5f21fbb5, type: 2}
+  - {fileID: 4300000, guid: de7cd1326fc07804d9e06d46359d6ec0, type: 2}
+  - {fileID: 4300000, guid: edbd002c5e7eb97479bba2f5e8086f9b, type: 2}
+  - {fileID: 4300000, guid: 328f6c50bee893245bd0ec03dd8b32af, type: 2}
+  agaves:
+  - {fileID: 4300000, guid: 21176ef577b8a8346b7993d65b73e209, type: 2}
+  deadTrees:
+  - {fileID: 4300000, guid: c3736cc0e3991354ea8e11d22f40f388, type: 2}

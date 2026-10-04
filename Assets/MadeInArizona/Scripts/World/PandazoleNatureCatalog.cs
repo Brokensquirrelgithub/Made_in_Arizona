@@ -23,6 +23,15 @@ namespace MadeInArizona
         public Mesh[] junipers;
         /// <summary>Red rock: orange-brown sandstone stones (the pack's tinted SoftRock set).</summary>
         public Mesh[] redRocks;
+        /// <summary>Rim forest: white-trunked broadleaves (some in autumn gold) standing in for quaking aspen.</summary>
+        public Mesh[] aspens;
+        /// <summary>San Francisco Peaks: snow-laden conifers on the upper slopes.</summary>
+        public Mesh[] snowPines;
+        /// <summary>
+        /// From the Runemark and Tiny Teacup desert packs, with their colours baked into vertex colours (their own
+        /// materials are not the nature atlas): agave for the deserts and plateau, and bare dead snags.
+        /// </summary>
+        public Mesh[] agaves, deadTrees;
         /// <summary>
         /// Pack models built only from stacked boxes (Grass_07 and Grass_08 are four axis-aligned cubes each) read as
         /// placeholder geometry next to the rest of the ecology, so they are never scattered.
