@@ -31,4 +31,11 @@ MonoBehaviour:
   - {fileID: 175310, guid: bf07739386a93f443b373a919b97fbe7, type: 3}
   - {fileID: 146236, guid: 802bd3dc24c20394ca2037c1b9c882a0, type: 3}
   - {fileID: 118734, guid: a45f923de9555884cbe160883ce87a74, type: 3}
+  mountainRocks:
+  - {fileID: 3827549956472576141, guid: db21cd8e08e0814498a2711e0b6ed107, type: 3}
+  - {fileID: 4897530773524410830, guid: 3e30f20949fc3894aac5f48337c2d765, type: 3}
+  - {fileID: 2967063527888809702, guid: 99c4ddb9d4ff2244db6f3b6eaba79d42, type: 3}
+  - {fileID: 2318272937317203139, guid: b897b91def57a2940a0f0042d364c50d, type: 3}
+  - {fileID: 3908896426618710466, guid: 3d672b1b497d64e48aa47e37b86514bb, type: 3}
   useTerrainMaterial: 1
+  keepPackColours: 1

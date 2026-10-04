@@ -327,11 +327,36 @@ namespace MadeInArizona
                 yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active&&Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,mapSize));
                 var world=GeneratedWorld.Active;
                 string issue=world.LandformIssue();
-                Debug.Log("MIA_MOUNTAINS: size="+mapSize+" landforms="+world.LandformCount+" cover="+world.CoverCount+
+                Debug.Log("MIA_MOUNTAINS: size="+mapSize+" landforms="+world.LandformCount+" ridges="+world.RidgeCount+" cover="+world.CoverCount+
                     " boundary="+world.BoundaryRockCount+" rubble="+world.BaseRockCount+" barriers="+world.MountainBarrierCount+" issue="+(issue??"none"));
                 Check(mapSize+" m mountain ring and route placement",issue==null&&world.BoundaryRockCount>=80&&
                     world.MountainBarrierCount>=world.BoundaryRockCount-8&&world.BaseRockCount>=world.BoundaryRockCount/2);
                 Check(mapSize+" m retains interior impassable formations and cover",world.LandformCount>=(mapSize==800?5:8)&&world.CoverCount>=20);
+                // Interior ridges may have car-sized passes; nothing built may clog them. (The boundary seal is in LandformIssue.)
+                var landformsRoot=world.transform.Find("Landforms and cover");int blocked=0;float narrowest=float.MaxValue;
+                for(int i=0;i<world.PassPoints.Count;i++)
+                {
+                    narrowest=Mathf.Min(narrowest,world.PassWidths[i]);
+                    Vector3 mid=world.PassPoints[i];mid.y=GeneratedWorld.HeightAt(mid)+1.6f;
+                    foreach(var hit in Physics.OverlapBox(mid,new Vector3(2,1.2f,2),Quaternion.identity,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+                        if(landformsRoot&&hit.transform.IsChildOf(landformsRoot)){blocked++;Debug.Log("MIA_PASS_BLOCKED: "+mid.ToString("0")+" by "+hit.name);break;}
+                }
+                Debug.Log("MIA_PASSES: size="+mapSize+" passes="+world.PassPoints.Count+" narrowest="+(world.PassPoints.Count>0?narrowest.ToString("0.0"):"-")+" blocked="+blocked);
+                if(mapSize>=1600)Check(mapSize+" m ridges have open, car-sized passes",world.PassPoints.Count>0&&narrowest>=7.9f&&blocked==0);
+                // Natural arches: open ground under the span, and rock overhead.
+                int drivable=0;
+                foreach(var arch in world.ArchPoints)
+                {
+                    Vector3 under=arch;under.y=GeneratedWorld.HeightAt(under);
+                    bool clear=true;
+                    foreach(var hit in Physics.OverlapBox(under+Vector3.up*1.6f,new Vector3(1.5f,1.2f,1.5f),Quaternion.identity,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+                        if(landformsRoot&&hit.transform.IsChildOf(landformsRoot)){clear=false;Debug.Log("MIA_ARCH_BLOCKED: "+under.ToString("0")+" by "+hit.name);break;}
+                    bool roofed=Physics.Raycast(under+Vector3.up*3,Vector3.up,out var roof,60,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore)&&landformsRoot&&roof.transform.IsChildOf(landformsRoot);
+                    if(clear&&roofed)drivable++;else Debug.Log("MIA_ARCH: "+under.ToString("0")+" clear="+clear+" roofed="+roofed);
+                }
+                Debug.Log("MIA_ARCHES: size="+mapSize+" arches="+world.ArchPoints.Count+" drivable="+drivable);
+                if(mapSize>=1600)Check(mapSize+" m has natural arches a car can drive under",world.ArchPoints.Count>0&&drivable==world.ArchPoints.Count);
+                else Check(mapSize+" m arches (if any) can be driven under",drivable==world.ArchPoints.Count);
                 if(mapSize!=1600)continue;
                 var camera=CameraController.Instance;var oldTarget=camera.Target;
                 var focus=new GameObject("Mountain review focus");var ui=game.GetComponent<GameUI>();bool oldUi=ui.enabled;ui.enabled=false;
@@ -342,8 +367,52 @@ namespace MadeInArizona
                 focus.transform.position=new Vector3(0,0,world.WorldBounds.size.x*.47f);
                 focus.transform.position=new Vector3(0,GeneratedWorld.HeightAt(focus.transform.position),focus.transform.position.z);
                 camera.Snap();yield return new WaitForSecondsRealtime(.3f);SceneLuminance("mountain-boundary");
+                // Mountain chains with the car parked alongside for scale, at gameplay zoom and pulled back.
+                var tuning=DevTuning.Current;float oldZoom=tuning.cameraZoom;
+                for(int i=0;i<world.LandformEntries;i++)
+                {
+                    Vector3 chain=world.LandformCenter(i,out var chainKind,out float chainReach);
+                    if(chainKind!=GeneratedWorld.LandformKind.Cliff)continue;
+                    Vector3 away=new Vector3(-chain.x,0,-chain.z).normalized;
+                    yield return ReviewBeside(chain+away*30,"mountain-chain-interior",camera,tuning);
+                    break;
+                }
+                if(world.PassPoints.Count>0)yield return ReviewBeside(world.PassPoints[0],"mountain-pass",camera,tuning);
+                if(world.ArchPoints.Count>0)yield return ReviewBeside(world.ArchPoints[0],"monument-arch",camera,tuning);
+                foreach(var wanted in new[]{GeneratedWorld.LandformKind.Mesa,GeneratedWorld.LandformKind.Butte})
+                    for(int i=0;i<world.LandformEntries;i++)
+                    {
+                        Vector3 at=world.LandformCenter(i,out var formation,out float formationReach);
+                        if(formation!=wanted)continue;
+                        Vector3 away=new Vector3(-at.x,0,-at.z).normalized;
+                        yield return ReviewBeside(world.ClearOfObstacles(at+away*(formationReach+10),4),"monument-"+wanted.ToString().ToLowerInvariant(),camera,tuning);
+                        break;
+                    }
+                Transform edgeRock=null;
+                foreach(var t in world.GetComponentsInChildren<Transform>())
+                    if(t.name=="Mountain rock"&&t.parent&&t.parent.name=="Boundary mountain chain"&&(!edgeRock||t.position.z>edgeRock.position.z))edgeRock=t;
+                if(edgeRock)
+                {
+                    yield return ReviewBeside(edgeRock.position+new Vector3(-edgeRock.position.x,0,-edgeRock.position.z).normalized*36,"mountain-chain-boundary",camera,tuning);
+                    // Straight down over the corner: where terrain and rim actually are, without perspective ambiguity.
+                    var top=new GameObject("Top-down review camera").AddComponent<Camera>();
+                    top.orthographic=true;top.orthographicSize=90;top.nearClipPlane=1;top.farClipPlane=1000;
+                    top.transform.SetPositionAndRotation(new Vector3(edgeRock.position.x,400,edgeRock.position.z-40),Quaternion.Euler(90,0,0));
+                    SceneLuminance("mountain-chain-boundary-topdown",top);Destroy(top.gameObject);
+                }
+                tuning.cameraZoom=oldZoom;
                 camera.Target=oldTarget;camera.Snap();ui.enabled=oldUi;game.Resume();Destroy(focus);
             }
+        }
+        /// <summary>Parks the player at <paramref name="spot"/> and captures it at gameplay zoom and at the widest zoom.</summary>
+        IEnumerator ReviewBeside(Vector3 spot,string name,CameraController camera,DevTuning tuning)
+        {
+            spot.y=GeneratedWorld.HeightAt(spot)+1;Teleport(spot);
+            var player=GameManager.Instance.Player;camera.Target=player.transform;
+            float zoom=tuning.cameraZoom;
+            camera.Snap();yield return new WaitForSecondsRealtime(.3f);SceneLuminance(name+"-gameplay");
+            tuning.cameraZoom=40;camera.Snap();yield return new WaitForSecondsRealtime(.3f);SceneLuminance(name+"-wide");
+            tuning.cameraZoom=zoom;
         }
         IEnumerator TestMinimapCapture()
         {
@@ -1279,13 +1348,13 @@ namespace MadeInArizona
             for(int i=0;i<20;i++){float h=GeneratedWorld.HeightAt(new Vector3(-220+i*22,0,-250+i*24));low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
             Check("generated terrain keeps gentle finite relief",WorldGenConfig.Finite(low)&&WorldGenConfig.Finite(high)&&high-low>3&&high-low<game.WorldConfig.terrainHeight);
         }
-        static float SceneLuminance(string name)
+        static float SceneLuminance(string name,Camera view=null)
         {
             // Hidden Windows players can skip the swapchain. Request a real URP render,
             // including post-processing, into a texture instead of reading that backbuffer.
             const int width=1600,height=900;
             var target=RenderTexture.GetTemporary(width,height,24,RenderTextureFormat.ARGB32,RenderTextureReadWrite.sRGB);
-            UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(Camera.main,
+            UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(view?view:Camera.main,
                 new UnityEngine.Rendering.RenderPipeline.StandardRequest{destination=target});
             var previous=RenderTexture.active;RenderTexture.active=target;
             var texture=new Texture2D(width,height,TextureFormat.RGB24,false);

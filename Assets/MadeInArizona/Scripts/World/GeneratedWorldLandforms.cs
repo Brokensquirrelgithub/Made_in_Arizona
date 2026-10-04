@@ -15,8 +15,10 @@ namespace MadeInArizona
     /// </summary>
     public sealed partial class GeneratedWorld
     {
-        public enum LandformKind { Mesa, Butte, Cliff, Boulders, Cover }
-        sealed class Landform { public LandformKind kind; public Vector2 center, inward; public float reach, height, yaw; public int first, count; public bool boundary; }
+        public enum LandformKind { Mesa, Butte, Cliff, Boulders, Cover, Arch }
+        // Butte variants: a plain butte, a mitten (butte plus a spire thumb) or a cluster of needle spires.
+        enum ButteVariant { Plain, Mitten, Spires }
+        sealed class Landform { public LandformKind kind; public Vector2 center, inward; public float reach, height, yaw; public int first, count, variant, shapeSeed; public bool boundary; public Vector4 arch; public float archDepth; }
         struct Footprint { public Vector2 center; public float radius, height; public bool cover; public int nextSpine; }
 
         /// <summary>A conservative first pass: 15-25 landforms on the default 1.6 km map, proportionally fewer on small maps.</summary>
@@ -30,12 +32,27 @@ namespace MadeInArizona
         readonly List<Footprint> footprints = new List<Footprint>();
         readonly Dictionary<long, List<int>> footprintCells = new Dictionary<long, List<int>>();
         Material landformMaterial;
+        readonly Dictionary<Material, Material> packRockMaterials = new Dictionary<Material, Material>();
+        bool keepPackColours;
+        Material monumentMaterial;
+        // Per circle of the shape being planned (parallel to it): height scale, and whether the spine breaks before it (a pass).
+        readonly List<float> shapeHeight = new List<float>();
+        readonly List<bool> shapePass = new List<bool>();
+        int shapeVariant; Vector4 shapeArch; float shapeArchDepth; // set by ShapeLandform for the landform being planned
 
         public int LandformCount { get; private set; }
         public int CoverCount { get; private set; }
         public int BoundaryRockCount { get; private set; }
         public int MountainBarrierCount { get; private set; }
         public int BaseRockCount { get; private set; }
+        /// <summary>Interior mountain ridges (cliff chains) among the landforms.</summary>
+        public int RidgeCount { get; private set; }
+        /// <summary>Planned passes through interior ridges: midpoint of each opening (ground level 0) and its width.</summary>
+        public readonly List<Vector3> PassPoints = new List<Vector3>();
+        public readonly List<float> PassWidths = new List<float>();
+        /// <summary>The ground under each natural arch's span, where a car drives through.</summary>
+        public readonly List<Vector3> ArchPoints = new List<Vector3>();
+        readonly List<Landform> arches = new List<Landform>();
         /// <summary>Landforms and cover rocks in placement order (landforms first), for review captures and tests.</summary>
         public int LandformEntries => landforms.Count;
         public Vector3 LandformCenter(int index, out LandformKind kind, out float reach)
@@ -107,6 +124,21 @@ namespace MadeInArizona
             return best;
         }
         public float ObstacleDistance(Vector3 p) => ObstacleDistance(XZ(p));
+        /// <summary>
+        /// Distance from a point to the drive-through under the nearest arch (the strip between its legs, the arch's depth
+        /// plus 3 m either side); negative inside. Scenery and cover rocks keep out; navigation treats it as open ground.
+        /// </summary>
+        public float ArchSpanDistance(Vector2 p)
+        {
+            float best = ObstacleQueryReach;
+            foreach (var arch in arches)
+            {
+                Vector2 a = footprints[arch.first].center, b = footprints[arch.first + 1].center, span = b - a;
+                float t = Mathf.Clamp01(Vector2.Dot(p - a, span) / Mathf.Max(.001f, span.sqrMagnitude));
+                best = Mathf.Min(best, Vector2.Distance(p, a + span * t) - (arch.archDepth * .5f + 3));
+            }
+            return best;
+        }
         /// <summary>As <see cref="ObstacleDistance(Vector2)"/>, ignoring cover rocks.</summary>
         float LandformDistance(Vector2 p)
         {
@@ -190,7 +222,11 @@ namespace MadeInArizona
             {
                 var center = new Vector2(Rand(random, -half * .92f, half * .92f), Rand(random, -half * .92f, half * .92f));
                 if (!InOutline(center / size)) continue;
-                var kind = PickLandform(random, Mathf.InverseLerp(-half, half, center.y));
+                // Every map gets at least one arch: the last slot tries for one first if none has been placed.
+                bool wantArch = landforms.Count == target - 1 && ArchPoints.Count == 0 && attempt < target * 60;
+                var kind = wantArch ? LandformKind.Arch : PickLandform(random, Mathf.InverseLerp(-half, half, center.y));
+                // Arches are small and fit where big formations do not, so without a cap they crowd the mix.
+                if (kind == LandformKind.Arch && ArchPoints.Count >= (size < 1000 ? 1 : size < 2000 ? 3 : 4)) continue;
                 float yaw = Rand(random, 0, 360), height = ShapeLandform(kind, random, shape);
                 Quaternion turn = Quaternion.Euler(0, yaw, 0);
                 float reach = 0;
@@ -201,15 +237,34 @@ namespace MadeInArizona
                     reach = Mathf.Max(reach, Vector2.Distance(center, new Vector2(shape[i].x, shape[i].y)) + shape[i].z);
                 }
                 if (!LandformFits(center, reach, height, shape)) continue;
-                var landform = new Landform { kind = kind, center = center, reach = reach, height = height, yaw = yaw, first = footprints.Count, count = shape.Count };
-                int previous = -1;
-                foreach (var circle in shape)
+                var landform = new Landform { kind = kind, center = center, reach = reach, height = height, yaw = yaw, first = footprints.Count, count = shape.Count,
+                    variant = shapeVariant, shapeSeed = random.Next(), arch = kind == LandformKind.Arch ? shapeArch : Vector4.zero, archDepth = shapeArchDepth };
+                if (kind == LandformKind.Arch)
                 {
-                    int next = AddFootprint(new Vector2(circle.x, circle.y), circle.z, height);
-                    if (kind == LandformKind.Cliff) LinkSpine(previous, next);
+                    // Under the arch is open ground: record it for the drive-through check.
+                    ArchPoints.Add(new Vector3(center.x, 0, center.y));
+                    arches.Add(landform);
+                }
+                int previous = -1;
+                for (int i = 0; i < shape.Count; i++)
+                {
+                    var circle = shape[i];
+                    float rise = i < shapeHeight.Count ? shapeHeight[i] : 1;
+                    int next = AddFootprint(new Vector2(circle.x, circle.y), circle.z, height * rise);
+                    bool pass = kind == LandformKind.Cliff && i < shapePass.Count && shapePass[i];
+                    if (kind == LandformKind.Cliff && !pass) LinkSpine(previous, next);
+                    if (pass)
+                    {
+                        Footprint a = footprints[previous], b = footprints[next];
+                        Vector2 dir = (b.center - a.center).normalized;
+                        Vector2 mid = ((a.center + dir * a.radius) + (b.center - dir * b.radius)) * .5f;
+                        PassPoints.Add(new Vector3(mid.x, 0, mid.y));
+                        PassWidths.Add(Vector2.Distance(a.center, b.center) - a.radius - b.radius);
+                    }
                     previous = next;
                 }
                 landforms.Add(landform);
+                if (kind == LandformKind.Cliff) RidgeCount++;
             }
             LandformCount = landforms.Count;
         }
@@ -224,45 +279,108 @@ namespace MadeInArizona
                 Vector2 a = Outline[edge] * size, b = Outline[(edge + 1) % Outline.Length] * size;
                 Vector2 tangent = (b - a).normalized, inward = new Vector2(tangent.y, -tangent.x);
                 if (!InOutline((Vector2.Lerp(a, b, .5f) + inward * radius) / size)) inward = -inward;
-                int segments = Mathf.CeilToInt(Vector2.Distance(a, b) / (radius * 1.2f));
+                int segments = Mathf.CeilToInt(Vector2.Distance(a, b) / (radius * 1.1f));
                 var chain = new Landform { kind = LandformKind.Cliff, boundary = true, center = (a + b) * .5f,
                     inward = inward, reach = radius, height = Rand(random, 26, 38), yaw = Mathf.Atan2(-tangent.y, tangent.x) * Mathf.Rad2Deg,
-                    first = footprints.Count, count = segments + 1 };
+                    first = footprints.Count };
                 int previous = -1;
-                float phase = Rand(random, 0, Mathf.PI * 2);
+                float phase = Rand(random, 0, Mathf.PI * 2), widthA = Rand(random, 0, 6.3f), widthB = Rand(random, 0, 6.3f), riseA = Rand(random, 0, 6.3f);
+                Vector2 lastCenter = Vector2.zero; float lastRadius = 0;
+                var buttresses = new List<Vector4>(); // centre xy, radius, height
                 for (int i = 0; i <= segments; i++)
                 {
                     float u = i / (float)segments;
+                    // The rim swells, thins, rises and dips along each edge instead of repeating one block.
+                    float width = Mathf.Clamp(.85f + .3f * Mathf.Sin(u * Mathf.PI * 3.7f + widthA) + .15f * Mathf.Sin(u * Mathf.PI * 9.1f + widthB) + Rand(random, -.07f, .07f), .62f, 1.45f);
+                    float rise = Mathf.Clamp(.85f + .25f * Mathf.Sin(u * Mathf.PI * 4.3f + riseA) + .12f * Mathf.Sin(u * Mathf.PI * 10.7f + riseA * 1.3f) + Rand(random, -.1f, .1f), .55f, 1.35f);
+                    float r = radius * width;
                     float wander = Mathf.Sin(u * Mathf.PI * 5 + phase) * .18f + Mathf.Sin(u * Mathf.PI * 11 + phase * .7f) * .08f;
-                    Vector2 center = Vector2.Lerp(a, b, u) + inward * radius * (-.18f + wander);
-                    int next = AddFootprint(center, radius * Rand(random, .9f, 1.1f), chain.height);
+                    Vector2 center = Vector2.Lerp(a, b, u) + inward * r * (-.18f + wander);
+                    // It must stay sealed: neighbours always overlap (and so cover the outline between them).
+                    if (previous >= 0) { float need = Vector2.Distance(lastCenter, center) * 1.2f; if (lastRadius + r < need) r = need - lastRadius; }
+                    int next = AddFootprint(center, r, chain.height * rise);
                     LinkSpine(previous, next);
-                    previous = next;
+                    previous = next; lastCenter = center; lastRadius = r;
                     BoundaryRockCount++;
+                    // Now and then a buttress juts inward from the rim, away from roads, towns and objectives.
+                    if (random.NextDouble() < .12)
+                    {
+                        float br = r * Rand(random, .45f, .75f);
+                        Vector2 at = center + inward * r * Rand(random, .8f, 1.2f) + tangent * r * Rand(random, -.3f, .3f);
+                        if (ButtressFits(at, br)) buttresses.Add(new Vector4(at.x, at.y, br, chain.height * rise * Rand(random, .5f, .85f)));
+                    }
                 }
+                foreach (var buttress in buttresses) AddFootprint(new Vector2(buttress.x, buttress.y), buttress.z, buttress.w);
+                chain.count = footprints.Count - chain.first;
                 boundaryChains.Add(chain);
             }
+        }
+
+        bool ButtressFits(Vector2 at, float radius)
+        {
+            if (!InOutline(at / size) || RoadDistance(at) < radius + 14 || TownDistance(at) < radius + 80) return false;
+            if (riverWidth > 0 && Mathf.Abs(at.x - RiverX(at.y)) < radius + riverWidth + 12) return false;
+            foreach (var pin in Pins) if (pin.kind != "town" && Vector2.Distance(at, XZ(pin.position)) < radius + 40) return false;
+            return true;
         }
 
         LandformKind PickLandform(System.Random random, float north)
         {
             double roll = random.NextDouble();
             // The compact test map needs shorter ridges and more small landmarks between its towns and roads.
-            if (size < 1000) return roll < .5 ? LandformKind.Cliff : roll < .68 ? LandformKind.Mesa : roll < .82 ? LandformKind.Butte : LandformKind.Boulders;
-            // Most impassable mountains are ridges. A few isolated mesas, buttes and rubble fields remain as landmarks.
-            if (north < .4f) return roll < .68 ? LandformKind.Cliff : roll < .8 ? LandformKind.Mesa : roll < .89 ? LandformKind.Butte : LandformKind.Boulders;
-            if (north < .68f) return roll < .77 ? LandformKind.Cliff : roll < .84 ? LandformKind.Mesa : roll < .9 ? LandformKind.Butte : LandformKind.Boulders;
-            return roll < .82 ? LandformKind.Cliff : roll < .91 ? LandformKind.Butte : LandformKind.Boulders;
+            if (size < 1000) return roll < .4 ? LandformKind.Cliff : roll < .58 ? LandformKind.Mesa : roll < .76 ? LandformKind.Butte : roll < .88 ? LandformKind.Arch : LandformKind.Boulders;
+            // Ridges remain the main barriers. Mesas, buttes, spires and arches stand between them, most thickly in the
+            // north, where Monument Valley sits.
+            if (north < .4f) return roll < .62 ? LandformKind.Cliff : roll < .76 ? LandformKind.Mesa : roll < .86 ? LandformKind.Butte : roll < .92 ? LandformKind.Arch : LandformKind.Boulders;
+            if (north < .68f) return roll < .6 ? LandformKind.Cliff : roll < .74 ? LandformKind.Mesa : roll < .86 ? LandformKind.Butte : roll < .93 ? LandformKind.Arch : LandformKind.Boulders;
+            return roll < .4 ? LandformKind.Cliff : roll < .62 ? LandformKind.Mesa : roll < .82 ? LandformKind.Butte : roll < .92 ? LandformKind.Arch : LandformKind.Boulders;
         }
 
         /// <summary>Fills <paramref name="shape"/> with local footprint circles (x, z, radius) and returns the landform height.</summary>
         float ShapeLandform(LandformKind kind, System.Random random, List<Vector3> shape)
         {
-            shape.Clear();
+            shape.Clear(); shapeHeight.Clear(); shapePass.Clear();
             switch (kind)
             {
-                case LandformKind.Mesa: shape.Add(new Vector3(0, 0, Rand(random, 22, 34))); return Rand(random, 19, 29);
-                case LandformKind.Butte: shape.Add(new Vector3(0, 0, Rand(random, 11, 17))); return Rand(random, 23, 35);
+                // Monument Valley proportions: broad tables and tall, slender buttes, with the talus slope inside the footprint.
+                case LandformKind.Mesa: shapeVariant = 0; shape.Add(new Vector3(0, 0, Rand(random, 26, 38))); return Rand(random, 26, 38);
+                case LandformKind.Butte:
+                {
+                    double roll = random.NextDouble();
+                    float r = Rand(random, 13, 19), height = Rand(random, 32, 46);
+                    shape.Add(new Vector3(0, 0, r));
+                    if (roll < .35)
+                    {
+                        // Mitten: a thin spire stands just off one shoulder, overlapping the butte's talus.
+                        shapeVariant = (int)ButteVariant.Mitten;
+                        shape.Add(new Vector3(r * .95f, 0, r * Rand(random, .45f, .55f)));
+                    }
+                    else if (roll < .6)
+                    {
+                        // A cluster of two or three needle spires, each on its own talus cone, leaning on the first.
+                        shapeVariant = (int)ButteVariant.Spires;
+                        shape[0] = new Vector3(0, 0, r * .6f);
+                        int count = random.Next(2, 4);
+                        for (int i = 1; i < count; i++)
+                        {
+                            var lean = shape[random.Next(shape.Count)];
+                            float sr = r * Rand(random, .4f, .55f), angle = Rand(random, 0, Mathf.PI * 2), gap = (lean.z + sr) * Rand(random, .6f, .8f);
+                            shape.Add(new Vector3(lean.x + Mathf.Cos(angle) * gap, lean.y + Mathf.Sin(angle) * gap, sr));
+                        }
+                    }
+                    else shapeVariant = (int)ButteVariant.Plain;
+                    return height;
+                }
+                case LandformKind.Arch:
+                {
+                    // Two leg footprints; the opening between them stays open ground, so cars drive under the arch.
+                    float inner = Rand(random, 9, 13), innerHeight = Rand(random, 9, 14), leg = Rand(random, 6, 9), lintel = Rand(random, 5, 8), depth = Rand(random, 7, 10);
+                    shapeArch = new Vector4(inner, innerHeight, leg, lintel); shapeArchDepth = depth;
+                    float legRadius = .5f * Mathf.Sqrt(leg * leg * 1.25f + depth * depth) + .5f;
+                    shape.Add(new Vector3(inner + leg * .5f, 0, legRadius)); shape.Add(new Vector3(-(inner + leg * .5f), 0, legRadius));
+                    shapeVariant = 0;
+                    return innerHeight + lintel;
+                }
                 case LandformKind.Cliff:
                 {
                     // A long, uneven spine; two bends prevent a capsule-shaped silhouette from above.
@@ -271,12 +389,20 @@ namespace MadeInArizona
                     float bow = Rand(random, -.13f, .13f) * length;
                     float kink = Rand(random, -.075f, .075f) * length;
                     int stacks = Mathf.CeilToInt(length / (thickness * 1.2f)) + 1;
+                    float widthA = Rand(random, 0, 6.3f), widthB = Rand(random, 0, 6.3f), riseA = Rand(random, 0, 6.3f), riseB = Rand(random, 0, 6.3f);
                     for (int i = 0; i < stacks; i++)
                     {
                         float u = i / (float)(stacks - 1), x = (u - .5f) * length;
-                        float z = bow * Mathf.Sin(u * Mathf.PI) + kink * Mathf.Sin(u * Mathf.PI * 2);
-                        shape.Add(new Vector3(x, z, thickness * Rand(random, .82f, 1.12f) * (i == 0 || i == stacks - 1 ? .78f : 1)));
+                        // Stacks wander off the spine line, so the ridge spreads and pinches instead of running as a row.
+                        float z = bow * Mathf.Sin(u * Mathf.PI) + kink * Mathf.Sin(u * Mathf.PI * 2) + thickness * Rand(random, -.22f, .22f);
+                        // Width and height drift slowly along the ridge, with jitter, and taper to low shoulders at the ends.
+                        // Sin(pi) is a hair below zero in floats; unclamped, its square root made the last stack's width NaN.
+                        float ends = Mathf.Sqrt(Mathf.Max(0, Mathf.Sin(u * Mathf.PI)));
+                        float width = (.8f + .22f * Mathf.Sin(u * Mathf.PI * 2.3f + widthA) + .12f * Mathf.Sin(u * Mathf.PI * 5.1f + widthB) + Rand(random, -.06f, .06f)) * Mathf.Lerp(.7f, 1, ends);
+                        float rise = (.82f + .22f * Mathf.Sin(u * Mathf.PI * 3 + riseA) + .14f * Mathf.Sin(u * Mathf.PI * 7.3f + riseB) + Rand(random, -.08f, .08f)) * Mathf.Lerp(.5f, 1, ends);
+                        shape.Add(new Vector3(x, z, thickness * width)); shapeHeight.Add(rise); shapePass.Add(false);
                     }
+                    OpenPasses(random, shape);
                     return Rand(random, 22, 34);
                 }
                 default:
@@ -295,6 +421,57 @@ namespace MadeInArizona
                 }
             }
         }
+
+        /// <summary>
+        /// Interior ridges get up to two car-sized passes: a stack is dropped and the rock shoulders either side are narrowed
+        /// until 8-11 m of open ground remains. Everywhere else neighbouring stacks are made to overlap, so the ridge stays
+        /// sealed apart from its passes. The spine (and the barriers that follow it) breaks at each pass.
+        /// </summary>
+        void OpenPasses(System.Random random, List<Vector3> shape)
+        {
+            int count = shape.Count;
+            var removed = new bool[count];
+            double roll = random.NextDouble();
+            int passes = count >= 8 ? (roll < .45 ? 1 : roll < .62 ? 2 : 0) : 0;
+            for (int p = 0, attempt = 0; p < passes && attempt < 20; attempt++)
+            {
+                int index = random.Next(2, count - 2);
+                bool crowded = false;
+                for (int k = index - 2; k <= index + 2; k++) crowded |= removed[k];
+                if (crowded) continue;
+                removed[index] = true; p++;
+            }
+            var keptShape = new List<Vector3>(); var keptHeight = new List<float>(); var keptPass = new List<bool>();
+            bool passNext = false;
+            for (int i = 0; i < count; i++)
+            {
+                if (removed[i]) { passNext = true; continue; }
+                keptShape.Add(shape[i]); keptHeight.Add(shapeHeight[i]); keptPass.Add(passNext); passNext = false;
+            }
+            shape.Clear(); shape.AddRange(keptShape); shapeHeight.Clear(); shapeHeight.AddRange(keptHeight); shapePass.Clear(); shapePass.AddRange(keptPass);
+            var shoulder = new bool[shape.Count];
+            for (int i = 1; i < shape.Count; i++)
+            {
+                if (!shapePass[i]) continue;
+                float room = Vector2.Distance(shape[i - 1], shape[i]) - Rand(random, 8, 11);
+                if (room < 6) { shapePass[i] = false; continue; } // too short a span for a pass between real shoulders
+                shoulder[i - 1] = shoulder[i] = true;
+                float sum = shape[i - 1].z + shape[i].z;
+                if (sum > room) { float s = room / sum; shape[i - 1] = Scaled(shape[i - 1], s); shape[i] = Scaled(shape[i], s); }
+            }
+            for (int i = 1; i < shape.Count; i++)
+            {
+                if (shapePass[i]) continue;
+                float need = Vector2.Distance(shape[i - 1], shape[i]) * 1.15f, sum = shape[i - 1].z + shape[i].z;
+                if (sum >= need) continue;
+                // Grow the stacks that are not pass shoulders, so passes keep their width.
+                if (shoulder[i - 1] && !shoulder[i]) shape[i] = Grown(shape[i], need - sum);
+                else if (shoulder[i] && !shoulder[i - 1]) shape[i - 1] = Grown(shape[i - 1], need - sum);
+                else { float s = need / sum; shape[i - 1] = Scaled(shape[i - 1], s); shape[i] = Scaled(shape[i], s); }
+            }
+        }
+        static Vector3 Scaled(Vector3 circle, float s) => new Vector3(circle.x, circle.y, circle.z * s);
+        static Vector3 Grown(Vector3 circle, float extra) => new Vector3(circle.x, circle.y, circle.z + extra);
 
         /// <summary>
         /// A landform may not touch a road (roads are the only guaranteed links between towns), crowd a town, a point of
@@ -387,7 +564,7 @@ namespace MadeInArizona
             // Footprint radius bounds a slab about 4-6 m long; 2.1-3.4 m tall hides a car (1.5 m) and stops rounds at bumper height.
             float radius = Rand(random, 2, 3.2f), height = Rand(random, 2.1f, 3.4f), yaw = Rand(random, 0, 360);
             if (!InOutline(p / size) || RoadDistance(p) < radius + CoverRoadClearance || TownDistance(p) < radius + CoverTownClearance) return false;
-            if (TrailEdgeDistance(p) < radius + 1.5f || ObstacleDistance(p) < radius + CoverGap) return false;
+            if (TrailEdgeDistance(p) < radius + 1.5f || ObstacleDistance(p) < radius + CoverGap || ArchSpanDistance(p) < radius) return false;
             if (riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < radius + riverWidth + 4) return false;
             foreach (var objective in objectives) if ((objective - p).sqrMagnitude < (radius + CoverObjectiveClearance) * (radius + CoverObjectiveClearance)) return false;
             Vector3 at = new Vector3(p.x, 0, p.y);
@@ -405,6 +582,11 @@ namespace MadeInArizona
             landformMaterial = new Material(desert) { name = "Landform rock (see-through over the car)" };
             landformMaterial.SetFloat("_OccluderCut", 1);
             var catalog = DesertLandformCatalog.Load();
+            keepPackColours = catalog && catalog.keepPackColours; packRockMaterials.Clear();
+            monumentMaterial = new Material(landformMaterial) { name = "Monument sandstone (see-through over the car)" };
+            monumentMaterial.SetTexture("_ModelAlbedo", MonumentMesh.StrataTexture); monumentMaterial.SetColor("_ModelTint", Color.white);
+            monumentMaterial.SetFloat("_UseModelAlbedo", 1); monumentMaterial.SetFloat("_ModelGrade", 0);
+            monumentMaterial.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
             var random = new System.Random(unchecked(seed * 214013 + 2531011));
             var builder = new LandformMesh();
             var spine = new List<Vector2>(); var spineRadii = new List<float>();
@@ -422,6 +604,52 @@ namespace MadeInArizona
                     }
                 }
                 ground /= landform.count * 5;
+                if (landform.kind == LandformKind.Mesa || landform.kind == LandformKind.Butte || landform.kind == LandformKind.Arch)
+                {
+                    BuildMonument(landform, root);
+                    // Fallen blocks round the talus; never under an arch's span.
+                    if (landform.kind != LandformKind.Arch) ScatterBaseRocks(landform, root, catalog, random);
+                    continue;
+                }
+                if (landform.kind == LandformKind.Cliff && catalog && catalog.HasMountainRocks)
+                {
+                    // Each footprint carries a broad rock mass plus a taller crag set off to one side, from a mix of the packs'
+                    // large rocks at random turns, so the ridge reads as rugged stone with a broken skyline. The barriers
+                    // below keep the chain sealed between the rocks.
+                    var chain = Group(landform.boundary ? "Boundary mountain chain" : "Mountain chain", root, Vector3.zero);
+                    for (int k = landform.first; k < landform.first + landform.count; k++)
+                    {
+                        var f = footprints[k];
+                        // Beside a pass the rock stays inside its footprint, so the planned opening stays drivable.
+                        bool shoulder = !landform.boundary && IsPassShoulder(landform, k);
+                        PlaceScaledModel(catalog.PickMountainRock(random), f.center, f.radius * (shoulder ? Rand(random, .85f, .95f) : Rand(random, .92f, 1.15f)), f.height * Rand(random, .55f, .85f),
+                            Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain rock", Tilt(random));
+                        // None, one or two crags per footprint, so peaks cluster and thin out rather than one per block.
+                        double roll = random.NextDouble();
+                        int crags = roll < .25 ? 0 : roll < .75 ? 1 : 2;
+                        for (int c = 0; c < crags; c++)
+                        {
+                            float angle = Rand(random, 0, Mathf.PI * 2);
+                            float cragRadius = f.radius * Rand(random, .35f, .7f);
+                            float offset = shoulder ? Mathf.Max(0, f.radius * .9f - cragRadius) * Rand(random, 0, 1) : f.radius * Rand(random, .15f, .6f);
+                            Vector2 crag = f.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * offset;
+                            PlaceScaledModel(catalog.PickMountainRock(random), crag, cragRadius, f.height * Rand(random, .75f, 1.25f),
+                                Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain crag", Tilt(random));
+                        }
+                        // Occasional outlying boulders break up the chain's edge.
+                        if (!shoulder && random.NextDouble() < .22)
+                        {
+                            float angle = Rand(random, 0, Mathf.PI * 2), radius = f.radius * Rand(random, .22f, .4f);
+                            Vector2 at = f.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * f.radius * Rand(random, 1f, 1.25f);
+                            if (RoadDistance(at) >= radius + 6 && TrailEdgeDistance(at) >= radius + 1.5f && TownDistance(at) >= radius + CoverTownClearance && ArchSpanDistance(at) >= radius)
+                                PlaceScaledModel(catalog.PickMountainRock(random), at, radius, f.height * Rand(random, .2f, .45f),
+                                    Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain outcrop", Tilt(random));
+                        }
+                    }
+                    AddChainBarriers(landform, chain);
+                    ScatterBaseRocks(landform, chain, catalog, random);
+                    continue;
+                }
                 var prefab = catalog ? catalog.Pick(landform.kind, random) : null;
                 if (prefab && landform.kind == LandformKind.Cliff && prefab.GetComponentInChildren<Renderer>())
                 {
@@ -475,15 +703,81 @@ namespace MadeInArizona
             }
         }
 
+        /// <summary>
+        /// Our own Monument Valley formations (see <see cref="MonumentMesh"/>), each seated on the lowest ground under its
+        /// footprints so no edge floats; the buried skirt absorbs the rest of the slope.
+        /// </summary>
+        void BuildMonument(Landform landform, Transform root)
+        {
+            var mesh = new MonumentMesh(landform.shapeSeed);
+            var random = new System.Random(landform.shapeSeed ^ 0x5bd1e995);
+            float Seat(Footprint f)
+            {
+                float low = SampleHeight(new Vector3(f.center.x, 0, f.center.y));
+                for (int s = 0; s < 8; s++)
+                {
+                    float angle = s * Mathf.PI * .25f; Vector2 q = f.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * f.radius * .95f;
+                    low = Mathf.Min(low, SampleHeight(new Vector3(q.x, 0, q.y)));
+                }
+                return low - .4f;
+            }
+            Vector3 At(Footprint f, float y) => new Vector3(f.center.x, y, f.center.y);
+            var first = footprints[landform.first];
+            string label;
+            switch (landform.kind)
+            {
+                case LandformKind.Mesa:
+                    mesh.Loft(MonumentMesh.Formation.Mesa, At(first, Seat(first)), first.radius, first.height, Rand(random, .08f, .22f));
+                    label = "Mesa"; break;
+                case LandformKind.Arch:
+                {
+                    var other = footprints[landform.first + 1];
+                    float seat = Mathf.Min(Seat(first), Seat(other));
+                    mesh.Arch(new Vector3(landform.center.x, seat, landform.center.y), Quaternion.Euler(0, landform.yaw, 0),
+                        landform.arch.x, landform.arch.y, landform.arch.z, landform.arch.w, landform.archDepth);
+                    label = "Arch"; break;
+                }
+                default:
+                    if (landform.variant == (int)ButteVariant.Spires)
+                    {
+                        for (int k = landform.first; k < landform.first + landform.count; k++)
+                        {
+                            var f = footprints[k];
+                            mesh.Loft(MonumentMesh.Formation.Spire, At(f, Seat(f)), f.radius, f.height * (k == landform.first ? 1 : Rand(random, .6f, .9f)));
+                        }
+                        label = "Spires";
+                    }
+                    else
+                    {
+                        mesh.Loft(MonumentMesh.Formation.Butte, At(first, Seat(first)), first.radius, first.height, Rand(random, 0, .12f));
+                        if (landform.variant == (int)ButteVariant.Mitten)
+                        {
+                            var thumb = footprints[landform.first + 1];
+                            mesh.Loft(MonumentMesh.Formation.Spire, At(thumb, Seat(thumb)), thumb.radius, first.height * Rand(random, .75f, .9f));
+                        }
+                        label = landform.variant == (int)ButteVariant.Mitten ? "Mitten butte" : "Butte";
+                    }
+                    break;
+            }
+            var go = new GameObject("Landform • " + label, typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider));
+            go.transform.SetParent(root, false);
+            var built = mesh.ToMesh(go.name);
+            go.GetComponent<MeshFilter>().sharedMesh = built; go.GetComponent<MeshRenderer>().sharedMaterial = monumentMaterial;
+            go.GetComponent<MeshCollider>().sharedMesh = built;
+            go.AddComponent<GeneratedMeshOwner>().Mesh = built;
+        }
+
         void AddChainBarriers(Landform landform, Transform root)
         {
             // Asset silhouettes have crevices. Overlapping simple colliders close those gaps along the impassable spine.
+            // Only along the spine: passes in interior ridges stay open, and buttresses need no seal.
             for (int k = landform.first; k < landform.first + landform.count - 1; k++)
             {
+                if (footprints[k].nextSpine != k + 1) continue;
                 var a = footprints[k]; var b = footprints[k + 1];
                 Vector2 delta = b.center - a.center, center = (a.center + b.center) * .5f;
                 float low = Mathf.Min(SampleHeight(new Vector3(a.center.x, 0, a.center.y)), SampleHeight(new Vector3(b.center.x, 0, b.center.y))) - 3;
-                float top = Mathf.Max(SampleHeight(new Vector3(a.center.x, 0, a.center.y)), SampleHeight(new Vector3(b.center.x, 0, b.center.y))) + landform.height * .8f;
+                float top = Mathf.Max(SampleHeight(new Vector3(a.center.x, 0, a.center.y)), SampleHeight(new Vector3(b.center.x, 0, b.center.y))) + Mathf.Max(a.height, b.height) * .8f;
                 var blocker = new GameObject("Mountain barrier", typeof(BoxCollider));
                 blocker.transform.SetParent(root, false);
                 blocker.transform.SetPositionAndRotation(new Vector3(center.x, (low + top) * .5f, center.y),
@@ -501,20 +795,35 @@ namespace MadeInArizona
                 root, terrainMaterial, prefab.name + " • " + landform.kind);
         }
 
-        bool PlaceScaledModel(GameObject prefab, Vector2 center, float radius, float height, float yaw, Transform root,
-            bool terrainMaterial, string label)
+        /// <summary>A ridge footprint that borders a pass (its spine link to a neighbour is broken).</summary>
+        bool IsPassShoulder(Landform landform, int k)
         {
+            if (landform.kind != LandformKind.Cliff) return false;
+            int last = landform.first + landform.count - 1;
+            return (k < last && footprints[k].nextSpine != k + 1) || (k > landform.first && footprints[k - 1].nextSpine != k);
+        }
+        Vector2 Tilt(System.Random random) => new Vector2(Rand(random, -7, 7), Rand(random, -7, 7));
+
+        bool PlaceScaledModel(GameObject prefab, Vector2 center, float radius, float height, float yaw, Transform root,
+            bool terrainMaterial, string label, Vector2 tilt = default)
+        {
+            if (!prefab) return false;
             var go = Instantiate(prefab, root);
             go.name = label;
             var renderers = go.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) { Destroy(go); return false; }
-            go.transform.SetPositionAndRotation(new Vector3(center.x, 0, center.y), Quaternion.Euler(0, yaw, 0));
+            go.transform.SetPositionAndRotation(new Vector3(center.x, 0, center.y), Quaternion.Euler(tilt.x, yaw, tilt.y));
             go.transform.localScale = Vector3.one;
             Bounds bounds = ModelBounds(renderers);
             float footprint = Mathf.Max(.01f, Mathf.Max(bounds.size.x, bounds.size.z) * .5f), tall = Mathf.Max(.01f, bounds.size.y);
             float horizontal = radius / footprint;
             float vertical = Mathf.Clamp(height / tall, horizontal * .75f, horizontal * 2.4f);
             go.transform.localScale = new Vector3(horizontal, vertical, horizontal);
+            // Pack pivots are rarely at the mesh centre, and scaling multiplies the gap (cliffs landed 4-10 m and mesas up
+            // to 30 m off their planned footprints, the boundary rim partly past the terrain edge). Centre the model's
+            // bounds on the footprint, which navigation, spawns and the road and town clearances all read.
+            bounds = ModelBounds(renderers);
+            go.transform.position += new Vector3(center.x - bounds.center.x, 0, center.y - bounds.center.z);
             float ground = SampleHeight(new Vector3(center.x, 0, center.y));
             for (int i = 0; i < 4; i++)
             {
@@ -525,17 +834,38 @@ namespace MadeInArizona
             bounds = ModelBounds(renderers);
             go.transform.position += Vector3.up * (ground - .65f - bounds.min.y);
             if (terrainMaterial && landformMaterial)
-                foreach (var renderer in renderers) { var materials = renderer.sharedMaterials; for (int i = 0; i < materials.Length; i++) materials[i] = landformMaterial; renderer.sharedMaterials = materials; }
+                foreach (var renderer in renderers) { var materials = renderer.sharedMaterials; for (int i = 0; i < materials.Length; i++) materials[i] = keepPackColours ? PackRockMaterial(materials[i]) : landformMaterial; renderer.sharedMaterials = materials; }
             if (!go.GetComponentInChildren<Collider>())
                 foreach (var filter in go.GetComponentsInChildren<MeshFilter>()) if (filter.sharedMesh) filter.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
             return true;
         }
 
+        /// <summary>
+        /// The terrain rock shader carrying a pack material's own texture and colour (the packs ship built-in Standard
+        /// materials, which URP cannot draw). Keeps the terrain lighting and the see-through dither over the car, and
+        /// draws both faces so one-sided models (cliff faces) never vanish from behind. One material per source.
+        /// </summary>
+        Material PackRockMaterial(Material source)
+        {
+            if (!source) return landformMaterial;
+            if (packRockMaterials.TryGetValue(source, out var material)) return material;
+            material = new Material(landformMaterial) { name = source.name + " (terrain-lit pack rock)" };
+            Texture albedo = source.HasProperty("_BaseMap") ? source.GetTexture("_BaseMap") : null;
+            if (!albedo && source.HasProperty("_MainTex")) albedo = source.GetTexture("_MainTex");
+            Color tint = source.HasProperty("_BaseColor") ? source.GetColor("_BaseColor") : source.HasProperty("_Color") ? source.GetColor("_Color") : Color.white;
+            if (albedo) material.SetTexture("_ModelAlbedo", albedo);
+            material.SetColor("_ModelTint", tint);
+            material.SetFloat("_UseModelAlbedo", 1);
+            material.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+            packRockMaterials[source] = material;
+            return material;
+        }
         void ScatterBaseRocks(Landform landform, Transform root, DesertLandformCatalog catalog, System.Random random)
         {
             int stride = landform.boundary ? 3 : landform.kind == LandformKind.Cliff ? 2 : 1;
             for (int k = landform.first; k < landform.first + landform.count; k += stride)
             {
+                if (!landform.boundary && IsPassShoulder(landform, k)) continue;
                 var f = footprints[k];
                 for (int side = -1; side <= 1; side += 2)
                 {
@@ -543,10 +873,14 @@ namespace MadeInArizona
                     Vector2 direction = landform.boundary ?
                         (landform.inward + new Vector2(-landform.inward.y, landform.inward.x) * side * .28f).normalized :
                         new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * side;
-                    Vector2 at = f.center + direction * f.radius * Rand(random, .65f, .78f);
-                    float radius = Mathf.Min(f.radius * .2f, Rand(random, 2.2f, 4.4f));
+                    // Medium cover-sized stones (a little larger than PlanCover's): tall enough to stop rounds at bumper
+                    // height and clearly an obstacle. Small ones read as pebbles and snagged tyres.
+                    float radius = Rand(random, 2.8f, 4f), height = Rand(random, 2.4f, 3.6f);
+                    Vector2 at = f.center + direction * f.radius * Rand(random, .7f, .85f);
+                    // Larger stones reach further from the mountain: keep them off roads, trails and town pads.
+                    if (RoadDistance(at) < radius + 4 || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance || ArchSpanDistance(at) < radius) continue;
                     var rock = catalog ? catalog.Pick(LandformKind.Cover, random) : null;
-                    if (!rock || !PlaceScaledModel(rock, at, radius, radius * Rand(random, .8f, 1.3f),
+                    if (!rock || !PlaceScaledModel(rock, at, radius, height,
                         Rand(random, 0, 360), root, catalog.useTerrainMaterial, "Mountain base rock"))
                     {
                         Vector3 p = new Vector3(at.x, SampleHeight(new Vector3(at.x, 0, at.y)), at.y);

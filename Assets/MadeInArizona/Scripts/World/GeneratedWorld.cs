@@ -192,6 +192,8 @@ namespace MadeInArizona
             // Grass may brush a trail edge; larger plants (clearance 3) stand a few metres back.
             c=Mathf.Min(c,TrailEdgeDistance(XZ(p))+.3f);
             c=Mathf.Min(c,ObstacleDistance(XZ(p))-.5f);
+            // Nothing grows in the drive-through under an arch.
+            c=Mathf.Min(c,ArchSpanDistance(XZ(p)));
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
             return c;
         }

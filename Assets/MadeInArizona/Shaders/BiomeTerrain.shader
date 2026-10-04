@@ -7,6 +7,12 @@ Shader "MadeInArizona/BiomeTerrain"
         _GroundNormalArray("Ground normal (RG) + AO (B) array",2DArray)=""{}
         _UseGroundTextures("Use Outdoor Ground Textures",Range(0,1))=0
         _OccluderCut("See-through where it hides the car",Range(0,1))=0
+        // Imported rock models keep their pack's own colours (no ground blend or strata) with this lighting and dither.
+        _ModelAlbedo("Model albedo",2D)="white"{}
+        _ModelTint("Model tint",Color)=(1,1,1,1)
+        _UseModelAlbedo("Use model albedo",Range(0,1))=0
+        _ModelGrade("Grade pack colours toward sandstone",Range(0,1))=1
+        [Enum(UnityEngine.Rendering.CullMode)]_Cull("Cull",Float)=2
     }
     SubShader
     {
@@ -30,6 +36,7 @@ Shader "MadeInArizona/BiomeTerrain"
         {
             Name "ForwardLit"
             Tags { "LightMode"="UniversalForward" }
+            Cull [_Cull]
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex vert
@@ -48,6 +55,7 @@ Shader "MadeInArizona/BiomeTerrain"
             // All fourteen Outdoor Ground Textures live in two arrays built at load (see WorldArt.GroundArrays).
             TEXTURE2D_ARRAY(_GroundAlbedoArray); SAMPLER(sampler_GroundAlbedoArray); TEXTURE2D_ARRAY(_GroundNormalArray);
             float _UseGroundTextures;
+            TEXTURE2D(_ModelAlbedo); SAMPLER(sampler_ModelAlbedo); float4 _ModelTint; float _UseModelAlbedo,_ModelGrade;
             float4 _ElevationRange; // min, max, enabled (set by GeneratedWorld)
             struct A { float4 p:POSITION; float3 n:NORMAL; float2 uv:TEXCOORD0; float4 c:COLOR; };
             struct V { float4 p:SV_POSITION; float3 world:TEXCOORD0; float3 n:TEXCOORD1; float2 uv:TEXCOORD2; float4 c:COLOR; float fog:TEXCOORD3; };
@@ -150,7 +158,7 @@ Shader "MadeInArizona/BiomeTerrain"
                 photo=lerp(photo,photo*albedo/paletteLuma*.5+photo*.5,.4);
                 albedo=lerp(albedo,lerp(detailOnly,photo,.7),_UseGroundTextures);
                 // Cliff walls: side-projected rock (no smearing down the face) with horizontal sandstone strata.
-                float cliffWeight=smoothstep(.22,.42,slope)*_UseGroundTextures;
+                float cliffWeight=smoothstep(.22,.42,slope)*_UseGroundTextures*(1-_UseModelAlbedo);
                 UNITY_BRANCH if(cliffWeight>.001)
                 {
                     float3 an=abs(normalize(i.n));float2 side=an.xz/max(an.x+an.z,.001);
@@ -171,7 +179,17 @@ Shader "MadeInArizona/BiomeTerrain"
                 // Grades above the car's 0.65 climb limit (normal.y < 0.84) use a dark,
                 // side-projected fractured face with bright horizontal seams. This begins at
                 // the actual traversal threshold, including slopes too shallow for cliffWeight.
-                float blockedGrade=smoothstep(.14,.17,slope);
+                float blockedGrade=smoothstep(.14,.17,slope)*(1-_UseModelAlbedo);
+                UNITY_BRANCH if(_UseModelAlbedo>0)
+                {
+                    // Pack rock: its own texture and colour, with a little large-scale variation so repeats don't match.
+                    float3 model=SAMPLE_TEXTURE2D(_ModelAlbedo,sampler_ModelAlbedo,i.uv).rgb*_ModelTint.rgb*lerp(.9,1.08,Noise(p*.07));
+                    // The low-poly packs are saturated for flat lighting; under this sun they read as yellow plastic. Pull them
+                    // toward weathered sandstone so they sit with the terrain's rock.
+                    float modelLuma=dot(model,float3(.299,.587,.114));
+                    model=lerp(model,lerp(modelLuma.xxx,model,.55)*float3(.86,.76,.66),_ModelGrade);
+                    albedo=lerp(albedo,model,_UseModelAlbedo);
+                }
                 UNITY_BRANCH if(blockedGrade>.001)
                 {
                     float3 an=abs(normalize(i.n));float2 side=an.xz/max(an.x+an.z,.001);
@@ -213,7 +231,8 @@ Shader "MadeInArizona/BiomeTerrain"
                 // Undo each layer's UV rotation so the tangent-space normals line up in world space.
                 float2 nx0=n0.xy*2-1,nx1=n1.xy*2-1,nx2=n2.xy*2-1;
                 float2 packNormal=(nx0*layerWeight.x+float2(nx1.y,-nx1.x)*layerWeight.y+float2(-nx2.y,nx2.x)*layerWeight.z)*_UseGroundTextures;
-                float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22));
+                // Ground micro-relief is world-space and horizontal; on model rock faces it would only smear the facets.
+                float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22)*(1-_UseModelAlbedo*.9));
                 Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
@@ -249,7 +268,7 @@ Shader "MadeInArizona/BiomeTerrain"
         {
             Name "DepthOnly"
             Tags { "LightMode"="DepthOnly" }
-            ZWrite On ColorMask R
+            ZWrite On ColorMask R Cull [_Cull]
             HLSLPROGRAM
             #pragma vertex depthVert
             #pragma fragment depthFrag
