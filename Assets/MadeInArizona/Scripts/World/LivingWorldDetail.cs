@@ -100,23 +100,24 @@ namespace MadeInArizona
                 if(clear<.7f)continue;
                 Vector3 world=origin+new Vector3(x,0,z);if(!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 local=world-origin;
-                float north=Mathf.InverseLerp(-half,half,world.z);
                 float patch=Mathf.PerlinNoise(world.x*.045f+GeneratedWorld.SeedOffset(config.seed,.013,GeneratedWorld.PerlinPeriod),world.z*.045f);
-                bool forest=north>config.biomeThresholds.scrub;
+                var biome=GeneratedWorld.BiomesAt(world);
+                bool forest=biome.forest>.45f,red=biome.redRock>.5f,plateau=biome.plateau>.5f;
                 bool bank=GeneratedWorld.Active.DistanceToRiver(world)<config.riverWidth+13&&config.riverWidth>0;
                 float scale=Next(random,.65f,1.35f);
-                Color grass=forest?new Color(.28f,.39f,.12f):bank?new Color(.36f,.48f,.19f):new Color(.57f,.48f,.23f);
+                Color grass=forest?new Color(.28f,.39f,.12f):bank?new Color(.36f,.48f,.19f):red?new Color(.55f,.42f,.22f):plateau?new Color(.50f,.46f,.28f):new Color(.57f,.48f,.23f);
                 if(i%13==0)
                 {
                     if(Next(random,0,1)>RockCountScale)continue;
-                    float s=Next(random,.12f,.55f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,local,s,random,StoneColor(forest,random)))mesh.Rock(local,new Vector3(s,s*.6f,s*.8f),StoneColor(forest,random),random);Stones++;
+                    float s=Next(random,.12f,.55f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(red?Choose(nature.redRocks,nature.rocks):nature.rocks,random):null,local,s,random,StoneColor(forest,red,random)))mesh.Rock(local,new Vector3(s,s*.6f,s*.8f),StoneColor(forest,red,random),random);Stones++;
                 }
                 else if(i%41==0)
                 {
                     Color c=forest?new Color(.31f,.22f,.12f):new Color(.50f,.36f,.21f);
                     Vector3 end=local+new Vector3(Next(random,-1,1),.12f,Next(random,-1,1));mesh.Tube(local+Vector3.up*.08f,end,.035f,.018f,c,5);DetailInstances++;
                 }
-                else if(patch>(forest?.28f:.43f)||bank)
+                // Grass: dense under the Rim pines, sparse on the plateau and sparsest on red sand.
+                else if(patch>(forest?.28f:red?.62f:plateau?.5f:.43f)||bank)
                 {
                     float h=(bank?.95f:forest?.6f:.42f)*scale;if(!mesh.Nature(nature?nature.Pick(nature.grasses,random):null,local,h,random,grass))mesh.Grass(local,h,grass,random,i%17==0);PlantClumps++;
                     if(i%19==0)mesh.Fern(local,(forest?1.1f:.65f)*scale,forest?new Color(.19f,.34f,.10f):new Color(.35f,.40f,.19f),random);
@@ -129,17 +130,20 @@ namespace MadeInArizona
                 Vector3 world=origin+new Vector3(Next(random,1,31),0,Next(random,1,31));
                 float clear=GeneratedWorld.Active.SceneryClearance(world);if(clear<3||!GeneratedWorld.Contains(world)||Steep(world))continue;
                 world.y=GeneratedWorld.HeightAt(world);Vector3 p=world-origin;
-                float north=Mathf.InverseLerp(-half,half,world.z),patch=Mathf.PerlinNoise(world.x*.023f+GeneratedWorld.SeedOffset(config.seed,.001,GeneratedWorld.PerlinPeriod),world.z*.023f);
-                bool forest=north>config.biomeThresholds.scrub;
+                float patch=Mathf.PerlinNoise(world.x*.023f+GeneratedWorld.SeedOffset(config.seed,.001,GeneratedWorld.PerlinPeriod),world.z*.023f);
+                var biome=GeneratedWorld.BiomesAt(world);
+                bool forest=biome.forest>.45f,red=biome.redRock>.5f,plateau=biome.plateau>.5f,sonoran=biome.sonoran>.5f;
                 bool bank=config.riverWidth>0&&GeneratedWorld.Active.DistanceToRiver(world)<config.riverWidth+17;
                 if(i<5)
                 {
                     if(Next(random,0,1)>RockCountScale){DetailInstances++;continue;}
-                    float baseSize=Next(random,.6f,2.6f),s=baseSize*RockSizeScale;Color c=StoneColor(forest,random);
-                    if(baseSize>1.2f) BreakableRock(root,p-Vector3.up*.16f,s,c,random);
-                    else if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,p-Vector3.up*.16f,s,random,c))mesh.Rock(p-Vector3.up*.16f,new Vector3(s,s*.72f,s*.82f),c,random);
+                    float baseSize=Next(random,.6f,2.6f),s=baseSize*RockSizeScale;Color c=StoneColor(forest,red,random);
+                    // Red rock scatters the pack's orange-brown sandstone; elsewhere the grey hard rock.
+                    var stones=nature?(red?Choose(nature.redRocks,nature.rocks):nature.rocks):null;
+                    if(baseSize>1.2f) BreakableRock(root,p-Vector3.up*.16f,s,c,random,stones);
+                    else if(!mesh.Nature(nature?nature.Pick(stones,random):null,p-Vector3.up*.16f,s,random,c))mesh.Rock(p-Vector3.up*.16f,new Vector3(s,s*.72f,s*.82f),c,random);
                     Stones++;
-                    for(int j=0;j<4;j++){Vector3 q=p+new Vector3(Next(random,-s,s),.03f,Next(random,-s,s));float qSize=Next(random,.12f,.4f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(nature.rocks,random):null,q,qSize,random,c))mesh.Rock(q,Vector3.one*qSize,c,random);}
+                    for(int j=0;j<4;j++){Vector3 q=p+new Vector3(Next(random,-s,s),.03f,Next(random,-s,s));float qSize=Next(random,.12f,.4f)*RockSizeScale;if(!mesh.Nature(nature?nature.Pick(stones,random):null,q,qSize,random,c))mesh.Rock(q,Vector3.one*qSize,c,random);}
                 }
                 else if(density>0&&forest&&patch>.28f&&i%2==0)
                 {
@@ -160,8 +164,22 @@ namespace MadeInArizona
                 }
                 else if(density>0&&bank&&i%3==0)
                 {float h=Next(random,5,10);BreakableTree(root,p,h,false,random);Trees++;}
-                else if(density>0&&north<config.biomeThresholds.lowland&&i%5==0)
-                {float h=Next(random,1.8f,4.5f);BreakableCactus(root,p,h,random);}
+                // Plateau woodland: scattered pinyon-juniper.
+                else if(density>0&&plateau&&patch>.52f&&i%3==0)
+                {float h=Next(random,3,6.5f);BreakableTree(root,p,h,true,random,nature?nature.junipers:null,"Breakable juniper",new Color(.3f,.4f,.34f));Trees++;}
+                // Sonoran: saguaros among organ pipes, barrels and prickly pear, and the odd mesquite or palo verde.
+                else if(density>0&&sonoran&&i%5==0)
+                {
+                    bool saguaro=nature&&nature.saguaros!=null&&nature.saguaros.Length>0&&Next(random,0,1)<.4f;
+                    float h=saguaro?Next(random,3.5f,6.5f):Next(random,1.4f,3.5f);
+                    BreakableCactus(root,p,h,random,saguaro?nature.saguaros:null);
+                }
+                else if(density>0&&sonoran&&patch>.6f&&i%4==0)
+                {float h=Next(random,4,7);BreakableTree(root,p,h,false,random,nature?nature.desertTrees:null,"Breakable mesquite");Trees++;}
+                // Red sand: prickly pear and small barrels, otherwise little more than scattered brush.
+                else if(density>0&&red&&i%4==0)
+                {float h=Next(random,.8f,1.8f);BreakableCactus(root,p,h,random,nature?nature.redRockPlants:null,"Breakable prickly pear");}
+                else if(density>0&&red&&Next(random,0,1)<.55f){DetailInstances++;continue;}
                 else if(density>0)
                 {float h=Next(random,.5f,1.4f);Color c=forest?new Color(.24f,.34f,.12f):new Color(.37f,.41f,.19f);if(!mesh.Nature(nature?nature.Pick(nature.bushes,random):null,p,h,random,c))mesh.Bush(p,h,c,random);}
                 DetailInstances++;
@@ -169,23 +187,23 @@ namespace MadeInArizona
             yield return null;
             mesh.Build(root,"Batched foliage / stones / deadwood",material);
         }
-        void BreakableRock(GameObject tile,Vector3 at,float size,Color color,System.Random random)
+        void BreakableRock(GameObject tile,Vector3 at,float size,Color color,System.Random random,Mesh[] choices=null)
         {
             var root=new GameObject("Breakable scenery rock");root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
             var shape=propMesh;shape.Clear();
-            if(!shape.Nature(nature?nature.Pick(nature.rocks,random):null,Vector3.zero,size,random,color))
+            if(!shape.Nature(nature?nature.Pick(Choose(choices,nature.rocks),random):null,Vector3.zero,size,random,color))
                 shape.Rock(Vector3.zero,new Vector3(size,size*.72f,size*.82f),color,random);
             shape.Build(root,"Fractured stone",material);
             var collider=root.AddComponent<BoxCollider>();collider.center=Vector3.up*size*.2f;collider.size=new Vector3(size*1.7f,size*.75f,size*1.5f);
             WorldArt.MakeBreakable(root.transform,Mathf.Clamp(12+size*6,18,28),false,ExplosionKind.Ammunition,3);
             var prop=root.GetComponent<DestructionSystem>();prop.MakeBrittle();prop.SetDebrisColor(color);
         }
-        void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random)
+        void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random,Mesh[] choices=null,string label=null,Color? tint=null)
         {
-            var root=new GameObject(pine?"Breakable ponderosa":"Breakable cottonwood");root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
+            var root=new GameObject(label??(pine?"Breakable ponderosa":"Breakable cottonwood"));root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
             var shape=propMesh;shape.Clear();
-            Mesh source=nature?nature.Pick(pine?nature.pines:nature.broadleafTrees,random):null;
-            if(!shape.Nature(source,Vector3.zero,height,random,Color.white))
+            Mesh source=nature?nature.Pick(Choose(choices,pine?nature.pines:nature.broadleafTrees),random):null;
+            if(!shape.Nature(source,Vector3.zero,height,random,tint??Color.white))
             {
                 if(pine)shape.Pine(Vector3.zero,height,random);
                 else shape.Cottonwood(Vector3.zero,height,random);
@@ -197,6 +215,8 @@ namespace MadeInArizona
             // Trees fall over rather than shatter; the mass only sets how little a blast or car can shove the trunk.
             root.GetComponent<DestructionSystem>().MakeTopple(pine?height*60:450);
         }
+        /// <summary>A biome's own models when the catalog has them, otherwise the general set (older catalogs lack the biome lists).</summary>
+        static Mesh[] Choose(Mesh[] biome,Mesh[] general)=>biome!=null&&biome.Length>0?biome:general;
         const float CactusReference=2;
         readonly Dictionary<Mesh,Mesh> cactusMeshes=new Dictionary<Mesh,Mesh>();readonly List<Mesh> cactusVariants=new List<Mesh>();
         /// <summary>
@@ -204,10 +224,10 @@ namespace MadeInArizona
         /// built at a 2 m reference height and scaled). The collider is a capsule, a line with a radius and the cheapest
         /// shape after a sphere, on a layer that never makes contact with cars; with no rigidbody it costs nothing per frame.
         /// </summary>
-        void BreakableCactus(GameObject tile,Vector3 at,float height,System.Random random)
+        void BreakableCactus(GameObject tile,Vector3 at,float height,System.Random random,Mesh[] choices=null,string label="Breakable saguaro")
         {
-            Mesh shape=CactusMesh(nature?nature.Pick(nature.cacti,random):null,random);
-            var root=new GameObject("Breakable saguaro",typeof(MeshFilter),typeof(MeshRenderer));root.layer=DestructionSystem.BrittleLayer;
+            Mesh shape=CactusMesh(nature?nature.Pick(Choose(choices,nature.cacti),random):null,random);
+            var root=new GameObject(label,typeof(MeshFilter),typeof(MeshRenderer));root.layer=DestructionSystem.BrittleLayer;
             root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;root.transform.localRotation=Quaternion.Euler(0,Next(random,0,360),0);root.transform.localScale=Vector3.one*(height/CactusReference);
             root.GetComponent<MeshFilter>().sharedMesh=shape;root.GetComponent<MeshRenderer>().sharedMaterial=material;
             var trunk=root.AddComponent<CapsuleCollider>();trunk.direction=1;trunk.height=CactusReference;trunk.center=Vector3.up*CactusReference*.5f;trunk.radius=CactusReference*.09f;
@@ -232,7 +252,7 @@ namespace MadeInArizona
             float dx=GeneratedWorld.HeightAt(p+Vector3.right)-GeneratedWorld.HeightAt(p-Vector3.right),dz=GeneratedWorld.HeightAt(p+Vector3.forward)-GeneratedWorld.HeightAt(p-Vector3.forward);
             return dx*dx+dz*dz>4*1.2f*1.2f;
         }
-        static Color StoneColor(bool forest,System.Random r)=>Color.Lerp(forest?new Color(.29f,.32f,.27f):new Color(.43f,.29f,.20f),forest?new Color(.49f,.48f,.38f):new Color(.68f,.48f,.31f),(float)r.NextDouble());
+        static Color StoneColor(bool forest,bool red,System.Random r)=>Color.Lerp(forest?new Color(.29f,.32f,.27f):red?new Color(.48f,.21f,.12f):new Color(.43f,.29f,.20f),forest?new Color(.49f,.48f,.38f):red?new Color(.72f,.38f,.22f):new Color(.68f,.48f,.31f),(float)r.NextDouble());
         internal static float Next(System.Random r,float a,float b)=>Mathf.Lerp(a,b,(float)r.NextDouble());
         /// <summary>Uniform 0..1 per grid cell, stable for a seed.</summary>
         static float CellHash(int x,int z,int seed){unchecked{uint h=(uint)(x*73856093^z*19349663^seed*83492791);h^=h>>13;h*=0x5bd1e995;h^=h>>15;return(h&0xFFFFFF)/16777216f;}}

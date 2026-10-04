@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -452,6 +453,7 @@ namespace MadeInArizona
             Check("licensed ground textures and height maps linked",groundTextures&&groundTextures.Diffuse(1)&&groundTextures.Height(1));
             var nature=PandazoleNatureCatalog.Load();
             Check("Pandazole nature meshes and atlas packaged",nature&&nature.atlas&&nature.pines.Length>0&&nature.rocks.Length>0&&nature.grasses.Length>0);
+            Check("biome nature picks packaged (saguaros, desert trees, junipers, red-rock plants and stones)",nature&&nature.saguaros?.Length==5&&nature.desertTrees?.Length==3&&nature.junipers?.Length==2&&nature.redRockPlants?.Length==5&&nature.redRocks?.Length==16&&nature.cacti?.Length==19);
             yield return TestNatureModelReview();
             yield return TestPresentationControls();
             Check("Arizona outline excludes rectangular corners",GeneratedWorld.Contains(game.World.PlayerSpawn)&&!GeneratedWorld.Contains(new Vector3(-790,0,-790))&&world.MapTexture.GetPixel(0,0).a<.1f);
@@ -492,19 +494,37 @@ namespace MadeInArizona
             game.WorldConfig.size=3200;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
             Check("maximum world size generates with bounded geometry",Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,3200)&&GeneratedWorld.Active.transform.Find("Chunked terrain").GetComponentsInChildren<MeshCollider>().Length<=64);
             game.WorldConfig.size=1600;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
-            // Inspect the forest and river using camera-only targets, leaving physics untouched.
+            // Biomes follow Arizona: Sonoran south (the starter town), red rock north-east, plateau north-west, Rim forest between.
+            var active=GeneratedWorld.Active;float span=active.WorldBounds.size.x;
+            bool geography=active.BiomeAt(active.Towns[0]).Dominant==Biome.Sonoran
+                &&active.BiomeAt(new Vector3(.3f*span,0,.38f*span)).Dominant==Biome.RedRock
+                &&active.BiomeAt(new Vector3(-.32f*span,0,.36f*span)).Dominant==Biome.Plateau
+                &&active.BiomeAt(new Vector3(-.3f*span,0,-.3f*span)).Dominant==Biome.Sonoran;
+            bool allBiomes=active.FindBiomeSpot(Biome.Sonoran)!=null&&active.FindBiomeSpot(Biome.RedRock)!=null&&active.FindBiomeSpot(Biome.Forest)!=null&&active.FindBiomeSpot(Biome.Plateau)!=null;
+            Check("biomes follow Arizona geography and all four appear",geography&&allBiomes);
+            // Inspect the biomes and river using camera-only targets, leaving physics untouched.
             var camera=CameraController.Instance;var target=camera.Target;var focus=new GameObject("World visual review");camera.Target=focus.transform;
+            foreach(var biome in new[]{Biome.RedRock,Biome.Plateau,Biome.Sonoran})
+            {
+                var spot=active.FindBiomeSpot(biome);if(spot==null)continue;
+                focus.transform.position=spot.Value;camera.Snap();
+                yield return new WaitForSecondsRealtime(3f);Capture("23-biome-"+biome.ToString().ToLowerInvariant());yield return new WaitForSecondsRealtime(.35f);
+                var names=new Dictionary<string,int>();
+                foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))
+                    if(prop&&!prop.IsDestroyed&&(prop.transform.position-spot.Value).sqrMagnitude<60*60){names.TryGetValue(prop.name,out int n);names[prop.name]=n+1;}
+                Debug.Log("MIA_BIOME_PROPS "+biome+" (within 60 m): "+string.Join(", ",names.Select(pair=>pair.Key+" x"+pair.Value)));
+            }
             for(int i=0;i<2;i++)
             {
                 Vector3 p=Vector3.zero;
-                if(i==0)p=GeneratedWorld.Active.Towns[GeneratedWorld.Active.Towns.Count-1]+new Vector3(-72,0,55);
+                if(i==0)p=active.FindBiomeSpot(Biome.Forest)??active.Towns[active.Towns.Count-1];
                 else foreach(var t in GeneratedWorld.Active.GetComponentsInChildren<Transform>(true))
                     if(t.name=="Salt River"){p=t.GetComponent<MeshFilter>().sharedMesh.vertices[t.GetComponent<MeshFilter>().sharedMesh.vertexCount/2]+Vector3.right*16;break;}
                 p.y=GeneratedWorld.HeightAt(p);focus.transform.position=p;camera.Snap();
                 yield return new WaitForSecondsRealtime(3f);Capture(i==0?"20-northern-biome":"21-river-biome");yield return new WaitForSecondsRealtime(.35f);
             }
             // A closer native view documents actual canopy/ground-cover geometry and shader detail.
-            Vector3 forest=GeneratedWorld.Active.Towns[GeneratedWorld.Active.Towns.Count-1]+new Vector3(-72,0,55);forest.y=GeneratedWorld.HeightAt(forest);
+            Vector3 forest=active.FindBiomeSpot(Biome.Forest)??active.Towns[active.Towns.Count-1];
             focus.transform.position=forest;camera.Snap();yield return new WaitForSecondsRealtime(3f);
             var ui=game.GetComponent<GameUI>();ui.enabled=false;camera.enabled=false;
             Camera.main.orthographic=false;Camera.main.fieldOfView=58;
@@ -585,8 +605,8 @@ namespace MadeInArizona
                 Debug.Log("MIA_CACTUS_DEBRIS pieces="+pieces+" mean x velocity="+(pieces>0?along/pieces:0).ToString("F2"));
                 Check("cactus pieces fly on along the shot",pieces>0&&along/pieces>1.5f);
             }
-            // Pines in the northern forest.
-            Vector3 forest=world.Towns[world.Towns.Count-1]+new Vector3(-72,0,55);forest.y=GeneratedWorld.HeightAt(forest);
+            // Pines in the Rim forest.
+            Vector3 forest=world.FindBiomeSpot(Biome.Forest)??world.Towns[world.Towns.Count-1];
             focus.transform.position=forest;camera.Snap();yield return new WaitForSecondsRealtime(3f);
             DestructionSystem tree=null;float nearest=float.MaxValue;
             foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))

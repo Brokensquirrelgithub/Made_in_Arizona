@@ -113,21 +113,23 @@ Shader "MadeInArizona/BiomeTerrain"
                 float forest=saturate(green*1.6),riverGreen=saturate(i.c.g*1.6-i.c.r*1.1-.05)*forest;
                 float highland=saturate(1-(max(i.c.r,max(i.c.g,i.c.b))-min(i.c.r,min(i.c.g,i.c.b)))*4.5)*(1-forest);
                 float desert=saturate(1-forest-highland);
+                // Red sand (the red-rock biome) is the only ground this much redder than it is yellow.
+                float redSand=saturate((i.c.r-i.c.g-.22)*7)*desert;
                 float patchA=smoothstep(.32,.68,Fbm(p*.018+float2(41,7))),patchB=smoothstep(.30,.70,Fbm(p*.061+float2(-9,23))),patchC=smoothstep(.35,.65,Noise(p*.21+float2(5,-17)));
                 float w[14];
                 w[0]=earthWeight*(desert*(1-patchA)*patchC*.8+highland*.9)+sandWeight*forest*.3;   // brown soil
-                w[1]=sandWeight*desert*(1-patchB*.55);                                             // pale sand
+                w[1]=sandWeight*desert*(1-patchB*.55)*(1-redSand);                                  // pale sand
                 w[2]=sandWeight*forest*.5*(1-patchA);                                             // pale ground with weeds
                 w[3]=earthWeight*forest*patchB*(1-riverGreen);                                    // weeds
                 w[4]=earthWeight*forest*(1-patchB)*patchA;                                        // moss and twigs
                 w[5]=(earthWeight+sandWeight)*riverGreen;                                         // lush grass by water
                 w[6]=gravelWeight*(1-patchB*.6)+earthWeight*desert*patchB*patchC*.35;             // gravel speckle
-                w[7]=earthWeight*desert*(1-patchA)*(1-patchC*.8)+gravelWeight*desert*patchB*.4;   // red pebble dirt
+                w[7]=earthWeight*desert*(1-patchA)*(1-patchC*.8)+gravelWeight*desert*patchB*.4+(sandWeight+earthWeight)*redSand*.9; // red pebble dirt
                 w[8]=gravelWeight*(forest+highland)*patchB+earthWeight*highland*patchA*.7;        // olive rocky ground
                 w[9]=earthWeight*forest*(1-patchB)*(1-patchA);                                    // dark grass tufts
                 w[10]=sandWeight*desert*patchB*.55+earthWeight*desert*patchA*(1-patchB)*.35;      // dry fibrous ground
                 w[11]=(sandWeight+earthWeight)*forest*patchC*.45;                                 // leaf and grass litter
-                w[12]=earthWeight*desert*patchA*(1-patchB*.35)+rockWeight*desert*.45;             // red cracked earth
+                w[12]=earthWeight*desert*patchA*(1-patchB*.35)+rockWeight*desert*.45+(sandWeight+earthWeight)*redSand*.6; // red cracked earth
                 w[13]=rockWeight*(1-desert*.45);                                                  // bedrock
                 // Keep the three strongest candidates.
                 int i0=0,i1=1,i2=2;float w0=-1,w1=-1,w2=-1;
@@ -157,6 +159,8 @@ Shader "MadeInArizona/BiomeTerrain"
                 float3 photo=packColor*clamp(pow(paletteLuma/packLuma,.6),.6,1.6);
                 photo=lerp(photo,photo*albedo/paletteLuma*.5+photo*.5,.4);
                 albedo=lerp(albedo,lerp(detailOnly,photo,.7),_UseGroundTextures);
+                // Warm the photo textures on red sand so the biome reads red on the ground, not only on the map.
+                albedo=lerp(albedo,albedo*float3(1.26,.8,.52),redSand*.85);
                 // Cliff walls: side-projected rock (no smearing down the face) with horizontal sandstone strata.
                 float cliffWeight=smoothstep(.22,.42,slope)*_UseGroundTextures*(1-_UseModelAlbedo);
                 UNITY_BRANCH if(cliffWeight>.001)

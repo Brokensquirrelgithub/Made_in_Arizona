@@ -18,23 +18,30 @@ MonoBehaviour:
   - {fileID: 4300000, guid: a025760322f8944d48d56feddb947f31, type: 2}
   - {fileID: 4300000, guid: 6517d9eea70b1496bbc0c5fe943649f0, type: 2}
   - {fileID: 4300000, guid: 153ab060a57014b37a1dfc0a6adffd81, type: 2}
+  - {fileID: 4300000, guid: 705a6dcff89a93348a90ea630b1b829e, type: 2}
+  - {fileID: 4300000, guid: f03d8d27b1af0b14da70f18e1159478f, type: 2}
   broadleafTrees:
   - {fileID: 4300000, guid: 3294b6add58dd4a87a1350e92c0cf3e4, type: 2}
   cacti:
-  - {fileID: 4300000, guid: b68c2ab64bd9e4e8abcb20a1383fd5f1, type: 2}
-  - {fileID: 4300000, guid: 472b9b2a023164ca185b1115f127ef67, type: 2}
   - {fileID: 4300000, guid: dfe789772d7ca4e8980078ee202a125c, type: 2}
-  - {fileID: 4300000, guid: 73e401066e025431ca9f8828d4fd559f, type: 2}
   - {fileID: 4300000, guid: 517a776257d944ef9ae481089ef0e5f2, type: 2}
-  - {fileID: 4300000, guid: e01590906bd0642bc843189591cac06c, type: 2}
-  - {fileID: 4300000, guid: b45f384f6e3fd4bda967e12a419ec7f1, type: 2}
   - {fileID: 4300000, guid: ad2f4800849b04f5fbe6a3415acc9564, type: 2}
   - {fileID: 4300000, guid: f2f15e765359749d19e3005c5b2d71ba, type: 2}
   - {fileID: 4300000, guid: 376d29a4772d54211b38adaa1685243e, type: 2}
   - {fileID: 4300000, guid: b4f155213a59546f4833826a62a604da, type: 2}
-  - {fileID: 4300000, guid: 42fd18d2ecf104b3082e28d5e1608155, type: 2}
   - {fileID: 4300000, guid: 8b3dc54c6fc314fb5a76fcfd44bd1e53, type: 2}
   - {fileID: 4300000, guid: 456e45f999994433b98592db6e87f0b0, type: 2}
+  - {fileID: 4300000, guid: 11c070ae3db50c0448f6096a5d1d04c6, type: 2}
+  - {fileID: 4300000, guid: aa5b796594b94bf4bbb3c7fdcc9357b3, type: 2}
+  - {fileID: 4300000, guid: 4e6f9191dcf6ec145a04c7061bfaa638, type: 2}
+  - {fileID: 4300000, guid: d3c4b2301f40e9e4085277d7f4ff5fea, type: 2}
+  - {fileID: 4300000, guid: 9f98226acf6f1b3468078b137e93c9a9, type: 2}
+  - {fileID: 4300000, guid: 797cebc0d02f5f74da25eb51fd01e262, type: 2}
+  - {fileID: 4300000, guid: 3624d09d915e7bf428c88827a334780e, type: 2}
+  - {fileID: 4300000, guid: 8f64a6bb144b0d54aa3a4155a5ad3a48, type: 2}
+  - {fileID: 4300000, guid: 591955e0df44c78469249ca4dac6f66d, type: 2}
+  - {fileID: 4300000, guid: 09f3058ac1662b745a1d17aa0f60ddfd, type: 2}
+  - {fileID: 4300000, guid: d27f8c1316de2c74ab18b7e5253d5e76, type: 2}
   rocks:
   - {fileID: 4300000, guid: 10fc7e3045e54485eb98629b6e64b9bd, type: 2}
   - {fileID: 4300000, guid: deaf6cd8b84b1479c8cb594739d073a1, type: 2}
@@ -72,3 +79,39 @@ MonoBehaviour:
   - {fileID: 4300000, guid: fc7601a50597046e7be905adcb54f067, type: 2}
   - {fileID: 4300000, guid: b90280d561074405d84fadc40ad5f30d, type: 2}
   - {fileID: 4300000, guid: f75851f4916a9410181f314441c5d648, type: 2}
+  saguaros:
+  - {fileID: 4300000, guid: 42a86f91150c87b4eacc1779f60d1f46, type: 2}
+  - {fileID: 4300000, guid: cde598dfe1931de49b1e3f38122698b1, type: 2}
+  - {fileID: 4300000, guid: 20864fbf92b056041a8a5fcd5b3710fb, type: 2}
+  - {fileID: 4300000, guid: 3c76c1681a88c064bba20aeb74f401e9, type: 2}
+  - {fileID: 4300000, guid: 72883694d0c6d6d4aa1db874f599fbf4, type: 2}
+  redRockPlants:
+  - {fileID: 4300000, guid: 09f3058ac1662b745a1d17aa0f60ddfd, type: 2}
+  - {fileID: 4300000, guid: d27f8c1316de2c74ab18b7e5253d5e76, type: 2}
+  - {fileID: 4300000, guid: 8b3dc54c6fc314fb5a76fcfd44bd1e53, type: 2}
+  - {fileID: 4300000, guid: 11c070ae3db50c0448f6096a5d1d04c6, type: 2}
+  - {fileID: 4300000, guid: 8f64a6bb144b0d54aa3a4155a5ad3a48, type: 2}
+  desertTrees:
+  - {fileID: 4300000, guid: 013e1e4f45ed5a3408cb0385d3d4b2a6, type: 2}
+  - {fileID: 4300000, guid: 9a89f94d3913e264794bea39a4274c6b, type: 2}
+  - {fileID: 4300000, guid: 9ff4125d13dcfef40bf8e96bb30e0614, type: 2}
+  junipers:
+  - {fileID: 4300000, guid: cd757afc727b39e479b069c65d95cfbe, type: 2}
+  - {fileID: 4300000, guid: 78e3b133c337fbd41bbb092313e69cc2, type: 2}
+  redRocks:
+  - {fileID: 4300000, guid: 6bb5b7454c27d8f45ae660765a1237fd, type: 2}
+  - {fileID: 4300000, guid: 51a484b503d12394fa6517170fb0a1cb, type: 2}
+  - {fileID: 4300000, guid: 6ef450ad06a311a47aabe35b1a089b5f, type: 2}
+  - {fileID: 4300000, guid: 314346596a3972d4e8670bf7241d977b, type: 2}
+  - {fileID: 4300000, guid: 799b45705a66dee468d501def1a8b222, type: 2}
+  - {fileID: 4300000, guid: a485892e8b9245f4c8d41c6bb5af2762, type: 2}
+  - {fileID: 4300000, guid: baf5359b98549ef4a9085b99f0db18d0, type: 2}
+  - {fileID: 4300000, guid: 4c2aa22862dcc3846ab576e6be8c1762, type: 2}
+  - {fileID: 4300000, guid: d1bcd980ebbd1824faf98474c7be4db1, type: 2}
+  - {fileID: 4300000, guid: 9a83fccfe623f1c4684f41db17c77160, type: 2}
+  - {fileID: 4300000, guid: ef81ce9c1e189eb488d1dbf370dcac12, type: 2}
+  - {fileID: 4300000, guid: cdc3a92e700ef4b4badb7492055a56b6, type: 2}
+  - {fileID: 4300000, guid: ba70e4cc87804c04d8e6dd27c03c7714, type: 2}
+  - {fileID: 4300000, guid: 1f16b60516df13a4885567c7266b361b, type: 2}
+  - {fileID: 4300000, guid: 7ee99f9c4d61cd34788eb6bf15e57f00, type: 2}
+  - {fileID: 4300000, guid: 2ec27d4da6b5e5040964270b22b124c5, type: 2}

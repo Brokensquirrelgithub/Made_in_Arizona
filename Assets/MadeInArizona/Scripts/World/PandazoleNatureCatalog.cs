@@ -12,6 +12,17 @@ namespace MadeInArizona
         public Mesh[] rocks;
         public Mesh[] grasses;
         public Mesh[] bushes;
+        // Per-biome picks from a contact-sheet review (Builds/AssetReview via AssetLineupReview).
+        /// <summary>Sonoran: tall branched saguaros, mixed in among the other cacti.</summary>
+        public Mesh[] saguaros;
+        /// <summary>Red rock: prickly pear and small barrel cacti.</summary>
+        public Mesh[] redRockPlants;
+        /// <summary>Sonoran: flat-canopied, crooked-trunk trees standing in for mesquite and palo verde.</summary>
+        public Mesh[] desertTrees;
+        /// <summary>Plateau: dense rounded canopies on short trunks standing in for juniper and pinyon.</summary>
+        public Mesh[] junipers;
+        /// <summary>Red rock: orange-brown sandstone stones (the pack's tinted SoftRock set).</summary>
+        public Mesh[] redRocks;
         /// <summary>
         /// Pack models built only from stacked boxes (Grass_07 and Grass_08 are four axis-aligned cubes each) read as
         /// placeholder geometry next to the rest of the ecology, so they are never scattered.

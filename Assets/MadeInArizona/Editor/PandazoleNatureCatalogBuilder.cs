@@ -24,9 +24,19 @@ namespace MadeInArizona.Editor
             catalog.atlas=AssetDatabase.LoadAssetAtPath<Texture2D>(Pack+"/Textures/PandaMat.png");
             // Native model review: 01–04 are conifers, 05 is broadleaf; 06–12
             // contain palms and tropical shapes unsuited to northern Arizona forests.
-            catalog.pines=Find("Tree_*_Spring",4);catalog.broadleafTrees=Find("Tree_05_Spring",1);
-            catalog.cacti=Find("Cactus_*_A",14);catalog.rocks=Find("HardRock_*",14);
+            // 23 and 24 (layered conifers) were added after the contact-sheet review of 13–37.
+            catalog.pines=Find("Tree_*_Spring",4).Concat(Named("Tree_23_Spring","Tree_24_Spring")).ToArray();catalog.broadleafTrees=Find("Tree_05_Spring",1);
+            catalog.rocks=Find("HardRock_*",14);
             catalog.grasses=Find("Grass_*",12);catalog.bushes=Find("Bush_*",8);
+            // Biome picks (Builds/AssetReview contact sheets): Sonoran organ pipes, columns, barrels, prickly pear and an
+            // ocotillo; the chunky blocks, bent single stems and thin segmented shapes are left out.
+            catalog.cacti=Named("Cactus_03_A","Cactus_05_A","Cactus_08_A","Cactus_09_A","Cactus_10_A","Cactus_11_A","Cactus_13_A","Cactus_14_A","Cactus_15_A",
+                "Cactus_18_A","Cactus_19_A","Cactus_20_A","Cactus_21_A","Cactus_22_A","Cactus_23_A","Cactus_24_A","Cactus_26_A","Cactus_27_A","Cactus_28_A");
+            catalog.saguaros=Named("Cactus_17_A","Cactus_35_A","Cactus_36_A","Cactus_37_A","Cactus_38_A");
+            catalog.redRockPlants=Named("Cactus_27_A","Cactus_28_A","Cactus_13_A","Cactus_15_A","Cactus_24_A");
+            catalog.desertTrees=Named("Tree_26_Spring","Tree_27_Spring","Tree_28_Spring");
+            catalog.junipers=Named("Tree_16_Spring","Tree_17_Spring");
+            catalog.redRocks=Named(Enumerable.Range(17,16).Select(i=>"SoftRock_"+i.ToString("00")).ToArray());
             EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();
             Debug.Log("MIA_PANDAZOLE_OK: shared low-poly tree, cactus, rock, grass and bush meshes cataloged for streamed runtime batches.");
         }
@@ -62,6 +72,7 @@ namespace MadeInArizona.Editor
             }
             return result.ToArray();
         }
+        static Mesh[] Named(params string[] names)=>names.SelectMany(name=>Find(name,1)).ToArray();
         static bool Match(string name,string pattern)
         {
             string[] parts=pattern.Split('*');int at=0;

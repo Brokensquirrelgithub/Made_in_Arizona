@@ -224,7 +224,9 @@ namespace MadeInArizona
                 if (!InOutline(center / size)) continue;
                 // Every map gets at least one arch: the last slot tries for one first if none has been placed.
                 bool wantArch = landforms.Count == target - 1 && ArchPoints.Count == 0 && attempt < target * 60;
-                var kind = wantArch ? LandformKind.Arch : PickLandform(random, Mathf.InverseLerp(-half, half, center.y));
+                // The guaranteed arch looks for red rock first, then settles for anywhere.
+                if (wantArch && attempt < target * 30 && BiomeAt(new Vector3(center.x, 0, center.y)).redRock < .3f) continue;
+                var kind = wantArch ? LandformKind.Arch : PickLandform(random, center);
                 // Arches are small and fit where big formations do not, so without a cap they crowd the mix.
                 if (kind == LandformKind.Arch && ArchPoints.Count >= (size < 1000 ? 1 : size < 2000 ? 3 : 4)) continue;
                 float yaw = Rand(random, 0, 360), height = ShapeLandform(kind, random, shape);
@@ -324,16 +326,19 @@ namespace MadeInArizona
             return true;
         }
 
-        LandformKind PickLandform(System.Random random, float north)
+        /// <summary>The landform suited to the biome at a site (see <see cref="BiomeAt"/>).</summary>
+        LandformKind PickLandform(System.Random random, Vector2 site)
         {
             double roll = random.NextDouble();
-            // The compact test map needs shorter ridges and more small landmarks between its towns and roads.
-            if (size < 1000) return roll < .4 ? LandformKind.Cliff : roll < .58 ? LandformKind.Mesa : roll < .76 ? LandformKind.Butte : roll < .88 ? LandformKind.Arch : LandformKind.Boulders;
-            // Ridges remain the main barriers. Mesas, buttes, spires and arches stand between them, most thickly in the
-            // north, where Monument Valley sits.
-            if (north < .4f) return roll < .62 ? LandformKind.Cliff : roll < .76 ? LandformKind.Mesa : roll < .86 ? LandformKind.Butte : roll < .92 ? LandformKind.Arch : LandformKind.Boulders;
-            if (north < .68f) return roll < .6 ? LandformKind.Cliff : roll < .74 ? LandformKind.Mesa : roll < .86 ? LandformKind.Butte : roll < .93 ? LandformKind.Arch : LandformKind.Boulders;
-            return roll < .4 ? LandformKind.Cliff : roll < .62 ? LandformKind.Mesa : roll < .82 ? LandformKind.Butte : roll < .92 ? LandformKind.Arch : LandformKind.Boulders;
+            var biome = BiomeAt(new Vector3(site.x, 0, site.y));
+            // Red rock is monument country: mesas, buttes, spires and arches, with few ridges.
+            if (biome.redRock > .5f) return roll < .15 ? LandformKind.Cliff : roll < .45 ? LandformKind.Mesa : roll < .8 ? LandformKind.Butte : roll < .93 ? LandformKind.Arch : LandformKind.Boulders;
+            // Canyon and plateau country: long ridges and broad mesas.
+            if (biome.plateau > .5f) return roll < .62 ? LandformKind.Cliff : roll < .84 ? LandformKind.Mesa : roll < .93 ? LandformKind.Butte : LandformKind.Boulders;
+            // The Rim forest: ridges and boulder piles.
+            if (biome.forest > .5f) return roll < .74 ? LandformKind.Cliff : roll < .92 ? LandformKind.Boulders : LandformKind.Mesa;
+            // Sonoran: desert ranges, boulder piles and the odd butte.
+            return roll < .7 ? LandformKind.Cliff : roll < .88 ? LandformKind.Boulders : roll < .96 ? LandformKind.Butte : LandformKind.Mesa;
         }
 
         /// <summary>Fills <paramref name="shape"/> with local footprint circles (x, z, radius) and returns the landform height.</summary>

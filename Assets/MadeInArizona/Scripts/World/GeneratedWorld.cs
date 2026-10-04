@@ -201,11 +201,8 @@ namespace MadeInArizona
         void POI(Vector3 p,int i,string label){Transform g=Group("POI • "+label,transform,p);if(i%3==0){for(int y=0;y<4;y++)Box("Radio mast",g,new Vector3(0,y*3+1.5f,0),new Vector3(.4f,3,.4f),Cream);Lamp("Beacon",g,new Vector3(0,13,0),Orange,4,10);}else if(i%3==1){Box("Mine portal",g,new Vector3(0,2,0),new Vector3(7,4,1),Ink,true);Box("Mine lintel",g,new Vector3(0,4.2f,0),new Vector3(9,.7f,1.2f),Rust);}else{RoadsideProps.JunkCar(g,Vector3.zero,Rust,R(0,360));RoadsideProps.Crate(g,new Vector3(3,0,1),1.3f);}}
         Color BiomeColor(Vector3 p)
         {
-            float n=Mathf.InverseLerp(-half,half,p.z);
-            var b=cfg.biomeThresholds;
-            Color c=Color.Lerp(new Color(.76f,.62f,.40f),new Color(.64f,.35f,.18f),Mathf.SmoothStep(0,1,Mathf.InverseLerp(b.lowland-.15f,b.lowland+.1f,n)));
-            c=Color.Lerp(c,new Color(.25f,.37f,.20f),Mathf.SmoothStep(0,1,Mathf.InverseLerp(b.scrub-.06f,b.scrub+.12f,n)));
-            c=Color.Lerp(c,new Color(.46f,.39f,.32f),Mathf.SmoothStep(0,1,Mathf.InverseLerp(b.highland,b.highland+.18f,n)));
+            // Biomes follow Arizona's real geography (GeneratedWorldBiomes); rivers stay green through any of them.
+            Color c=BiomeGround(p);
             if(riverWidth>0)c=Color.Lerp(new Color(.27f,.40f,.23f),c,Mathf.InverseLerp(riverWidth,riverWidth*4,Mathf.Abs(p.x-RiverX(p.z))));
             return c;
         }
@@ -244,8 +241,9 @@ namespace MadeInArizona
             if(Active.RoadDistance(XZ(p))<9 || Active.TownDistance(XZ(p))<34)return SurfaceKind.Asphalt;
             if(Active.riverWidth>0&&Mathf.Abs(p.x-Active.RiverX(p.z))<Active.riverWidth)return SurfaceKind.Water;
             if(Active.TrailEdgeDistance(XZ(p))<0)return SurfaceKind.Dirt;
-            float n=Mathf.InverseLerp(-Active.half,Active.half,p.z);
-            return n<Active.cfg.biomeThresholds.lowland?SurfaceKind.Sand:n>Active.cfg.biomeThresholds.highland?SurfaceKind.Rocks:SurfaceKind.Dirt;
+            // Desert floors (Sonoran, red sand) are sand, the plateau is rock and the Rim forest is dirt.
+            var biome=Active.BiomeAt(p).Dominant;
+            return biome==Biome.Sonoran||biome==Biome.RedRock?SurfaceKind.Sand:biome==Biome.Plateau?SurfaceKind.Rocks:SurfaceKind.Dirt;
         }
         // The river is carved last, into graded ground: road embankments and town pads used to bury it at crossings.
         float HeightInternal(float x,float z)=>CarveRiver(x,z,GroundHeight(x,z));

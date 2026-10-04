@@ -96,7 +96,7 @@ namespace MadeInArizona
             Text(x,100,400,40,"OFF THE ROAD",24,Orange,true);
             Text(x,148,390,100,"Towns are charted. Secrets appear as you explore. Orange locations demand better equipment. Click the map to place a waypoint.",17,Muted);
             Text(x,261,390,36,"VEHICLE CAPABILITY: TIER "+WorldExploration.CurrentTier,19,Lime,true);
-            Text(x,309,390,94,"South: Sonoran cactus and flats\nRiver: riparian vegetation\nNorth: pine forest and mountain ridges",16,Cream);
+            Text(x,309,390,94,"South: Sonoran cactus and flats\nThe Rim: ponderosa forest\nNorth-east: red rock and monuments\nNorth-west: canyon and plateau",16,Cream);
             DrawWorldCrafting(x,420);
             Text(35,height-42,width-70,28,"Green: you    Orange: mission    Cream: towns    Blue: discoveries / waypoint",14,Muted);
             if(Event.current.type==EventType.MouseDown&&area.Contains(Event.current.mousePosition))
