@@ -12,5 +12,8 @@ namespace MadeInArizona
         public float rideHeight = .7f, wheelbase = 2.3f, trackWidth = 1.5f, suspensionTravel = .3f, springStiffness = 1, damping = .7f, finalDrive = 4.1f;
         public Color color = Color.cyan;
         public Drivetrain drivetrain; public Differential differential;
+        /// <summary>EngineLayouts id for the physical engine voice (cylinders, firing order, headers, exhaust).</summary>
+        public string engineLayout;
+        public EngineLayout Engine => EngineLayouts.Find(string.IsNullOrEmpty(engineLayout) ? EngineLayouts.ForVehicle(id) : engineLayout);
     }
 }

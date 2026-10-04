@@ -36,3 +36,4 @@ MonoBehaviour:
   color: {r: 0.68, g: 0.34, b: 0.95, a: 1}
   drivetrain: 2
   differential: 1
+  engineLayout: inline4-bike

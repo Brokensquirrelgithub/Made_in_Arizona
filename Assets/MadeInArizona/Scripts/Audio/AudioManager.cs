@@ -23,7 +23,10 @@ namespace MadeInArizona
                 &&decay==other.decay&&body==other.body&&rasp==other.rasp&&saturation==other.saturation;
         }
         EngineShape generatedShape,targetShape;
-        float engineShapeChangedAt,engineModeBlend;
+        float engineShapeChangedAt,engineModeBlend,physicalBlend;
+        /// <summary>Physical engine voice (dev model C), rendered on the audio thread for the player's own engine layout.</summary>
+        EngineVoiceSource physicalEngine;
+        public EngineVoiceSource PhysicalEngine => physicalEngine;
         AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,nitroLevel,nitroOffAt=-10;
         bool wasBoosting;
         MusicManager music;
@@ -34,6 +37,9 @@ namespace MadeInArizona
             var engineTuning=DevTuning.Current;
             generatedShape=targetShape=EngineShape.From(engineTuning);
             engineModeBlend=engineTuning.enginePreserveEdges?1:0;
+            physicalBlend=engineTuning.enginePhysical?1:0;
+            var physicalObject=new GameObject("Physical engine");physicalObject.transform.SetParent(transform,false);
+            physicalObject.AddComponent<AudioSource>();physicalEngine=physicalObject.AddComponent<EngineVoiceSource>();
             int layers=AudioSynthesis.EngineLayerHz.Length;
             engineOn=new AudioSource[layers];engineOff=new AudioSource[layers];engineBOn=new AudioSource[layers];engineBOff=new AudioSource[layers];
             for(int i=0;i<layers;i++)
@@ -103,15 +109,21 @@ namespace MadeInArizona
             var tuning=DevTuning.Current;
             RefreshEngineShape(tuning);
             engineModeBlend=Mathf.MoveTowards(engineModeBlend,tuning.enginePreserveEdges?1:0,Time.unscaledDeltaTime*20);
+            physicalBlend=Mathf.MoveTowards(physicalBlend,tuning.enginePhysical?1:0,Time.unscaledDeltaTime*20);
             if(player&&player.Damage!=null)
             {
                 float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.Throttle;
-                UpdateEngineBank(rpm,load,player.Damage.IsDead?0:active?1:.3f,gain);
+                float presence=player.Damage.IsDead?0:active?1:.3f;
+                UpdateEngineBank(rpm,load,presence*(1-physicalBlend),gain);
+                UpdatePhysicalEngine(player,presence,gain);
                 if(active&&!player.Damage.IsDead)UpdateCrackle(player,rpm,load,gain);
                 if(active&&player.Gear!=previousGear){previousGear=player.Gear;PlayAt(shift,player.transform.position,.24f*gain*tuning.shiftLevel,Random.Range(.9f,1.1f),70);}
                 float boost=active&&player.Boosting&&!player.Damage.IsDead?1:0;
                 UpdateNitro(player,active,boost>0,rpm,gain);
-                whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f)*tuning.turboWhineLevel:0;
+                // A turbocharged physical voice whistles itself, following its own shaft speed; the generic whine steps aside.
+                var voice=physicalEngine.Voice;bool voiceTurbo=voice!=null&&voice.Turbocharged;
+                float genericWhine=1-(voiceTurbo?physicalBlend:0);
+                whine.pitch=.55f+rpm*1.6f;whine.volume=active?gain*(load*rpm*.027f+boost*.027f)*tuning.turboWhineLevel*genericWhine:0;
                 road.pitch=.6f+player.SpeedKph/80;
                 float rough=WorldBuilder.SurfaceAt(player.transform.position)==SurfaceKind.Asphalt?.12f:.36f;
                 road.volume=active?Settings.environment*(Mathf.Clamp01(player.SpeedKph/80)*rough+player.DriftAmount*.13f)*duck:0;
@@ -119,10 +131,16 @@ namespace MadeInArizona
                 float scrub = active && tyres && tyres.IsSkidding ? Mathf.Clamp01(player.SideSlip * 1.2f + player.WheelSpin * .5f) : 0;
                 drift.volume = Mathf.MoveTowards(drift.volume, Settings.environment * scrub * .42f * duck, Time.unscaledDeltaTime * 3);
                 drift.pitch = pavedScrub(player) ? 1.15f : .82f;
-                if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt){blowoffAt=Time.time+.5f;PlayAt(release,player.transform.position,.18f*gain*tuning.exhaustPopLevel,1+rpm*.3f,75);}
+                if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt)
+                {
+                    // With the turbo voice the blow-off valve only vents real boost: louder the harder the shaft was spinning.
+                    float vent=voiceTurbo&&physicalBlend>.5f?Mathf.InverseLerp(.2f,.8f,voice.Spool)*1.6f:1;
+                    blowoffAt=Time.time+.5f;
+                    if(vent>0)PlayAt(release,player.transform.position,.18f*gain*tuning.exhaustPopLevel*vent,1+rpm*.3f,75);
+                }
                 lastThrottle=load;
             }
-            else{UpdateEngineBank(0,0,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;drift.volume=0;}
+            else{UpdateEngineBank(0,0,0,0);UpdatePhysicalEngine(null,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;drift.volume=0;}
             UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
             AudioListener.volume=OutputVolume(Settings.master);
@@ -156,6 +174,24 @@ namespace MadeInArizona
                 engineOn[i].volume=onVolume*(1-engineModeBlend);engineOff[i].volume=offVolume*(1-engineModeBlend);
                 engineBOn[i].volume=onVolume*engineModeBlend;engineBOff[i].volume=offVolume*engineModeBlend;
             }
+        }
+        /// <summary>
+        /// Drives the physical voice with the player's engine layout. The game's 850–7200 tachometer is mapped onto
+        /// that engine's own idle–redline range, so a diesel tops out near 3300 rpm and the bike engine near 11,500.
+        /// </summary>
+        /// <summary>
+        /// Mix level of the physical voice against the rest of the game (-6 dB after the first playtest found it too loud).
+        /// Applied after the voice's own limiter, so it changes loudness without changing the saturation character.
+        /// </summary>
+        const float PhysicalMixLevel=.5f;
+        void UpdatePhysicalEngine(VehicleController player,float presence,float gain)
+        {
+            if(player&&player.Definition)physicalEngine.Bind(player.Definition.Engine,player.Stats!=null&&player.Stats.turbocharged);
+            var engine=physicalEngine.Layout;if(engine==null)return;
+            var tuning=DevTuning.Current;
+            float revs=player?Mathf.Clamp01((player.RPM-850)/(7200-850)):0;
+            float rpm=Mathf.Lerp(engine.idleRpm,engine.redlineRpm,revs)*tuning.enginePitch;
+            physicalEngine.Drive(rpm,player?player.Throttle:0,presence*gain*physicalBlend*PhysicalMixLevel,tuning);
         }
         /// <summary>
         /// Nitro: a whump as the charge lights, a roaring burn that climbs in pitch with road speed while held, and a

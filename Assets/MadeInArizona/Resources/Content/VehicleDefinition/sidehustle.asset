@@ -36,3 +36,4 @@ MonoBehaviour:
   color: {r: 0.86, g: 0.82, b: 0.67, a: 1}
   drivetrain: 1
   differential: 0
+  engineLayout: v6

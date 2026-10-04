@@ -36,3 +36,4 @@ MonoBehaviour:
   color: {r: 0.25, g: 0.29, b: 0.34, a: 1}
   drivetrain: 1
   differential: 2
+  engineLayout: inline6-diesel

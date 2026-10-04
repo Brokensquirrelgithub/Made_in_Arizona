@@ -35,6 +35,7 @@ MonoBehaviour:
   finalDriveMultiplier: 1
   changesDrivetrain: 0
   changesDifferential: 0
+  turbocharger: 1
   drivetrain: 0
   differential: 0
   compatibleVehicles:

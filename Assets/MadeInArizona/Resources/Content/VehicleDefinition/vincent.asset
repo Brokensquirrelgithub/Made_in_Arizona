@@ -36,3 +36,4 @@ MonoBehaviour:
   color: {r: 0.72, g: 0.26, b: 0.12, a: 1}
   drivetrain: 2
   differential: 2
+  engineLayout: v8-flatplane

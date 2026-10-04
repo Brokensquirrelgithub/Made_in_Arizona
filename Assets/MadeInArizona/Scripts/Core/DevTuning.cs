@@ -24,7 +24,9 @@ namespace MadeInArizona
         public float enginePulseVariation=1f, engineBody=1f, engineRasp=1f, engineSaturation=1f;
         public float enginePulsePressure=1f, enginePulseAttack=1f, enginePulseDecay=1f;
         public bool enginePreserveEdges;
-        public int audioVersion=2;
+        /// <summary>C: the physical engine voice (EngineVoice) instead of the A/B loop bank.</summary>
+        public bool enginePhysical=true;
+        public int audioVersion=3;
         public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
         public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
@@ -74,6 +76,11 @@ namespace MadeInArizona
                 enginePulseDecay=defaults.enginePulseDecay;
                 enginePreserveEdges=false; // Existing saves retain the original sound until B is selected.
                 audioVersion=2;
+            }
+            if (audioVersion < 3)
+            {
+                enginePhysical=defaults.enginePhysical; // The experiment starts on the physical voice; A and B stay selectable.
+                audioVersion=3;
             }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;

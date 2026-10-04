@@ -42,6 +42,7 @@ namespace MadeInArizona
             v.drivetrain = drive; v.differential = diff; v.color = color; v.cost = cost; v.unlockMission = unlock;
             v.suspensionTravel = travel; v.rideHeight = ride; v.wheelbase = wheelbase; v.trackWidth = track; v.finalDrive = finalDrive;
             v.springStiffness = mass * (mass > 1700 ? 44f : 38f); v.damping = mass * 4.5f;
+            v.engineLayout = EngineLayouts.ForVehicle(id);
             return v;
         }
         /// <summary>#4d8a78, the factory green of the Geo Metro the Thimble Sprint is based on.</summary>
@@ -109,7 +110,7 @@ namespace MadeInArizona
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             Find("cam").torqueMultiplier = 1.12f;
-            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "thimble" };
+            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "thimble" }; Find("turbo").turbocharger = true;
             Find("blower").torqueMultiplier = 1.38f; Find("blower").compatibleVehicles = new[] { "foreclosure", "perennial", "sidehustle", "sunskip" };
             Find("ecu").torqueMultiplier = 1.12f; Find("swap").torqueMultiplier = 1.55f; Find("swap").compatibleVehicles = new[] { "thimble", "juniper" };
             foreach (string id in new[] { "lsd", "locker", "welded" }) Find(id).changesDifferential = true;

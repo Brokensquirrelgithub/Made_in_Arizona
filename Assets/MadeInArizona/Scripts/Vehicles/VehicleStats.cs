@@ -9,6 +9,8 @@ namespace MadeInArizona
         public float mass, horsepower, torque, maxSpeed, grip, turnSpeed, maxHealth;
         public float rideHeight, wheelbase, trackWidth, suspensionTravel, springStiffness, damping, finalDrive;
         public float cooling = 1f;
+        /// <summary>A turbocharger part is installed (physical engine voice: boost, turbine damping, whistle).</summary>
+        public bool turbocharged;
         public Drivetrain drivetrain;
         public Differential differential;
 

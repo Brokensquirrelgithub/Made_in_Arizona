@@ -41,6 +41,8 @@ namespace MadeInArizona
             { yield return TestEnemyBalance(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponAudioTest")>=0)
             { yield return TestImportedWeaponAudio(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEngineAudioTest")>=0)
+            { yield return TestEngineAudio(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0)
             {
                 var campaignKeyboard=InputSystem.AddDevice<Keyboard>();
@@ -896,6 +898,122 @@ namespace MadeInArizona
             bool muted=true;foreach(var source in audio.GetComponentsInChildren<AudioSource>())if(source.gameObject!=audio.gameObject&&source.isPlaying)muted&=source.volume==0;
             Check("weapons volume mutes imported shots",muted);
             game.Save.settings.weapons=oldVolume;game.ReturnToGarage();
+        }
+        /// <summary>
+        /// Physical engine voice: every vehicle resolves a valid layout, each layout renders finite, bounded audio
+        /// within the CPU budget, the Thimble's three-cylinder firing period is present, and the live voice follows
+        /// the player's vehicle and the A/B/C model choice. Set MIA_AUDIO_DIR to also write each sweep as a WAV.
+        /// </summary>
+        IEnumerator TestEngineAudio()
+        {
+            var game=GameManager.Instance;var audio=AudioManager.Instance;
+            bool layoutsValid=true;
+            foreach(var vehicle in ContentCatalog.Vehicles)
+            {
+                var layout=vehicle.Engine;
+                bool valid=layout!=null&&layout.Cylinders>0&&layout.headerLength.Length==layout.Cylinders&&layout.collector.Length==layout.Cylinders
+                    &&layout.Collectors>0&&layout.pan.Length==layout.Collectors&&layout.redlineRpm>layout.idleRpm
+                    &&Array.TrueForAll(layout.collector,c=>c>=0&&c<layout.Collectors);
+                if(!valid)Debug.LogError("MIA_ENGINE_LAYOUT: invalid engine layout for "+vehicle.id);
+                layoutsValid&=valid;
+            }
+            Check("every vehicle resolves a valid engine layout",layoutsValid);
+            var thimble=Array.Find(ContentCatalog.Vehicles,v=>v.id=="thimble");
+            Check("Thimble Sprint (Geo Metro) uses the three-cylinder layout",thimble&&thimble.Engine.id=="inline3"&&thimble.Engine.Cylinders==3);
+
+            string wavDir=Environment.GetEnvironmentVariable("MIA_AUDIO_DIR");
+            bool allBounded=true;float worstLoad=0;
+            foreach(var layout in EngineLayouts.All)
+            {
+                var voice=new EngineVoice(layout,48000);
+                var block=new float[2048];var pcm=new float[48000*2*4];int written=0;bool finite=true;float peak=0;double energy=0;
+                for(int frame=0;frame<48000*4;frame+=1024)
+                {
+                    float t=frame/48000f;
+                    voice.TargetRpm=t<1?layout.idleRpm:t<3?Mathf.Lerp(layout.idleRpm,layout.redlineRpm,(t-1)/2):Mathf.Lerp(layout.redlineRpm,layout.idleRpm,t-3);
+                    voice.Throttle=t>=1&&t<3?1:0;voice.Gain=1;
+                    voice.Render(block,2);
+                    foreach(float v in block){finite&=!float.IsNaN(v)&&!float.IsInfinity(v);peak=Mathf.Max(peak,Mathf.Abs(v));energy+=v*v;if(written<pcm.Length)pcm[written++]=v;}
+                    if(t>2)worstLoad=Mathf.Max(worstLoad,voice.Load);
+                }
+                float rms=(float)Math.Sqrt(energy/written);
+                bool bounded=finite&&peak<=1&&rms>.02f;
+                if(!bounded)Debug.LogError("MIA_ENGINE_RENDER: "+layout.id+" finite="+finite+" peak="+peak+" rms="+rms);
+                allBounded&=bounded;
+                if(!string.IsNullOrEmpty(wavDir)){Directory.CreateDirectory(wavDir);WriteWav(Path.Combine(wavDir,"engine-"+layout.id+".wav"),pcm,48000);}
+                yield return null;
+            }
+            Check("every engine layout renders finite, audible, unclipped audio",allBounded);
+            Debug.Log("MIA_ENGINE_CPU: worst smoothed render load "+(worstLoad*100).ToString("0.00")+"% of one core per voice");
+            Check("physical engine voice stays under 5% of one core",worstLoad>0&&worstLoad<.05f);
+            Check("Thimble three-cylinder firing period is present at 3000 rpm",FiringPeriodPresent(thimble.Engine,3000));
+            float stockHigh=HighBandShare(new EngineVoice(thimble.Engine,48000),out _,out _);
+            float turboHigh=HighBandShare(new EngineVoice(thimble.Engine,48000,true),out float boostSpool,out float liftSpool);
+            Debug.Log("MIA_ENGINE_TURBO: spool at boost "+boostSpool.ToString("0.00")+", after 1 s lift "+liftSpool.ToString("0.00")+", exhaust >2 kHz share stock "+stockHigh.ToString("0.000")+" turbo "+turboHigh.ToString("0.000"));
+            Check("Thimble turbo spools under load and coasts down on lift",boostSpool>.5f&&liftSpool<boostSpool*.75f);
+            Check("Thimble turbo turbine softens the exhaust pulses",turboHigh<stockHigh*.9f);
+
+            game.Save.settings.dev.enginePhysical=true;
+            if(game.Player==null||game.Player.Definition==null||game.Player.Definition.id!="thimble")
+            {GarageManager.SelectVehicle(0,game.Save);game.RefreshGarageVehicle();}
+            yield return new WaitForSecondsRealtime(.6f);
+            var live=audio.PhysicalEngine;
+            Check("live physical voice follows the player's vehicle",live&&live.Layout!=null&&live.Layout.id==game.Player.Definition.Engine.id);
+            Check("live physical voice renders on the audio thread",live&&live.GetComponent<AudioSource>().isPlaying&&live.Voice.Gain>0&&live.Voice.Load>0);
+            game.Save.settings.dev.enginePhysical=false;
+            yield return new WaitForSecondsRealtime(.4f);
+            Check("choosing model A or B silences the physical voice",live.Voice.Gain==0);
+            game.Save.settings.dev.enginePhysical=true;
+
+            var save=game.Save;bool owned=save.ownedParts.Contains("turbo"),installed=save.installedParts.Contains("turbo");
+            if(!owned)save.ownedParts.Add("turbo");if(!installed)save.installedParts.Add("turbo");
+            game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
+            Check("installing the Thimble turbo rebuilds the live voice with a turbocharger",game.Player.Stats.turbocharged&&live.Voice.Turbocharged&&live.Layout.id=="inline3");
+            if(!installed)save.installedParts.Remove("turbo");if(!owned)save.ownedParts.Remove("turbo");
+            game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
+            Check("removing the turbo restores the stock voice",!game.Player.Stats.turbocharged&&!live.Voice.Turbocharged);
+        }
+        /// <summary>
+        /// Two seconds of full throttle at 4500 rpm, then one second lifted. Returns the share of full-load energy
+        /// above about 2 kHz, plus the turbo shaft speed at the end of the pull and after the lift.
+        /// </summary>
+        static float HighBandShare(EngineVoice voice,out float boostSpool,out float liftSpool)
+        {
+            var block=new float[2048];double low=0,high=0;float lowPass=0;boostSpool=0;
+            voice.Gain=1;voice.TargetRpm=4500;voice.Throttle=1;
+            for(int frame=0;frame<96000;frame+=1024)
+            {
+                voice.Render(block,2);
+                if(frame>=48000)for(int i=0;i<1024;i++){float x=block[2*i];lowPass+=(x-lowPass)*.23f;low+=lowPass*lowPass;high+=(x-lowPass)*(x-lowPass);}
+            }
+            boostSpool=voice.Spool;voice.Throttle=0;
+            for(int frame=0;frame<48000;frame+=1024)voice.Render(block,2);
+            liftSpool=voice.Spool;
+            return (float)(high/Math.Max(1e-12,low+high));
+        }
+        /// <summary>Steady-state autocorrelation has a peak within 3% of the firing interval.</summary>
+        static bool FiringPeriodPresent(EngineLayout layout,float rpm)
+        {
+            const int rate=48000;
+            var voice=new EngineVoice(layout,rate){TargetRpm=rpm,Throttle=1,Gain=1,Variation=0};
+            var block=new float[2048];var mono=new float[rate/2];
+            for(int i=0;i<40;i++)voice.Render(block,2);
+            for(int w=0;w<mono.Length;){voice.Render(block,2);for(int i=0;i<1024&&w<mono.Length;i++)mono[w++]=block[2*i]+block[2*i+1];}
+            float period=rate*120f/(rpm*layout.Cylinders);
+            double zero=0;foreach(float v in mono)zero+=v*v;
+            double best=0;
+            for(int lag=Mathf.FloorToInt(period*.97f);lag<=Mathf.CeilToInt(period*1.03f);lag++)
+            {double r=0;for(int i=0;i+lag<mono.Length;i++)r+=mono[i]*mono[i+lag];best=Math.Max(best,r/zero);}
+            return best>.4;
+        }
+        static void WriteWav(string path,float[] stereo,int rate)
+        {
+            using var writer=new BinaryWriter(File.Create(path));
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));writer.Write(36+stereo.Length*2);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));writer.Write(16);writer.Write((short)1);writer.Write((short)2);
+            writer.Write(rate);writer.Write(rate*4);writer.Write((short)4);writer.Write((short)16);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));writer.Write(stereo.Length*2);
+            foreach(float v in stereo)writer.Write((short)Mathf.Clamp(Mathf.RoundToInt(v*32767),-32768,32767));
         }
         static void StopPooledAudio(AudioManager audio)
         {

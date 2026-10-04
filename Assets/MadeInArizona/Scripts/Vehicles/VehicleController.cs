@@ -12,6 +12,8 @@ namespace MadeInArizona
         public Rigidbody Body { get; private set; }
         public Transform Visual { get; private set; }
         public VehicleStats Stats { get; private set; }
+        /// <summary>The vehicle this controller was built from (engine layout, display data).</summary>
+        public VehicleDefinition Definition { get; private set; }
         /// <summary>Burn, stall and stuck-charge state, created the first time a weapon applies one.</summary>
         public VehicleAfflictions Afflictions { get; internal set; }
         public bool IsPlayer { get; private set; }
@@ -108,7 +110,7 @@ namespace MadeInArizona
         void OnDisable() { Active.Remove(this); }
         public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
-            Stats = stats; IsPlayer = isPlayer;
+            Stats = stats; IsPlayer = isPlayer; Definition = definition;
             Body = GetComponent<Rigidbody>();
             Body.mass = Mathf.Max(300, stats.mass);
             Body.linearDamping = .08f; Body.angularDamping = 3f;
