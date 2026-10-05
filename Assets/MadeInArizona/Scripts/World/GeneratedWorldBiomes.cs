@@ -104,6 +104,8 @@ namespace MadeInArizona
             return Mathf.Exp(-(dx * dx + dz * dz) / (2 * spread * spread));
         }
         public static float PeakAt(Vector3 p) => Active ? Active.PeakFactor(p) : 0;
+        /// <summary>Ground point of the San Francisco Peaks' summit.</summary>
+        public Vector3 PeaksCentre { get { var p = new Vector3(PeaksSite.x * size, 0, PeaksSite.y * size); p.y = SampleHeight(p); return p; } }
         /// <summary>
         /// Height added by the peaks. The steepest grade of a Gaussian is 0.61 × rise / spread, about 0.2 on the default
         /// map and 0.4 on the smallest: well under the 0.65 a car can climb.

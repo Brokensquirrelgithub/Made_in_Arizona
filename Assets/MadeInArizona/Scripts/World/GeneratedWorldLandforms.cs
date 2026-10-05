@@ -55,6 +55,14 @@ namespace MadeInArizona
         readonly List<Landform> arches = new List<Landform>();
         /// <summary>Landforms and cover rocks in placement order (landforms first), for review captures and tests.</summary>
         public int LandformEntries => landforms.Count;
+        /// <summary>Footprint circles (x, z, radius) of a landform, or of a boundary chain when <paramref name="boundary"/>.</summary>
+        public void Footprints(int index, List<Vector3> into, bool boundary = false)
+        {
+            into.Clear();
+            var landform = boundary ? boundaryChains[index] : landforms[index];
+            for (int k = landform.first; k < landform.first + landform.count; k++) into.Add(new Vector3(footprints[k].center.x, footprints[k].center.y, footprints[k].radius));
+        }
+        public int BoundaryChainCount => boundaryChains.Count;
         public Vector3 LandformCenter(int index, out LandformKind kind, out float reach)
         {
             var landform = landforms[index]; kind = landform.kind; reach = landform.reach;

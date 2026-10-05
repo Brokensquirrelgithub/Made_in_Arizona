@@ -36,7 +36,8 @@ namespace MadeInArizona
         float committedDistance;
         float orbitSign;
         readonly List<Vector3> route = new List<Vector3>();
-        int routeIndex; Vector3 routeGoal; float routePlannedAt = float.NegativeInfinity, reverseUntil;
+        int routeIndex; Vector3 routeGoal; float routePlannedAt = float.NegativeInfinity, reverseUntil, offRouteSince = -1;
+        const float BrakeForTurnSpeed = 9; // m/s: route followers slow to this before a sharp turn
         readonly RaycastHit[] hits = new RaycastHit[16];
         readonly Collider[] hazards = new Collider[24];
 
@@ -95,8 +96,18 @@ namespace MadeInArizona
             RecoverIfStuck(ref desired, towardTarget, tangent);
             bool reversing = Time.time < reverseUntil;
             if (reversing) desired = -transform.forward;
+            // Route followers brake hard for a turn they cannot make at speed (the new route behind them after a
+            // checkpoint, or a hairpin) and take it slowly. Coasting into it instead swung the van round in wide circles,
+            // off its route and back over its own track. Reverse throttle while rolling forward is the brake.
+            bool braking = false;
+            if (IsFriendly && UseDestination && FollowRoads && !reversing && desired.sqrMagnitude > .01f)
+            {
+                float error = Vector3.Angle(Vector3.ProjectOnPlane(transform.forward, Vector3.up), desired);
+                braking = error > 70 && vehicle.Body.linearVelocity.magnitude > BrakeForTurnSpeed;
+                if (braking) desired = -transform.forward;
+            }
             bool firePrimary = !IsFriendly && Time.time < primaryBurstUntil && targetDistance > 7 && targetDistance < primaryRange && clearShot && AttackTelegraph == EnemyAttackTelegraph.None;
-            vehicle.SetAIInput(new Vector2(desired.x, desired.z), aim, firePrimary, reversing);
+            vehicle.SetAIInput(new Vector2(desired.x, desired.z), aim, firePrimary, reversing || braking);
         }
 
         /// <summary>
@@ -141,8 +152,16 @@ namespace MadeInArizona
             if (!FollowRoads || !world) return Destination;
             Vector3 here = transform.position;
             bool stale = route.Count == 0 || FlatDelta(Destination, routeGoal).sqrMagnitude > 25;
-            if (!stale && Time.time - routePlannedAt > 3 && DistanceToRoute(here) > 28) stale = true;
+            // Strayed: steer back to the route already planned, and re-plan only after staying well off it. Re-planning
+            // the moment it strayed started each new route behind the vehicle again, which kept it circling.
+            if (DistanceToRoute(here) > 35) { if (offRouteSince < 0) offRouteSince = Time.time; }
+            else offRouteSince = -1;
+            if (!stale && Time.time - routePlannedAt > 3 && offRouteSince >= 0 && Time.time - offRouteSince > 4) { stale = true; offRouteSince = -1; }
             if (stale) PlanRoute();
+            // Never turn back for a waypoint already overshot: move on to the nearest of the next few.
+            float nearest = float.MaxValue; int ahead = routeIndex;
+            for (int i = routeIndex; i < Mathf.Min(route.Count, routeIndex + 10); i++) { float d = FlatDelta(route[i], here).sqrMagnitude; if (d < nearest) { nearest = d; ahead = i; } }
+            routeIndex = ahead;
             float lookAhead = 9 + vehicle.Body.linearVelocity.magnitude * .55f;
             while (routeIndex < route.Count - 1 && FlatDelta(route[routeIndex], here).magnitude < lookAhead) routeIndex++;
             return route.Count > 0 ? route[routeIndex] : Destination;
@@ -151,7 +170,9 @@ namespace MadeInArizona
         {
             var world = GeneratedWorld.Active;
             routeGoal = Destination; routePlannedAt = Time.time; routeIndex = 0;
-            if (world) world.FindPath(transform.position, Destination, route);
+            // Friendly escorts may leave the road where it winds away from the job: off-road ground costs about twice the
+            // road instead of five times, so a road is still taken when it goes roughly the right way.
+            if (world) world.FindPath(transform.position, Destination, route, IsFriendly ? .3f : 1);
             else { route.Clear(); route.Add(Destination); }
             // Start from the waypoint nearest the vehicle so it never doubles back to the first node.
             float best = float.MaxValue;

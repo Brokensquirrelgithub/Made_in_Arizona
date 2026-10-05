@@ -45,6 +45,10 @@ namespace MadeInArizona
             { yield return TestImportedWeaponAudio(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEngineAudioTest")>=0)
             { yield return TestEngineAudio(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTest")>=0)
+            { yield return TestEscortRoute(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaAssetBehaviourTest")>=0)
+            { yield return TestAssetBehaviour(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0)
             {
                 var campaignKeyboard=InputSystem.AddDevice<Keyboard>();
@@ -1097,6 +1101,237 @@ namespace MadeInArizona
             for(int frame=0;frame<48000;frame+=1024)voice.Render(block,2);
             liftSpool=voice.Spool;
             return (float)(high/Math.Max(1e-12,low+high));
+        }
+        /// <summary>
+        /// Biome art keeps the game's rules: every tree topples when shot, small plants and stones shatter when a car drives
+        /// into them without stopping it, and formations (mesas, buttes, arch legs, ridges, the boundary rim, cover-size
+        /// base rocks) stay impassable when driven straight at. Uses real driving: the car is aimed and the throttle held.
+        /// </summary>
+        IEnumerator TestAssetBehaviour()
+        {
+            var game=GameManager.Instance;
+            game.StartCampaign(173,1600);
+            yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active);
+            yield return new WaitForSecondsRealtime(1);
+            var world=GeneratedWorld.Active;var camera=CameraController.Instance;var keyboard=InputSystem.AddDevice<Keyboard>();
+            float span=world.WorldBounds.size.x;
+
+            // Trees topple when shot.
+            var trees=new (string name,Vector3? where)[]{("Breakable ponderosa",world.FindBiomeSpot(Biome.Forest)),("Breakable aspen",world.FindBiomeSpot(Biome.Forest)),
+                ("Breakable snowy pine",world.PeaksCentre+new Vector3(0,0,-span*.03f)),("Breakable juniper",world.FindBiomeSpot(Biome.Plateau)),
+                ("Breakable mesquite",world.FindBiomeSpot(Biome.Sonoran)),("Breakable snag",world.FindBiomeSpot(Biome.RedRock))};
+            foreach(var (name,where) in trees)
+            {
+                if(where==null){Check(name+" biome present",false);continue;}
+                yield return GoTo(where.Value);
+                var tree=NearestProp(name,game.Player.transform.position,140);
+                if(!tree){Check(name+" spawns in its biome",false);continue;}
+                Vector3 start=tree.transform.position;int shots=0;
+                while(!tree.IsDestroyed&&shots<80){tree.ApplyProjectileHit(8,start+Vector3.up*1.2f,game.Player.gameObject,Vector3.right);shots++;}
+                var body=tree?tree.GetComponent<Rigidbody>():null;var look=tree?tree.GetComponentInChildren<Renderer>():null;
+                bool falling=body&&!body.isKinematic&&look&&look.enabled;
+                yield return new WaitForSecondsRealtime(.9f);
+                float tilt=tree?Vector3.Angle(tree.transform.up,Vector3.up):90;
+                Debug.Log("MIA_ASSET_TREE "+name+": shots="+shots+" falling="+falling+" tilt="+tilt.ToString("0"));
+                Check(name+" topples when shot",falling&&tilt>25);
+            }
+
+            // Small plants and stones shatter when driven into, without stopping the car.
+            var small=new (string name,Vector3? where)[]{("Breakable saguaro",world.FindBiomeSpot(Biome.Sonoran)),("Breakable prickly pear",world.FindBiomeSpot(Biome.RedRock)),
+                ("Breakable agave",world.FindBiomeSpot(Biome.Plateau)),("Breakable scenery rock",world.FindBiomeSpot(Biome.RedRock))};
+            foreach(var (name,where) in small)
+            {
+                if(where==null)continue;
+                yield return GoTo(where.Value);
+                var prop=NearestProp(name,game.Player.transform.position,140,p=>ClearRunUp(p.transform.position,9,p)!=null);
+                if(!prop){Check(name+" found with a clear run-up",false);continue;}
+                Vector3 target=prop.transform.position;Vector3 dir=ClearRunUp(target,9,prop).Value;
+                float minDistance=float.MaxValue,travelled=0;
+                yield return Drive(target-dir*9,dir,14,1.3f,keyboard,car=>{minDistance=Mathf.Min(minDistance,Flat(car-target));});
+                travelled=Vector3.Dot(game.Player.transform.position-(target-dir*9),dir);
+                bool broke=!prop||prop.IsDestroyed;bool shattered=broke&&(!prop||!prop.GetComponent<Rigidbody>());
+                Debug.Log("MIA_ASSET_SMALL "+name+": broke="+broke+" travelled="+travelled.ToString("0.0")+" speed="+game.Player.Body.linearVelocity.magnitude.ToString("0.0"));
+                Check(name+" shatters when driven into and the car carries on",shattered&&travelled>11);
+            }
+
+            // Formations stay impassable.
+            var circles=new List<Vector3>();
+            foreach(var wanted in new[]{GeneratedWorld.LandformKind.Mesa,GeneratedWorld.LandformKind.Butte,GeneratedWorld.LandformKind.Arch,GeneratedWorld.LandformKind.Cliff})
+            {
+                int tested=0,breached=0;
+                for(int i=0,tries=0;i<world.LandformEntries&&tested<2&&tries<8;i++)
+                {
+                    world.LandformCenter(i,out var kind,out _);if(kind!=wanted)continue;
+                    world.Footprints(i,circles);
+                    int k=circles.Count/2;Vector2 c=new Vector2(circles[k].x,circles[k].y);float r=circles[k].z;
+                    // Arch: hit a leg from the outside. Ridge: square on to the spine. Others: from the map centre's side.
+                    Vector2 outward=wanted==GeneratedWorld.LandformKind.Arch?(c-new Vector2(circles[1-k].x,circles[1-k].y)).normalized
+                        :wanted==GeneratedWorld.LandformKind.Cliff&&circles.Count>2?Perpendicular(circles,k):(-c).normalized;
+                    var result=new float[1];
+                    // Try the planned side, then the other three, until one run actually reaches the rock.
+                    for(int turn=0;turn<4;turn++)
+                    {
+                        tries++;
+                        Vector2 side=turn==0?outward:turn==1?-outward:turn==2?new Vector2(-outward.y,outward.x):new Vector2(outward.y,-outward.x);
+                        if(wanted==GeneratedWorld.LandformKind.Arch&&turn>0)break; // other sides of a leg face the opening
+                        yield return RamFormation(c,r,side,keyboard,result);
+                        Debug.Log("MIA_ASSET_SOLID "+wanted+" #"+i+" side "+turn+": radius="+r.ToString("0.0")+" closest="+(result[0]<0?"never reached":result[0].ToString("0.0")));
+                        if(result[0]>=0)break;
+                    }
+                    if(result[0]<0)continue; // blocked before reaching it from every side: inconclusive
+                    tested++;if(result[0]<r*.45f)breached++;
+                }
+                Check(wanted+" stays impassable when rammed",tested>0&&breached==0);
+            }
+            // The boundary rim, from inside the map.
+            {
+                world.Footprints(0,circles,true);int k=circles.Count/2;Vector2 c=new Vector2(circles[k].x,circles[k].y);float r=circles[k].z;
+                var result=new float[1];
+                yield return RamFormation(c,r,(-c).normalized,keyboard,result);
+                Debug.Log("MIA_ASSET_SOLID boundary: radius="+r.ToString("0.0")+" closest="+result[0].ToString("0.0")+" inside map="+GeneratedWorld.Contains(game.Player.transform.position));
+                Check("boundary rim stays impassable when rammed",result[0]>=r*.45f&&GeneratedWorld.Contains(game.Player.transform.position));
+            }
+            // Cover-size base rocks at the foot of the mountains are solid cover, not break-away props.
+            {
+                Transform rock=null;float best=float.MaxValue;Vector3 from=game.Player.transform.position;
+                foreach(var t in world.GetComponentsInChildren<Transform>())
+                    if(t.name=="Mountain base rock"&&t.parent&&t.parent.name=="Mountain chain"){float d=(t.position-from).sqrMagnitude;if(d<best&&ClearRunUp(t.position,10,null)!=null){best=d;rock=t;}}
+                if(rock)
+                {
+                    var rs=rock.GetComponentsInChildren<Renderer>();Bounds b=rs[0].bounds;foreach(var x in rs)b.Encapsulate(x.bounds);
+                    float r=Mathf.Max(b.extents.x,b.extents.z);var result=new float[1];
+                    Vector2 c=new Vector2(b.center.x,b.center.z);
+                    yield return RamFormation(c,r,ClearRunUp(rock.position,10,null).Value is Vector3 d?new Vector2(-d.x,-d.z):Vector2.right,keyboard,result);
+                    Debug.Log("MIA_ASSET_SOLID base rock: radius="+r.ToString("0.0")+" closest="+result[0].ToString("0.0"));
+                    Check("mountain base rocks are solid cover",rock&&result[0]>=r*.45f);
+                }
+                else Check("mountain base rock found",false);
+            }
+            InputSystem.RemoveDevice(keyboard);
+        }
+        /// <summary>
+        /// Escort (convoy) jobs: each planned leg is compared with the straight line between its ends and checked for
+        /// doubling back, then the van actually drives the job (the player kept beside it, hostiles held still) and its
+        /// track is checked for loops: coming back within 20 m of where it was more than 25 s earlier.
+        /// </summary>
+        IEnumerator TestEscortRoute()
+        {
+            var game=GameManager.Instance;game.Save.unlockedMission=14;
+            // One mission per run keeps the suite inside the runner's time limit: -miaEscortMission=8 picks the other.
+            string only=Array.Find(Environment.GetCommandLineArgs(),a=>a.StartsWith("-miaEscortMission="));
+            foreach(int mission in new[]{only!=null?int.Parse(only.Substring(18)):3})
+            {
+                game.StartMission(mission);
+                yield return new WaitUntil(()=>game.State==GameState.Playing&&GeneratedWorld.Active);
+                yield return new WaitForSecondsRealtime(.5f);
+                VehicleController van=null;
+                foreach(var v in VehicleController.Active){var ai0=v?v.GetComponent<EnemyAI>():null;if(ai0&&ai0.IsFriendly){van=v;break;}}
+                if(!van){Check("mission "+mission+" escort van spawns",false);continue;}
+                var ai=van.GetComponent<EnemyAI>();
+                var track=new List<(Vector3 p,float t)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
+                while(Time.time-start<150&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
+                {
+                    QuietMissionHostiles();van.Damage.Repair(10000);
+                    // Keep the player alongside so the van never waits to regroup.
+                    Vector3 side=van.transform.position-van.transform.right*7;side.y=GeneratedWorld.HeightAt(side)+1;
+                    if(Vector3.Distance(game.Player.transform.position,van.transform.position)>20)Teleport(side);
+                    if(Flat(ai.Destination-lastGoal)>5&&ai.Route.Count>1)
+                    {
+                        // A new leg: measure the planned route.
+                        lastGoal=ai.Destination;legs++;
+                        float length=0;for(int i=1;i<ai.Route.Count;i++)length+=Flat(ai.Route[i]-ai.Route[i-1]);
+                        float straight=Flat(ai.Destination-van.transform.position);float ratio=length/Mathf.Max(1,straight);
+                        int doubles=0;float along=0;var arc=new float[ai.Route.Count];
+                        for(int i=1;i<ai.Route.Count;i++){along+=Flat(ai.Route[i]-ai.Route[i-1]);arc[i]=along;}
+                        for(int i=0;i<ai.Route.Count;i++)for(int j=i+1;j<ai.Route.Count;j++)if(arc[j]-arc[i]>120&&Flat(ai.Route[j]-ai.Route[i])<25){doubles++;break;}
+                        Debug.Log("MIA_ESCORT_LEG mission "+mission+" leg "+legs+": straight="+straight.ToString("0")+" planned="+length.ToString("0")+" ratio="+ratio.ToString("0.00")+" doubling-back points="+doubles);
+                        if(ratio>worstRatio){worstRatio=ratio;worstLeg=legs;}
+                    }
+                    Vector3 here=van.transform.position;
+                    foreach(var (p,t) in track)if(Time.time-t>25&&Flat(here-p)<20){loops++;if(loops<=3)Debug.Log("MIA_ESCORT_LOOP t="+(Time.time-start).ToString("0")+" at "+here.ToString("0")+" was here at t="+(t-start).ToString("0")+" goal="+ai.Destination.ToString("0")+" leg="+legs);break;}
+                    if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTrace")>=0&&track.Count%4==0){float nearest=float.MaxValue;int at=-1;for(int i=0;i<ai.Route.Count;i++){float d=Flat(ai.Route[i]-here);if(d<nearest){nearest=d;at=i;}}Debug.Log("MIA_ESCORT_TRACE t="+(Time.time-start).ToString("0")+" pos="+here.ToString("0")+" toGoal="+Flat(ai.Destination-here).ToString("0")+" speed="+van.Body.linearVelocity.magnitude.ToString("0")+" nearestRoute="+at+"/"+ai.Route.Count+" off="+nearest.ToString("0")+" hold="+ai.HoldPosition+" fwd="+van.transform.forward.ToString("0.0"));}
+                    track.Add((here,Time.time));
+                    yield return new WaitForSecondsRealtime(.5f);
+                }
+                float driven=0;for(int i=1;i<track.Count;i++)driven+=Flat(track[i].p-track[i-1].p);
+                Debug.Log("MIA_ESCORT mission "+mission+": legs="+legs+" stage="+game.Mission.Stage+" seconds="+(Time.time-start).ToString("0")+" driven="+driven.ToString("0")+" loop samples="+loops+" worst planned ratio="+worstRatio.ToString("0.00")+" (leg "+worstLeg+")");
+                Check("mission "+mission+" escort completes its transfers",game.Mission.Stage>=1);
+                Check("mission "+mission+" escort never loops back over its own track",loops==0);
+                Check("mission "+mission+" escort routes stay direct (planned at most 1.6x the straight line)",worstRatio<=1.6f);
+                game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f);
+            }
+        }
+        IEnumerator GoTo(Vector3 spot)
+        {
+            QuietMissionHostiles();
+            spot=GeneratedWorld.Active.ClearOfObstacles(spot,4);spot.y=GeneratedWorld.HeightAt(spot)+1;
+            Teleport(spot);CameraController.Instance.Snap();
+            yield return new WaitForSecondsRealtime(3f); // streamed scenery builds round the car
+        }
+        static float Flat(Vector3 v){v.y=0;return v.magnitude;}
+        static Vector2 Perpendicular(List<Vector3> circles,int k)
+        {
+            Vector2 tangent=new Vector2(circles[k+1].x-circles[k-1].x,circles[k+1].y-circles[k-1].y).normalized;
+            Vector2 side=new Vector2(-tangent.y,tangent.x);
+            // Pick the side towards the map centre (more likely open ground).
+            return Vector2.Dot(side,-new Vector2(circles[k].x,circles[k].y))>0?side:-side;
+        }
+        static DestructionSystem NearestProp(string name,Vector3 from,float within,Func<DestructionSystem,bool> accept=null)
+        {
+            DestructionSystem best=null;float nearest=within*within;
+            foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))
+            {
+                if(!prop||prop.IsDestroyed||prop.name!=name)continue;
+                float d=(prop.transform.position-from).sqrMagnitude;
+                if(d<nearest&&(accept==null||accept(prop))){nearest=d;best=prop;}
+            }
+            return best;
+        }
+        /// <summary>A flat-ish approach direction with nothing solid (other than the target) in the last <paramref name="length"/> metres.</summary>
+        static Vector3? ClearRunUp(Vector3 target,float length,DestructionSystem self)
+        {
+            for(int a=0;a<12;a++)
+            {
+                float angle=a*Mathf.PI/6;Vector3 dir=new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle));
+                Vector3 start=target-dir*length;
+                if(!GeneratedWorld.Contains(start)||Mathf.Abs(GeneratedWorld.HeightAt(start)-GeneratedWorld.HeightAt(target))>2.5f)continue;
+                bool clear=true;
+                foreach(var hit in Physics.SphereCastAll(start+Vector3.up*1.4f,1.1f,dir,length-1.5f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+                {
+                    if(!hit.collider||hit.collider.gameObject.layer==DestructionSystem.BrittleLayer)continue;
+                    if(hit.collider.GetComponentInParent<VehicleController>())continue;
+                    if(self&&hit.collider.transform.IsChildOf(self.transform))continue;
+                    if(hit.collider.transform.parent&&hit.collider.transform.parent.name=="Chunked terrain")continue;
+                    clear=false;break;
+                }
+                if(clear)return dir;
+            }
+            return null;
+        }
+        /// <summary>Places the car at <paramref name="from"/> facing <paramref name="dir"/>, at speed with the throttle held.</summary>
+        IEnumerator Drive(Vector3 from,Vector3 dir,float speed,float seconds,Keyboard keyboard,Action<Vector3> track)
+        {
+            var player=GameManager.Instance.Player;
+            from.y=GeneratedWorld.HeightAt(from)+.9f;Teleport(from);
+            var facing=Quaternion.LookRotation(dir,Vector3.up);player.Body.rotation=facing;player.transform.rotation=facing;
+            yield return new WaitForFixedUpdate();
+            player.Body.linearVelocity=dir*speed;
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.W));
+            for(float t=0;t<seconds;t+=Time.fixedDeltaTime){yield return new WaitForFixedUpdate();track(player.transform.position);}
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+        }
+        /// <summary>
+        /// Drives at a footprint (centre <paramref name="c"/>, radius <paramref name="r"/>) from <paramref name="outward"/>.
+        /// result[0] = closest the car's centre came to it, or -1 when the car never got within 4 m of its edge.
+        /// </summary>
+        IEnumerator RamFormation(Vector2 c,float r,Vector2 outward,Keyboard keyboard,float[] result)
+        {
+            Vector3 centre=new Vector3(c.x,0,c.y),dir=new Vector3(-outward.x,0,-outward.y);
+            Vector3 start=centre-dir*(r+14);
+            yield return GoTo(start);
+            float closest=float.MaxValue;
+            yield return Drive(start,dir,16,2.6f,keyboard,car=>closest=Mathf.Min(closest,Flat(car-centre)));
+            result[0]=closest<=r+4?closest:-1;
         }
         /// <summary>Steady-state autocorrelation has a peak within 3% of the firing interval.</summary>
         static bool FiringPeriodPresent(EngineLayout layout,float rpm)

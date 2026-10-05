@@ -79,7 +79,9 @@ namespace MadeInArizona
         /// <paramref name="from"/> to <paramref name="to"/>. Returns false, with a direct two-point path, when the
         /// goal cannot be reached without climbing a blocked grade.
         /// </summary>
-        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path)
+        /// <param name="offRoad">Scales how much more than road the other ground costs: 1 keeps routes on the road network
+        /// wherever it goes the right way; lower values let a vehicle cut across country rather than follow a winding road.</param>
+        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path, float offRoad = 1)
         {
             path.Clear();
             BuildNavigation();
@@ -111,7 +113,9 @@ namespace MadeInArizona
                         // Elevation blockage: cliff walls and anything steeper than a car can climb.
                         if (rise > MaxDriveGrade * run) continue;
                         float grade = rise / run;
-                        float g = navG[current] + run * (navCost[current] + navCost[next]) * .5f * (1 + grade * 2.5f);
+                        float step = (navCost[current] + navCost[next]) * .5f;
+                        if (navCost[current] < WaterCost && navCost[next] < WaterCost) step = RoadCost + (step - RoadCost) * offRoad; // never cheapen fording
+                        float g = navG[current] + run * step * (1 + grade * 2.5f);
                         if (g >= navG[next]) continue;
                         navG[next] = g; navParent[next] = current;
                         Push(next, g + Heuristic(next, goal));

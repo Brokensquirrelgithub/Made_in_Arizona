@@ -181,9 +181,9 @@ namespace MadeInArizona
                 }
                 else if(density>0&&sonoran&&patch>.6f&&i%4==0)
                 {float h=Next(random,4,7);BreakableTree(root,p,h,false,random,nature?nature.desertTrees:null,"Breakable mesquite");Trees++;}
-                // Agave on the desert floors and the plateau, batched like the bushes.
+                // Agave on the desert floors and the plateau: a brittle prop like the cacti, so cars break it apart.
                 else if(density>0&&(red||plateau||sonoran)&&i%7==3&&nature&&nature.agaves!=null&&nature.agaves.Length>0)
-                {float h=Next(random,.6f,1.2f);mesh.Nature(nature.Pick(nature.agaves,random),p,h,random,Color.white);}
+                {float h=Next(random,.6f,1.2f);BreakableCactus(root,p,h,random,nature.agaves,"Breakable agave");}
                 // Weathered dead snags in red rock and the Sonoran.
                 else if(density>0&&(red||sonoran)&&i%11==5&&patch<.4f&&nature&&nature.deadTrees!=null&&nature.deadTrees.Length>0)
                 {float h=Next(random,3,5.5f);BreakableTree(root,p,h,false,random,nature.deadTrees,"Breakable snag");Trees++;}
