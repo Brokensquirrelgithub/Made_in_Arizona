@@ -59,6 +59,7 @@ namespace MadeInArizona
 
         void Update()
         {
+            if (introActive) { TickOpening(); return; }
             TickDevSave();UpdatesInput();if(updatesMenu)return;WorldMenuInput();
             if(game.State==GameState.MainMenu||game.State==GameState.Generating||worldMap)return;
             smoothedFps = Mathf.Lerp(smoothedFps, 1f / Mathf.Max(.001f, Time.unscaledDeltaTime), .05f);
@@ -148,6 +149,7 @@ namespace MadeInArizona
             scale = Mathf.Max(.45f, scale);
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * scale);
             width = Screen.width / scale; height = Screen.height / scale;
+            if (introActive) { DrawOpening(); GUI.matrix = Matrix4x4.identity; return; }
             if (CoopSession.Instance && (CoopSession.Instance.EndChoicePending || CoopSession.Instance.EndingSession))
             { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
             if(game.State==GameState.MainMenu)
