@@ -9,7 +9,7 @@ namespace MadeInArizona
     public sealed class WorldExploration : MonoBehaviour
     {
         public static WorldExploration Instance { get; private set; }
-        public static int CurrentTier { get { return CalculateTier(GameManager.Instance); } }
+        public static int CurrentTier { get { return CoopSession.IsRemoteClient ? CoopSession.Instance.HostTier : CalculateTier(GameManager.Instance); } }
         public static int Alloy { get { return CountMaterial("alloy"); } }
         public static int Circuits { get { return CountMaterial("circuit"); } }
         public static int Propellant { get { return CountMaterial("propellant"); } }
@@ -32,17 +32,32 @@ namespace MadeInArizona
 
         void Update()
         {
+            if (CoopSession.IsRemoteClient) return;
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || !game.Player || GeneratedWorld.Active == null) return;
             if(observedWorld!=GeneratedWorld.Active) ResetForWorld(GeneratedWorld.Active);
             refresh -= Time.deltaTime;
-            if (refresh > 0 && (InputManager.Instance==null||!InputManager.Instance.Interact)) return;
+            bool interaction = InputManager.Instance != null && InputManager.Instance.Interact;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                foreach (var car in VehicleController.Active)
+                    if (car && car.IsPlayer && car.HasRemoteInput && car.RemoteControls.interact) interaction = true;
+            if (refresh > 0 && !interaction) return;
             refresh = .2f;
-            TickPins(game, game.Player.transform.position);
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+            {
+                foreach (var car in VehicleController.Active)
+                {
+                    if (!car || !car.IsPlayer || !car.Damage || car.Damage.IsDead) continue;
+                    bool use = car.HasRemoteInput ? car.RemoteControls.interact : InputManager.Instance != null && InputManager.Instance.Interact;
+                    TickPins(game, car, use);
+                }
+            }
+            else TickPins(game, game.Player, interaction);
         }
 
-        void TickPins(GameManager game, Vector3 player)
+        void TickPins(GameManager game, VehicleController actor, bool interact)
         {
+            Vector3 player = actor.transform.position;
             var world = GeneratedWorld.Active;
             int tier = CurrentTier;
             for (int i=0;i<world.Pins.Count;i++)
@@ -53,7 +68,7 @@ namespace MadeInArizona
                 bool saved = game.Save.collectibles.Contains(key);
                 if ((saved||game.Save.collectibles.Contains(seen)) && !pin.discovered) { pin.discovered=true; world.Pins[i]=pin; }
                 float distance = FlatDistance(player,pin.position);
-                if (distance < 150 && IsHideout(pin) && !saved) ActivateHideout(pin,game.Player);
+                if (distance < 150 && IsHideout(pin) && !saved) ActivateHideout(pin,actor);
                 if (distance < 75 && tier < pin.requiredTier && warned.Add(key))
                     game.Notify(pin.label+" • tier "+pin.requiredTier+" terrain. Upgrade tires, suspension or drivetrain before pushing deeper.");
                 if (distance < 34 && !pin.discovered)
@@ -65,7 +80,7 @@ namespace MadeInArizona
                 if (distance < 7 && IsSalvage(pin) && !saved)
                 {
                     EnsureSalvageMarker(pin,game);
-                    if(InputManager.Instance!=null && InputManager.Instance.Interact) Collect(pin,key,game);
+                    if(interact) Collect(pin,key,game);
                     else if(warned.Add(key+":use")) game.Notify("Press E / gamepad South to recover specialty salvage.");
                 }
                 else if(distance < 11 && !saved && !IsSalvage(pin) && (!IsHideout(pin)||HideoutClear(pin.position)))
@@ -132,6 +147,7 @@ namespace MadeInArizona
 
         public static bool TryCraft(int recipe)
         {
+            if (CoopSession.IsRemoteClient) return false;
             var game=GameManager.Instance;if(!game||game.Save==null||recipe<0||recipe>=RecipeDescriptions.Length)return false;
             string crafted="world-craft:"+recipe;if(game.Save.collectibles.Contains(crafted)){game.Notify("That weapon upgrade is already fitted.");return false;}
             int alloy=recipe==0?2:recipe==2?1:0,circuit=recipe>0?1:0,propellant=recipe==1?1:0;

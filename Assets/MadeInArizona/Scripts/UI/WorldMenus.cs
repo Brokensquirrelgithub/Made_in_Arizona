@@ -23,6 +23,7 @@ namespace MadeInArizona
             float panelW=Mathf.Min(740,width-x-40);
             Rect(x,y+179,panelW,440,Ink);
             Text(x+25,y+201,panelW-50,30,"SEEDED CAMPAIGN WORLD",21,Orange,true);
+            if(width<1250 && Button(x+panelW-145,y+197,120,36,"CO-OP")) coopPage=true;
             if(worldSeed==null){worldSeed=game.WorldConfig.seed.ToString();worldSize=game.WorldConfig.size;}
             Text(x+25,y+254,180,25,"WORLD SEED",15,Muted);
             worldSeed=GUI.TextField(new Rect(x+235,y+248,250,36),worldSeed,11);
@@ -32,9 +33,9 @@ namespace MadeInArizona
             Text(x+580,y+305,120,28,(worldSize/1000).ToString("0.0")+" km",19,Lime,true);
             Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);
-            if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid))game.StartCampaign(seed,Mathf.Round(worldSize/50)*50);
-            if(Button(x+25,y+512,220,48,"GARAGE / SAVED"))game.ReturnToGarage();
-            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP")){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
+            if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid&&!CoopSession.IsRemoteClient))game.StartCampaign(seed,Mathf.Round(worldSize/50)*50);
+            if(Button(x+25,y+512,220,48,"GARAGE / SAVED",false,!CoopSession.IsRemoteClient))game.ReturnToGarage();
+            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
             Text(x+25,y+575,panelW-50,38,"Starting a world preserves garage upgrades and completed jobs.",13,Muted);
             DrawUpdateEntry(x,y+640,panelW);
@@ -88,7 +89,7 @@ namespace MadeInArizona
             Rect(0,0,width,height,new Color(.035f,.055f,.06f,1));
             Text(30,20,width-320,45,"ARIZONA • SEED "+game.WorldConfig.seed,29,Cream,true);
             if(Button(width-260,20,230,42,"CLOSE MAP / M",true)){worldMap=false;game.Resume();}
-            if(Button(width-520,20,245,42,"REGENERATE MAP")){worldMap=false;game.RegenerateWorld();}
+            if(Button(width-520,20,245,42,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){worldMap=false;game.RegenerateWorld();}
             float size=Mathf.Min(height-150,width-490);
             var area=new Rect(35,92,size*.9f,size);
             RenderWorldMap(area,true);
@@ -115,7 +116,7 @@ namespace MadeInArizona
             {
                 bool crafted=game.Save.collectibles.Contains("world-craft:"+i);
                 Text(x,y+88+i*82,380,40,WorldExploration.RecipeDescriptions[i],14,Cream);
-                if(Button(x,y+130+i*82,360,30,crafted?"FITTED":"CRAFT UPGRADE",false,!crafted))WorldExploration.TryCraft(i);
+                if(Button(x,y+130+i*82,360,30,crafted?"FITTED":"CRAFT UPGRADE",false,!crafted&&!CoopSession.IsRemoteClient))WorldExploration.TryCraft(i);
             }
             if(game.NotificationUntil>Time.unscaledTime)Text(x,y+342,390,64,game.Notification,14,Lime);
         }

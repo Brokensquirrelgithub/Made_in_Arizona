@@ -28,6 +28,12 @@ namespace MadeInArizona
             vehicle = owner; baseHealth=health; durabilityMultiplier=1; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false;
             Engine = Radiator = Transmission = Wheels = Suspension = 1;
         }
+        public void SetNetworkHealth(float health, float maximum)
+        {
+            MaxHealth = Mathf.Max(1, maximum);
+            Health = Mathf.Clamp(health, 0, MaxHealth);
+            IsDead = Health <= 0;
+        }
         public void SetDurabilityMultiplier(float multiplier)
         {
             durabilityMultiplier=Mathf.Max(1,multiplier);
@@ -55,6 +61,7 @@ namespace MadeInArizona
         /// </summary>
         public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false, bool environmental = false)
         {
+            if (CoopSession.IsRemoteClient) return;
             if (IsDead || amount <= 0 || vehicle == null) return;
             var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
             // Escort health is a mission objective. Scenery, wrecks, self damage and allied splash never deplete it.
@@ -174,7 +181,7 @@ namespace MadeInArizona
             var friendly = ai != null && ai.IsFriendly;
             if (!vehicle.IsPlayer && !friendly)
             {
-                GameManager.Instance?.Mission?.RegisterKill();
+                GameManager.Instance?.Mission?.RegisterKill(sourceVehicle);
                 CombatPickup.DropFromEnemy(vehicle, ai != null ? ai.Archetype : 0, ai != null ? ai.Faction : EnemyFaction.Sunsprawl);
             }
             ExplosionSystem.Detonate(transform.position + Vector3.up * .9f, vehicle.IsPlayer ? 7 : 6, 65, source != null ? source : gameObject, ExplosionKind.Vehicle, environmental:true);

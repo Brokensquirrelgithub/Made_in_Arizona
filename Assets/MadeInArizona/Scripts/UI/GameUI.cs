@@ -48,7 +48,7 @@ namespace MadeInArizona
         void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; }
         void ResetFocus()
         {
-            worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; menuFocus=0;
+            worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;
             if (game != null && game.Save != null)
             {
                 selectedWeapon=Array.FindIndex(garageWeapons,i=>ContentCatalog.Weapons[i].id==game.Save.selectedWeapon);
@@ -96,8 +96,8 @@ namespace MadeInArizona
                 }
                 if (pad.buttonSouth.wasPressedThisFrame) ConfirmSelection();
             }
-            else if (game.State == GameState.Paused) { if (pad.buttonSouth.wasPressedThisFrame) game.Resume(); if (pad.buttonEast.wasPressedThisFrame) game.ReturnToGarage(); }
-            else if (game.State == GameState.Won || game.State == GameState.Lost) { if (pad.buttonSouth.wasPressedThisFrame) game.ReturnToGarage(); if (pad.buttonWest.wasPressedThisFrame) game.RetryMission(); }
+            else if (game.State == GameState.Paused) { if (pad.buttonSouth.wasPressedThisFrame) game.Resume(); if (pad.buttonEast.wasPressedThisFrame) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ReturnToGarage(); } }
+            else if (game.State == GameState.Won || game.State == GameState.Lost) { if (CoopSession.IsRemoteClient) { if (pad.buttonEast.wasPressedThisFrame) LeaveCoop(); } else { if (pad.buttonSouth.wasPressedThisFrame) game.ReturnToGarage(); if (pad.buttonWest.wasPressedThisFrame) game.RetryMission(); } }
         }
 
         void ConfirmSelection()
@@ -148,7 +148,15 @@ namespace MadeInArizona
             scale = Mathf.Max(.45f, scale);
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * scale);
             width = Screen.width / scale; height = Screen.height / scale;
-            if(game.State==GameState.MainMenu){if(updatesMenu)DrawUpdates();else DrawMainMenu();GUI.matrix=Matrix4x4.identity;return;}
+            if (CoopSession.Instance && (CoopSession.Instance.EndChoicePending || CoopSession.Instance.EndingSession))
+            { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
+            if(game.State==GameState.MainMenu)
+            {
+                if(updatesMenu)DrawUpdates();
+                else if (coopPage) { Rect(0, 0, width, height, Ink); DrawCoopPanel(); }
+                else { DrawMainMenu(); if (width >= 1250) DrawCoopPanel(); }
+                GUI.matrix=Matrix4x4.identity;return;
+            }
             if(game.State==GameState.Generating){DrawGeneration();GUI.matrix=Matrix4x4.identity;return;}
             if(worldMap&&GeneratedWorld.Active){DrawWorldMap();GUI.matrix=Matrix4x4.identity;return;}
             if(updatesMenu){DrawUpdates();GUI.matrix=Matrix4x4.identity;return;}
@@ -164,6 +172,7 @@ namespace MadeInArizona
                 if (game.State == GameState.Won || game.State == GameState.Lost) DrawDebrief();
             }
             if (game.Dying) DrawDeathOverlay();
+            DrawCoopBadge();
             if (!settings && game.NotificationUntil > Time.unscaledTime) {
                 float w = Mathf.Min(650, width - 80); Rect((width - w) / 2, 106, w, 48, Ink);
                 Rect((width - w) / 2, 106, 4, 48, Lime);
@@ -536,9 +545,9 @@ namespace MadeInArizona
             if (Button(x + 40, y + 249, 420, 49, "SETTINGS  /  Y")) { settings = true; menuFocus = 0; }
             if (Button(x + 40, y + 315, 420, 49, "DEV TUNING  /  MOUSE")) { devMenu=true; settings=false; }
             if(Button(x+40,y+380,420,49,"ARIZONA MAP / M",false,GeneratedWorld.Active!=null))OpenWorldMap();
-            if(Button(x+40,y+445,420,49,"MAIN MENU"))game.ShowMainMenu();
-            if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE  /  B")) game.ReturnToGarage();
-            if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED", false, GeneratedWorld.Active != null && !game.IsCombatTrial)) game.RegenerateWorld();
+            if(Button(x+40,y+445,420,49,CoopSession.IsRemoteClient?"LEAVE CO-OP / MAIN MENU":"MAIN MENU")) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ShowMainMenu(); }
+            if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE  /  B",false,!CoopSession.IsRemoteClient)) game.ReturnToGarage();
+            if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED", false, GeneratedWorld.Active != null && !game.IsCombatTrial && !CoopSession.IsRemoteClient)) game.RegenerateWorld();
             Text(x + 40, y + 630, 420, 40, "Restarts this job on a freshly generated Arizona. Progress is kept.", 13, Muted);
         }
 
@@ -568,8 +577,16 @@ namespace MadeInArizona
             Rule(x + 40, y + 324, 660);
             Text(x + 40, y + 352, 660, 59, game.Mission.Score.ToString("N0") + " POINTS     " + game.Mission.Kills + " VEHICLES\n" + game.Mission.DestructionCount + " INSURANCE CLAIMS", 22, Cream, true);
             if (won) Text(x + 40, y + 424, 650, 34, game.IsCombatTrial?"PRACTICE COMPLETE • CAMPAIGN UNCHANGED":"+$" + game.Mission.AwardedMoney + "  /  PROGRESSION SAVED", 20, Lime, true);
-            if (Button(x + 40, y + 498, 393, 58, "BACK TO 117° AUTO CARE  /  A", true)) game.ReturnToGarage();
-            if (Button(x + 450, y + 498, 250, 58, "REPLAY  /  X")) game.RetryMission();
+            if (CoopSession.IsRemoteClient)
+            {
+                if (Button(x + 40, y + 498, 393, 58, "WAITING FOR HOST", true, false)) { }
+                if (Button(x + 450, y + 498, 250, 58, "LEAVE CO-OP")) LeaveCoop();
+            }
+            else
+            {
+                if (Button(x + 40, y + 498, 393, 58, "BACK TO 117° AUTO CARE  /  A", true)) game.ReturnToGarage();
+                if (Button(x + 450, y + 498, 250, 58, "REPLAY  /  X")) game.RetryMission();
+            }
         }
 
         void DrawSettings()

@@ -25,6 +25,52 @@ namespace MadeInArizona
         public float HoldProgress { get { return heldSeconds; } }
         public MissionDefinition Definition { get { return definition; } }
         MissionDefinition definition;
+        int remoteMarkerStage = -1;
+        internal void SetRemoteMission(MissionDefinition mission)
+        {
+            if (!mission)
+            {
+                if (!trialDefinition) trialDefinition = ScriptableObject.CreateInstance<MissionDefinition>();
+                trialDefinition.timeLimit = 180;
+                mission = trialDefinition;
+            }
+            if (marker) Destroy(marker);
+            marker = null;
+            remoteMarkerStage = -1;
+            definition = mission;
+            Objective = "Waiting for host";
+            Elapsed = 0;
+            effectiveTimeLimit = mission ? mission.timeLimit : 180;
+            Score = Kills = Stage = 0;
+            ObjectivePosition = Vector3.zero;
+        }
+
+        internal void ApplyRemoteState(string objective, Vector3 position, float progress, float remaining,
+            int stage, int score, int kills, int combo, int destruction, int money, string debrief)
+        {
+            Objective = objective;
+            ObjectivePosition = position;
+            if (position != Vector3.zero && Game != null && Game.World != null)
+            {
+                if (!marker || remoteMarkerStage != stage)
+                {
+                    if (marker) Destroy(marker);
+                    marker = Game.World.CreateMarker(position, new Color(1, .76f, .15f), "OBJECTIVE");
+                    remoteMarkerStage = stage;
+                }
+                else marker.transform.position = position;
+            }
+            Progress = progress;
+            effectiveTimeLimit = remaining;
+            Elapsed = 0;
+            Stage = stage;
+            Score = score;
+            Kills = kills;
+            Combo = combo;
+            DestructionCount = destruction;
+            AwardedMoney = money;
+            Debrief = debrief;
+        }
         int missionIndex, stageKills, wave, checkpoint, bestCombo, pickupCount;
         float heldSeconds, comboTimeout, nextWaveTime, stageStarted, effectiveTimeLimit;
         bool ended, midwaySaid, finalStand, collecting;
@@ -35,6 +81,23 @@ namespace MadeInArizona
         readonly List<Vector3> cachePositions=new List<Vector3>();
         GameManager Game { get { return GameManager.Instance; } }
         Vector3 PlayerPosition { get { return Game.Player?Game.Player.transform.position:Vector3.zero; } }
+        float TeamHealthRatio
+        {
+            get
+            {
+                if (!(CoopSession.Instance && CoopSession.Instance.IsHost))
+                    return Game.Player && Game.Player.Damage ? Game.Player.Damage.Health / Game.Player.Damage.MaxHealth : 0;
+                float total = 0;
+                int players = 0;
+                foreach (var car in VehicleController.Active)
+                    if (car && car.IsPlayer && car.Damage)
+                    {
+                        total += car.Damage.Health / car.Damage.MaxHealth;
+                        players++;
+                    }
+                return players > 0 ? total / players : 0;
+            }
+        }
         Vector3 Point(int index)
         {
             var pts=Game.World.ObjectivePoints;
@@ -139,7 +202,7 @@ namespace MadeInArizona
             bool clockRunning=definition.mode==MissionMode.Race||definition.mode==MissionMode.Escape||Stage>0||Near(ObjectivePosition,150);
             if(clockRunning)Elapsed+=dt;comboTimeout-=dt;if(comboTimeout<=0)Combo=0;
             if(Remaining<=0) { Fail("The job window expired. Retry from the garage with a different build.");return; }
-            if(Game.Player.Damage.IsDead)return;
+            if(Game.Player.Damage.IsDead && !(CoopSession.Instance && CoopSession.Instance.IsHost && CoopSession.Instance.AnyPlayerAlive))return;
             CheckCaches();UpdateOptional(false);
             if(missionIndex<0)TickCombatTrial();
             else if(missionIndex==0)TickFirstMission();
@@ -228,7 +291,7 @@ namespace MadeInArizona
             if(!escort||escort.Damage.IsDead){Fail("The evidence van was destroyed. Stay close and clear the road ahead on the next attempt.");return;}
             if(Stage==0)
             {
-                var ai=escort.GetComponent<EnemyAI>();bool close=Vector3.Distance(PlayerPosition,escort.transform.position)<32;
+                var ai=escort.GetComponent<EnemyAI>();bool close=Near(escort.transform.position,32);
                 if(ai){ai.UseDestination=true;ai.Destination=Point(checkpoint);ai.HoldPosition=!close;}
                 ObjectivePosition=escort.transform.position;
                 Objective=(close?"ESCORT MOVING":"REGROUP WITH THE EVIDENCE VAN")+" • transfer "+(checkpoint+1)+" / 3 • hull "+Mathf.RoundToInt(EscortHealth*100)+"%";
@@ -301,13 +364,33 @@ namespace MadeInArizona
             else {Progress=.9f;TryExtract();}
         }
         void TryExtract() { if(Near(Game.World.ExtractionPoint,10))Finish(); }
-        bool Near(Vector3 point,float radius) { Vector3 delta=PlayerPosition-point;delta.y=0;return delta.sqrMagnitude<radius*radius; }
+        bool Near(Vector3 point,float radius)
+        {
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+            {
+                foreach (var vehicle in VehicleController.Active)
+                {
+                    if (!vehicle || !vehicle.IsPlayer || !vehicle.Damage || vehicle.Damage.IsDead) continue;
+                    Vector3 separation = vehicle.transform.position - point; separation.y = 0;
+                    if (separation.sqrMagnitude < radius * radius) return true;
+                }
+                return false;
+            }
+            Vector3 delta=PlayerPosition-point;delta.y=0;return delta.sqrMagnitude<radius*radius;
+        }
         bool InteractAt(Vector3 point)
         {
             bool here=Near(point,9);
             if(here&&!collecting){Game.Notify("Hold E / gamepad South to recover the marked objective.");collecting=true;}
             if(!here)collecting=false;
-            return here&&InputManager.Instance!=null&&InputManager.Instance.Interact;
+            if (!here) return false;
+            if (InputManager.Instance != null && InputManager.Instance.Interact && Game.Player &&
+                (Game.Player.transform.position - point).sqrMagnitude < 81) return true;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                foreach (var player in VehicleController.Active)
+                    if (player && player.IsPlayer && player.Damage && !player.Damage.IsDead && player.HasRemoteInput &&
+                        player.RemoteControls.interact && (player.transform.position - point).sqrMagnitude < 81) return true;
+            return false;
         }
         void SetStage(int stage){Stage=stage;stageStarted=Elapsed;collecting=false;}
         void SetObjective(string text,Vector3 point)
@@ -374,12 +457,13 @@ namespace MadeInArizona
                 Spawn(p,missionIndex<0?i%3+(Stage>0?2:0):missionIndex<2?i%2:(i+wave+missionIndex)%7);
             }
         }
-        public void RegisterKill()
+        public void RegisterKill(VehicleController killer = null)
         {
             if(ended||definition==null||Game==null||!Game.IsPlaying)return;
             Kills++;BumpCombo();int points=200+Mathf.Min(Combo,15)*25;Score+=points;
-            float groundHeight=Game.Player&&GeneratedWorld.Active?GeneratedWorld.HeightAt(Game.Player.transform.position):0;
-            bool air=Game.Player&&!Game.Player.Grounded&&Game.Player.transform.position.y-groundHeight>2.8f;
+            var scoringCar = killer && killer.IsPlayer ? killer : Game.Player;
+            float groundHeight=scoringCar&&GeneratedWorld.Active?GeneratedWorld.HeightAt(scoringCar.transform.position):0;
+            bool air=scoringCar&&!scoringCar.Grounded&&scoringCar.transform.position.y-groundHeight>2.8f;
             LastAward=air?"AIRBORNE KILL +"+points:Combo>=3?"MULTI-KILL +"+points:"VEHICLE DESTROYED +"+points;
             if(air)UnlockAchievement("airborne","AIRBORNE KILL");
         }
@@ -438,7 +522,7 @@ namespace MadeInArizona
             switch(definition.optionalKind)
             {
                 case OptionalKind.Destruction:satisfied=DestructionCount>=definition.optionalThreshold;break;
-                case OptionalKind.Health:satisfied=final&&Game.Player.Damage.Health/Game.Player.Damage.MaxHealth>=definition.optionalThreshold;break;
+                case OptionalKind.Health:satisfied=final&&TeamHealthRatio>=definition.optionalThreshold;break;
                 case OptionalKind.Time:satisfied=final&&Elapsed<=definition.optionalThreshold;break;
                 case OptionalKind.Salvage:satisfied=pickupCount>=definition.optionalThreshold;break;
                 case OptionalKind.Combo:satisfied=bestCombo>=definition.optionalThreshold;break;
@@ -451,7 +535,7 @@ namespace MadeInArizona
         void Finish()
         {
             if(ended)return;ended=true;Progress=1;UpdateOptional(true);
-            Score+=Mathf.RoundToInt(Remaining*4)+Mathf.RoundToInt(Game.Player.Damage.Health/Game.Player.Damage.MaxHealth*1000);
+            Score+=Mathf.RoundToInt(Remaining*4)+Mathf.RoundToInt(TeamHealthRatio*1000);
             if(missionIndex<0){Debrief="COMBAT TRIAL COMPLETE • "+Score+" points • no campaign progress changed";Game.CompleteMission();return;}
             var save=Game.Save;bool first=!save.completedMissions.Contains(missionIndex);
             AwardedMoney=(first?definition.reward:Mathf.RoundToInt(definition.reward*.3f))+(OptionalComplete?250:0)+Mathf.Min(500,Score/40);

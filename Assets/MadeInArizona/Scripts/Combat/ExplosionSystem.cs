@@ -170,6 +170,8 @@ namespace MadeInArizona
         }
         public static void Detonate(Vector3 position, float radius, float damage, GameObject source, ExplosionKind kind, bool environmental = false, float falloffPower = 0)
         {
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                CoopSession.Instance.PublishExplosion(position, radius, kind);
             var system = Get();
             if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind, environmental = environmental, falloffPower = falloffPower });
         }
@@ -388,6 +390,7 @@ namespace MadeInArizona
             foreach (var fragment in fragments)
                 if (!fragment.body.isKinematic && (fragment.t.position - blast.point).sqrMagnitude < radius * radius)
                     fragment.body.AddExplosionForce(radius * 22, blast.point, radius, radius * .18f, ForceMode.Impulse);
+            if (CoopSession.IsRemoteClient) return; // network explosions are visual; the host applies all damage and forces
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
             int count = Physics.OverlapSphereNonAlloc(blast.point, radius, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)

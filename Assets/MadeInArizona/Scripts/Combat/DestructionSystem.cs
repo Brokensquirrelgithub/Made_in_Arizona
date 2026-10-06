@@ -67,6 +67,8 @@ namespace MadeInArizona
                 return;
             }
             IsDestroyed = true;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                CoopSession.Instance.PublishPropBreak(transform.position, name);
             var renderers = GetComponentsInChildren<Renderer>();
             var bounds = new Bounds(transform.position, Vector3.one);
             Color color = new Color(.53f, .33f, .19f);
@@ -101,6 +103,15 @@ namespace MadeInArizona
                 ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind, environmental:true);
             }
             if (!hostileCaused) GetComponent<WorldDiscovery>()?.OnDestroyed(source);
+            Destroy(gameObject, .05f);
+        }
+        public void ApplyNetworkBreak()
+        {
+            if (IsDestroyed) return;
+            IsDestroyed = true;
+            foreach (var renderer in GetComponentsInChildren<Renderer>()) renderer.enabled = false;
+            foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
+            ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);
             Destroy(gameObject, .05f);
         }
         /// <summary>

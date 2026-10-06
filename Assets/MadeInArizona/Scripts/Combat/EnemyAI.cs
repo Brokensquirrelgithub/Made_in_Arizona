@@ -54,6 +54,16 @@ namespace MadeInArizona
         {
             if (vehicle == null || vehicle.Damage == null || vehicle.Damage.IsDead || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
             if (Target == null || Target.Damage == null || Target.Damage.IsDead) Target = GameManager.Instance.Player;
+            if (!IsFriendly && Target && Target.IsPlayer && CoopSession.Instance && CoopSession.Instance.IsHost)
+            {
+                float nearest = float.PositiveInfinity;
+                foreach (var candidate in VehicleController.Active)
+                {
+                    if (!candidate || !candidate.IsPlayer || !candidate.Damage || candidate.Damage.IsDead) continue;
+                    float distance = (candidate.transform.position - transform.position).sqrMagnitude;
+                    if (distance < nearest) { nearest = distance; Target = candidate; }
+                }
+            }
             if (Target == null || Target.Damage == null || Target.Damage.IsDead) return;
 
             // A destination controls where a vehicle drives; it never replaces its combat target.

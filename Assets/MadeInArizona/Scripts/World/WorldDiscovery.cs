@@ -6,6 +6,7 @@ namespace MadeInArizona
     {
         public void OnDestroyed(GameObject source)
         {
+            if (CoopSession.IsRemoteClient) return;
             var game = GameManager.Instance;
             if (!game || !game.IsPlaying || game.Save.achievements.Contains("wonton-destruction")) return;
             game.Save.achievements.Add("wonton-destruction");

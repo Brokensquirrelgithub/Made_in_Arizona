@@ -17,6 +17,10 @@ Enemy colors reveal six factions. Red Sunsprawl Security fights at range; sand-c
 
 ## Controls
 
+### Co-op playtest
+
+The main menu can host a session for up to four players or join a friend by code through Unity Relay. The host PC runs the world and owns campaign progress. Guests bring their selected car, garage weapon, and vehicle parts. The host controls world balance; car and weapon tuning is owned by a player using each item. This repository is linked to the Made in Arizona Unity Cloud project; setup and current playtest limits are in [co-op setup](Docs/COOP.md).
+
 | Action | Keyboard / mouse | Xbox-style gamepad |
 |---|---|---|
 | Drive toward direction | WASD | Left stick |
@@ -45,7 +49,7 @@ Edit the live `world-generation.json` path shown in the main menu to change terr
 
 ## Developer tuning
 
-During a mission, press **Escape → Dev Tuning / Mouse**. Tabs expose driving, drift, combat, camera, light/color, reflection controls (sun glints: intensity, angular tolerance, bloom contribution, fade and which materials can flash), and Dirt & Sky (cloud shadows, lens dirt, tyre smoke, skid marks, gravel spray and how fast dust builds up on cars). Changes apply immediately and save automatically across launches. Use **Save & Resume** to drive with the new values. **Reset All Defaults** restores the nimble baseline and default effects. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
+During a mission, press **Escape → Dev Tuning / Mouse**. Tabs expose driving, drift, combat, engine sound, two equipped-weapon balance profiles, camera, light/color, reflection controls (sun glints: intensity, angular tolerance, bloom contribution, fade and which materials can flash), and Dirt & Sky (cloud shadows, lens dirt, tyre smoke, skid marks, gravel spray and how fast dust builds up on cars). Driving, drift, and engine sound are stored per car; weapon balance is stored per weapon. Changes apply immediately and save automatically across launches in solo play. Use **Save & Resume** to drive with the new values. **Reset Local Tuning** restores the baseline profiles and effects. In co-op, the host decides whether to save or discard everyone's session tuning when choosing **Leave Co-op**; shared car and weapon sliders are locked for players other than the item's owner. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
 
 Suzuki is your white husky girl and senior recovery specialist. She leaves her bed and wanders a garage route, pausing to sniff.
 

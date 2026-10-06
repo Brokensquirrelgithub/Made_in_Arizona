@@ -16,6 +16,13 @@ namespace MadeInArizona
         public PickupKind Kind { get; private set; }
         public WeaponDefinition Weapon { get; private set; }
         public int Amount { get; private set; }
+        public bool IsNetworkProxy { get; private set; }
+        public void ApplyNetworkPosition(Vector3 position)
+        {
+            IsNetworkProxy = true;
+            basePosition = position;
+            transform.position = position;
+        }
         const float MagnetRadius = 18.2f, MagnetCollect = 2.86f;
         float availableAt, magnetSpeed;
         Vector3 basePosition;
@@ -122,54 +129,71 @@ namespace MadeInArizona
         {
             transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
             transform.Rotate(Vector3.up, 85 * Time.deltaTime);
+            if (IsNetworkProxy) return;
             var game = GameManager.Instance;
-            if (!game || !game.IsPlaying || !game.Player || game.Player.Damage.IsDead || Time.time < availableAt) return;
+            if (CoopSession.IsRemoteClient || !game || !game.IsPlaying || Time.time < availableAt) return;
+            VehicleController player = game.Player;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+            {
+                player = null; float nearest = float.PositiveInfinity;
+                foreach (var car in VehicleController.Active)
+                {
+                    if (!car || !car.IsPlayer || !car.Damage || car.Damage.IsDead) continue;
+                    if (Kind == PickupKind.Health && car.Damage.Health >= car.Damage.MaxHealth) continue;
+                    if (Kind == PickupKind.Nitro && car.BoostCharge >= .99f) continue;
+                    if (Kind == PickupKind.Weapon && SameAsHeld(car) && !IsAmmoFor(car)) continue;
+                    float distance = (car.transform.position - transform.position).sqrMagnitude;
+                    if (distance < nearest) { nearest = distance; player = car; }
+                }
+            }
+            if (!player || player.Damage.IsDead) return;
             // A full resource must stay on the ground. Otherwise its magnet holds an uncollectable
             // pickup over the player's roof, with the world label following it indefinitely.
-            if (Kind == PickupKind.Health && game.Player.Damage.Health >= game.Player.Damage.MaxHealth) return;
-            if (Kind == PickupKind.Nitro && game.Player.BoostCharge >= .99f) return;
-            if (IsAmmoFor(game.Player)) { MagnetToAmmo(game.Player); return; }
-            if (ClaimsEmptySlot(game.Player)) { MagnetToAmmo(game.Player, true); return; }
-            if (SameAsHeld(game.Player)) { magnetSpeed = 0; return; } // full: leave it for later
+            if (Kind == PickupKind.Health && player.Damage.Health >= player.Damage.MaxHealth) return;
+            if (Kind == PickupKind.Nitro && player.BoostCharge >= .99f) return;
+            if (IsAmmoFor(player)) { MagnetToAmmo(player); return; }
+            if (ClaimsEmptySlot(player)) { MagnetToAmmo(player, true); return; }
+            if (SameAsHeld(player)) { magnetSpeed = 0; return; } // full: leave it for later
             magnetSpeed = 0;
-            Vector3 delta = transform.position - game.Player.transform.position; delta.y = 0;
+            Vector3 delta = transform.position - player.transform.position; delta.y = 0;
             // Only supplies follow the car. Keep weapons anchored for deliberate field-slot swaps.
             if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= SupplyMagnetRadius * SupplyMagnetRadius &&
-                Mathf.Abs(basePosition.y - game.Player.transform.position.y) <= 5f)
+                Mathf.Abs(basePosition.y - player.transform.position.y) <= 5f)
             {
-                float speed = 18f + game.Player.Body.linearVelocity.magnitude;
-                basePosition = Vector3.MoveTowards(basePosition, game.Player.transform.position + Vector3.up * .8f, speed * Time.deltaTime);
+                float speed = 18f + player.Body.linearVelocity.magnitude;
+                basePosition = Vector3.MoveTowards(basePosition, player.transform.position + Vector3.up * .8f, speed * Time.deltaTime);
                 transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
-                delta = transform.position - game.Player.transform.position; delta.y = 0;
+                delta = transform.position - player.transform.position; delta.y = 0;
             }
-            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? 21.97f : 13f) || Mathf.Abs(transform.position.y - game.Player.transform.position.y) > 4) return;
+            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? 21.97f : 13f) || Mathf.Abs(transform.position.y - player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)
             {
-                if (NearbyWeapon(game.Player) != this) return;
-                var current = game.Player.Weapons.FieldWeapon;
-                if (current && (InputManager.Instance == null || !InputManager.Instance.SwapPressed)) return;
-                int oldAmmo = game.Player.Weapons.FieldAmmo;
-                game.Player.Weapons.EquipField(Weapon, Amount);
+                if (NearbyWeapon(player) != this) return;
+                var current = player.Weapons.FieldWeapon;
+                bool swap = player.HasRemoteInput ? player.RemoteControls.swap : InputManager.Instance != null && InputManager.Instance.SwapPressed;
+                if (current && !swap) return;
+                int oldAmmo = player.Weapons.FieldAmmo;
+                player.Weapons.EquipField(Weapon, Amount);
                 game.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped");
                 AudioManager.Instance?.PlayWeaponPickup();
                 if (current && oldAmmo > 0)
                 {
-                    var discarded = Create(PickupKind.Weapon, game.Player.transform.position + game.Player.transform.right * 3.5f, current, oldAmmo);
+                    var discarded = Create(PickupKind.Weapon, player.transform.position + player.transform.right * 3.5f, current, oldAmmo);
                     discarded.availableAt = Time.time + 1;
                 }
             }
             else if (Kind == PickupKind.Health)
             {
-                if (game.Player.Damage.Health >= game.Player.Damage.MaxHealth) return;
-                game.Player.Repair(Amount); game.Notify("REPAIR PICKUP • +" + Amount + " chassis");
+                if (player.Damage.Health >= player.Damage.MaxHealth) return;
+                player.Repair(Amount); game.Notify("REPAIR PICKUP • +" + Amount + " chassis");
                 // Repair tell: a light puff of green sparks and a soft ratchet, deliberately quieter than being hit.
-                ExplosionSystem.Burst(game.Player.transform.position + Vector3.up * 1.1f, new Color(.3f, 1, .45f), 12, 3);
+                ExplosionSystem.Burst(player.transform.position + Vector3.up * 1.1f, new Color(.3f, 1, .45f), 12, 3);
                 AudioManager.Instance?.PlayRepair();
             }
             else if (Kind == PickupKind.Nitro)
             {
-                if (game.Player.BoostCharge >= .99f) return;
-                game.Player.RefillNitro(Amount * .01f); game.Notify("N2O PICKUP • tank " + Mathf.RoundToInt(game.Player.BoostCharge * 100) + "%");
+                if (player.BoostCharge >= .99f) return;
+                player.RefillNitro(Amount * .01f); game.Notify("N2O PICKUP • tank " + Mathf.RoundToInt(player.BoostCharge * 100) + "%");
             }
             else
             {

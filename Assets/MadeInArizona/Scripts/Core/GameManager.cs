@@ -77,6 +77,7 @@ namespace MadeInArizona
             sunObj.transform.rotation = Quaternion.Euler(68, -35, 0);
             CreatePostProcessing();
             gameObject.AddComponent<GameUpdater>();
+            gameObject.AddComponent<CoopSession>();
             gameObject.AddComponent<GameUI>();
             gameObject.AddComponent<SmokeTestRunner>();
             if (TelemetryRecorder.Enabled) gameObject.AddComponent<TelemetryRecorder>();
@@ -171,14 +172,17 @@ namespace MadeInArizona
         public bool IsCombatTrial { get; private set; }
         public void StartCombatTrial()
         {
+            if (CoopSession.IsRemoteClient) return;
             Time.timeScale=1;IsCombatTrial=true;State=GameState.Playing;NotificationUntil=0;DevVisuals.Apply();
             World.BuildCombatArena();SpawnPlayer(false);InputManager.Instance.SetEnabled(true);
             Mission.BeginCombatTrial();AudioManager.Instance.SetCombat(true);CameraController.Instance.Snap();StateChanged?.Invoke();
+            CoopSession.Instance?.HostWorldChanged();
         }
         public void RetryMission() { if(IsCombatTrial)StartCombatTrial();else StartMission(SelectedMission); }
 
         public void StartMission(int index)
         {
+            if (CoopSession.IsRemoteClient) return;
             if (index < 0 || index >= ContentCatalog.Missions.Length || index > Save.unlockedMission) return;
             Time.timeScale = 1;
             IsCombatTrial=false;
@@ -194,10 +198,12 @@ namespace MadeInArizona
             AudioManager.Instance.SetCombat(true);
             CameraController.Instance.Snap();
             StateChanged?.Invoke();
+            CoopSession.Instance?.HostWorldChanged();
         }
 
         public void ReturnToGarage()
         {
+            if (CoopSession.IsRemoteClient) return;
             Time.timeScale = 1;
             IsCombatTrial=false;
             State = GameState.Garage;
@@ -211,6 +217,7 @@ namespace MadeInArizona
             SaveSystem.Save(Save);
             CameraController.Instance.Snap();
             StateChanged?.Invoke();
+            CoopSession.Instance?.HostWorldChanged();
         }
 
         public void RefreshGarageVehicle()
@@ -233,6 +240,7 @@ namespace MadeInArizona
         public void BeginPlayerDeath()
         {
             if (Dying || !IsPlaying) return;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost && CoopSession.Instance.AnyPlayerAlive) return;
             StartCoroutine(PlayerDeathSequence());
         }
 
@@ -274,7 +282,7 @@ namespace MadeInArizona
         public void Pause()
         {
             if (State != GameState.Playing || Dying) return;
-            State = GameState.Paused; Time.timeScale = 0;
+            State = GameState.Paused; Time.timeScale = CoopSession.IsRemoteClient ? 1 : 0;
             InputManager.Instance.SetEnabled(false); StateChanged?.Invoke();
         }
 
@@ -282,11 +290,12 @@ namespace MadeInArizona
         {
             if (State != GameState.Paused) return;
             State = GameState.Playing; Time.timeScale = 1;
-            InputManager.Instance.SetEnabled(true); StateChanged?.Invoke();
+            InputManager.Instance.SetEnabled(!(CoopSession.IsRemoteClient && CoopSession.Instance.HostPaused)); StateChanged?.Invoke();
         }
 
         public void CompleteMission()
         {
+            if (CoopSession.IsRemoteClient) return;
             if (!IsPlaying) return;
             State = GameState.Won;
             InputManager.Instance.SetEnabled(false);
@@ -297,6 +306,7 @@ namespace MadeInArizona
 
         public void FailMission()
         {
+            if (CoopSession.IsRemoteClient) return;
             if (!IsPlaying) return;
             State = GameState.Lost;
             InputManager.Instance.SetEnabled(false);
@@ -312,16 +322,17 @@ namespace MadeInArizona
 
         void Update()
         {
-            PollWorldConfig();
+            if (!CoopSession.IsRemoteClient) PollWorldConfig();
             if (InputManager.Instance.PausePressed) { if (State == GameState.Playing) Pause(); else if (State == GameState.Paused) Resume(); }
+            if (CoopSession.IsRemoteClient) return;
             if (!IsPlaying) return;
             Mission.Tick(Time.deltaTime);
-            if (Player && Player.Damage.IsDead) BeginPlayerDeath();
+            if (Player && Player.Damage.IsDead && !(CoopSession.Instance && CoopSession.Instance.IsHost && CoopSession.Instance.AnyPlayerAlive)) BeginPlayerDeath();
             autosave += Time.unscaledDeltaTime;
             if (autosave > 60) { autosave = 0; SaveSystem.Save(Save); }
         }
 
-        void OnApplicationFocus(bool focus) { if (!focus && IsPlaying && !SmokeTestRunner.Active) Pause(); }
+        void OnApplicationFocus(bool focus) { if (!focus && IsPlaying && !SmokeTestRunner.Active && !(CoopSession.Instance && CoopSession.Instance.IsHost)) Pause(); }
         void OnApplicationQuit() { if (Save != null) SaveSystem.Save(Save); Time.timeScale = 1; }
         void OnDestroy()
         {

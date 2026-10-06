@@ -34,7 +34,10 @@ namespace MadeInArizona
         public float[] mufflerHz = { 110, 420, 1250 }, mufflerQ = { 2, 3, 3 }, mufflerGain = { .5f, .35f, .2f };
         public float mufflerCutoff = 3000;
         /// <summary>Cycle-to-cycle combustion spread, flow turbulence noise and overrun afterfire chance.</summary>
-        public float combustionVariation = .06f, turbulence = .3f, burble = .05f;
+        public float combustionVariation = .06f, turbulence = .25f, burble = .05f;
+        /// <summary>How sharp each exhaust pulse's front is: high for small, free-revving petrol engines (buzz and rasp),
+        /// low for a turbo-diesel (dull thud). Adds the harmonics that separate a petrol bark from a diesel drone.</summary>
+        public float edge = .5f;
         /// <summary>Diesel: no throttle plate (load is fuel quantity) and a combustion knock radiated by the block.</summary>
         public bool diesel;
         public float knock;
@@ -57,18 +60,20 @@ namespace MadeInArizona
         static void Add(EngineLayout layout) => all[layout.id] = layout;
         static void Build()
         {
-            // Geo Metro G10: 1.0 L inline three, firing order 1-3-2 every 240°, cast 3-into-1 manifold, one long pipe
-            // under the car. The 1.5-per-revolution firing rate and the uneven manifold runners give the thrum.
+            // Geo Metro G10: 993 cc SOHC inline three, firing 1-3-2 every 240° (1.5 pulses a revolution), idling near
+            // 800 and revving to about 6000. A short cast 3-into-1 manifold with nearly equal runners feeds a thin pipe
+            // through a resonator and a small economy muffler: a buzzy, slightly uneven thrum that turns thin and raspy
+            // up the revs, never deep. Sharp pulse edges, damped pipe drone, muffler resonances well above the firing rate.
             Add(new EngineLayout
             {
-                id = "inline3", displayName = "1.0 inline three (G10)", displacement = 1f, compression = 9.5f,
+                id = "inline3", displayName = "1.0 inline three (Geo Metro G10)", displacement = 1f, compression = 9.5f,
                 idleRpm = 800, redlineRpm = 6000,
-                firingAngle = new float[] { 0, 480, 240 }, headerLength = new[] { .34f, .26f, .4f },
-                collector = new[] { 0, 0, 0 }, pipeLength = new[] { 3.1f }, pan = new[] { 0f },
-                exhaustOpen = 132, exhaustDuration = 232, exhaustFlow = 1.05f,
-                pipeReflection = .5f, pipeDamping = .4f,
-                mufflerHz = new float[] { 128, 470, 1380 }, mufflerQ = new float[] { 2.2f, 3, 3.5f }, mufflerGain = new[] { .45f, .4f, .25f },
-                mufflerCutoff = 2700, combustionVariation = .08f, turbulence = .38f, burble = .03f
+                firingAngle = new float[] { 0, 480, 240 }, headerLength = new[] { .3f, .27f, .33f },
+                collector = new[] { 0, 0, 0 }, pipeLength = new[] { 3.3f }, pan = new[] { 0f },
+                exhaustOpen = 130, exhaustDuration = 230, exhaustFlow = 1.1f,
+                pipeReflection = .3f, pipeDamping = .55f,
+                mufflerHz = new float[] { 180, 620, 1800 }, mufflerQ = new float[] { 2.2f, 3, 3 }, mufflerGain = new[] { .4f, .35f, .2f },
+                mufflerCutoff = 3000, combustionVariation = .05f, turbulence = .3f, burble = .02f, edge = .6f
             });
             // 1.3 L inline four, 1-3-4-2, cast 4-into-1, economy muffler.
             Add(new EngineLayout
@@ -77,8 +82,8 @@ namespace MadeInArizona
                 idleRpm = 850, redlineRpm = 6000,
                 firingAngle = new float[] { 0, 540, 180, 360 }, headerLength = new[] { .36f, .3f, .3f, .36f },
                 collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { 2.8f }, pan = new[] { 0f },
-                mufflerHz = new float[] { 96, 380, 1100 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .5f, .35f, .2f },
-                mufflerCutoff = 2800, turbulence = .3f
+                mufflerHz = new float[] { 170, 520, 1500 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .3f, .35f, .25f },
+                mufflerCutoff = 3000, turbulence = .25f, edge = .6f
             });
             // 1.0 L motorcycle four, 1-2-4-3, 4-2-1 headers and a short, barely muffled can.
             Add(new EngineLayout
@@ -89,7 +94,20 @@ namespace MadeInArizona
                 collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { .8f }, pan = new[] { .1f },
                 exhaustOpen = 125, exhaustDuration = 250, exhaustFlow = 1.15f, pipeReflection = .6f, pipeDamping = .25f,
                 mufflerHz = new float[] { 210, 760, 2300 }, mufflerQ = new float[] { 1.8f, 2.5f, 3 }, mufflerGain = new[] { .4f, .45f, .35f },
-                mufflerCutoff = 5500, combustionVariation = .05f, turbulence = .45f, burble = .08f
+                mufflerCutoff = 5500, combustionVariation = .05f, turbulence = .1f, burble = .08f, edge = .7f
+            });
+            // Skitter: a 1.0 L four-stroke V3, two cylinders in the front bank and one at the back. The shared crank gives
+            // uneven firing (255°, 210°, 255°) and an off-beat lope; a short 3-into-1 (the rear runner longer) into a
+            // barely muffled can. Revs high like a bike engine.
+            Add(new EngineLayout
+            {
+                id = "v3-bike", displayName = "1.0 V3", displacement = 1f, compression = 12.5f,
+                idleRpm = 1200, redlineRpm = 11000,
+                firingAngle = new float[] { 0, 255, 465 }, headerLength = new[] { .45f, .5f, .75f },
+                collector = new[] { 0, 0, 0 }, pipeLength = new[] { .9f }, pan = new[] { .1f },
+                exhaustOpen = 125, exhaustDuration = 250, exhaustFlow = 1.15f, pipeReflection = .55f, pipeDamping = .3f,
+                mufflerHz = new float[] { 190, 680, 2100 }, mufflerQ = new float[] { 1.8f, 2.5f, 3 }, mufflerGain = new[] { .4f, .4f, .25f },
+                mufflerCutoff = 5000, combustionVariation = .06f, turbulence = .15f, burble = .1f, edge = .6f
             });
             // 3.0 L 60° V6, 1-4-2-5-3-6, two manifolds joined by a Y-pipe (the crossover side runs longer).
             Add(new EngineLayout
@@ -99,7 +117,7 @@ namespace MadeInArizona
                 firingAngle = new float[] { 0, 240, 480, 120, 360, 600 }, headerLength = new[] { .42f, .38f, .45f, 1.05f, 1f, 1.1f },
                 collector = new[] { 0, 0, 0, 0, 0, 0 }, pipeLength = new[] { 3.6f }, pan = new[] { 0f },
                 mufflerHz = new float[] { 82, 300, 900 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .5f, .3f, .15f },
-                mufflerCutoff = 2200, turbulence = .25f
+                mufflerCutoff = 2600, turbulence = .22f
             });
             // Cross-plane V8, GM order 1-8-4-3-6-5-7-2, odd cylinders left. Each bank's pulses arrive 270/180/90/180°
             // apart: dual exhausts keep the banks separate, which is where the burble comes from.
@@ -112,7 +130,7 @@ namespace MadeInArizona
                 collector = new[] { 0, 1, 0, 1, 0, 1, 0, 1 }, pipeLength = new[] { 1.3f, 1.25f }, pan = new[] { -.35f, .35f },
                 pipeReflection = .65f, pipeDamping = .3f,
                 mufflerHz = new float[] { 78, 290, 880 }, mufflerQ = new float[] { 1.8f, 2.5f, 3 }, mufflerGain = new[] { .6f, .4f, .25f },
-                mufflerCutoff = 4600, combustionVariation = .07f, turbulence = .35f, burble = .1f
+                mufflerCutoff = 4600, combustionVariation = .07f, turbulence = .28f, burble = .1f
             });
             // Truck cross-plane V8, Ford order 1-5-4-2-6-3-7-8, single exhaust: the left bank reaches the Y-pipe
             // through a long crossover, so the banks' pulses merge with a lag.
@@ -124,7 +142,7 @@ namespace MadeInArizona
                 headerLength = new[] { .5f, .48f, .52f, .5f, 1.3f, 1.28f, 1.32f, 1.3f },
                 collector = new[] { 0, 0, 0, 0, 0, 0, 0, 0 }, pipeLength = new[] { 3.8f }, pan = new[] { .15f },
                 mufflerHz = new float[] { 70, 250, 760 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .55f, .35f, .2f },
-                mufflerCutoff = 2600, combustionVariation = .08f, turbulence = .28f, burble = .08f
+                mufflerCutoff = 2600, combustionVariation = .08f, turbulence = .25f, burble = .08f
             });
             // Flat-plane V8, 1-5-3-7-4-8-2-6: each bank is an even-firing four, one collector per bank. Raw and high.
             Add(new EngineLayout
@@ -136,7 +154,7 @@ namespace MadeInArizona
                 collector = new[] { 0, 0, 0, 0, 1, 1, 1, 1 }, pipeLength = new[] { 1.6f, 1.6f }, pan = new[] { -.4f, .4f },
                 exhaustOpen = 125, exhaustDuration = 250, pipeReflection = .6f, pipeDamping = .28f,
                 mufflerHz = new float[] { 120, 440, 1500 }, mufflerQ = new float[] { 1.8f, 2.5f, 3 }, mufflerGain = new[] { .45f, .45f, .3f },
-                mufflerCutoff = 5200, combustionVariation = .05f, turbulence = .4f, burble = .12f
+                mufflerCutoff = 5200, combustionVariation = .05f, turbulence = .2f, burble = .12f, edge = .6f
             });
             // 6.7 L turbo-diesel inline six, 1-5-3-6-2-4. The turbine absorbs much of the pulse energy; the block
             // radiates combustion knock.
@@ -149,7 +167,7 @@ namespace MadeInArizona
                 collector = new[] { 0, 0, 0, 0, 0, 0 }, pipeLength = new[] { 4.5f }, pan = new[] { .2f },
                 exhaustOpen = 120, exhaustDuration = 235, pipeReflection = .45f, pipeDamping = .5f,
                 mufflerHz = new float[] { 62, 210, 640 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .6f, .35f, .2f },
-                mufflerCutoff = 1800, combustionVariation = .05f, turbulence = .22f, burble = 0,
+                mufflerCutoff = 1800, combustionVariation = .05f, turbulence = .18f, burble = 0, edge = .3f,
                 diesel = true, knock = .5f
             });
         }
@@ -160,7 +178,7 @@ namespace MadeInArizona
             {
                 case "thimble": return "inline3";
                 case "juniper": return "inline4";
-                case "skitter": return "inline4-bike";
+                case "skitter": return "v3-bike";
                 case "sidehustle": return "v6";
                 case "perennial": return "v8-truck";
                 case "foreclosure": return "inline6-diesel";

@@ -33,7 +33,7 @@ Runs at half the output rate (24 kHz at 48 kHz output), linearly upsampled, on t
 | Foreclosure 6.8D | `inline6-diesel` | Turbo-diesel, block knock, 700–3300 rpm |
 | Side Hustle Tradesman | `v6` | 60° V6, Y-pipe with longer crossover side |
 | Perennial Half-Ton | `v8-truck` | Cross-plane, single exhaust |
-| Skitter Sport 1000 | `inline4-bike` | 1–2–4–3, to 11,500 rpm |
+| Skitter Sport 1000 | `v3-bike` | 1.0 V3, uneven 255°/210°/255° firing, to 11,000 rpm |
 | VINcent | `v8-flatplane` | Two even-firing fours, one pipe per bank |
 
 The game tachometer (850–7200) maps onto each layout's own idle–redline range.

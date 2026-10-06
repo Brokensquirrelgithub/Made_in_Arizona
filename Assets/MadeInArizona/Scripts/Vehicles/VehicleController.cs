@@ -17,7 +17,45 @@ namespace MadeInArizona
         /// <summary>Burn, stall and stuck-charge state, created the first time a weapon applies one.</summary>
         public VehicleAfflictions Afflictions { get; internal set; }
         public bool IsPlayer { get; private set; }
-        public float SpeedKph => Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
+        public bool IsNetworkProxy { get; private set; }
+        Vector3 networkPosition;
+        Vector3 networkVelocity;
+        Quaternion networkRotation;
+        float networkYawRate;
+        public bool HasRemoteInput { get; private set; }
+        public CoopControls RemoteControls { get; private set; }
+        float remoteInputAt;
+        CoopControls FreshRemoteControls => Time.unscaledTime - remoteInputAt < .4f ? RemoteControls : default;
+        public void SetRemoteControls(CoopControls controls)
+        {
+            HasRemoteInput = true;
+            RemoteControls = controls;
+            remoteInputAt = Time.unscaledTime;
+        }
+        public void SetNetworkProxy()
+        {
+            IsNetworkProxy = true;
+            Body.isKinematic = true;
+            Body.detectCollisions = false;
+            Body.interpolation = RigidbodyInterpolation.None;
+            networkPosition = transform.position;
+            networkRotation = transform.rotation;
+        }
+        public void ApplyNetworkMotion(Vector3 position, Quaternion rotation, Vector3 velocity,
+            float health, float maximumHealth, float boost, float rpm, float throttle, float yawRate, bool boosting)
+        {
+            networkPosition = position;
+            networkRotation = rotation;
+            networkVelocity = velocity;
+            networkYawRate = yawRate;
+            Damage?.SetNetworkHealth(health, maximumHealth);
+            BoostCharge = Mathf.Clamp01(boost);
+            RPM = rpm;
+            Throttle = throttle;
+            Boosting = boosting;
+        }
+        public float SpeedKph => IsNetworkProxy ? networkVelocity.magnitude * 3.6f
+            : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
         public float BoostCharge { get; private set; } = 1;
@@ -203,10 +241,28 @@ namespace MadeInArizona
 
         void Update()
         {
+            if (IsNetworkProxy)
+            {
+                float blend = 1 - Mathf.Exp(-15 * Time.unscaledDeltaTime);
+                Vector3 position = Vector3.Distance(transform.position, networkPosition) > 30 ? networkPosition : Vector3.Lerp(transform.position, networkPosition, blend);
+                Quaternion rotation = Quaternion.Slerp(transform.rotation, networkRotation, blend);
+                transform.SetPositionAndRotation(position, rotation);
+                if (Body) { Body.position = position; Body.rotation = rotation; }
+                if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying) AnimateBody();
+                return;
+            }
             if (!initialized || Damage.IsDead || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
             var input = InputManager.Instance;
             Vector3 aimDirection = aiAim;
-            if (IsPlayer && input != null)
+            if (IsPlayer && HasRemoteInput)
+            {
+                var controls = FreshRemoteControls;
+                aimDirection = new Vector3(controls.aim.x, controls.elevation, controls.aim.y);
+                Weapons.AimAt(aimDirection);
+                if (controls.primary) Weapons.FirePrimary(aimDirection);
+                if (controls.secondary) Weapons.FireSecondary(aimDirection);
+            }
+            else if (IsPlayer && input != null)
             {
                 aimDirection = new Vector3(input.Aim.x, input.AimElevation, input.Aim.y);
                 Weapons.AimAt(aimDirection);
@@ -223,18 +279,19 @@ namespace MadeInArizona
         void FixedUpdate()
         {
             Boosting = false;
-            if (!initialized || Damage.IsDead || Body.isKinematic) return;
+            if (!initialized || Damage.IsDead || Body.isKinematic || IsNetworkProxy) return;
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
                 Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; return;
             }
-            Vector2 input = IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
+            CoopControls remote = FreshRemoteControls;
+            Vector2 input = IsPlayer && HasRemoteInput ? remote.move : IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
             // A stalled engine (shock weapons) coasts; steering and throttle return when it restarts.
             if (VehicleAfflictions.Stalled(this)) input = Vector2.zero;
-            bool drifting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Drift;
-            var tuning = DevTuning.Current;
-            bool boosting = IsPlayer && InputManager.Instance != null && InputManager.Instance.Boost && BoostCharge > .002f && input.sqrMagnitude > .1f;
+            bool drifting = IsPlayer && (HasRemoteInput ? remote.drift : InputManager.Instance != null && InputManager.Instance.Drift);
+            var tuning = IsPlayer ? DevTuning.ForCar(this) : DevTuning.Current;
+            bool boosting = IsPlayer && (HasRemoteInput ? remote.boost : InputManager.Instance != null && InputManager.Instance.Boost) && BoostCharge > .002f && input.sqrMagnitude > .1f;
             Throttle = Mathf.MoveTowards(Throttle, input.magnitude, Time.fixedDeltaTime * 6);
             Grounded = SupportSuspension();
             // Cars come back down quickly: extra gravity whenever no wheel is on the ground (player and hostiles alike).
@@ -273,7 +330,7 @@ namespace MadeInArizona
             float wheelGrip = Mathf.Lerp(.5f, 1f, Damage.Wheels);
             float diffGrip = Stats.differential == Differential.Locked ? 1.13f : Stats.differential == Differential.LimitedSlip ? 1.07f : .92f;
             float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip;
-            if (IsPlayer) grip *= DevTuning.Current.grip;
+            if (IsPlayer) grip *= tuning.grip;
             float drivetrain = Stats.drivetrain == Drivetrain.AWD ? 1.16f : Stats.drivetrain == Drivetrain.FWD ? 1.04f : .98f;
             if (input.sqrMagnitude > .04f)
             {
@@ -288,7 +345,7 @@ namespace MadeInArizona
                 float handling = Mathf.Lerp(.5f, 1, Damage.Suspension) * Mathf.Lerp(.72f, 1, Damage.Wheels);
                 float lockPenalty = Stats.differential == Differential.Locked ? .84f : 1;
                 float turnRate = Mathf.Clamp(Stats.turnSpeed, 35, 240) * LowSpeedTurnMultiplier(speed) * handling * lockPenalty;
-                if (IsPlayer) turnRate *= DevTuning.Current.steering;
+                if (IsPlayer) turnRate *= tuning.steering;
                 turnRate *= Mathf.Lerp(1, Mathf.Max(1, tuning.driftYaw), DriftBlend);
                 float yaw = steering * turnRate * Mathf.Deg2Rad;
                 // Pressing drift while steering flicks the tail out, like a handbrake entry without losing speed.
@@ -314,7 +371,7 @@ namespace MadeInArizona
                 // responsive and controllable without raising top speed.
                 acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
                 acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * drivetrain;
-                if (IsPlayer) acceleration *= DevTuning.Current.acceleration;
+                if (IsPlayer) acceleration *= tuning.acceleration;
                 if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
@@ -502,13 +559,14 @@ namespace MadeInArizona
         void AnimateBody()
         {
             if (Visual == null) return;
-            Vector3 localVelocity = transform.InverseTransformDirection(Body.linearVelocity);
+            Vector3 localVelocity = transform.InverseTransformDirection(IsNetworkProxy ? networkVelocity : Body.linearVelocity);
             // Acceleration is sampled per physics step; per-render-frame sampling alternated between zero and double.
             Vector3 acceleration = transform.InverseTransformDirection(bodyAcceleration);
             float narrow = Mathf.Clamp(Stats.rideHeight / Mathf.Max(1, Stats.trackWidth), .15f, 1);
             // Cornering lean follows turn force (yaw rate x speed) with a little slip, capped low so fast turns never
             // look like the car tipping over; it settles back twice as fast as it leans in.
-            float targetRoll = -Body.angularVelocity.y * localVelocity.z * .1f * (1 + narrow * .5f) - localVelocity.x * .25f * (1 + narrow);
+            float yawRate = IsNetworkProxy ? networkYawRate : Body.angularVelocity.y;
+            float targetRoll = -yawRate * localVelocity.z * .1f * (1 + narrow * .5f) - localVelocity.x * .25f * (1 + narrow);
             targetRoll = Mathf.Clamp(targetRoll, -MaxCorneringLean, MaxCorneringLean) + (1 - Damage.Suspension) * 4;
             visualRoll = Mathf.Lerp(visualRoll, targetRoll, Time.deltaTime * (Mathf.Abs(targetRoll) < Mathf.Abs(visualRoll) ? 12 : 6));
             // The body sits on the slope, then squats under power and dives under braking. The old pitch dipped the
@@ -519,7 +577,7 @@ namespace MadeInArizona
             wheelAngle += localVelocity.z * Time.deltaTime * 150;
             if (wheels != null)
                 for (int i = 0; i < wheels.Length; i++)
-                    if (wheels[i] != null) wheels[i].localRotation = Quaternion.Euler(wheelAngle, i < 2 ? Body.angularVelocity.y * 12 : 0, 0);
+                    if (wheels[i] != null) wheels[i].localRotation = Quaternion.Euler(wheelAngle, i < 2 ? yawRate * 12 : 0, 0);
         }
         public static float SurfaceGrip(SurfaceKind surface)
         {

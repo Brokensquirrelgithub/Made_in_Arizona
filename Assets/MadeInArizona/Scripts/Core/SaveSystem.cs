@@ -16,9 +16,20 @@ namespace MadeInArizona
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
         public string bindingOverrides="";
         public DevTuning dev=new DevTuning();
+        public List<CarTuning> cars=new List<CarTuning>();
+        public List<WeaponTuning> weaponsBalance=new List<WeaponTuning>();
         public void Clamp()
         {
             if(dev==null)dev=new DevTuning(); dev.Clamp();
+            if(cars==null)cars=new List<CarTuning>();
+            cars.RemoveAll(item=>item==null||string.IsNullOrEmpty(item.id)||
+                !Array.Exists(ContentCatalog.Vehicles,car=>car&&car.id==item.id));
+            if(cars.Count>ContentCatalog.Vehicles.Length)cars.RemoveRange(ContentCatalog.Vehicles.Length,cars.Count-ContentCatalog.Vehicles.Length);
+            foreach(var item in cars)item.Clamp();
+            if(weaponsBalance==null)weaponsBalance=new List<WeaponTuning>();
+            weaponsBalance.RemoveAll(item=>item==null||WeaponRules.Find(item.id)==null);
+            if(weaponsBalance.Count>ContentCatalog.Weapons.Length)weaponsBalance.RemoveRange(ContentCatalog.Weapons.Length,weaponsBalance.Count-ContentCatalog.Weapons.Length);
+            foreach(var item in weaponsBalance)item.Clamp(WeaponRules.Find(item.id));
             master=Unit(master,.8f); music=Unit(music,.48f); engines=Unit(engines,.62f); weapons=Unit(weapons,.82f);
             dialogue=Unit(dialogue,.8f); environment=Unit(environment,.5f); shake=Unit(shake,.6f);
             uiScale=Finite(uiScale)?Mathf.Clamp(uiScale,.75f,1.5f):1;
@@ -106,7 +117,8 @@ namespace MadeInArizona
             try
             {
                 data.Normalize(); Directory.CreateDirectory(DirectoryPath);
-                string payload=JsonUtility.ToJson(data); string json=JsonUtility.ToJson(new Envelope{payload=payload,checksum=Hash(payload)},true);
+                var persisted=CoopSession.Instance?.ForPersistence(data) ?? data;
+                string payload=JsonUtility.ToJson(persisted); string json=JsonUtility.ToJson(new Envelope{payload=payload,checksum=Hash(payload)},true);
                 byte[] bytes=Encoding.UTF8.GetBytes(json); string temp=Path+".tmp";
                 using(var stream=new FileStream(temp,FileMode.Create,FileAccess.Write,FileShare.None)) { stream.Write(bytes,0,bytes.Length); stream.Flush(true); }
                 if(File.Exists(Path))

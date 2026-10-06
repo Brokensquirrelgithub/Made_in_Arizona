@@ -18,6 +18,7 @@ namespace MadeInArizona
         }
         public void StartCampaign(int seed,float size)
         {
+            if (CoopSession.IsRemoteClient) return;
             if(State==GameState.Generating)return;
             WorldConfig.seed=seed;WorldConfig.size=size;
             if(!WorldConfigStore.Save(WorldConfig)){Notify(WorldConfigStore.LastError);return;}
@@ -29,6 +30,7 @@ namespace MadeInArizona
         /// </summary>
         public void RegenerateWorld()
         {
+            if (CoopSession.IsRemoteClient) return;
             if(State==GameState.Generating)return;
             int seed=UnityEngine.Random.Range(1,int.MaxValue);
             bool inWorld=GeneratedWorld.Active&&(State==GameState.Playing||State==GameState.Paused)&&!IsCombatTrial;
@@ -47,6 +49,7 @@ namespace MadeInArizona
         }
         void PollWorldConfig()
         {
+            if (CoopSession.IsRemoteClient) return;
             if(!UseGeneratedWorld||State==GameState.Generating||Time.unscaledTime<configPoll)return;
             configPoll=Time.unscaledTime+.2f;
             var current=WorldConfig;

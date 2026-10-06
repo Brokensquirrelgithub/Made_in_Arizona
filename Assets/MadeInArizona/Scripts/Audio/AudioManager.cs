@@ -34,7 +34,7 @@ namespace MadeInArizona
         {
             Instance=this;
             shift=Keep(AudioSynthesis.Mechanical(false));release=Keep(AudioSynthesis.Mechanical(true));backfire=Keep(AudioSynthesis.Backfire());
-            var engineTuning=DevTuning.Current;
+            var engineTuning=DevTuning.ForCar(GameManager.Instance?.Player);
             generatedShape=targetShape=EngineShape.From(engineTuning);
             engineModeBlend=engineTuning.enginePreserveEdges?1:0;
             physicalBlend=engineTuning.enginePhysical?1:0;
@@ -106,7 +106,7 @@ namespace MadeInArizona
             duck=Mathf.MoveTowards(duck,1,Time.unscaledDeltaTime*1.5f);if(music)music.Duck=duck;
             bool active=game.State==GameState.Playing;var player=game.Player;
             float gain=Settings.engines*duck;
-            var tuning=DevTuning.Current;
+            var tuning=DevTuning.ForCar(player);
             RefreshEngineShape(tuning);
             engineModeBlend=Mathf.MoveTowards(engineModeBlend,tuning.enginePreserveEdges?1:0,Time.unscaledDeltaTime*20);
             physicalBlend=Mathf.MoveTowards(physicalBlend,tuning.enginePhysical?1:0,Time.unscaledDeltaTime*20);
@@ -152,7 +152,7 @@ namespace MadeInArizona
         /// </summary>
         void UpdateEngineBank(float rpm,float load,float presence,float gain)
         {
-            var tuning=DevTuning.Current;
+            var tuning=DevTuning.ForCar(GameManager.Instance?.Player);
             var rates=AudioSynthesis.EngineLayerHz;
             float firing=40+rpm*190,position=0;
             float octave=Mathf.Log(firing,2);
@@ -188,7 +188,7 @@ namespace MadeInArizona
         {
             if(player&&player.Definition)physicalEngine.Bind(player.Definition.Engine,player.Stats!=null&&player.Stats.turbocharged);
             var engine=physicalEngine.Layout;if(engine==null)return;
-            var tuning=DevTuning.Current;
+            var tuning=DevTuning.ForCar(player);
             float revs=player?Mathf.Clamp01((player.RPM-850)/(7200-850)):0;
             float rpm=Mathf.Lerp(engine.idleRpm,engine.redlineRpm,revs)*tuning.enginePitch;
             physicalEngine.Drive(rpm,player?player.Throttle:0,presence*gain*physicalBlend*PhysicalMixLevel,tuning);
@@ -200,11 +200,11 @@ namespace MadeInArizona
         void UpdateNitro(VehicleController player,bool active,bool boosting,float rpm,float gain)
         {
             if(player&&boosting&&!wasBoosting&&Time.time-nitroOffAt>.3f)PlayAt(nitroIgnite,player.transform.position-player.transform.forward*2,.6f*gain,Random.Range(.95f,1.05f),40);
-            if(player&&active&&!boosting&&wasBoosting)PlayAt(release,player.transform.position-player.transform.forward*2,.24f*gain*DevTuning.Current.exhaustPopLevel,.85f,75);
+            if(player&&active&&!boosting&&wasBoosting)PlayAt(release,player.transform.position-player.transform.forward*2,.24f*gain*DevTuning.ForCar(player).exhaustPopLevel,.85f,75);
             if(boosting)nitroOffAt=Time.time;
             wasBoosting=boosting;
             nitroLevel=Mathf.MoveTowards(nitroLevel,boosting?1:0,Time.unscaledDeltaTime*(boosting?10:4));
-            nitro.volume=nitroLevel*gain*.5f*DevTuning.Current.nitroRoarLevel;
+            nitro.volume=nitroLevel*gain*.5f*DevTuning.ForCar(player).nitroRoarLevel;
             if(player)nitro.pitch=.88f+Mathf.Clamp01(player.SpeedKph/140)*.32f+rpm*.08f;
         }
         /// <summary>Lifting off at high RPM dumps unburnt fuel into the exhaust: a short run of irregular pops.</summary>
@@ -214,7 +214,7 @@ namespace MadeInArizona
             if(load>.45f)crackleUntil=0;
             if(Time.time>crackleUntil||Time.time<crackleAt)return;
             crackleAt=Time.time+Random.Range(.045f,.16f);
-            PlayAt(backfire,player.transform.position-player.transform.forward*2,Random.Range(.12f,.3f)*gain*DevTuning.Current.exhaustPopLevel,Random.Range(.8f,1.25f),72);
+            PlayAt(backfire,player.transform.position-player.transform.forward*2,Random.Range(.12f,.3f)*gain*DevTuning.ForCar(player).exhaustPopLevel,Random.Range(.8f,1.25f),72);
         }
         /// <summary>Metal hull impact for the player, scaled by the share of health lost. Rapid fire is rate limited.</summary>
         public void PlayHurt(float healthFraction)

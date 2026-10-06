@@ -89,6 +89,8 @@ namespace MadeInArizona
         }
         public static void Fire(Vector3 position, Vector3 direction, float speed, float damage, float radius, GameObject source, Color color, ExplosionKind kind, float lifetime, ShotFx fx = null)
         {
+            if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime);
             Get().Launch(position, direction, speed, damage, radius, source, color, kind, lifetime, fx);
         }
         /// <summary>True when <paramref name="target"/> is on the other side from the vehicle that owns <paramref name="source"/>.</summary>

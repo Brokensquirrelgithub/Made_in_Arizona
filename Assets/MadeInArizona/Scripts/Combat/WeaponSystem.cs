@@ -8,8 +8,9 @@ namespace MadeInArizona
         public WeaponDefinition GarageWeapon { get; private set; }
         public WeaponDefinition FieldWeapon { get; private set; }
         public int FieldAmmo { get; private set; }
-        public float GarageCooldown => GarageWeapon ? Mathf.Clamp01((garageAt - Time.time) * Mathf.Max(.1f, GarageWeapon.fireRate)) : 0;
-        public float FieldCooldown => FieldWeapon ? Mathf.Clamp01((fieldAt - Time.time) * Mathf.Max(.1f, FieldWeapon.fireRate)) : 0;
+        public float GarageCooldown => GarageWeapon ? Mathf.Clamp01((garageAt - Time.time) * Mathf.Max(.1f, Effective(GarageWeapon).fireRate)) : 0;
+        public float FieldCooldown => FieldWeapon ? Mathf.Clamp01((fieldAt - Time.time) * Mathf.Max(.1f, Effective(FieldWeapon).fireRate)) : 0;
+        readonly Dictionary<string, WeaponDefinition> balancedWeapons = new Dictionary<string, WeaponDefinition>();
         VehicleController owner;
         Transform turret, muzzleTransform;
         Light muzzleFlash;
@@ -71,18 +72,53 @@ namespace MadeInArizona
             if (owner != null && !owner.IsPlayer)
                 GarageWeapon = WeaponRules.Find(id) ?? WeaponRules.Find("riveter");
         }
+        public void ConfigurePlayerPrimary(string id)
+        {
+            if (!owner || !owner.IsPlayer || !WeaponRules.GarageWeapon(id)) return;
+            GarageWeapon = WeaponRules.Find(id) ?? GarageWeapon;
+        }
+        WeaponDefinition Effective(WeaponDefinition source)
+        {
+            if (!source || !owner || !owner.IsPlayer) return source;
+            var tuning = BalanceTuning.Weapon(source.id);
+            if (tuning == null) return source;
+            if (!balancedWeapons.TryGetValue(source.id, out var result) || !result)
+            {
+                result = Instantiate(source);
+                result.hideFlags = HideFlags.DontSave;
+                balancedWeapons[source.id] = result;
+            }
+            result.damage = tuning.damage;
+            result.fireRate = tuning.fireRate;
+            result.speed = tuning.speed;
+            result.blastRadius = tuning.blastRadius;
+            return result;
+        }
+        public void SetNetworkGarageWeapon(string id)
+        {
+            if (!CoopSession.IsRemoteClient) return;
+            var weapon = WeaponRules.Find(id);
+            if (weapon) GarageWeapon = weapon;
+        }
+        public void SetNetworkFieldWeapon(string id, int ammo)
+        {
+            if (!CoopSession.IsRemoteClient) return;
+            FieldWeapon = string.IsNullOrEmpty(id) ? null : WeaponRules.Find(id);
+            FieldAmmo = FieldWeapon ? Mathf.Max(0, ammo) : 0;
+        }
         public void FirePrimary(Vector3 direction)
         {
             if (!CanFire() || Time.time < garageAt || !GarageWeapon) return;
-            garageAt = Time.time + 1f / Mathf.Max(.1f, GarageWeapon.fireRate);
-            Fire(GarageWeapon, direction);
+            var weapon = Effective(GarageWeapon);
+            garageAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
+            Fire(weapon, direction);
         }
         public void FireSecondary(Vector3 direction)
         {
             if (!CanFire()) return;
             if (!owner.IsPlayer) { FireEnemyRocket(direction); return; }
             if (!FieldWeapon || FieldAmmo <= 0 || Time.time < fieldAt) return;
-            var weapon = FieldWeapon;
+            var weapon = Effective(FieldWeapon);
             fieldAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
             Fire(weapon, direction);
             if (--FieldAmmo == 0) { FieldWeapon = null; GameManager.Instance?.Notify("FIELD WEAPON EMPTY • FIND ANOTHER DROP"); }
@@ -306,7 +342,7 @@ namespace MadeInArizona
         }
         void UpdateLobMarker()
         {
-            var lobbed = Lobbed(FieldWeapon) ? FieldWeapon : LobbedGarage(GarageWeapon) ? GarageWeapon : null;
+            var lobbed = Lobbed(FieldWeapon) ? Effective(FieldWeapon) : LobbedGarage(GarageWeapon) ? Effective(GarageWeapon) : null;
             if (!owner || !owner.IsPlayer || !lobbed) { SetLobMarker(false); lobTarget = null; return; }
             var target = AcquireLobTarget(aimDirection, lobbed);
             if (!target) { SetLobMarker(false); return; }
@@ -342,6 +378,11 @@ namespace MadeInArizona
             muzzleFlash.color = color; muzzleFlash.intensity = intensity * 1.6f;
         }
         bool CanFire() => owner != null && !owner.Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying && !VehicleAfflictions.Stalled(owner);
-        void OnDestroy() { if (lobMarkerMaterial) Destroy(lobMarkerMaterial); }
+        void OnDestroy()
+        {
+            if (lobMarkerMaterial) Destroy(lobMarkerMaterial);
+            foreach (var pair in balancedWeapons) if (pair.Value) Destroy(pair.Value);
+            balancedWeapons.Clear();
+        }
     }
 }

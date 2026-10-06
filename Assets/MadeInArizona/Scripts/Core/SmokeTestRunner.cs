@@ -1091,7 +1091,8 @@ namespace MadeInArizona
         static float HighBandShare(EngineVoice voice,out float boostSpool,out float liftSpool)
         {
             var block=new float[2048];double low=0,high=0;float lowPass=0;boostSpool=0;
-            voice.Gain=1;voice.TargetRpm=4500;voice.Throttle=1;
+            // Whistle muted: this measures the turbine's effect on the exhaust pulses, not the compressor's whine.
+            voice.Gain=1;voice.TargetRpm=4500;voice.Throttle=1;voice.TurboLevel=0;
             for(int frame=0;frame<96000;frame+=1024)
             {
                 voice.Render(block,2);

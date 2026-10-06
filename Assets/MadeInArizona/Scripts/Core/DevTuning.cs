@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 namespace MadeInArizona
 {
@@ -26,10 +27,55 @@ namespace MadeInArizona
         public bool enginePreserveEdges;
         /// <summary>C: the physical engine voice (EngineVoice) instead of the A/B loop bank.</summary>
         public bool enginePhysical=true;
-        public int audioVersion=3;
+        /// <summary>Physical voice: how much tailpipe brightness is blended in (1 = default, 0 = dark, 2.5 = buzzy).</summary>
+        public float engineBrightness=1f;
+        /// <summary>Physical voice: strength of the waves ringing in the headers and tailpipe (1 = default).</summary>
+        public float engineResonance=1f;
+        public int audioVersion=5;
         public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
-        public static DevTuning Current => GameManager.Instance?.Save?.settings?.dev ?? defaults;
+        static DevTuning coopOverride;
+        static DevTuning coopComposite;
+        static readonly Dictionary<string,DevTuning> carCache=new Dictionary<string,DevTuning>();
+        public static DevTuning Local => GameManager.Instance?.Save?.settings?.dev ?? defaults;
+        public static DevTuning Current => CoopSession.IsRemoteClient && coopComposite != null ? coopComposite : Local;
+        public static DevTuning ForCar(VehicleController vehicle)
+        {
+            string id=vehicle&&vehicle.Definition?vehicle.Definition.id:null;
+            if(string.IsNullOrEmpty(id))return Current;
+            if(carCache.TryGetValue(id,out var cached))return cached;
+            var profile=BalanceTuning.Car(id);
+            if(profile==null)return Current;
+            cached=JsonUtility.FromJson<DevTuning>(JsonUtility.ToJson(Current));
+            profile.CopyTo(cached);
+            carCache[id]=cached;
+            return cached;
+        }
+        public static void SetCoopOverride(string json)
+        {
+            if (!CoopSession.IsRemoteClient || string.IsNullOrEmpty(json)) return;
+            DevTuning tuning;
+            try { tuning = JsonUtility.FromJson<DevTuning>(json); }
+            catch (Exception) { return; }
+            if (tuning == null) return;
+            coopOverride = tuning;
+            Apply();
+        }
+        public static void ClearCoopOverride()
+        {
+            if (coopOverride == null) return;
+            coopOverride = null;
+            Apply();
+        }
+        public static void AdoptHostSharedDefaults()
+        {
+            if (coopOverride == null) return;
+            var local = Local;
+            foreach (var control in DevControl.All)
+                if (control.scope == DevScope.Shared)
+                    control.field.SetValue(local, control.field.GetValue(coopOverride));
+            Apply();
+        }
         public void Clamp()
         {
             if (presentationVersion < 1)
@@ -82,6 +128,16 @@ namespace MadeInArizona
                 enginePhysical=defaults.enginePhysical; // The experiment starts on the physical voice; A and B stay selectable.
                 audioVersion=3;
             }
+            if (audioVersion < 4)
+            {
+                engineBrightness=defaults.engineBrightness;
+                audioVersion=4;
+            }
+            if (audioVersion < 5)
+            {
+                engineResonance=defaults.engineResonance;
+                audioVersion=5;
+            }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;
             foreach(var control in DevControl.All)
@@ -93,18 +149,32 @@ namespace MadeInArizona
         }
         public static void Apply()
         {
-            Current.Clamp();
+            Local.Clamp();
+            if(coopOverride!=null)
+            {
+                coopOverride.Clamp();
+                coopComposite=JsonUtility.FromJson<DevTuning>(JsonUtility.ToJson(Local));
+                foreach(var control in DevControl.All)
+                    if(control.scope==DevScope.Shared)
+                        control.field.SetValue(coopComposite,control.field.GetValue(coopOverride));
+            }
+            else coopComposite=null;
+            carCache.Clear();
             foreach(var vehicle in VehicleController.Active) if(vehicle&&vehicle.Damage) vehicle.Damage.ApplyHealthTuning();
             DevVisuals.Apply();
         }
     }
+    public enum DevScope { Local, Shared, Car }
     public sealed class DevControl
     {
         public readonly string label,group;
+        public readonly DevScope scope;
         public readonly float min,max;
         public readonly System.Reflection.FieldInfo field;
         DevControl(string group,string name,string label,float min,float max)
-        { this.group=group;this.label=label;this.min=min;this.max=max;field=typeof(DevTuning).GetField(name); }
+        { this.group=group;this.label=label;this.min=min;this.max=max;field=typeof(DevTuning).GetField(name);
+            scope=group=="COMBAT"||name=="propDamage"?DevScope.Shared:
+                group=="DRIVING"||group=="DRIFT"||group=="ENGINE"?DevScope.Car:DevScope.Local; }
         public static readonly DevControl[] All={
             new DevControl("DRIVING","steering","Steering agility",.5f,3.5f),
             new DevControl("DRIVING","acceleration","Acceleration",.5f,3f),
@@ -129,6 +199,8 @@ namespace MadeInArizona
             new DevControl("ENGINE","engineBody","Low engine body resonance",0,2.5f),
             new DevControl("ENGINE","engineRasp","High exhaust rasp",0,3),
             new DevControl("ENGINE","engineSaturation","Combustion saturation / growl",.25f,2.5f),
+            new DevControl("ENGINE","engineBrightness","Engine brightness (physical voice: low = darker, high = buzzier)",0,2.5f),
+            new DevControl("ENGINE","engineResonance","Exhaust resonance (physical voice: header and tailpipe waves)",0,2),
             new DevControl("ENGINE","enginePitch","Engine pitch (1 = default)",.5f,1.5f),
             new DevControl("ENGINE","engineLoadLevel","On-throttle engine level",0,2.5f),
             new DevControl("ENGINE","engineOverrunLevel","Off-throttle engine level",0,2.5f),
