@@ -13,12 +13,14 @@ namespace MadeInArizona
     public sealed class SmokeTestRunner : MonoBehaviour
     {
         public static bool Active => Array.IndexOf(Environment.GetCommandLineArgs(), "-miaSmokeTest") >= 0;
+        /// <summary>Seconds before a hung run is abandoned; an escort run on a larger map needs longer.</summary>
+        static float TimeLimit => Array.Exists(Environment.GetCommandLineArgs(), a => a.StartsWith("-miaEscortSize=")) ? 720 : 240;
         readonly List<string> checks = new List<string>();
         readonly List<string> failures = new List<string>();
         readonly List<string> fixtureTrace = new List<string>();
         void Update()
         {
-            if (Active && Time.realtimeSinceStartup > 240) { Debug.LogError("MIA_SMOKE_TIMEOUT: test did not finish; inspect earlier exceptions."); Application.Quit(2); }
+            if (Active && Time.realtimeSinceStartup > TimeLimit) { Debug.LogError("MIA_SMOKE_TIMEOUT: test did not finish; inspect earlier exceptions."); Application.Quit(2); }
         }
         IEnumerator Start()
         {
@@ -69,6 +71,7 @@ namespace MadeInArizona
                 FinishResults();yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDriveProbe")>=0){yield return DriveProbe.Run(Check);FinishResults();yield break;}
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGarageReview")>=0){yield return GarageReview.Run(Check,Capture);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaUiCapture")>=0)
             {
                 // Visual review of the HUD, map and garage (needs a real window; run hidden, not in batch mode).
@@ -1220,6 +1223,13 @@ namespace MadeInArizona
             var game=GameManager.Instance;game.Save.unlockedMission=14;
             // One mission per run keeps the suite inside the runner's time limit: -miaEscortMission=8 picks the other.
             string only=Array.Find(Environment.GetCommandLineArgs(),a=>a.StartsWith("-miaEscortMission="));
+            // Always the same map. The world config persists between runs, and a suite run just before (the mountain
+            // suite ends on a 4.8 km map) used to leave legs three times longer than the time limit allows.
+            // -miaEscortSize=3200 drives the same seed on a larger map, with the time limit scaled to match.
+            string sizeArg=Array.Find(Environment.GetCommandLineArgs(),a=>a.StartsWith("-miaEscortSize="));
+            float mapSize=sizeArg!=null?float.Parse(sizeArg.Substring(15),System.Globalization.CultureInfo.InvariantCulture):1600;
+            game.WorldConfig.seed=173;game.WorldConfig.size=mapSize;WorldConfigStore.Save(game.WorldConfig);
+            float timeLimit=150*Mathf.Max(1,mapSize/1600);
             foreach(int mission in new[]{only!=null?int.Parse(only.Substring(18)):3})
             {
                 game.StartMission(mission);
@@ -1230,7 +1240,7 @@ namespace MadeInArizona
                 if(!van){Check("mission "+mission+" escort van spawns",false);continue;}
                 var ai=van.GetComponent<EnemyAI>();
                 var track=new List<(Vector3 p,float t)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
-                while(Time.time-start<150&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
+                while(Time.time-start<timeLimit&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
                 {
                     QuietMissionHostiles();van.Damage.Repair(10000);
                     // Keep the player alongside so the van never waits to regroup.
@@ -1255,7 +1265,7 @@ namespace MadeInArizona
                     yield return new WaitForSecondsRealtime(.5f);
                 }
                 float driven=0;for(int i=1;i<track.Count;i++)driven+=Flat(track[i].p-track[i-1].p);
-                Debug.Log("MIA_ESCORT mission "+mission+": legs="+legs+" stage="+game.Mission.Stage+" seconds="+(Time.time-start).ToString("0")+" driven="+driven.ToString("0")+" loop samples="+loops+" worst planned ratio="+worstRatio.ToString("0.00")+" (leg "+worstLeg+")");
+                Debug.Log("MIA_ESCORT mission "+mission+" on "+mapSize.ToString("0")+" m: legs="+legs+" stage="+game.Mission.Stage+" seconds="+(Time.time-start).ToString("0")+" driven="+driven.ToString("0")+" loop samples="+loops+" worst planned ratio="+worstRatio.ToString("0.00")+" (leg "+worstLeg+")");
                 Check("mission "+mission+" escort completes its transfers",game.Mission.Stage>=1);
                 Check("mission "+mission+" escort never loops back over its own track",loops==0);
                 Check("mission "+mission+" escort routes stay direct (planned at most 1.6x the straight line)",worstRatio<=1.6f);

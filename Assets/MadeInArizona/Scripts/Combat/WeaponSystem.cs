@@ -22,6 +22,38 @@ namespace MadeInArizona
         float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity, lobTargetUntil;
 
         public VehicleController AssistedTarget => lobTarget;
+        public VehicleController Owner => owner;
+        /// <summary>Where shots and beams leave the turret, along the current aim.</summary>
+        public Vector3 MuzzlePoint => Muzzle(aimDirection);
+        /// <summary>This car's death ray is drawn from replicated host state (co-op guest view of any car).</summary>
+        public bool IsNetworkBeam => owner && owner.IsNetworkProxy;
+        public bool BeamActive => beam && beam.Active;
+        public Vector3 BeamEnd => beam ? beam.End : Vector3.zero;
+        public float BeamHeat => beam ? beam.Heat : 0;
+        DeathRayBeam beam;
+        readonly List<RaycastHit> traceHits = new List<RaycastHit>();
+        DeathRayBeam Beam
+        {
+            get
+            {
+                if (beam) return beam;
+                beam = GetComponent<DeathRayBeam>();
+                if (!beam) beam = gameObject.AddComponent<DeathRayBeam>();
+                beam.Bind(this);
+                return beam;
+            }
+        }
+        /// <summary>Where the death ray currently lands along the aim (visual only: no damage, no prop hits).</summary>
+        public Vector3 TraceBeam(Vector3 muzzle) => ProjectileSystem.Hitscan(muzzle, aimDirection, DeathRayRange, owner.gameObject, false, 0, traceHits);
+        /// <summary>Co-op guests: the host's death ray state for this car, from its vehicle snapshot.</summary>
+        public void SetNetworkBeam(bool active, Vector3 end, float heat)
+        {
+            if (!CoopSession.IsRemoteClient || (!active && !beam)) return;
+            Beam.SetNetwork(active, end, heat);
+            if (!active) return;
+            Vector3 toward = end - Muzzle(aimDirection);
+            if (toward.sqrMagnitude > .01f) aimDirection = toward.normalized;
+        }
 
         public void Initialize(VehicleController vehicle)
         {
@@ -219,7 +251,7 @@ namespace MadeInArizona
                     break;
                 case "harpoon":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1,
-                        new ShotFx { effect = ShotEffect.Harpoon, power = 17, duration = .6f, castRadius = .25f });
+                        new ShotFx { effect = ShotEffect.Harpoon, power = 13, duration = TowLink.HoldTime, castRadius = .25f });
                     break;
                 case "sentry": FieldOrdnance.DeploySentry(owner, weapon, damage); break;
                 case "gokart": FieldOrdnance.LaunchGoKart(owner, weapon, damage); break;
@@ -234,10 +266,12 @@ namespace MadeInArizona
                     break;
                 }
             }
-            bool quiet = weapon.id == "mines" || weapon.id == "sentry" || weapon.id == "gokart" || weapon.id == "deathray" || weapon.id == "torch";
-            ExplosionSystem.Burst(muzzle, color, quiet ? 2 : 4, 1);
-            Flash(color, weapon.id == "mortar" || weapon.id == "railgun" ? 14 : 7, weapon.id == "minigun" || weapon.id == "deathray" || weapon.id == "torch" ? .035f : weapon.id == "railgun" ? .2f : .09f);
-            AudioManager.Instance?.PlayShot(muzzle, weapon);
+            // The death ray is one continuous beam with its own glow and hum (DeathRayBeam), not a gun firing 12 times a second.
+            bool beamWeapon = weapon.id == "deathray";
+            bool quiet = weapon.id == "mines" || weapon.id == "sentry" || weapon.id == "gokart" || weapon.id == "torch";
+            if (!beamWeapon) ExplosionSystem.Burst(muzzle, color, quiet ? 2 : 4, 1);
+            Flash(color, weapon.id == "mortar" || weapon.id == "railgun" ? 14 : 7, beamWeapon ? 0 : weapon.id == "minigun" || weapon.id == "torch" ? .035f : weapon.id == "railgun" ? .2f : .09f);
+            if (!beamWeapon) AudioManager.Instance?.PlayShot(muzzle, weapon);
             if (owner.IsPlayer && (weapon.blastRadius > 0 || weapon.id == "railgun")) CameraController.Instance?.Shake(weapon.id == "railgun" ? .2f : .1f);
         }
         void Pellets(WeaponDefinition weapon, Vector3 muzzle, float damage, int pellets, float spacing, float lifetime, bool firecrackers)
@@ -268,7 +302,7 @@ namespace MadeInArizona
         /// </summary>
         void DeathRay(WeaponDefinition weapon, Vector3 muzzle, float damage)
         {
-            Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, 48, owner.gameObject, false, damage * 2, scanHits);
+            Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, DeathRayRange, owner.gameObject, false, damage * 2, scanHits);
             VehicleController target = scanHits.Count > 0 ? scanHits[0].collider.GetComponentInParent<VehicleController>() : null;
             float gap = Time.time - rayLastShot; rayLastShot = Time.time;
             bool continuing = target && target == rayTarget && gap < .3f;
@@ -282,8 +316,9 @@ namespace MadeInArizona
                 if (rayContact >= .5f) VehicleAfflictions.For(target).Ignite(12f, 2.5f, owner.gameObject);
                 ExplosionSystem.Burst(hit.point, Color.Lerp(weapon.projectileColor, new Color(1, .4f, .1f), rayHeat), 2 + Mathf.RoundToInt(rayHeat * 5), 2 + rayHeat * 3);
             }
-            WeaponFx.Ray(muzzle, end, rayHeat);
+            Beam.Fire(end, rayHeat);
         }
+        const float DeathRayRange = 48;
         readonly List<RaycastHit> scanHits = new List<RaycastHit>();
         VehicleController rayTarget; float rayHeat, rayLastShot, rayContact;
         Vector3 Muzzle(Vector3 direction)

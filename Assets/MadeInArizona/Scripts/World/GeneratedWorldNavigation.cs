@@ -81,7 +81,9 @@ namespace MadeInArizona
         /// </summary>
         /// <param name="offRoad">Scales how much more than road the other ground costs: 1 keeps routes on the road network
         /// wherever it goes the right way; lower values let a vehicle cut across country rather than follow a winding road.</param>
-        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path, float offRoad = 1)
+        /// <param name="maxExpansions">Search budget in nodes; past it the search gives up as if there were no route
+        /// (keeps an unreachable goal from scanning the whole map during play).</param>
+        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path, float offRoad = 1, int maxExpansions = int.MaxValue)
         {
             path.Clear();
             BuildNavigation();
@@ -90,12 +92,13 @@ namespace MadeInArizona
             if (start < 0 || goal < 0) { path.Add(from); path.Add(to); return false; }
             navSearch++; navHeap.Clear(); navHeapF.Clear();
             Touch(start); navG[start] = 0; navParent[start] = -1; Push(start, Heuristic(start, goal));
-            bool found = false;
+            bool found = false; int expanded = 0;
             while (navHeap.Count > 0)
             {
                 int current = Pop();
                 if (navClosed[current]) continue;
                 navClosed[current] = true;
+                if (++expanded > maxExpansions) break;
                 if (current == goal) { found = true; break; }
                 int cx = current % navSize, cz = current / navSize;
                 for (int dz = -1; dz <= 1; dz++)
@@ -137,6 +140,31 @@ namespace MadeInArizona
                 path.Add(p); last = p;
             }
             path.Add(to);
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a car could drive the straight line between two points: no landform, cover rock, map edge or grade
+        /// steeper than the climb limit on the way (cliff walls between elevation levels). Hostiles check this before
+        /// spending an A* search on a detour. The first and last few metres are not checked for obstacles, so a car
+        /// already tucked against a rock still sees open ground ahead.
+        /// </summary>
+        public bool DirectDrivable(Vector3 from, Vector3 to)
+        {
+            if (heights == null) return true;
+            Vector2 a = XZ(from), b = XZ(to);
+            float length = Vector2.Distance(a, b);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(length / 4));
+            float stepLength = length / steps, previous = SampleHeight(from);
+            for (int i = 1; i <= steps; i++)
+            {
+                Vector2 p = Vector2.Lerp(a, b, i / (float)steps);
+                float h = SampleHeight(new Vector3(p.x, 0, p.y));
+                if (Mathf.Abs(h - previous) > MaxDriveGrade * stepLength * 1.15f) return false;
+                previous = h;
+                float along = i * stepLength;
+                if (along > 6 && length - along > 6 && (ObstacleDistance(p) < 1 || !InOutline(p / size))) return false;
+            }
             return true;
         }
 

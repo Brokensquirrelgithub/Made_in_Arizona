@@ -17,13 +17,20 @@ namespace MadeInArizona
         /// <summary>Held to drift. The action keeps its old "Handbrake" name so saved rebinds still apply.</summary>
         public bool Drift { get; private set; }
         public bool Boost { get; private set; }
+        /// <summary>Held reverse (LB / R) while the shoulder-reverse option is on.</summary>
+        public bool Reverse { get; private set; }
+        /// <summary>
+        /// The shoulder-reverse option applies to this input: driving with a gamepad, where the left stick then only
+        /// ever drives forward. Keyboard driving keeps automatic reverse (and can still hold R).
+        /// </summary>
+        public bool ManualReverse { get; private set; }
         public bool Interact { get; private set; }
         public bool SwapPressed { get; private set; }
         public bool PausePressed { get; private set; }
         public bool UsingGamepad { get; private set; }
         public bool Rebinding => rebind != null;
         InputActionMap map;
-        InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause;
+        InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause, reverse;
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
         float mouseTravel;
@@ -43,8 +50,9 @@ namespace MadeInArizona
             secondary = Button("Secondary", "<Mouse>/rightButton", "<Gamepad>/leftTrigger");
             brake = Button("Handbrake", "<Keyboard>/space", "<Gamepad>/buttonEast");
             boost = Button("Boost", "<Keyboard>/leftShift", "<Gamepad>/rightShoulder");
-            // Left shoulder (and R) are free: the old hold-to-repair ability was removed pending a replacement.
             interact = Button("Interact", "<Keyboard>/e", "<Gamepad>/buttonSouth");
+            // Only read while Settings > Controls > Reverse is on the shoulder button.
+            reverse = Button("Reverse", "<Keyboard>/r", "<Gamepad>/leftShoulder");
             swap = Button("Swap", "<Keyboard>/f", "<Gamepad>/buttonNorth");
             pause = Button("Pause", "<Keyboard>/escape", "<Gamepad>/start");
             Actions.AddActionMap(map);
@@ -77,7 +85,7 @@ namespace MadeInArizona
         void ClearGameplay()
         {
             Move = Vector2.zero;
-            Primary = Secondary = Drift = Boost = Interact = SwapPressed = false;
+            Primary = Secondary = Drift = Boost = Reverse = Interact = SwapPressed = false;
         }
 
         void Update()
@@ -146,9 +154,31 @@ namespace MadeInArizona
             if (UsingGamepad && player != null && GeneratedWorld.Active) AimElevation = GamepadElevation(player, Aim);
             Primary = primary.IsPressed();
             Secondary = secondary.IsPressed();
-            Drift = brake.IsPressed(); Boost = boost.IsPressed();
-            Interact = interact.WasPressedThisFrame();
+            Drift = brake.IsPressed();
+            var settings = GameManager.Instance != null ? GameManager.Instance.Save?.settings : null;
+            // Optional gamepad layout: nitro on A (button south) with interact moved to its old shoulder. Each action's
+            // keyboard bindings and rebinds are untouched; only which gamepad control feeds which action swaps.
+            bool swapPad = settings != null && settings.boostOnSouth;
+            Boost = Held(boost, false) || Held(swapPad ? interact : boost, true);
+            Interact = PressedThisFrame(interact, false) || PressedThisFrame(swapPad ? boost : interact, true);
+            bool shoulderReverse = settings != null && settings.shoulderReverse;
+            Reverse = shoulderReverse && reverse.IsPressed();
+            ManualReverse = shoulderReverse && UsingGamepad;
             SwapPressed = swap.WasPressedThisFrame();
+        }
+
+        /// <summary>An action's bound buttons on one kind of device (gamepad or not) held down.</summary>
+        static bool Held(InputAction action, bool gamepad)
+        {
+            foreach (var control in action.controls)
+                if ((control.device is Gamepad) == gamepad && control is UnityEngine.InputSystem.Controls.ButtonControl button && button.isPressed) return true;
+            return false;
+        }
+        static bool PressedThisFrame(InputAction action, bool gamepad)
+        {
+            foreach (var control in action.controls)
+                if ((control.device is Gamepad) == gamepad && control is UnityEngine.InputSystem.Controls.ButtonControl button && button.wasPressedThisFrame) return true;
+            return false;
         }
 
         static VehicleController HostileNear(VehicleController player, Vector3 point, float radius)

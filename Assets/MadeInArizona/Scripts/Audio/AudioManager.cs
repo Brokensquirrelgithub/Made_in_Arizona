@@ -10,7 +10,13 @@ namespace MadeInArizona
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
         AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
-        AudioSource whine,road,wind,heartbeat,nitro,drift,radioSource,uiSource;
+        AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
+        AudioClip[] pinStrikes;
+        /// <summary>Death ray beam: the sustained hum loop and the ignition zap (played by each car's DeathRayBeam).</summary>
+        public AudioClip RayLoop { get; private set; }
+        public AudioClip RayStart { get; private set; }
+        /// <summary>Engine level, eased so pausing and resuming fades the engine instead of clicking it off.</summary>
+        float enginePresence;
         // Engine bank: [layer] on-load and overrun loops, crossfaded by RPM and throttle like recorded car audio.
         AudioSource[] engineOn,engineOff,engineBOn,engineBOff;
         struct EngineShape
@@ -54,7 +60,11 @@ namespace MadeInArizona
                 engineBOn[i].timeSamples=engineOn[i].timeSamples;engineBOff[i].timeSamples=engineOff[i].timeSamples;
             }
             hurts=new AudioClip[3];for(int i=0;i<hurts.Length;i++)hurts[i]=Keep(AudioSynthesis.Hurt(i));heartbeat=Loop(AudioSynthesis.Heartbeat(),20);
-            whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);drift=Loop(AudioSynthesis.DriftScrub(),95);
+            whine=Loop(AudioSynthesis.Turbo(),90);nitro=Loop(AudioSynthesis.NitroRoar(),65);nitroIgnite=Keep(AudioSynthesis.NitroIgnite());road=Loop(AudioSynthesis.Wind(),140);wind=Loop(AudioSynthesis.Wind(),160);
+            // Tyres: rubber squeal on pavement, crunching scrub on loose ground (replacing one pitched-up noise loop).
+            squeal=Loop(AudioSynthesis.TyreSqueal(),95);scrub=Loop(AudioSynthesis.GravelScrub(),96);
+            RayLoop=Keep(AudioSynthesis.DeathRayLoop());RayStart=Keep(AudioSynthesis.DeathRayStart());
+            pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
@@ -113,7 +123,10 @@ namespace MadeInArizona
             if(player&&player.Damage!=null)
             {
                 float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.Throttle;
-                float presence=player.Damage.IsDead?0:active?1:.3f;
+                // Idling quietly in the garage; silent while paused (it used to keep running at 30% under the pause menu).
+                bool idle=game.State==GameState.Garage||game.State==GameState.MainMenu;
+                enginePresence=Mathf.MoveTowards(enginePresence,player.Damage.IsDead?0:active?1:idle?.3f:0,Time.unscaledDeltaTime*4);
+                float presence=enginePresence;
                 UpdateEngineBank(rpm,load,presence*(1-physicalBlend),gain);
                 UpdatePhysicalEngine(player,presence,gain);
                 if(active&&!player.Damage.IsDead)UpdateCrackle(player,rpm,load,gain);
@@ -127,10 +140,7 @@ namespace MadeInArizona
                 road.pitch=.6f+player.SpeedKph/80;
                 float rough=WorldBuilder.SurfaceAt(player.transform.position)==SurfaceKind.Asphalt?.12f:.36f;
                 road.volume=active?Settings.environment*(Mathf.Clamp01(player.SpeedKph/80)*rough+player.DriftAmount*.13f)*duck:0;
-                var tyres = player.GetComponent<TireEffects>();
-                float scrub = active && tyres && tyres.IsSkidding ? Mathf.Clamp01(player.SideSlip * 1.2f + player.WheelSpin * .5f) : 0;
-                drift.volume = Mathf.MoveTowards(drift.volume, Settings.environment * scrub * .42f * duck, Time.unscaledDeltaTime * 3);
-                drift.pitch = pavedScrub(player) ? 1.15f : .82f;
+                UpdateTyres(player,active);
                 if(active&&lastThrottle>.7f&&load<.3f&&Time.time>blowoffAt)
                 {
                     // With the turbo voice the blow-off valve only vents real boost: louder the harder the shaft was spinning.
@@ -140,12 +150,29 @@ namespace MadeInArizona
                 }
                 lastThrottle=load;
             }
-            else{UpdateEngineBank(0,0,0,0);UpdatePhysicalEngine(null,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;drift.volume=0;}
+            else{enginePresence=0;UpdateEngineBank(0,0,0,0);UpdatePhysicalEngine(null,0,0);UpdateNitro(null,false,false,0,0);whine.volume=0;road.volume=0;squeal.volume=0;scrub.volume=0;}
             UpdateHeartbeat(active?player:null);
             wind.volume=Settings.environment*(active?.08f:.035f)*duck;
             AudioListener.volume=OutputVolume(Settings.master);
         }
         static bool pavedScrub(VehicleController player) => player.Surface == SurfaceKind.Asphalt || player.Surface == SurfaceKind.Oil;
+        /// <summary>
+        /// Slides and wheelspin: a squeal on pavement, a gritty scrub on loose ground, crossfaded by surface. Pitch
+        /// rises a little with slip and road speed, so a hard slide sounds harder. Co-op guests drive replicated cars
+        /// whose slip is estimated from their motion, so they hear their own slides too.
+        /// </summary>
+        void UpdateTyres(VehicleController player,bool active)
+        {
+            var tyres=player.GetComponent<TireEffects>();
+            bool sliding=player.IsNetworkProxy?player.SideSlip>.05f:tyres&&tyres.IsSkidding;
+            float slip=active&&sliding?Mathf.Clamp01(player.SideSlip*1.2f+player.WheelSpin*.5f):0;
+            bool paved=pavedScrub(player),wet=player.Surface==SurfaceKind.Water;
+            float speed=Mathf.Clamp01(player.SpeedKph/120),rate=Time.unscaledDeltaTime*(slip>0?6:3);
+            squeal.volume=Mathf.MoveTowards(squeal.volume,Settings.environment*(paved?slip:0)*.4f*duck,rate);
+            scrub.volume=Mathf.MoveTowards(scrub.volume,Settings.environment*(!paved&&!wet?slip:0)*.5f*duck,rate);
+            squeal.pitch=.9f+slip*.12f+speed*.08f;
+            scrub.pitch=.82f+speed*.3f+slip*.05f;
+        }
         /// <summary>
         /// Equal-power crossfade between the neighbouring RPM layers (in log-frequency, as pitch is heard) and
         /// between on-load and overrun loops. Each layer is only pitch-shifted around its recorded rate.
@@ -258,6 +285,24 @@ namespace MadeInArizona
                 }
             }
             PlayShot(position, weapon.blastRadius > 0 ? 1 : weapon.id == "sweeper" || weapon.id == "boomstick" ? 2 : 0);
+        }
+        /// <summary>The death ray striking up (its sustained hum is each beam's own looping source).</summary>
+        public void PlayRayStart(Vector3 position)
+        {
+            if(Settings==null||!RayStart)return;
+            PlayAt(RayStart,position,Settings.weapons*.5f*duck,Random.Range(.97f,1.03f),55);
+        }
+        /// <summary>Bowling ball into a car: a full rack of pins going down.</summary>
+        public void PlayPinStrike(Vector3 position)
+        {
+            if(Settings==null||pinStrikes==null)return;
+            PlayAt(pinStrikes[Random.Range(0,pinStrikes.Length)],position,Settings.weapons*.95f*duck,Random.Range(.95f,1.06f),40);
+        }
+        /// <summary>A car whipped into scenery on the tow cable: a heavy body crunch, louder for a harder hit.</summary>
+        public void PlayCrash(Vector3 position,float strength)
+        {
+            if(Settings==null||hurts==null)return;
+            PlayAt(hurts[Random.Range(0,hurts.Length)],position,Settings.weapons*Mathf.Lerp(.55f,1,strength)*duck,Random.Range(.72f,.85f),45);
         }
         public void PlayExplosion(Vector3 position,float strength,ExplosionKind kind=ExplosionKind.Vehicle)
         {

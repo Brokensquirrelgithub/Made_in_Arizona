@@ -18,7 +18,7 @@ namespace MadeInArizona
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
-        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Pause" };
+        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause" };
         int[] garageWeaponIndices;
         /// <summary>Catalog indices of every scrap weapon, core roles first and then the oddballs.</summary>
         int[] garageWeapons
@@ -73,9 +73,9 @@ namespace MadeInArizona
             if (pad == null) return;
             if (settings) {
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
-                if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
-                if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 9 : settingsPage == 1 ? 6 : 2 + actions.Length;
+                if (pad.leftShoulder.wasPressedThisFrame) { settingsPage = (settingsPage + SettingsTabs.Length - 1) % SettingsTabs.Length; menuFocus = 0; }
+                if (pad.rightShoulder.wasPressedThisFrame) { settingsPage = (settingsPage + 1) % SettingsTabs.Length; menuFocus = 0; }
+                int rowCount = SettingsRows(settingsPage);
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -419,7 +419,9 @@ namespace MadeInArizona
             }
             // Backing panel: the control hints were unreadable over pale sand.
             Rect(weaponsX, height - 142, 430, 28, new Color(Ink.r, Ink.g, Ink.b, .85f));
-            Text(weaponsX + 12, height - 142, 418, 28, padControls ? "RB BOOST    B DRIFT    Y SWAP" : "SHIFT BOOST    SPACE DRIFT    F SWAP", 12, Cream, true, TextAnchor.MiddleLeft);
+            var hintSettings = game.Save.settings;
+            string padHint = (hintSettings.boostOnSouth ? "A BOOST" : "RB BOOST") + "    B DRIFT    Y SWAP" + (hintSettings.shoulderReverse ? "    LB REVERSE" : "");
+            Text(weaponsX + 12, height - 142, 418, 28, padControls ? padHint : "SHIFT BOOST    SPACE DRIFT    F SWAP" + (hintSettings.shoulderReverse ? "    R REVERSE" : ""), 12, Cream, true, TextAnchor.MiddleLeft);
             if (game.Mission.Combo > 1) Text(28, 136, 320, 43, "×" + game.Mission.Combo + "  INSURANCE EVENT", 23, Orange, true);
             Text(28, 185, 320, 30, game.Mission.Score.ToString("N0") + "  DAMAGE CLAIM", 17, Cream, true);
             DrawMinimap(width - 216, height - 228, 188);
@@ -598,52 +600,71 @@ namespace MadeInArizona
             Rect(x, y, 930, 790, Ink);
             Tag(x + 35, y + 25, "OWNER’S MANUAL / THE USEFUL PAGES", Orange);
             Text(x + 35, y + 59, 750, 57, "SHOP SETTINGS", 40, Cream, true);
-            string[] tabs = { "DISPLAY & ACCESS", "AUDIO", "CONTROLS" };
-            for (int i = 0; i < 3; i++) if (Button(x + 35 + i * 286, y + 127, 273, 41, tabs[i], settingsPage == i)) { settingsPage = i; menuFocus = 0; }
+            for (int i = 0; i < SettingsTabs.Length; i++) if (Button(x + 35 + i * 215, y + 127, 205, 41, SettingsTabs[i], settingsPage == i, size: 13)) { settingsPage = i; menuFocus = 0; }
             var s = game.Save.settings;
             if (settingsPage == 0) {
-                SettingLabel(x, y + 191, "GRAPHICS PRESET", 0);
-                if (Button(x + 465, y + 188, 426, 38, presets[s.quality])) { s.quality = (s.quality + 1) % 4; game.ApplySettings(); }
-                Text(x + 35, y + 242, 850, 45, s.quality == 3 ? "Long-lived debris, dense explosion layers, 4K shadows, more lights. Hardware performance varies; profiling required." : "Shared URP renderer. Metal on Mac, Direct3D on Windows. All presets preserve combat readability.", 14, Muted);
-                SettingLabel(x, y + 307, "WINDOW MODE", 1);
-                if (Button(x + 465, y + 302, 426, 38, Screen.fullScreenMode.ToString())) CycleWindow();
-                SettingLabel(x, y + 360, "RESOLUTION", 2);
-                if (Button(x + 465, y + 355, 426, 38, Screen.width + " × " + Screen.height)) CycleResolution();
-                SettingLabel(x, y + 413, "DIFFICULTY", 3);
-                if (Button(x + 465, y + 408, 426, 38, new[] { "SUNDAY DRIVER", "SHOP STANDARD", "LIABILITY WAIVER" }[Mathf.Clamp(s.difficulty, 0, 2)])) s.difficulty = (s.difficulty + 1) % 3;
-                SettingLabel(x, y + 466, "CAMERA SHAKE", 4); s.shake = Slider(x + 465, y + 466, 426, s.shake, 0, 1);
-                SettingLabel(x, y + 519, "INTERFACE SCALE", 5); s.uiScale = Slider(x + 465, y + 519, 426, s.uiScale, .85f, 1.2f);
-                SettingLabel(x, y + 572, "SUBTITLES", 6); if (Button(x + 465, y + 567, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
-                SettingLabel(x, y + 673, "VSYNC", 8); if (Button(x + 465, y + 668, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
-                SettingLabel(x, y + 625, "DYNAMIC CAMERA ZOOM", 7); if (Button(x + 465, y + 620, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
+                SettingLabel(x, y + 196, "WINDOW MODE", 0);
+                if (Button(x + 465, y + 191, 426, 38, Screen.fullScreenMode.ToString())) CycleWindow();
+                SettingLabel(x, y + 249, "RESOLUTION", 1);
+                if (Button(x + 465, y + 244, 426, 38, Screen.width + " × " + Screen.height)) CycleResolution();
+                SettingLabel(x, y + 302, "DIFFICULTY", 2);
+                if (Button(x + 465, y + 297, 426, 38, new[] { "SUNDAY DRIVER", "SHOP STANDARD", "LIABILITY WAIVER" }[Mathf.Clamp(s.difficulty, 0, 2)])) s.difficulty = (s.difficulty + 1) % 3;
+                SettingLabel(x, y + 355, "CAMERA SHAKE", 3); s.shake = Slider(x + 465, y + 355, 426, s.shake, 0, 1);
+                SettingLabel(x, y + 408, "INTERFACE SCALE", 4); s.uiScale = Slider(x + 465, y + 408, 426, s.uiScale, .85f, 1.2f);
+                SettingLabel(x, y + 461, "SUBTITLES", 5); if (Button(x + 465, y + 456, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
             }
             if (settingsPage == 1) {
+                SettingLabel(x, y + 191, "GRAPHICS PRESET", 0);
+                if (Button(x + 465, y + 188, 426, 38, presets[s.quality])) { s.quality = (s.quality + 1) % 4; game.ApplySettings(); }
+                Text(x + 35, y + 232, 850, 40, s.quality == 3 ? "Long-lived debris, dense explosion layers, 4K shadows, more lights. Hardware performance varies; profiling required." : "Shared URP renderer. Metal on Mac, Direct3D on Windows. All presets preserve combat readability.", 14, Muted);
+                SettingLabel(x, y + 291, "SHADOW DETAIL", 1);
+                if (Button(x + 465, y + 286, 426, 38, ShadowDetailLabels[s.shadowDetail])) { s.shadowDetail = (s.shadowDetail + 1) % 3; game.ApplySettings(); }
+                Text(x + 35, y + 330, 850, 40, ShadowDetailNotes[s.shadowDetail], 14, Muted);
+                SettingLabel(x, y + 389, "TERRAIN CAMERA SWAY", 2); s.cameraSway = Slider(x + 465, y + 389, 426, s.cameraSway, 0, 1);
+                Text(x + 35, y + 425, 850, 40, "The camera tips a few degrees as you climb, dip and travel, so hills and drops read in 3D. 0% keeps the fixed overhead view.", 14, Muted);
+                SettingLabel(x, y + 484, "DYNAMIC CAMERA ZOOM", 3); if (Button(x + 465, y + 479, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
+                SettingLabel(x, y + 537, "VSYNC", 4); if (Button(x + 465, y + 532, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
+            }
+            if (settingsPage == 2) {
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
                 float[] values = { s.master, s.music, s.engines, s.weapons, s.dialogue, s.environment };
                 for (int i = 0; i < labels.Length; i++) { SettingLabel(x, y + 215 + i * 65, labels[i], i); values[i] = Slider(x + 465, y + 215 + i * 65, 426, values[i], 0, 1); }
                 s.master = values[0]; s.music = values[1]; s.engines = values[2]; s.weapons = values[3]; s.dialogue = values[4]; s.environment = values[5]; AudioListener.volume = AudioManager.OutputVolume(s.master);
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
-            if (settingsPage == 2) {
-                Text(x + 35, y + 198, 850, 65, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / Esc pause", 18);
-                Text(x + 35, y + 280, 850, 66, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, RB boost, B drift, A interact, Start pause.", 18, Muted);
-                Tag(x + 35, y + 368, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
+            if (settingsPage == 3) {
+                Text(x + 35, y + 186, 850, 52, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / Esc pause" + (s.shoulderReverse ? " / hold R to reverse" : ""), 17);
+                Text(x + 35, y + 242, 850, 52, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, " +
+                    (s.boostOnSouth ? "A boost, RB interact" : "RB boost, A interact") + ", B drift" + (s.shoulderReverse ? ", LB reverse" : "") + ", Start pause.", 17, Muted);
+                Tag(x + 35, y + 306, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
-                    float bx = x + 35 + i % 4 * 215, by = y + 401 + i / 4 * 59;
+                    float bx = x + 35 + i % 4 * 215, by = y + 338 + i / 4 * 56;
                     string action = i < 4 ? "Move" : actions[i];
                     int binding = i < 4 ? i + 1 : 0;
                     if (InputManager.Instance.UsingGamepad) binding = InputManager.Instance.Actions.FindAction(action).bindings.Count - 1;
-                    if (Button(bx, by, 202, 45, (action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant()) + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 2)) BeginControlRebind(i);
+                    if (Button(bx, by, 202, 45, (action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant()) + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 4)) BeginControlRebind(i);
                 }
-                SettingLabel(x, y + 602, "AIM ASSIST", 0);
-                if (Button(x + 465, y + 597, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
-                if (Button(x + 35, y + 648, 273, 37, "RESET INPUT BINDINGS")) InputManager.Instance.ResetBindings();
+                SettingLabel(x, y + 513, "AIM ASSIST", 0);
+                if (Button(x + 465, y + 508, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
+                SettingLabel(x, y + 560, "REVERSE (GAMEPAD)", 1);
+                if (Button(x + 465, y + 555, 426, 38, s.shoulderReverse ? "HOLD LB • STICK NEVER REVERSES" : "AUTO • HOLD STICK BEHIND THE CAR")) s.shoulderReverse = !s.shoulderReverse;
+                SettingLabel(x, y + 607, "NITRO BUTTON (GAMEPAD)", 2);
+                if (Button(x + 465, y + 602, 426, 38, s.boostOnSouth ? "A • INTERACT MOVES TO RB" : "RB • INTERACT ON A")) s.boostOnSouth = !s.boostOnSouth;
+                if (Button(x + 35, y + 652, 273, 37, "RESET INPUT BINDINGS", InputManager.Instance.UsingGamepad && menuFocus == 3)) InputManager.Instance.ResetBindings();
                 if (InputManager.Instance.Rebinding) { Rect(x + 180, y + 309, 570, 180, Panel); Text(x + 200, y + 336, 530, 85, "PRESS A NEW KEY OR CONTROL\nEscape cancels. Devices are saved separately.", 23, Cream, true, TextAnchor.MiddleCenter); if (Button(x + 345, y + 431, 240, 37, "CANCEL REBIND")) InputManager.Instance.CancelRebind(); }
             }
             if (Button(x + 570, y + 718, 320, 48, "SAVE & CLOSE  /  B", true)) { game.ApplySettings(); settings = false; }
             Text(x + 35, y + 730, 520, 35, "LB/RB tabs · D-pad select/adjust · A toggle · B close", 12, Muted);
         }
 
+        static readonly string[] SettingsTabs = { "DISPLAY & ACCESS", "GRAPHICS & CAMERA", "AUDIO", "CONTROLS" };
+        /// <summary>Gamepad rows on each settings page (the controls page adds one per rebindable action).</summary>
+        int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 5 : page == 2 ? 6 : 4 + actions.Length;
+        static readonly string[] ShadowDetailLabels = { "MATCH GRAPHICS PRESET", "HIGH • 4K, SOFT EDGES", "ULTRA • 8K, SOFT EDGES" };
+        static readonly string[] ShadowDetailNotes = {
+            "Shadow map size and range follow the preset.",
+            "A 4096 sun shadow map spent on the play area, with filtered edges. For capable GPUs.",
+            "An 8192 sun shadow map with the softest filtering. For high-end GPUs; uses about 128 MB of video memory." };
         static readonly string[] FrameSyncLabels = { "ON • MATCH DISPLAY REFRESH", "OFF • 120 FPS CAP", "OFF • UNCAPPED" };
         void SettingLabel(float x, float y, string label, int index)
         { Text(x + 35, y, 420, 32, (InputManager.Instance.UsingGamepad && menuFocus == index ? "›  " : "") + label, 17, InputManager.Instance.UsingGamepad && menuFocus == index ? Orange : Cream, true); }
@@ -669,15 +690,18 @@ namespace MadeInArizona
         {
             var s = game.Save.settings;
             if (settingsPage == 0) {
-                if (menuFocus == 0) { s.quality = (s.quality + direction + 4) % 4; game.ApplySettings(); }
-                if (menuFocus == 1) CycleWindow(); if (menuFocus == 2) CycleResolution();
-                if (menuFocus == 3) s.difficulty = (s.difficulty + direction + 3) % 3;
-                if (menuFocus == 4) s.shake = Mathf.Clamp01(s.shake + .1f * direction);
-                if (menuFocus == 5) s.uiScale = Mathf.Clamp(s.uiScale + .05f * direction, .85f, 1.2f);
-                if (menuFocus == 6) s.subtitles = !s.subtitles;
-                if (menuFocus == 7) s.dynamicZoom = !s.dynamicZoom;
-                if (menuFocus == 8) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
+                if (menuFocus == 0) CycleWindow(); if (menuFocus == 1) CycleResolution();
+                if (menuFocus == 2) s.difficulty = (s.difficulty + direction + 3) % 3;
+                if (menuFocus == 3) s.shake = Mathf.Clamp01(s.shake + .1f * direction);
+                if (menuFocus == 4) s.uiScale = Mathf.Clamp(s.uiScale + .05f * direction, .85f, 1.2f);
+                if (menuFocus == 5) s.subtitles = !s.subtitles;
             } else if (settingsPage == 1) {
+                if (menuFocus == 0) { s.quality = (s.quality + direction + 4) % 4; game.ApplySettings(); }
+                if (menuFocus == 1) { s.shadowDetail = (s.shadowDetail + direction + 3) % 3; game.ApplySettings(); }
+                if (menuFocus == 2) s.cameraSway = Mathf.Clamp01(s.cameraSway + .1f * direction);
+                if (menuFocus == 3) s.dynamicZoom = !s.dynamicZoom;
+                if (menuFocus == 4) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
+            } else if (settingsPage == 2) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);
                 if (menuFocus == 2) s.engines = Mathf.Clamp01(s.engines + .1f * direction);
@@ -686,8 +710,10 @@ namespace MadeInArizona
                 if (menuFocus == 5) s.environment = Mathf.Clamp01(s.environment + .1f * direction);
             } else {
                 if (menuFocus == 0) s.aimAssist = (s.aimAssist + direction + 3) % 3;
-                else if (menuFocus == 1) InputManager.Instance.ResetBindings();
-                else BeginControlRebind(menuFocus - 2);
+                else if (menuFocus == 1) s.shoulderReverse = !s.shoulderReverse;
+                else if (menuFocus == 2) s.boostOnSouth = !s.boostOnSouth;
+                else if (menuFocus == 3) InputManager.Instance.ResetBindings();
+                else BeginControlRebind(menuFocus - 4);
             }
         }
 

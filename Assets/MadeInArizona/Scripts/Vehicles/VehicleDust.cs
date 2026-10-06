@@ -27,6 +27,14 @@ namespace MadeInArizona
         Vector4 shape;
 
         public float Amount => amount;
+        /// <summary>Review captures only: sets the dust level outright.</summary>
+        internal void SoilForReview(float value) { amount = Mathf.Clamp01(value); tint = DustColor(SurfaceKind.Sand); }
+        /// <summary>Washes some dust off (Suzuki's hose in the garage). The player's dust per car is remembered.</summary>
+        public void Rinse(float rinsed)
+        {
+            amount = Mathf.Max(0, amount - Mathf.Max(0, rinsed));
+            if (vehicle && vehicle.IsPlayer) PlayerDust[vehicleId] = new Vector4(amount, tint.r, tint.g, tint.b);
+        }
 
         public void Bind(VehicleController owner, VehicleDefinition definition)
         {

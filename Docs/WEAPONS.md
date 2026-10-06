@@ -28,12 +28,12 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 | **Lawn-Sprinkler Firebomb** | 300 | Grenade + Flamethrower | Radial fire jets ignite cars they hit. | Weak blast and a slow lob; the burn does the work. |
 | **Piñata Bottle Rocket** | 340 | Rocket + Cluster bomb | One hit carpets a wide area with bomblets. | Bomblets scatter randomly; poor against a single fast car. |
 | **Shop-Vac Black Hole** | 380 | Grenade + Gravity well | Pulls a whole pack together for one big blast. | Long recharge and a short delay before it pays off. |
-| **Satellite-Dish Death Ray** | 360 | Beam rifle + Focus ramp | A layered ray burns a car after half a second of continuous contact. | Weak until it warms up; switching targets resets it. |
+| **Satellite-Dish Death Ray** | 360 | Beam rifle + Focus ramp | One continuous, humming beam for as long as the trigger is held; it burns a car after half a second of contact. | Weak until it warms up; switching targets resets it. |
 | **Dynamite Crossbow** | 280 | Precision rifle + Sticky bomb | Triple the original blast radius, with damage falling off toward the edge. | A second's fuse, and misses stick to the ground instead. |
-| **Bowling-Ball Cannon** | 260 | Shell + Ram | A 20% wider sweep and stronger impact shove cars aside. | Only goes where the ground goes; hills and walls deflect it. |
+| **Bowling-Ball Cannon** | 260 | Shell + Ram | A 20% wider sweep hurls cars aside (34 m/s shove), and the ball hops off each car to the crash of a rack of pins. | Only goes where the ground goes; hills and walls deflect it. |
 | **Hubcap Boomerang** | 240 | Sawblade + Return trip | Triple damage on both passes; grows to double size on return. | Useless beyond its turn-around point. |
 | **Scatter Mortar** | 360 | Shotgun + Mortar | Nine bomblets spread near and far while inheriting the car's velocity. | No target assist; each charge needs to land near its target. |
-| **Tow-Hook Harpoon** | 260 | Sniper + Winch | Drags runners and snipers into ram and shotgun range. | Single target and pulls danger toward you. |
+| **Tow-Hook Harpoon** | 260 | Sniper + Winch | Holds a car on the cable for 5.5 s: swing round to whip it into a rock, wall or another car and wreck it. | Single target and pulls danger toward you. |
 | **Firecracker Blunderbuss** | 300 | Shotgun + Explosive rounds | Splash on every pellet rewards near misses. | Short range, and the pops hurt you up close. |
 | **Lawn-Chair Sentry** | 400 | Mine + Auto-turret | Keeps shooting while you drive elsewhere; two at a time. | Stationary; slow to redeploy; light damage per nail. |
 
@@ -55,13 +55,14 @@ The **Dynamite Go-Kart** replaces the old Lien Mines as a field weapon: it drive
 ## Mechanics
 
 - **Friendly fire:** rounds, rams, burns and arcs never hurt a vehicle on the attacker's own side (hostile crews on each other, or the player and the escort). Explosions hurt everyone in range, so a crew's rockets and pipe bombs can still catch its own cars.
-- **Burn** (Weed-Burner Torch, Sprinkler Firebomb, Death Ray) keeps damaging a car after contact; the ray needs half a second of continuous focus first.
-- **Stall** (Jumper-Cable Zapper, Tow-Hook Harpoon) cuts a car's engine and guns for about a second; zapper bolts arc to two more hostiles within 14 m.
+- **Burn** (Weed-Burner Torch, Sprinkler Firebomb, Death Ray) keeps damaging a car after contact; the ray needs half a second of continuous focus first. Burn ticks deal three times the weapon's stated burn rate (`VehicleAfflictions.BurnTickMultiplier`).
+- **Stall** (Jumper-Cable Zapper) cuts a car's engine and guns for about a second; zapper bolts arc to two more hostiles within 14 m.
+- **Tow cable** (Tow-Hook Harpoon, `TowLink`): the hook yanks the car in, reels the cable to a short tow and holds it for 5.5 s with its engine stalled. The cable only pulls, and the towed car's tyres skid sideways, so turning hard swings it out wide. A towed car that hits something solid at more than about 6.5 m/s closing speed takes damage, and at about 16 m/s (58 km/h) it is wrecked; a car it is slammed into takes most of the same hit. Bosses take a third. Kills are credited to the driver holding the cable.
 - **Spines** (Cactus-Spine Needler) stick; seven within a few seconds rupture together in a large blast.
 - **Sticky dynamite** (Dynamite Crossbow) fizzes for a second, then explodes on whatever it hit.
-- **Knockback / pull** (Air Cannon, Bowling Ball, Harpoon) moves cars — into hazards, each other, off ledges or into your bumper.
+- **Knockback / pull** (Air Cannon, Bowling Ball, Harpoon) moves cars — into hazards, each other, off ledges, into your bumper or, on the tow cable, into the scenery.
 - **Deployables** (Lawn-Chair Sentry, Go-Kart) act on their own; two sentries can be out at once.
 
-Implementation: `ContentCatalog.BuildWeapons` (stats and text), `WeaponRules` (garage list, scrap prices, ammo, drop pools, sound donors), `WeaponSystem.Fire` (firing patterns), `ProjectileSystem`/`ShotFx` (homing, piercing, boomerang, on-hit effects, bomblets, hitscan), `FieldOrdnance` (shells, bomblets, roller, go-kart, sentry, vortex) and `WeaponEffects` (`VehicleAfflictions` and beam visuals). New weapons without their own recordings borrow a similar weapon's clips.
+Implementation: `ContentCatalog.BuildWeapons` (stats and text), `WeaponRules` (garage list, scrap prices, ammo, drop pools, sound donors), `WeaponSystem.Fire` (firing patterns), `ProjectileSystem`/`ShotFx` (homing, piercing, boomerang, on-hit effects, bomblets, hitscan), `FieldOrdnance` (shells, bomblets, roller, go-kart, sentry, vortex), `WeaponEffects` (`VehicleAfflictions` and railgun/lightning visuals), `DeathRayBeam` (the continuous beam and its hum) and `TowLink` (the harpoon cable). The death ray hum, its ignition zap and the bowling pin crash are synthesized in `AudioSynthesis`. New weapons without their own recordings borrow a similar weapon's clips.
 
 Research references: Halo sandbox roles (plasma pistol vehicle disable, needler supercombine, Spartan laser/Skewer one-shot anti-vehicle, concussion rifle knockback, Shock Rifle arcs and vehicle EMP, Heatwave spread, Cindershot bounce, Ravager burn) and Mad Max's improvised vehicle weapons (thundersticks, the thunderpoon harpoon, flamethrowers).

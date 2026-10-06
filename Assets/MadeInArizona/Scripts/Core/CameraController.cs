@@ -35,6 +35,13 @@ namespace MadeInArizona
         /// </summary>
         const float MaxLead = 4f, LeadSmoothing = .22f;
         Vector3 lead, leadVelocity; Rigidbody targetBody; Transform leadTarget;
+        /// <summary>
+        /// Terrain sway (Settings > Graphics &amp; Camera): the camera arm tips a few degrees as the car climbs, dips and
+        /// travels, plus a slow drift, so the orthographic view picks up parallax and hills read as hills. Degrees at
+        /// full setting; the default of 50% keeps it to about +/-3.
+        /// </summary>
+        const float SwayPitch = 6.5f, SwayYaw = 3.5f, SwaySmoothing = .55f;
+        Vector2 sway, swayVelocity; float swayClock;
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
         void Start()
         {
@@ -60,6 +67,7 @@ namespace MadeInArizona
             // the mission board) turns around the car, so it stays framed the same way from every side.
             Quaternion orbit = garage ? Quaternion.Euler(0, garageYaw, 0) : Quaternion.identity;
             var offset = garage ? orbit * new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
+            if (!garage) offset = Sway(snap) * offset;
             // Offset the garage composition so the car sits to the right of the mission board.
             var focus = Target.position + (garage ? orbit * new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
             FocusPoint = focus; HasFocus = true;
@@ -112,6 +120,28 @@ namespace MadeInArizona
             if (snap) { lead = wanted; leadVelocity = Vector3.zero; }
             else lead = Vector3.SmoothDamp(lead, wanted, ref leadVelocity, LeadSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
             return lead;
+        }
+
+        /// <summary>Rotation applied to the gameplay camera arm for the terrain-sway option (identity when it is off).</summary>
+        Quaternion Sway(bool snap)
+        {
+            var game = GameManager.Instance;
+            float amount = game.Save != null ? Mathf.Clamp01(game.Save.settings.cameraSway) : 0;
+            Vector2 wanted = Vector2.zero;
+            if (amount > 0 && !game.Dying && game.IsPlaying)
+            {
+                swayClock += Time.unscaledDeltaTime;
+                Vector3 velocity = targetBody ? targetBody.linearVelocity : Vector3.zero;
+                // Climbing lowers the arm to look along the slope; heading up-screen lowers it to look ahead; sideways
+                // travel swings it a little. A slow drift keeps some parallax even when parked.
+                float pitch = -Mathf.Clamp(velocity.y / 4, -1, 1) * .55f - Mathf.Clamp(velocity.z / 28, -1, 1) * .35f + Mathf.Sin(swayClock * .39f) * .18f;
+                float yaw = Mathf.Clamp(velocity.x / 28, -1, 1) * .7f + Mathf.Sin(swayClock * .23f + 1.3f) * .3f;
+                wanted = new Vector2(pitch * SwayPitch, yaw * SwayYaw) * amount;
+            }
+            // Paused: hold the current angle.
+            if (snap) { sway = wanted; swayVelocity = Vector2.zero; }
+            else if (game.IsPlaying || game.Dying) sway = Vector2.SmoothDamp(sway, wanted, ref swayVelocity, SwaySmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
+            return Quaternion.AngleAxis(sway.y, Vector3.up) * Quaternion.AngleAxis(sway.x, Vector3.right);
         }
 
         void OrbitGarage()

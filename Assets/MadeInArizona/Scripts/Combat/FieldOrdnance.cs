@@ -11,6 +11,10 @@ namespace MadeInArizona
     /// </summary>
     public sealed class FieldOrdnance : MonoBehaviour
     {
+        /// <summary>Speed (m/s) a bowling-ball strike shoves a car along the ball's lane, and how high it pops.</summary>
+        const float BowlingShove = 34, BowlingLift = 8;
+        /// <summary>The ball hops off each car it strikes before rolling on.</summary>
+        const float BowlingBounce = 7.5f;
         enum Mode { Shell, Mine, Bomblet, Fuse, Roller, Crawler, Sentry, Vortex }
         enum Payload { None, FireRing, Vortex }
         readonly RaycastHit[] hits = new RaycastHit[16];
@@ -182,10 +186,48 @@ namespace MadeInArizona
         public static void Roll(VehicleController owner, Vector3 origin, Vector3 aim, WeaponDefinition weapon, float damage)
         {
             Vector3 flat = Vector3.ProjectOnPlane(aim, Vector3.up); if (flat.sqrMagnitude < .01f) flat = owner.transform.forward; flat.Normalize();
-            var ball = Create("Bowling ball", origin + flat, new Color(.18f, .2f, .32f), owner, PrimitiveType.Sphere);
-            ball.mode = Mode.Roller; ball.damage = damage; ball.velocity = flat * weapon.speed + Vector3.ProjectOnPlane(owner.Body.linearVelocity, Vector3.up) * .5f;
+            var ball = SpawnBall(owner, origin + flat, flat * weapon.speed + Vector3.ProjectOnPlane(owner.Body.linearVelocity, Vector3.up) * .5f, weapon.projectileColor);
+            ball.damage = damage;
+            CoopSession.Instance?.PublishFx(CoopFx.BowlingLaunch, ball.transform.position, ball.velocity);
+        }
+        static FieldOrdnance SpawnBall(VehicleController owner, Vector3 at, Vector3 velocity, Color glow)
+        {
+            var ball = Create("Bowling ball", at, new Color(.18f, .2f, .32f), owner, PrimitiveType.Sphere);
+            ball.mode = Mode.Roller; ball.velocity = velocity;
             ball.expiresAt = Time.time + 3.4f; ball.transform.localScale = Vector3.one * 1.08f;
-            ball.ownMaterial.SetFloat("_Smoothness", .9f); ball.ownMaterial.SetColor("_EmissionColor", weapon.projectileColor * .6f);
+            ball.ownMaterial.SetFloat("_Smoothness", .9f); ball.ownMaterial.SetColor("_EmissionColor", glow * .6f);
+            return ball;
+        }
+        /// <summary>Co-op guests: a look-alike of the host's bowling ball. It strikes nothing; the host's strikes bounce it.</summary>
+        public static void RollReplica(Vector3 at, Vector3 velocity)
+        {
+            var weapon = WeaponRules.Find("bowling");
+            var ball = SpawnBall(null, at, velocity, weapon ? weapon.projectileColor : new Color(.35f, .35f, .45f));
+            ball.replica = true;
+            replicas.Add(ball);
+        }
+        /// <summary>Co-op guests: the host's ball struck a car here. Pins crash, and the nearest replica ball hops.</summary>
+        public static void ReplicaStrike(Vector3 at, Vector3 velocity)
+        {
+            FieldOrdnance nearest = null; float best = 8 * 8;
+            replicas.RemoveAll(r => !r);
+            foreach (var replica in replicas)
+            {
+                float d = (replica.transform.position - at).sqrMagnitude;
+                if (d < best) { best = d; nearest = replica; }
+            }
+            if (nearest) { nearest.transform.position = at; nearest.velocity = velocity; }
+            StrikeEffects(at);
+        }
+        static readonly List<FieldOrdnance> replicas = new List<FieldOrdnance>();
+        bool replica;
+        static void StrikeEffects(Vector3 at)
+        {
+            ExplosionSystem.Burst(at + Vector3.up * .5f, new Color(1, .75f, .3f), 14, 5);
+            // Pin-shaped splinters scatter from the strike.
+            ExplosionSystem.ScatterPieces(at + Vector3.up * .6f, 7, 5, new Color(.95f, .93f, .88f), Vector3.zero,
+                new Vector3(.12f, .12f, .32f), new Vector3(.16f, .16f, .42f), .3f);
+            AudioManager.Instance?.PlayPinStrike(at);
         }
         /// <summary>Dynamite go-kart: drives off ahead of the car and hunts the nearest hostile.</summary>
         public static void LaunchGoKart(VehicleController owner, WeaponDefinition weapon, float damage)
@@ -359,21 +401,26 @@ namespace MadeInArizona
             if (speed > .1f && Blocked(direction, speed * dt + .42f, .48f, out RaycastHit wall))
             {
                 var prop = wall.collider.GetComponentInParent<DestructionSystem>();
-                if (prop && !prop.IsDestroyed && prop.Size < 3.5f) prop.SmashFromVehicle(wall.point, source, flat * .7f);
+                // A guest's replica rolls through: the host breaks the prop and replicates that.
+                if (prop && !prop.IsDestroyed && prop.Size < 3.5f) { if (!replica) prop.SmashFromVehicle(wall.point, source, flat * .7f); }
                 else if (wall.normal.y < .6f) { flat = Vector3.Reflect(flat, Vector3.ProjectOnPlane(wall.normal, Vector3.up).normalized) * .75f; velocity = flat + Vector3.up * velocity.y; ExplosionSystem.Burst(wall.point, new Color(.8f, .8f, .9f), 5, 3); }
             }
-            foreach (var vehicle in VehicleController.Active)
-            {
-                if (!Hostile(vehicle) || struck.Contains(vehicle)) continue;
-                Vector3 delta = vehicle.transform.position - transform.position;
-                if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > BowlingHitRadius * BowlingHitRadius || Mathf.Abs(delta.y) > 3f) continue;
-                struck.Add(vehicle);
-                vehicle.Damage.ApplyDamage(damage, transform.position, source);
-                if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * 20 + Vector3.up * 5, ForceMode.VelocityChange);
-                ExplosionSystem.Burst(transform.position + Vector3.up * .5f, new Color(1, .75f, .3f), 14, 5);
-                velocity *= .82f;
-                if (owner && owner.IsPlayer) CameraController.Instance?.Shake(.12f);
-            }
+            if (!replica)
+                foreach (var vehicle in VehicleController.Active)
+                {
+                    if (!Hostile(vehicle) || struck.Contains(vehicle)) continue;
+                    Vector3 delta = vehicle.transform.position - transform.position;
+                    if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > BowlingHitRadius * BowlingHitRadius || Mathf.Abs(delta.y) > 3f) continue;
+                    struck.Add(vehicle);
+                    vehicle.Damage.ApplyDamage(damage, transform.position, source);
+                    if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * BowlingShove + Vector3.up * BowlingLift, ForceMode.VelocityChange);
+                    // The ball keeps most of its pace and hops up off the car, ready for the next one in the lane.
+                    velocity = Vector3.ProjectOnPlane(velocity, Vector3.up) * .82f + Vector3.up * BowlingBounce;
+                    transform.position += Vector3.up * .15f;
+                    StrikeEffects(transform.position);
+                    CoopSession.Instance?.PublishFx(CoopFx.BowlingStrike, transform.position, velocity);
+                    if (owner && owner.IsPlayer) CameraController.Instance?.Shake(.16f);
+                }
             GroundFollow(.54f, true);
             velocity *= 1 - .12f * dt;
             transform.Rotate(Vector3.Cross(Vector3.up, direction), speed * dt / .54f * Mathf.Rad2Deg, Space.World);
@@ -459,7 +506,8 @@ namespace MadeInArizona
                 if (hits[i].distance < nearest) { nearest = hits[i].distance; groundY = hits[i].point.y; normal = hits[i].normal; }
             }
             float rest = groundY + lift;
-            if (p.y > rest + .5f) { velocity += Vector3.down * 25 * dt; p.y += velocity.y * dt; }
+            // Airborne while above the ground or still rising (a bowling ball hopping off a car); lands on the ground.
+            if (p.y > rest + .5f || velocity.y > 0) { velocity += Vector3.down * 25 * dt; p.y += velocity.y * dt; if (p.y < rest) { p.y = rest; velocity.y = 0; } }
             else
             {
                 p.y = rest; velocity.y = 0;

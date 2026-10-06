@@ -38,6 +38,16 @@ namespace MadeInArizona
         readonly List<Vector3> route = new List<Vector3>();
         int routeIndex; Vector3 routeGoal; float routePlannedAt = float.NegativeInfinity, reverseUntil, offRouteSince = -1;
         const float BrakeForTurnSpeed = 9; // m/s: route followers slow to this before a sharp turn
+        // Detours round impassable terrain (hostiles): the A* route, when it was planned and toward what.
+        readonly List<Vector3> detour = new List<Vector3>();
+        int detourIndex; Vector3 detourGoal; float detourCheckAt, detourPlannedAt = float.NegativeInfinity; bool detouring;
+        /// <summary>Frame of the last detour search by any hostile: one A* search a frame across them all.</summary>
+        static int detourPlanFrame = -1;
+        const float DetourCheckInterval = .8f, DetourReplanMove = 30, DetourMaxAge = 8;
+        const int DetourSearchBudget = 40000;
+        /// <summary>The detour being followed, for tests and the minimap.</summary>
+        public IReadOnlyList<Vector3> Detour => detour;
+        public bool Detouring => detouring && detour.Count > 0;
         readonly RaycastHit[] hits = new RaycastHit[16];
         readonly Collider[] hazards = new Collider[24];
 
@@ -101,7 +111,12 @@ namespace MadeInArizona
             if (UseDestination && !IsFriendly && AttackTelegraph != EnemyAttackTelegraph.Ram && Time.time >= ramUntil)
                 desired = travelDistance > 4 ? towardTravel : CombatSteering(towardTarget, tangent, targetDistance) * .35f;
 
-            desired = UpdateCatchUp(desired, towardTarget, targetDistance);
+            // A cliff, ridge or mesa between this car and where it is going: follow a planned way round instead of
+            // grinding against the rock. Guns stay on the target.
+            Vector3? detourHeading = IsFriendly ? null : DetourHeading(UseDestination ? Destination : Target.transform.position);
+            if (detourHeading.HasValue && AttackTelegraph != EnemyAttackTelegraph.Ram && Time.time >= ramUntil) desired = detourHeading.Value;
+
+            desired = UpdateCatchUp(desired, detourHeading ?? towardTarget, targetDistance);
             UpdateHazardAvoidance(); desired = AvoidBlockedRoute(desired);
             RecoverIfStuck(ref desired, towardTarget, tangent);
             bool reversing = Time.time < reverseUntil;
@@ -142,6 +157,47 @@ namespace MadeInArizona
             if (!camera) return false;
             Vector3 view = camera.WorldToViewportPoint(transform.position);
             return view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
+        }
+
+        /// <summary>
+        /// Hostiles drive straight at their target or destination until the straight line is blocked by terrain a car
+        /// cannot cross (cliff walls between elevation levels, mountain chains, mesas, big rocks, the map rim). Then they
+        /// follow an A* route over the navigation grid: through ridge passes, up the ramps between levels and across
+        /// bridges and fords. Returns the heading to steer, or null to fight normally.
+        /// </summary>
+        Vector3? DetourHeading(Vector3 goal)
+        {
+            var world = GeneratedWorld.Active;
+            if (!world) return null;
+            Vector3 here = transform.position;
+            if (FlatDelta(goal, here).magnitude < 18) { detouring = false; return null; }
+            if (Time.time >= detourCheckAt)
+            {
+                detourCheckAt = Time.time + DetourCheckInterval * Random.Range(.8f, 1.2f);
+                if (world.DirectDrivable(here, goal)) { detouring = false; detour.Clear(); }
+                else
+                {
+                    bool stale = !detouring || detour.Count == 0 || FlatDelta(goal, detourGoal).magnitude > DetourReplanMove || Time.time - detourPlannedAt > DetourMaxAge;
+                    if (stale && detourPlanFrame != Time.frameCount)
+                    {
+                        detourPlanFrame = Time.frameCount;
+                        detourGoal = goal; detourPlannedAt = Time.time; detourIndex = 0;
+                        // Hostiles cut across country rather than keeping to roads: off-road ground costs about twice road.
+                        detouring = world.FindPath(here, goal, detour, .45f, DetourSearchBudget);
+                        if (!detouring) detour.Clear();
+                    }
+                    else if (stale) detourCheckAt = Time.time; // another hostile planned this frame: try the next one
+                }
+            }
+            if (!detouring || detour.Count == 0) return null;
+            // Never turn back for a waypoint already passed; look ahead further at speed.
+            float nearest = float.MaxValue; int ahead = detourIndex;
+            for (int i = detourIndex; i < Mathf.Min(detour.Count, detourIndex + 10); i++) { float d = FlatDelta(detour[i], here).sqrMagnitude; if (d < nearest) { nearest = d; ahead = i; } }
+            detourIndex = ahead;
+            float lookAhead = 8 + vehicle.Body.linearVelocity.magnitude * .5f;
+            while (detourIndex < detour.Count - 1 && FlatDelta(detour[detourIndex], here).magnitude < lookAhead) detourIndex++;
+            Vector3 heading = FlatDelta(detour[detourIndex], here);
+            return heading.sqrMagnitude > .01f ? heading.normalized : (Vector3?)null;
         }
 
         Vector3 FriendlySteering(Vector3 towardDestination, float destinationDistance)
@@ -452,6 +508,8 @@ namespace MadeInArizona
                 {
                     vehicle.Body.AddForce((tangent + Vector3.up * .65f) * 7, ForceMode.VelocityChange);
                     stuckTime = 0; orbitSign *= -1;
+                    // Wedged while detouring: plan again from here.
+                    detourCheckAt = 0; detourPlannedAt = float.NegativeInfinity;
                 }
             }
             else stuckTime = 0;

@@ -14,6 +14,14 @@ namespace MadeInArizona
         // 0 = VSync on (match display), 1 = off with 120 FPS cap, 2 = off and uncapped.
         public int frameSync=0;
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
+        // Camera sway that reveals terrain relief (0 = fixed overhead camera, 1 = the strongest sway on offer).
+        public float cameraSway=.5f;
+        // Gamepad: LB is a held reverse button and the left stick never selects reverse by itself.
+        public bool shoulderReverse;
+        // Gamepad: nitro on A (button south) and interact on RB, instead of the reverse.
+        public bool boostOnSouth;
+        // 0 follows the graphics preset; 1 = high (4K map, tight cascade, soft); 2 = ultra (8K map) for strong GPUs.
+        public int shadowDetail;
         public string bindingOverrides="";
         public DevTuning dev=new DevTuning();
         public List<CarTuning> cars=new List<CarTuning>();
@@ -35,6 +43,7 @@ namespace MadeInArizona
             uiScale=Finite(uiScale)?Mathf.Clamp(uiScale,.75f,1.5f):1;
             quality=Mathf.Clamp(quality,0,3); difficulty=Mathf.Clamp(difficulty,0,2); aimAssist=Mathf.Clamp(aimAssist,0,2);
             width=Mathf.Clamp(width,960,7680); height=Mathf.Clamp(height,540,4320); windowMode=Mathf.Clamp(windowMode,0,2); frameSync=Mathf.Clamp(frameSync,0,2);
+            cameraSway=Unit(cameraSway,.5f); shadowDetail=Mathf.Clamp(shadowDetail,0,2);
             if(bindingOverrides==null || bindingOverrides.Length>200000) bindingOverrides="";
         }
         static bool Finite(float f) { return !float.IsNaN(f)&&!float.IsInfinity(f); }

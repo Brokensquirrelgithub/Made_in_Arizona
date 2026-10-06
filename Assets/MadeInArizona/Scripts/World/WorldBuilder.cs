@@ -77,7 +77,8 @@ namespace MadeInArizona
             for(int x=-2;x<=2;x++)
             {
                 Box("Steel portal column",shop,new Vector3(x*5.9f,3.8f,11.7f),new Vector3(.19f,7.6f,.3f),Rust);
-                for(int y=0;y<7;y++) Box("Corrugated siding ridge",shop,new Vector3(x*5.9f+2.7f,y+.4f,11.85f),new Vector3(5.4f,.038f,.12f),new Color(.41f,.43f,.35f));
+                // Siding runs between columns only: the last bay used to start at the right column and stick out of the shop.
+                if(x<2)for(int y=0;y<7;y++) Box("Corrugated siding ridge",shop,new Vector3(x*5.9f+2.95f,y+.4f,11.85f),new Vector3(5.7f,.038f,.12f),new Color(.41f,.43f,.35f));
             }
             Box("Main lintel",shop,new Vector3(0,7.25f,11.6f),new Vector3(25,.38f,.4f),Ink);
             Box("Neon backing",shop,new Vector3(0,5.8f,11.66f),new Vector3(12.3f,2.8f,.14f),Ink);
@@ -94,13 +95,15 @@ namespace MadeInArizona
                 Box("Platform yellow lip",shop,new Vector3(side*1.14f,1.01f,0),new Vector3(.055f,.07f,6),new Color(.95f,.65f,.1f));
                 Wedge("Drive on ramp",shop,new Vector3(side*.87f,.015f,-4.13f),new Vector3(.66f,.87f,2.35f),Ink,true);
                 Box("Lift column",shop,new Vector3(side*2.4f,1.8f,1.1f),new Vector3(.45f,3.6f,.48f),Turquoise);
-                Box("Lift arm",shop,new Vector3(side*1.55f,.76f,1.1f),new Vector3(1.55f,.18f,.21f),Ink);
-                Box("Lift arm",shop,new Vector3(side*1.55f,.76f,-1),new Vector3(1.55f,.18f,.21f),Ink);
+                // Arms run under the runway (whose underside is at 0.74 m) rather than through its side.
+                Box("Lift arm",shop,new Vector3(side*1.55f,.62f,1.1f),new Vector3(1.55f,.18f,.21f),Ink);
+                Box("Lift arm",shop,new Vector3(side*1.55f,.62f,-1),new Vector3(1.55f,.18f,.21f),Ink);
                 for(int stripe=0;stripe<5;stripe++) Box("Safety floor stripe",shop,new Vector3(side*3.07f,.04f,-2.2f+stripe*1.15f),new Vector3(.38f,.02f,.55f),new Color(.94f,.66f,.16f));
             }
             Text("CUSTOMER DECLINED\nRECOMMENDED SERVICE",shop,new Vector3(0,.047f,-7.05f),.37f,new Color(.71f,.65f,.43f),Quaternion.Euler(90,0,0));
-            BuildWorkbench(shop,new Vector3(-7.5f,0,9.1f));
-            BuildWorkbench(shop,new Vector3(6.9f,0,9.1f));
+            // Against the back wall, each in the bay between two portal columns.
+            BuildWorkbench(shop,new Vector3(-8.85f,0,10.95f));
+            BuildWorkbench(shop,new Vector3(8.85f,0,10.95f));
             for(int row=0;row<2;row++) for(int col=0;col<3;col++)
             {
                 var tire=Cylinder("Take-off tires",shop,new Vector3(-9.5f+col*.85f,.15f+row*.3f,3.9f),.42f,.3f,Ink);
@@ -108,7 +111,8 @@ namespace MadeInArizona
             }
             Box("Tool chest",shop,new Vector3(-7.4f,.72f,4.5f),new Vector3(2.2f,1.4f,.85f),new Color(.64f,.15f,.08f));
             for(int i=0;i<5;i++) Box("Drawer pull",shop,new Vector3(-7.4f,.23f+i*.24f,4.055f),new Vector3(1.7f,.025f,.035f),Cream);
-            Box("Parts shelving frame",shop,new Vector3(9.75f,1.8f,5.4f),new Vector3(3.4f,3.6f,.19f),Ink);
+            Box("Parts shelving back",shop,new Vector3(9.75f,1.8f,5.8f),new Vector3(3.6f,3.6f,.19f),Ink);
+            for(int side=-1;side<=1;side+=2)Box("Parts shelving upright",shop,new Vector3(9.75f+side*1.78f,1.8f,5),new Vector3(.08f,3.6f,1.4f),Ink);
             for(int level=0;level<3;level++)
             {
                 Box("Parts shelf",shop,new Vector3(9.75f,.3f+level*1.1f,5),new Vector3(3.5f,.08f,1.4f),Cream);
@@ -127,14 +131,15 @@ namespace MadeInArizona
             Box("Bed cushion",shop,new Vector3(4.7f,.27f,-3.5f),new Vector3(1.86f,.14f,1.35f),new Color(.74f,.47f,.24f));
             Text("SUZUKI • MANAGEMENT",shop,new Vector3(4.7f,.18f,-4.34f),.16f,Cream);
             Cylinder("Water bowl",shop,new Vector3(6,.13f,-4.2f),.27f,.21f,new Color(.45f,.54f,.56f));
-            Cylinder("Water",shop,new Vector3(6,.247f,-4.2f),.235f,.015f,Turquoise);
-            SuzukiDog.Create(shop,new Vector3(4.5f,.38f,-3.25f),GameManager.Instance?.Save?.dogCosmetic??0,false,new[]{
+            Cylinder("Water",shop,new Vector3(6,.212f,-4.2f),.235f,.015f,Turquoise);
+            var suzuki=SuzukiDog.Create(shop,new Vector3(4.5f,.38f,-3.25f),GameManager.Instance?.Save?.dogCosmetic??0,false,new[]{
                 // One-time cushion egress stays high until her paws clear the mattress; the loop then remains on the floor.
                 new Vector3(5.0f,.30f,-2.3f),new Vector3(6.0f,0,-2.3f),new Vector3(5.3f,0,-8.6f),
                 new Vector3(-5.5f,0,-8.6f),new Vector3(-8.0f,0,-4.5f),new Vector3(-7.0f,0,1.8f),
                 new Vector3(-5.2f,0,3.3f),new Vector3(-5.0f,0,6.8f),new Vector3(-3.8f,0,7.6f),
                 new Vector3(3.8f,0,7.5f),new Vector3(5.2f,0,5.2f),new Vector3(5.0f,0,1.0f),new Vector3(5.0f,0,-2.3f)
             },1);
+            suzuki.HoseReel=SuzukiDog.BuildHoseReel(shop,new Vector3(11.85f,0,-9.4f));
             int souvenirs=GameManager.Instance?.Save?.completedMissions?.Count??0;
             for(int i=0;i<Mathf.Min(16,souvenirs);i++)
             {
@@ -156,11 +161,11 @@ namespace MadeInArizona
             var g=Group("Mechanic workbench",parent,pos);
             Box("Wood top",g,new Vector3(0,1.5f,0),new Vector3(5,.19f,1.45f),new Color(.48f,.30f,.15f));
             for(int x=-1;x<=1;x+=2) Box("Bench leg",g,new Vector3(x*2.16f,.73f,0),new Vector3(.14f,1.45f,1.12f),Ink);
-            Box("Pegboard",g,new Vector3(0,2.7f,.7f),new Vector3(5,2,.12f),new Color(.37f,.29f,.18f));
+            Box("Pegboard",g,new Vector3(0,2.6f,.65f),new Vector3(5,2,.12f),new Color(.37f,.29f,.18f));
             for(int i=0;i<9;i++)
             {
                 float x=-2+i*.5f;
-                Beam("Hanging wrench",g,new Vector3(x,2.35f,.59f),new Vector3(x,2.86f+(i%3)*.11f,.59f),.035f,new Color(.57f,.62f,.59f));
+                Beam("Hanging wrench",g,new Vector3(x,2.25f,.55f),new Vector3(x,2.76f+(i%3)*.11f,.55f),.035f,new Color(.57f,.62f,.59f));
                 Cylinder("Socket",g,new Vector3(x,1.69f,0),.065f,.17f,new Color(.51f,.55f,.54f));
             }
             Box("Shop radio",g,new Vector3(1.65f,1.9f,.1f),new Vector3(.8f,.5f,.42f),Ink);
@@ -170,14 +175,16 @@ namespace MadeInArizona
         }
         void BuildOfficeCorner(Transform shop)
         {
-            Box("Mission planning board",shop,new Vector3(-10.9f,3,7.6f),new Vector3(.17f,2.5f,3.6f),new Color(.51f,.37f,.2f));
-            for(int i=0;i<7;i++) Box("Customer work order",shop,new Vector3(-10.79f,2.4f+(i%3)*.6f,6.4f+(i/3)*1.1f),new Vector3(.025f,.43f,.72f),Cream);
+            // Mounted on the left wall (its inner face is at x = -12.2); it used to hang in the air 1.2 m from it.
+            Box("Mission planning board",shop,new Vector3(-12.11f,3,7.6f),new Vector3(.17f,2.5f,3.6f),new Color(.51f,.37f,.2f));
+            for(int i=0;i<7;i++) Box("Customer work order",shop,new Vector3(-12.01f,2.4f+(i%3)*.6f,6.4f+(i/3)*1.1f),new Vector3(.025f,.43f,.72f),Cream);
             Box("Office desk",shop,new Vector3(8,.72f,-6.6f),new Vector3(3,1.45f,1.6f),new Color(.43f,.29f,.15f));
-            Box("CRT monitor",shop,new Vector3(8,1.93f,-6.45f),new Vector3(1.03f,.8f,.7f),new Color(.63f,.62f,.49f));
-            Box("Green terminal",shop,new Vector3(8,1.97f,-6.81f),new Vector3(.83f,.57f,.025f),new Color(.12f,.46f,.3f),false,1.8f);
-            Text("INVOICE\nUNPAID",shop,new Vector3(8,1.97f,-6.835f),.13f,Cream);
+            // Resting on the desk top (1.445 m); it used to float a few centimetres above it.
+            Box("CRT monitor",shop,new Vector3(8,1.845f,-6.45f),new Vector3(1.03f,.8f,.7f),new Color(.63f,.62f,.49f));
+            Box("Green terminal",shop,new Vector3(8,1.885f,-6.81f),new Vector3(.83f,.57f,.025f),new Color(.12f,.46f,.3f),false,1.8f);
+            Text("INVOICE\nUNPAID",shop,new Vector3(8,1.885f,-6.835f),.13f,Cream);
             Box("Keyboard",shop,new Vector3(8,1.49f,-7.18f),new Vector3(.95f,.07f,.32f),new Color(.63f,.62f,.49f));
-            Text("THE 10mm IS NOT A SHOP SUPPLY",shop,new Vector3(7.9f,3.5f,11.43f),.22f,Cream);
+            Text("THE 10mm IS NOT A SHOP SUPPLY",shop,new Vector3(8.85f,4.15f,11.6f),.22f,Cream);
         }
 
         public void BuildMission(int missionIndex)

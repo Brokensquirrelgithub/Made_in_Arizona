@@ -14,8 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: deathray
   displayName: Satellite-Dish Death Ray
-  description: SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing
-    the sun; damage builds the longer it stays on one car.
+  description: 'SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing the sun into one steady, humming beam; damage builds the longer it stays on one car.'
   role: SUSTAINED FOCUS BEAM
   strength: Melts a target you can keep it on for two seconds.
   weakness: Weak until it warms up; switching targets resets it.

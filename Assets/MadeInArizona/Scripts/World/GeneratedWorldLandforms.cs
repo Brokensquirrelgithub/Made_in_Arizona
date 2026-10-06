@@ -26,6 +26,12 @@ namespace MadeInArizona
         const float LandformRoadClearance = 24, LandformTownClearance = 130, LandformPinClearance = 70, LandformSpacing = 50,
             LandformRiverClearance = 30, TrailLandformClearance = 6, JunctionLandformClearance = 40;
         const float CoverRoadClearance = 12, CoverTownClearance = 75, CoverObjectiveClearance = 12, CoverGap = 8;
+        /// <summary>
+        /// Smallest footprint radius of any solid, unbreakable rock: 6.5 m, so the smallest is about 13 m across, three
+        /// car lengths. Smaller impassable stones read as pebbles and snagged tyres like hooks; anything smaller is a
+        /// breakable prop the car ploughs through.
+        /// </summary>
+        public const float MinSolidRockRadius = 6.5f;
         const float ObstacleCell = 48, ObstacleQueryReach = 48;
         readonly List<Landform> landforms = new List<Landform>();
         readonly List<Landform> boundaryChains = new List<Landform>();
@@ -619,7 +625,7 @@ namespace MadeInArizona
         {
             var random = new System.Random(unchecked(seed * 1103515245 + 4099));
             float scale = size / 1600f;
-            int target = Mathf.RoundToInt(Rand(random, 45, 65) * Mathf.Clamp(scale * scale, 1, 4));
+            int target = Mathf.RoundToInt(Rand(random, 30, 44) * Mathf.Clamp(scale * scale, 1, 4));
             var objectives = new List<Vector2>();
             foreach (var junction in TrailJunctions) objectives.Add(XZ(junction));
             foreach (var pin in Pins) if (pin.kind != "town") objectives.Add(XZ(pin.position));
@@ -628,7 +634,7 @@ namespace MadeInArizona
             {
                 if (landforms.Count - start >= target * .6f) break;
                 if (random.NextDouble() > .7) continue;
-                int rocks = random.Next(2, 5); float ring = Rand(random, 18, 30), turn = Rand(random, 0, Mathf.PI * 2);
+                int rocks = random.Next(2, 5); float ring = Rand(random, 24, 36), turn = Rand(random, 0, Mathf.PI * 2);
                 for (int k = 0; k < rocks; k++)
                 {
                     float angle = turn + k * Mathf.PI * 2 / rocks + Rand(random, -.35f, .35f), distance = ring * Rand(random, .85f, 1.15f);
@@ -645,8 +651,8 @@ namespace MadeInArizona
 
         bool TryCover(Vector2 p, System.Random random, List<Vector2> objectives)
         {
-            // Footprint radius bounds a slab about 4-6 m long; 2.1-3.4 m tall hides a car (1.5 m) and stops rounds at bumper height.
-            float radius = Rand(random, 2, 3.2f), height = Rand(random, 2.1f, 3.4f), yaw = Rand(random, 0, 360);
+            // Footprint radius bounds a slab 13-18 m long (three to four car lengths); 3-5.5 m tall hides a car and stops rounds.
+            float radius = Rand(random, MinSolidRockRadius, 9), height = Rand(random, 3, 5.5f), yaw = Rand(random, 0, 360);
             if (!InOutline(p / size) || RoadDistance(p) < radius + CoverRoadClearance || TownDistance(p) < radius + CoverTownClearance) return false;
             if (TrailEdgeDistance(p) < radius + 1.5f || ObstacleDistance(p) < radius + CoverGap || ArchSpanDistance(p) < radius) return false;
             if (riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < radius + riverWidth + 4) return false;
@@ -657,6 +663,14 @@ namespace MadeInArizona
             landforms.Add(new Landform { kind = LandformKind.Cover, center = p, reach = radius, height = height, yaw = yaw, first = footprints.Count, count = 1 });
             AddFootprint(p, radius, height, true);
             return true;
+        }
+
+        /// <summary>Distance from a point to the nearest trail junction.</summary>
+        float JunctionDistance(Vector2 p)
+        {
+            float best = float.MaxValue;
+            foreach (var junction in TrailJunctions) best = Mathf.Min(best, Vector2.Distance(p, XZ(junction)));
+            return best;
         }
 
         void BuildLandforms()
@@ -723,11 +737,12 @@ namespace MadeInArizona
                         // Occasional outlying boulders break up the chain's edge.
                         if (!shoulder && random.NextDouble() < .22)
                         {
-                            float angle = Rand(random, 0, Mathf.PI * 2), radius = f.radius * Rand(random, .22f, .4f);
+                            float angle = Rand(random, 0, Mathf.PI * 2), radius = Mathf.Max(MinSolidRockRadius, f.radius * Rand(random, .25f, .42f));
                             Vector2 at = f.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * f.radius * Rand(random, 1f, 1.25f);
-                            if (RoadDistance(at) >= radius + 6 && TrailEdgeDistance(at) >= radius + 1.5f && TownDistance(at) >= radius + CoverTownClearance && ArchSpanDistance(at) >= radius)
-                                PlaceScaledModel(catalog.PickMountainRock(random), at, radius, f.height * Rand(random, .2f, .45f),
-                                    Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain outcrop", Tilt(random));
+                            if (RoadDistance(at) >= radius + 6 && TrailEdgeDistance(at) >= radius + 1.5f && TownDistance(at) >= radius + CoverTownClearance && ArchSpanDistance(at) >= radius && JunctionDistance(at) >= radius + CoverObjectiveClearance)
+                                if (PlaceScaledModel(catalog.PickMountainRock(random), at, radius, Mathf.Max(3, f.height * Rand(random, .2f, .45f)),
+                                    Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain outcrop", Tilt(random)))
+                                    AddFootprint(at, radius * .85f, f.height * .3f, true);
                         }
                     }
                     AddChainBarriers(landform, chain);
@@ -770,8 +785,8 @@ namespace MadeInArizona
                     float stackHeight = landform.kind == LandformKind.Boulders ? f.radius * Rand(random, 1.15f, 1.4f) : landform.height;
                     int sides = landform.kind == LandformKind.Mesa ? 26 : landform.kind == LandformKind.Cover ? 9 : landform.kind == LandformKind.Boulders ? 11 : 16;
                     float roughness = landform.kind == LandformKind.Mesa ? .16f : landform.kind == LandformKind.Cover ? .22f : .2f;
-                    // Cover rocks are slabs: long across their yaw, narrow along it.
-                    Vector2 stretch = landform.kind == LandformKind.Cover ? new Vector2(1, Rand(random, .55f, .75f)) : Vector2.one;
+                    // Cover rocks are slabs: long across their yaw, narrower along it (still two car lengths and more).
+                    Vector2 stretch = landform.kind == LandformKind.Cover ? new Vector2(1, Rand(random, .65f, .85f)) : Vector2.one;
                     float groundRef = rounded ? SampleHeight(new Vector3(f.center.x, 0, f.center.y)) - .35f : ground;
                     // Rounded rocks get a domed top; a flat one read as a pale disc of ground texture from above.
                     builder.Round(this, f.center, f.radius, stackHeight, groundRef, Profile(landform.kind), sides, roughness, stretch, landform.yaw, rounded ? .14f : .015f, tint, random);
@@ -875,7 +890,8 @@ namespace MadeInArizona
         /// <summary>Places a catalog model on a planned footprint. Returns false (placeholder used instead) if it has no renderers.</summary>
         bool PlaceLandformModel(GameObject prefab, Landform landform, Transform root, bool terrainMaterial)
         {
-            return PlaceScaledModel(prefab, landform.center, landform.reach * .95f, landform.height, landform.yaw,
+            float radius = landform.kind == LandformKind.Cover ? Mathf.Max(MinSolidRockRadius, landform.reach * .95f) : landform.reach * .95f;
+            return PlaceScaledModel(prefab, landform.center, radius, landform.height, landform.yaw,
                 root, terrainMaterial, prefab.name + " • " + landform.kind);
         }
 
@@ -958,12 +974,12 @@ namespace MadeInArizona
                     Vector2 direction = landform.boundary ?
                         (landform.inward + new Vector2(-landform.inward.y, landform.inward.x) * side * .28f).normalized :
                         new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * side;
-                    // Medium cover-sized stones (a little larger than PlanCover's): tall enough to stop rounds at bumper
-                    // height and clearly an obstacle. Small ones read as pebbles and snagged tyres.
-                    float radius = Rand(random, 2.8f, 4f), height = Rand(random, 2.4f, 3.6f);
+                    // Big fallen blocks, at least three car lengths across: clearly an obstacle to steer round. The old
+                    // 6-8 m stones read as pebbles yet stopped cars dead, like hooks for the tyres.
+                    float radius = Rand(random, MinSolidRockRadius, 8.5f), height = Rand(random, 3, 5);
                     Vector2 at = f.center + direction * f.radius * Rand(random, .7f, .85f);
-                    // Larger stones reach further from the mountain: keep them off roads, trails and town pads.
-                    if (RoadDistance(at) < radius + 4 || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance || ArchSpanDistance(at) < radius) continue;
+                    // Larger stones reach further from the mountain: keep them off roads, trails, junctions and town pads.
+                    if (RoadDistance(at) < radius + 4 || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance || ArchSpanDistance(at) < radius || JunctionDistance(at) < radius + CoverObjectiveClearance) continue;
                     var rock = catalog ? catalog.Pick(LandformKind.Cover, random) : null;
                     if (!rock || !PlaceScaledModel(rock, at, radius, height,
                         Rand(random, 0, 360), root, catalog.useTerrainMaterial, "Mountain base rock"))
@@ -971,6 +987,8 @@ namespace MadeInArizona
                         Vector3 p = new Vector3(at.x, SampleHeight(new Vector3(at.x, 0, at.y)), at.y);
                         Boulder(root, p, radius * 1.4f);
                     }
+                    // Navigation, spawns and scenery steer clear of it like any other cover rock.
+                    AddFootprint(at, radius * .85f, height, true);
                     BaseRockCount++;
                 }
             }

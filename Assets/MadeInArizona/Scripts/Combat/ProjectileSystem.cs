@@ -374,11 +374,12 @@ namespace MadeInArizona
                     var shooter = round.source ? round.source.GetComponentInParent<VehicleController>() : null;
                     if (shooter && vehicle.Body && !vehicle.Body.isKinematic)
                     {
+                        // A yank toward the driver, then the cable holds it (TowLink) so it can be whipped into scenery.
                         Vector3 pull = Vector3.ProjectOnPlane(shooter.transform.position - vehicle.transform.position, Vector3.up);
                         if (pull.sqrMagnitude > 1) vehicle.Body.AddForce(pull.normalized * fx.power + Vector3.up * 2, ForceMode.VelocityChange);
-                        WeaponFx.Tether(shooter.transform, vehicle.transform, round.color, .6f);
+                        TowLink.Attach(shooter, vehicle, round.color, fx.duration);
                     }
-                    afflictions.Stall(fx.duration);
+                    else afflictions.Stall(1);
                     break;
             }
         }
