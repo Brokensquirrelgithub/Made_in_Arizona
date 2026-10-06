@@ -15,6 +15,8 @@ namespace MadeInArizona
         const float RoadCost = 1, ShoulderCost = 1.8f, TrailCost = 2.6f, OpenCost = 5, WaterCost = 9;
         int navSize; float navStep;
         float[] navCost, navHeight;
+        /// <summary>Nodes on a bridge deck, which stands well above the river bed the heightfield holds there.</summary>
+        bool[] navDeck;
         float[] navG; int[] navParent; bool[] navClosed; int[] navStamp; int navSearch;
         readonly List<int> navHeap = new List<int>();
         readonly List<float> navHeapF = new List<float>();
@@ -26,7 +28,7 @@ namespace MadeInArizona
             int grid = Chunks * Cells; float step = size / grid;
             navSize = grid / NavStride + 1; navStep = step * NavStride;
             int count = navSize * navSize;
-            navCost = new float[count]; navHeight = new float[count];
+            navCost = new float[count]; navHeight = new float[count]; navDeck = new bool[count];
             navG = new float[count]; navParent = new int[count]; navClosed = new bool[count]; navStamp = new int[count];
             for (int z = 0; z < navSize; z++)
                 for (int x = 0; x < navSize; x++)
@@ -36,14 +38,18 @@ namespace MadeInArizona
                     if (!InsideVertex(gx, gz, step)) { navCost[i] = -1; continue; }
                     Vector2 p = new Vector2(-half + gx * step, -half + gz * step);
                     float road = RoadDistance(p), cost;
+                    // A road over the carved channel is a bridge deck: route at the deck's height, not the river bed's.
+                    if (road < 6.5f && OverRiver(p) && NearestRoad(p, out float deck) < 6.5f && deck > navHeight[i] + .9f)
+                    { navHeight[i] = deck; navDeck[i] = true; }
                     if (road < 6.5f || TownDistance(p) < 30) cost = RoadCost;
                     else if (road < 11) cost = ShoulderCost;
                     else if (TrailEdgeDistance(p) < 0) cost = TrailCost;
                     else cost = OpenCost;
                     if (cost > RoadCost && riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < riverWidth) cost = WaterCost;
-                    // Landforms and cover rocks are solid; the margin keeps routes from clipping their edges. Landforms also
-                    // block half a cell round them, so one lying between nodes on a coarse (large-map) grid is still avoided.
-                    if (ObstacleDistance(p) < 2.5f || LandformDistance(p) < Mathf.Max(2.5f, navStep * .5f)) cost = -1;
+                    // Landforms and cover rocks are solid; the margin keeps routes from clipping their edges. Both block half a
+                    // cell round them, so one lying between nodes on a coarse (large-map) grid is still avoided, and rocks
+                    // count their overhang past the planned circle.
+                    if (DrivingObstacleDistance(p) < Mathf.Max(2.5f, navStep * .5f)) cost = -1;
                     navCost[i] = cost;
                 }
         }
@@ -113,6 +119,9 @@ namespace MadeInArizona
                         if (navClosed[next]) continue;
                         float run = navStep * (dx != 0 && dz != 0 ? 1.41421f : 1);
                         float rise = Mathf.Abs(navHeight[next] - navHeight[current]);
+                        // Between a deck and the river bed below it there are parapets and piers: only along the road,
+                        // where the deck meets ground at its own level. Routes used to run under bridges into the piers.
+                        if (navDeck[current] != navDeck[next] && rise > 1.2f) continue;
                         // Elevation blockage: cliff walls and anything steeper than a car can climb.
                         if (rise > MaxDriveGrade * run) continue;
                         float grade = rise / run;
@@ -163,7 +172,7 @@ namespace MadeInArizona
                 if (Mathf.Abs(h - previous) > MaxDriveGrade * stepLength * 1.15f) return false;
                 previous = h;
                 float along = i * stepLength;
-                if (along > 6 && length - along > 6 && (ObstacleDistance(p) < 1 || !InOutline(p / size))) return false;
+                if (along > 6 && length - along > 6 && (DrivingObstacleDistance(p) < 1 || !InOutline(p / size))) return false;
             }
             return true;
         }

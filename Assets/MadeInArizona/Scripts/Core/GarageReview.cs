@@ -36,6 +36,8 @@ namespace MadeInArizona
                 }
             }
             check("garage ramps exist and every face points outward (" + ramps + " ramps, " + inward + " inward faces)", ramps == 2 && inward == 0);
+            var strikes = Resources.LoadAll<AudioClip>("Audio/Bowling");
+            check("both bowling strike recordings load (" + strikes.Length + ")", strikes.Length == 2 && Array.TrueForAll(strikes, c => c && c.length > 1));
 
             Vector3 shopCentre = new Vector3(0, 1.6f, 2);
             for (int i = 0; i < 10; i++)

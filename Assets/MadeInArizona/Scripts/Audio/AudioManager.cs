@@ -64,7 +64,9 @@ namespace MadeInArizona
             // Tyres: rubber squeal on pavement, crunching scrub on loose ground (replacing one pitched-up noise loop).
             squeal=Loop(AudioSynthesis.TyreSqueal(),95);scrub=Loop(AudioSynthesis.GravelScrub(),96);
             RayLoop=Keep(AudioSynthesis.DeathRayLoop());RayStart=Keep(AudioSynthesis.DeathRayStart());
-            pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));
+            // Bowling pins: the supplied strike recordings (Resources/Audio/Bowling); the synthesized rack only if they are missing.
+            pinStrikes=Resources.LoadAll<AudioClip>("Audio/Bowling");
+            if(pinStrikes.Length==0){pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));}
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
@@ -168,8 +170,8 @@ namespace MadeInArizona
             float slip=active&&sliding?Mathf.Clamp01(player.SideSlip*1.2f+player.WheelSpin*.5f):0;
             bool paved=pavedScrub(player),wet=player.Surface==SurfaceKind.Water;
             float speed=Mathf.Clamp01(player.SpeedKph/120),rate=Time.unscaledDeltaTime*(slip>0?6:3);
-            squeal.volume=Mathf.MoveTowards(squeal.volume,Settings.environment*(paved?slip:0)*.4f*duck,rate);
-            scrub.volume=Mathf.MoveTowards(scrub.volume,Settings.environment*(!paved&&!wet?slip:0)*.5f*duck,rate);
+            squeal.volume=Mathf.MoveTowards(squeal.volume,Settings.environment*(paved?slip:0)*.2f*duck,rate);
+            scrub.volume=Mathf.MoveTowards(scrub.volume,Settings.environment*(!paved&&!wet?slip:0)*.25f*duck,rate);
             squeal.pitch=.9f+slip*.12f+speed*.08f;
             scrub.pitch=.82f+speed*.3f+slip*.05f;
         }
@@ -295,8 +297,8 @@ namespace MadeInArizona
         /// <summary>Bowling ball into a car: a full rack of pins going down.</summary>
         public void PlayPinStrike(Vector3 position)
         {
-            if(Settings==null||pinStrikes==null)return;
-            PlayAt(pinStrikes[Random.Range(0,pinStrikes.Length)],position,Settings.weapons*.95f*duck,Random.Range(.95f,1.06f),40);
+            if(Settings==null||pinStrikes==null||pinStrikes.Length==0)return;
+            PlayAt(pinStrikes[Random.Range(0,pinStrikes.Length)],position,Settings.weapons*.9f*duck,Random.Range(.96f,1.04f),40);
         }
         /// <summary>A car whipped into scenery on the tow cable: a heavy body crunch, louder for a harder hit.</summary>
         public void PlayCrash(Vector3 position,float strength)

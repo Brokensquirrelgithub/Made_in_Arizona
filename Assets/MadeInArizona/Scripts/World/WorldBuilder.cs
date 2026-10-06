@@ -82,7 +82,8 @@ namespace MadeInArizona
             }
             Box("Main lintel",shop,new Vector3(0,7.25f,11.6f),new Vector3(25,.38f,.4f),Ink);
             Box("Neon backing",shop,new Vector3(0,5.8f,11.66f),new Vector3(12.3f,2.8f,.14f),Ink);
-            Text("MADE IN ARIZONA",shop,new Vector3(0,6.13f,11.53f),.93f,Cream);
+            // The shop's motto, on two lines to fit the neon backing.
+            Text("REPAIRS THROUGH\nSUPERIOR FIREPOWER",shop,new Vector3(0,6.28f,11.53f),.6f,Cream);
             Text("117° AUTO CARE  /  SINCE THE WARRANTY EXPIRED",shop,new Vector3(0,5.18f,11.50f),.245f,Turquoise);
             Box("Amber neon border",shop,new Vector3(0,7.08f,11.4f),new Vector3(12,.065f,.055f),Orange,false,4);
             Box("Teal neon border",shop,new Vector3(0,4.5f,11.4f),new Vector3(12,.065f,.055f),Turquoise,false,3);

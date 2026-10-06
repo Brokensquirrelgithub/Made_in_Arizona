@@ -147,7 +147,22 @@ Windows x64 builds (built to a separate folder with `MIA_BUILD_ROOT`) succeeded 
 | `-miaSmokeTest -miaEnemyBalanceTest` | 20 / 20 pass |
 | `-miaSmokeTest -miaReachabilityTest` | 24 / 24 pass |
 | `-miaSmokeTest -miaGarageReview` (new) | 8 / 8 pass: garage ramps face outward, Suzuki washes a dusty car (dust 1.00 to 0.44 in one pass), cliff found, death ray stays on while held and goes out on release |
-| `-miaSmokeTest -miaEscortTest` | 1 / 3: mission 3's van loops on its route and does not finish its transfers. **Pre-existing:** the unmodified build from earlier the same day fails the same two checks (130 loop samples on leg 1, against 37 on leg 3 with this revision). |
+| `-miaSmokeTest -miaEscortTest` | Failed 1 / 3 in this run; fixed on 7 October (see below). The failure was partly test interference and partly real route-following bugs on larger maps. |
 
 The first world and mountain runs placed no cover or base rocks at all: trail distances were capped at 8 m, below the clearance the new 13 m+ rocks need. `TrailQueryReach` is now 16 m. The garage review captures (orbit, close-ups, wash, cliff, clouds on/off, beam) were inspected by eye. They confirmed the ramp, siding, lift-arm, bench, board, shelving and CRT fixes, and showed two further defects that were fixed: sign text drawn through walls, and Suzuki's boxy ears. Not verified: listening to the new sounds (their spectrograms were checked offline), real gamepad input for shoulder reverse and nitro-on-A, live multi-PC co-op for the replicated beam, tow cable and bowling ball, and the 8K shadow option's cost on target hardware.
+
+## Escort routing — 7 October 2026
+
+The escort suite failed for two reasons. It inherited whatever map the previous suite saved, and run after the mountain suite that was a 4.8 km map, too long for its time limit. It now pins seed 173 at 1600 m. Larger maps (`-miaEscortSize=3200`/`4800`) also showed real route-following bugs: circling a drop beyond a ring of cover rocks, a navigation grid too coarse for the rocks, overshooting drops, staying wedged against a parked car, and routes under bridges into piers. All are fixed; see [development notes](DEVELOPMENT.md).
+
+| Suite (Windows player, run one after another) | Result |
+|---|---|
+| `-miaEscortTest` (mission 3, 1600 m) | 3 / 3, 107 s, no loop samples |
+| `-miaEscortTest -miaEscortSize=3200` | 3 / 3, 111 s, no loop samples (was 158) |
+| `-miaEscortTest -miaEscortSize=4800` | 3 / 3, 165 s, no loop samples (was 46–130) |
+| `-miaEscortTest -miaEscortMission=8` | 3 / 3, 127 s, no loop samples |
+| `-miaReachabilityTest` | 24 / 24 |
+| `-miaWorldTest` | 46 / 46 |
+
+The navigation margin change was also checked with `-miaMountainTest` (12 / 12). An intermediate version that simply lowered the van's stuck threshold broke mission 8, and was replaced by the obstacle-aware rule above. These are single runs; route following involves physics and some randomness, so occasional variation between runs is possible.
 

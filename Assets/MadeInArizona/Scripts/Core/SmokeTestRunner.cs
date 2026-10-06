@@ -1239,7 +1239,7 @@ namespace MadeInArizona
                 foreach(var v in VehicleController.Active){var ai0=v?v.GetComponent<EnemyAI>():null;if(ai0&&ai0.IsFriendly){van=v;break;}}
                 if(!van){Check("mission "+mission+" escort van spawns",false);continue;}
                 var ai=van.GetComponent<EnemyAI>();
-                var track=new List<(Vector3 p,float t)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
+                var track=new List<(Vector3 p,float t,int leg)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
                 while(Time.time-start<timeLimit&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
                 {
                     QuietMissionHostiles();van.Damage.Repair(10000);
@@ -1259,9 +1259,11 @@ namespace MadeInArizona
                         if(ratio>worstRatio){worstRatio=ratio;worstLeg=legs;}
                     }
                     Vector3 here=van.transform.position;
-                    foreach(var (p,t) in track)if(Time.time-t>25&&Flat(here-p)<20){loops++;if(loops<=3)Debug.Log("MIA_ESCORT_LOOP t="+(Time.time-start).ToString("0")+" at "+here.ToString("0")+" was here at t="+(t-start).ToString("0")+" goal="+ai.Destination.ToString("0")+" leg="+legs);break;}
-                    if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTrace")>=0&&track.Count%4==0){float nearest=float.MaxValue;int at=-1;for(int i=0;i<ai.Route.Count;i++){float d=Flat(ai.Route[i]-here);if(d<nearest){nearest=d;at=i;}}Debug.Log("MIA_ESCORT_TRACE t="+(Time.time-start).ToString("0")+" pos="+here.ToString("0")+" toGoal="+Flat(ai.Destination-here).ToString("0")+" speed="+van.Body.linearVelocity.magnitude.ToString("0")+" nearestRoute="+at+"/"+ai.Route.Count+" off="+nearest.ToString("0")+" hold="+ai.HoldPosition+" fwd="+van.transform.forward.ToString("0.0"));}
-                    track.Add((here,Time.time));
+                    // Circling is a return to the same spot on the same leg. A new leg may rightly drive back down the road
+                    // the last one came in on (a drop at the end of a spur or a town at the end of the highway).
+                    foreach(var (p,t,leg) in track)if(leg==legs&&Time.time-t>25&&Flat(here-p)<20){loops++;if(loops<=3)Debug.Log("MIA_ESCORT_LOOP t="+(Time.time-start).ToString("0")+" at "+here.ToString("0")+" was here at t="+(t-start).ToString("0")+" goal="+ai.Destination.ToString("0")+" leg="+legs);break;}
+                    if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTrace")>=0&&track.Count%4==0){float nearest=float.MaxValue;int at=-1;for(int i=0;i<ai.Route.Count;i++){float d=Flat(ai.Route[i]-here);if(d<nearest){nearest=d;at=i;}}Debug.Log("MIA_ESCORT_TRACE t="+(Time.time-start).ToString("0")+" pos="+here.ToString("0")+" toGoal="+Flat(ai.Destination-here).ToString("0")+" speed="+van.Body.linearVelocity.magnitude.ToString("0")+" nearestRoute="+at+"/"+ai.Route.Count+" off="+nearest.ToString("0")+" hold="+ai.HoldPosition+" fwd="+van.transform.forward.ToString("0.0")+" "+ai.SteerDebug+" avoid="+ai.AvoidDebug);}
+                    track.Add((here,Time.time,legs));
                     yield return new WaitForSecondsRealtime(.5f);
                 }
                 float driven=0;for(int i=1;i<track.Count;i++)driven+=Flat(track[i].p-track[i-1].p);

@@ -165,14 +165,19 @@ namespace MadeInArizona
             }
             return best;
         }
-        /// <summary>As <see cref="ObstacleDistance(Vector2)"/>, ignoring cover rocks.</summary>
-        float LandformDistance(Vector2 p)
+        /// <summary>
+        /// As <see cref="ObstacleDistance(Vector2)"/> for driving: cover rocks count 30% wider than their planned circle.
+        /// Pack models are scaled by their longest half-extent, so a rock's corners reach past the circle, and routes
+        /// planned against the bare circle ran vans into them.
+        /// </summary>
+        float DrivingObstacleDistance(Vector2 p)
         {
             if (!footprintCells.TryGetValue(ObstacleKey(Mathf.FloorToInt(p.x / ObstacleCell), Mathf.FloorToInt(p.y / ObstacleCell)), out var list)) return ObstacleQueryReach;
             float best = ObstacleQueryReach;
-            foreach (int i in list) if (!footprints[i].cover) best = Mathf.Min(best, Vector2.Distance(p, footprints[i].center) - footprints[i].radius);
+            foreach (int i in list) best = Mathf.Min(best, Vector2.Distance(p, footprints[i].center) - footprints[i].radius * (footprints[i].cover ? CoverOverhang : 1));
             return best;
         }
+        const float CoverOverhang = 1.3f;
 
         /// <summary>
         /// Moves a point (a spawn or pickup) out of any landform or cover rock, keeping <paramref name="margin"/> metres
