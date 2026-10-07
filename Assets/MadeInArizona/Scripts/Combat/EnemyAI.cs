@@ -174,7 +174,7 @@ namespace MadeInArizona
             var camera = Camera.main;
             if (!camera) return false;
             Vector3 view = camera.WorldToViewportPoint(transform.position);
-            return view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
+            return view.z < 0 || view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
         }
 
         /// <summary>

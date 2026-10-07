@@ -16,6 +16,8 @@ namespace MadeInArizona
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
         // Camera sway that reveals terrain relief (0 = fixed overhead camera, 1 = the strongest sway on offer).
         public float cameraSway=.5f;
+        // Gameplay camera projection: false = the original orthographic view, true = perspective (CameraController.PerspectiveFov).
+        public bool perspectiveCamera;
         // Gamepad: LB is a held reverse button and the left stick never selects reverse by itself.
         public bool shoulderReverse;
         // Gamepad: nitro on A (button south) and interact on RB, instead of the reverse.

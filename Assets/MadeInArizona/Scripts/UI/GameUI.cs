@@ -435,7 +435,10 @@ namespace MadeInArizona
 
         Vector2 ScreenPoint(Vector3 world)
         {
-            var point=Camera.main.WorldToViewportPoint(world);return new Vector2(point.x*width,(1-point.y)*height);
+            var cam=Camera.main;var point=cam.WorldToViewportPoint(world);
+            // A perspective lens mirrors points behind it through the screen centre; un-mirror so directions stay true.
+            if(point.z<0&&!cam.orthographic){point.x=1-point.x;point.y=1-point.y;}
+            return new Vector2(point.x*width,(1-point.y)*height);
         }
         void CombatLine(Vector2 a,Vector2 b,float thickness,Color color)
         {
@@ -525,6 +528,8 @@ namespace MadeInArizona
             float distance = Vector3.Distance(game.Player.transform.position, target);
             if (distance < 8) return;
             var point = Camera.main.WorldToViewportPoint(target + Vector3.up * 2);
+            // Behind a perspective lens (far to the south): un-mirror and pin to the bottom edge.
+            if (point.z < 0 && !Camera.main.orthographic) { point.x = 1 - point.x; point.y = -1; }
             float x = Mathf.Clamp(point.x * width, 50, width - 80), y = Mathf.Clamp((1 - point.y) * height, 205, height - 250);
             Text(x - 80, y, 160, 30, "◇ " + Mathf.RoundToInt(distance) + " m", 23, Orange, true, TextAnchor.MiddleCenter);
         }
@@ -624,6 +629,8 @@ namespace MadeInArizona
                 Text(x + 35, y + 425, 850, 40, "The camera tips a few degrees as you climb, dip and travel, so hills and drops read in 3D. 0% keeps the fixed overhead view.", 14, Muted);
                 SettingLabel(x, y + 484, "DYNAMIC CAMERA ZOOM", 3); if (Button(x + 465, y + 479, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
                 SettingLabel(x, y + 537, "VSYNC", 4); if (Button(x + 465, y + 532, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
+                SettingLabel(x, y + 590, "CAMERA STYLE", 5); if (Button(x + 465, y + 585, 426, 38, s.perspectiveCamera ? "PERSPECTIVE • 3D DEPTH" : "ORTHOGRAPHIC • FLAT OVERHEAD")) s.perspectiveCamera = !s.perspectiveCamera;
+                Text(x + 35, y + 628, 850, 40, "Perspective keeps the same angle and framing at the car, with distance falling away toward the top of the screen. The garage stays orthographic.", 14, Muted);
             }
             if (settingsPage == 2) {
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
@@ -659,7 +666,7 @@ namespace MadeInArizona
 
         static readonly string[] SettingsTabs = { "DISPLAY & ACCESS", "GRAPHICS & CAMERA", "AUDIO", "CONTROLS" };
         /// <summary>Gamepad rows on each settings page (the controls page adds one per rebindable action).</summary>
-        int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 5 : page == 2 ? 6 : 4 + actions.Length;
+        int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 6 : page == 2 ? 6 : 4 + actions.Length;
         static readonly string[] ShadowDetailLabels = { "MATCH GRAPHICS PRESET", "HIGH • 4K, SOFT EDGES", "ULTRA • 8K, SOFT EDGES" };
         static readonly string[] ShadowDetailNotes = {
             "Shadow map size and range follow the preset.",
@@ -701,6 +708,7 @@ namespace MadeInArizona
                 if (menuFocus == 2) s.cameraSway = Mathf.Clamp01(s.cameraSway + .1f * direction);
                 if (menuFocus == 3) s.dynamicZoom = !s.dynamicZoom;
                 if (menuFocus == 4) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
+                if (menuFocus == 5) s.perspectiveCamera = !s.perspectiveCamera;
             } else if (settingsPage == 2) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);
