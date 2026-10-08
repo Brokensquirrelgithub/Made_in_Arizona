@@ -14,10 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: harpoon
   displayName: Tow-Hook Harpoon
-  description: 'SNIPER + WINCH. A tow hook on a winch cable: it spears a car and
-    yanks it into your bumper.'
-  role: PULL / SETUP
-  strength: Drags runners and snipers into ram and shotgun range.
+  description: 'SNIPER + WINCH. A tow hook on a winch cable: it spears a car, reels it in and holds it on the line for five seconds.'
+  role: PULL / WHIP
+  strength: Swing round and whip the hooked car into a rock or wall to wreck it.
   weakness: Single target and pulls danger toward you.
   contentOrder: 25
   damage: 45

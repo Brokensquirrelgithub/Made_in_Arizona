@@ -184,18 +184,181 @@ namespace MadeInArizona
             }
             return Clip("Original • weapon pickup", samples);
         }
-        /// <summary>Seamless, gritty tyre scrub loop, shaped for a sustained slide.</summary>
-        public static AudioClip DriftScrub()
+        /// <summary>Chamberlin state-variable band-pass: one step, returns the band output.</summary>
+        struct BandPass
         {
-            var samples = new float[Rate]; uint seed = 4497; float filtered = 0;
+            float low, band;
+            public float Step(float input, float hz, float q)
+            {
+                float f = 2 * Mathf.Sin(Mathf.PI * Mathf.Min(hz, Rate * .22f) / Rate);
+                low += f * band; float high = input - low - band / q; band += f * high;
+                return band;
+            }
+        }
+        /// <summary>
+        /// Folds the last <paramref name="fade"/> samples over the start with an equal-power crossfade, so a buffer of
+        /// length + fade becomes a seamless loop of length samples with no level dip at the seam.
+        /// </summary>
+        static float[] LoopSeamless(float[] raw, int fade)
+        {
+            int length = raw.Length - fade; var loop = new float[length];
+            for (int i = 0; i < length; i++) loop[i] = raw[i];
+            for (int i = 0; i < fade; i++)
+            {
+                float t = (i + .5f) / fade;
+                loop[i] = raw[i] * Mathf.Sin(t * Mathf.PI * .5f) + raw[length + i] * Mathf.Cos(t * Mathf.PI * .5f);
+            }
+            return loop;
+        }
+        static void NormalizeRms(float[] samples, float rms, float ceiling = .92f)
+        {
+            double energy = 0; foreach (float v in samples) energy += v * v;
+            float scale = rms / Mathf.Max(1e-6f, (float)Math.Sqrt(energy / samples.Length));
+            for (int i = 0; i < samples.Length; i++) samples[i] = SoftLimit(samples[i] * scale / ceiling) * ceiling;
+        }
+        /// <summary>
+        /// Rubber squeal on pavement, for drifts and burnouts. A tyre squeals because the tread sticks and slips at a few
+        /// hundred cycles a second, so the voice is a narrow, ringing band of noise around 1 kHz with its overtones, and
+        /// a rasping tone under it whose pitch wanders at random (never a steady vibrato) and whose level chatters.
+        /// Three seconds, crossfaded into a seamless loop.
+        /// </summary>
+        public static AudioClip TyreSqueal()
+        {
+            int fade = Rate / 4, length = Rate * 3; var raw = new float[length + fade];
+            uint seed = 4497; BandPass b1 = default, b2 = default, b3 = default;
+            float walk = 0, walkTarget = 0, level = .8f, levelTarget = .8f, chatter = 0, phase = 0, hissLow = 0;
+            int retarget = 0;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                float n = Noise(ref seed);
+                if (i >= retarget)
+                {
+                    // A new pitch and level every 40-150 ms, glided toward: stick-slip is irregular, not periodic.
+                    walkTarget = Noise(ref seed); levelTarget = .55f + .45f * Mathf.Abs(Noise(ref seed));
+                    retarget = i + Mathf.RoundToInt(Rate * (.04f + .11f * Mathf.Abs(Noise(ref seed))));
+                }
+                walk += (walkTarget - walk) * .0016f; level += (levelTarget - level) * .003f;
+                chatter = Mathf.Lerp(chatter, n, .018f);
+                float hz = 1040 * (1 + .065f * walk + .01f * n);
+                phase += hz / Rate; phase -= Mathf.Floor(phase);
+                // Rasping tone: a soft-cornered pulse rich in odd and even partials.
+                float tone = Wave(phase) * .55f + Wave(phase * 2) * .3f + Wave(phase * 3) * .18f + Wave(phase * 4) * .08f;
+                float ring = b1.Step(n, hz, 16) + b2.Step(n, hz * 2.06f, 20) * .55f + b3.Step(n, hz * 3.1f, 24) * .22f;
+                hissLow = Mathf.Lerp(hissLow, n, .5f);
+                raw[i] = (tone * .16f * (.65f + chatter * 3.2f) + ring) * level + (n - hissLow) * .025f;
+            }
+            var samples = LoopSeamless(raw, fade);
+            NormalizeRms(samples, .3f);
+            return Clip("Original • tyre squeal", samples);
+        }
+        /// <summary>
+        /// Tyres sliding on loose ground: grit crunching under the tread (dense random grains through two resonant
+        /// bands), a low gravel rumble and a dry hiss of thrown dirt. Seamless three-second loop.
+        /// </summary>
+        public static AudioClip GravelScrub()
+        {
+            int fade = Rate / 4, length = Rate * 3; var raw = new float[length + fade];
+            uint seed = 7741; BandPass crunchLow = default, crunchHigh = default;
+            float rumble = 0, rumbleLow = 0, hissLow = 0, swell = 1, swellTarget = 1; int retarget = 0;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                float n = Noise(ref seed);
+                if (i >= retarget) { swellTarget = .6f + .4f * Mathf.Abs(Noise(ref seed)); retarget = i + Mathf.RoundToInt(Rate * (.06f + .1f * Mathf.Abs(Noise(ref seed)))); }
+                swell += (swellTarget - swell) * .002f;
+                // About 1100 grains a second, each a random-sized tick.
+                float grain = Mathf.Abs(Noise(ref seed)) < 1100f / Rate ? Noise(ref seed) * 4 : 0;
+                float crunch = crunchLow.Step(grain, 1350, 3) + crunchHigh.Step(grain, 3300, 4) * .6f;
+                rumble = Mathf.Lerp(rumble, n, .06f); rumbleLow = Mathf.Lerp(rumbleLow, rumble, .05f);
+                hissLow = Mathf.Lerp(hissLow, n, .45f);
+                raw[i] = (crunch * .9f + (rumble - rumbleLow) * 1.6f + (n - hissLow) * .07f) * swell;
+            }
+            var samples = LoopSeamless(raw, fade);
+            NormalizeRms(samples, .28f);
+            return Clip("Original • gravel scrub", samples);
+        }
+        /// <summary>
+        /// The death ray's sustained beam: a thick, slowly phasing electrical hum (two detuned buzzing saws over a sub),
+        /// a bright singing whine and a crackling sizzle where the focused light burns. Every oscillator completes whole
+        /// cycles in the two-second loop and the sizzle is crossfaded, so the seam is silent.
+        /// </summary>
+        public static AudioClip DeathRayLoop()
+        {
+            int fade = Rate / 5, length = Rate * 2; var raw = new float[length + fade];
+            uint seed = 3301; BandPass sizzle = default, crackle = default;
+            float spark = 0;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                float t = i / (float)Rate, n = Noise(ref seed);
+                float saw = 0, partner = 0;
+                // Band-limited saws: 110 Hz and 110.5 Hz beat once every two seconds; harmonics stop below 4.5 kHz.
+                for (int k = 1; k <= 40; k++) { float amp = 1f / k; saw += Wave(110 * k * t) * amp; partner += Wave(110.5f * k * t) * amp; }
+                float sub = Wave(55 * t);
+                float whine = Wave(1760 * t + .004f * 1760 / 6 * Wave(6 * t)) * (.6f + .4f * Wave(.5f * t));
+                // Sparks: random bursts of crackle on top of a steady sizzle band.
+                if (Mathf.Abs(Noise(ref seed)) < 30f / Rate) spark = 1;
+                spark *= .9985f;
+                float hiss = sizzle.Step(n, 4200, 2.2f) + crackle.Step(n * spark, 2400, 6) * 1.6f;
+                raw[i] = (saw + partner) * .16f + sub * .32f + whine * .06f + hiss * .35f;
+            }
+            var samples = LoopSeamless(raw, fade);
+            NormalizeRms(samples, .3f);
+            return Clip("Original • death ray beam", samples);
+        }
+        /// <summary>The ray striking up: a rising electrical zap that lands on the beam's hum.</summary>
+        public static AudioClip DeathRayStart()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .4f)]; uint seed = 3307; BandPass zap = default; float phase = 0;
             for (int i = 0; i < samples.Length; i++)
             {
                 float t = i / (float)Rate, n = Noise(ref seed);
-                filtered = Mathf.Lerp(filtered, n, .12f);
-                float seam = Mathf.Sin(Mathf.PI * t); seam = Mathf.Clamp01(seam * 12);
-                samples[i] = SoftLimit(((n - filtered) * .43f + Wave(750 * t + .7f * Wave(13 * t)) * .16f) * seam);
+                float hz = 180 * Mathf.Pow(12, Mathf.Clamp01(t / .22f));
+                phase += hz / Rate;
+                float sweep = (Wave(phase) + Wave(phase * 2) * .4f) * Mathf.Exp(-t * 7);
+                float burst = zap.Step(n, 2600, 3) * Mathf.Exp(-t * 22);
+                samples[i] = SoftLimit((sweep * .5f + burst * 1.2f) * 1.1f) * Mathf.Min(1, t * 2000) * Mathf.Min(1, (samples.Length - i) / (Rate * .03f));
             }
-            return Clip("Original • tyre scrub", samples);
+            return Clip("Original • death ray ignition", samples);
+        }
+        /// <summary>
+        /// Bowling pins: the ball's heavy wooden thump into the pins, then a cascade of hollow maple clacks (each pin
+        /// a few inharmonic body modes) thinning out and quietening as they tumble and roll on the boards.
+        /// </summary>
+        public static AudioClip PinStrike(int variant)
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * 1.5f)];
+            uint seed = (uint)(6271 + variant * 811);
+            int pins = 14 + variant * 2;
+            var at = new float[pins]; var hz = new float[pins]; var gain = new float[pins]; var decay = new float[pins];
+            for (int p = 0; p < pins; p++)
+            {
+                // Dense at first, spreading out: most clacks land in the first 0.35 s, stragglers to about 1.1 s.
+                float u = (p + .5f * (Noise(ref seed) * .5f + .5f)) / pins;
+                at[p] = .012f + u * u * 1.05f;
+                hz[p] = (p % 4 == 3 ? 520 : 760) * (1 + .22f * Noise(ref seed));
+                gain[p] = Mathf.Lerp(1, .22f, u) * (.7f + .3f * Mathf.Abs(Noise(ref seed)));
+                decay[p] = 26 + 14 * Mathf.Abs(Noise(ref seed));
+            }
+            float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, n = Noise(ref seed); low = Mathf.Lerp(low, n, .2f);
+                float thump = Wave(150 * t - 60 * t * t) * Mathf.Exp(-t * 26) * Mathf.Min(1, t * 900) * .9f
+                    + (n - low) * Mathf.Exp(-t * 90) * .5f;
+                float clacks = 0;
+                for (int p = 0; p < pins; p++)
+                {
+                    float local = t - at[p]; if (local < 0) continue;
+                    float env = Mathf.Exp(-local * decay[p]) * Mathf.Min(1, local * 3000) * gain[p];
+                    if (env < .002f) continue;
+                    // Inharmonic modes of a hollow wooden bottle shape, plus the click of the strike.
+                    clacks += (Wave(hz[p] * local) * .55f + Wave(hz[p] * 2.32f * local) * .3f + Wave(hz[p] * 3.87f * local) * .16f) * env
+                        + (n - low) * Mathf.Exp(-local * 400) * gain[p] * .35f;
+                }
+                // Rumble of pins rolling on the lane.
+                float roll = low * Mathf.Exp(-Mathf.Abs(t - .45f) * 3) * .18f;
+                samples[i] = SoftLimit((thump + clacks * .55f + roll) * 1.05f) * Mathf.Min(1, (samples.Length - i) / (Rate * .05f));
+            }
+            return Clip("Original • bowling pin strike " + variant, samples);
         }
         /// <summary>
         /// Kill confirmation: a heavy punched thunk with a short crunch, topped by a bright two-note ding, so a kill

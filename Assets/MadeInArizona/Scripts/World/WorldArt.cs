@@ -137,6 +137,12 @@ namespace MadeInArizona
         }
 
         const int GroundArraySize = 512;
+        /// <summary>
+        /// Array slice of the cliff-face set (Resources/Terrain/CliffFace_*, made by Tools/cliff_texture.py from the
+        /// ground textures): layered sandstone for grades too steep to drive. Falls back to the bedrock texture.
+        /// </summary>
+        public const int CliffSlice = GroundTextureSet.TextureCount;
+        const int GroundArrayDepth = GroundTextureSet.TextureCount + 1;
         static RenderTexture groundAlbedo, groundNormal;
         /// <summary>
         /// Packs all Outdoor Ground Textures into two 512 px texture arrays (albedo+height, normal+AO) on the GPU.
@@ -160,6 +166,15 @@ namespace MadeInArizona
                 material.SetTexture("_Second", set.Occlusion(i) ? set.Occlusion(i) : Texture2D.whiteTexture);
                 Graphics.Blit(set.Normal(i) ? set.Normal(i) : Texture2D.normalTexture, groundNormal, material, 1, i);
             }
+            var cliffAlbedo = Resources.Load<Texture2D>("Terrain/CliffFace_Diffuse");
+            var cliffHeight = Resources.Load<Texture2D>("Terrain/CliffFace_Height");
+            var cliffNormal = Resources.Load<Texture2D>("Terrain/CliffFace_Normal");
+            var cliffOcclusion = Resources.Load<Texture2D>("Terrain/CliffFace_Occlusion");
+            int fallback = GroundTextureSet.TextureCount - 1;
+            material.SetTexture("_Second", cliffHeight ? cliffHeight : set.Height(fallback) ? set.Height(fallback) : Texture2D.grayTexture);
+            Graphics.Blit(cliffAlbedo ? cliffAlbedo : set.Diffuse(fallback), groundAlbedo, material, 0, CliffSlice);
+            material.SetTexture("_Second", cliffOcclusion ? cliffOcclusion : set.Occlusion(fallback) ? set.Occlusion(fallback) : Texture2D.whiteTexture);
+            Graphics.Blit(cliffNormal ? cliffNormal : set.Normal(fallback) ? set.Normal(fallback) : Texture2D.normalTexture, groundNormal, material, 1, CliffSlice);
             Object.Destroy(material);
             groundAlbedo.GenerateMips(); groundNormal.GenerateMips();
             albedoArray = groundAlbedo; normalArray = groundNormal;
@@ -169,7 +184,7 @@ namespace MadeInArizona
         {
             var array = new RenderTexture(GroundArraySize, GroundArraySize, 0, RenderTextureFormat.ARGB32, space)
             {
-                name = name, dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray, volumeDepth = GroundTextureSet.TextureCount,
+                name = name, dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray, volumeDepth = GroundArrayDepth,
                 useMipMap = true, autoGenerateMips = false, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4
             };
             array.Create();
@@ -247,10 +262,22 @@ namespace MadeInArizona
             t.localRotation = rotation ?? Quaternion.identity;
             TextMesh label = t.gameObject.AddComponent<TextMesh>(); label.text = words; label.fontSize = 80;
             label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            t.GetComponent<MeshRenderer>().sharedMaterial = label.font.material;
+            t.GetComponent<MeshRenderer>().sharedMaterial = TextMaterial(label.font);
             label.characterSize = size / 8f; label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center; label.color = color;
             return t.gameObject;
+        }
+        static Material textMaterial;
+        /// <summary>Depth-tested lettering (Shaders/WorldText); the font's own material draws through walls.</summary>
+        static Material TextMaterial(Font font)
+        {
+            if (textMaterial) return textMaterial;
+            var shader = Shader.Find("MadeInArizona/WorldText");
+            if (!shader) return font.material;
+            textMaterial = new Material(shader) { name = "World lettering (depth tested)", mainTexture = font.material.mainTexture };
+            // The dynamic font can rebuild its atlas into a new texture when new glyphs are needed.
+            Font.textureRebuilt += rebuilt => { if (textMaterial && rebuilt == font) textMaterial.mainTexture = rebuilt.material.mainTexture; };
+            return textMaterial;
         }
         public static Light Lamp(string name, Transform parent, Vector3 position, Color color, float intensity, float range)
         {
@@ -267,12 +294,34 @@ namespace MadeInArizona
             if (Application.isPlaying) go.AddComponent<GeneratedMeshOwner>().Mesh = mesh;
             return go;
         }
+        /// <summary>
+        /// A ramp: a unit box's bottom, back and two triangular sides, with a slope rising from the front-bottom edge
+        /// (z = -0.5) to the top of the back (z = +0.5). Every face has its own vertices, so lighting is flat per face, and
+        /// every triangle is wound clockwise seen from outside. The original shared six vertices wound inside-out:
+        /// back-face culling showed only the far faces, and the averaged normals shaded the slope like a cushion.
+        /// </summary>
         public static GameObject Wedge(string name, Transform parent, Vector3 pos, Vector3 size, Color color, bool solid = false)
         {
-            Vector3[] v = { new Vector3(-.5f,0,-.5f),new Vector3(.5f,0,-.5f),new Vector3(-.5f,0,.5f),new Vector3(.5f,0,.5f),new Vector3(-.5f,1,.5f),new Vector3(.5f,1,.5f) };
-            int[] tris = {0,4,2,0,1,5,0,5,4,1,3,5,2,4,5,2,5,3,0,2,3,0,3,1};
+            Vector3 fl = new Vector3(-.5f, 0, -.5f), fr = new Vector3(.5f, 0, -.5f), bl = new Vector3(-.5f, 0, .5f), br = new Vector3(.5f, 0, .5f);
+            Vector3 tl = new Vector3(-.5f, 1, .5f), tr = new Vector3(.5f, 1, .5f);
+            Vector3[] v = {
+                fl, fr, br, bl,      // bottom
+                bl, br, tr, tl,      // back
+                fl, fr, tr, tl,      // slope
+                fl, bl, tl,          // left side
+                fr, tr, br };        // right side
+            int[] tris = { 0,1,2, 0,2,3, 4,5,6, 4,6,7, 8,10,9, 8,11,10, 12,13,14, 15,16,17 };
             var go = MeshObject(name,parent,v,tris,color); go.transform.localPosition=pos; go.transform.localScale=size;
             if (solid) { var c=go.AddComponent<MeshCollider>(); c.sharedMesh=go.GetComponent<MeshFilter>().sharedMesh; }
+            return go;
+        }
+        /// <summary>A four-sided pyramid on a unit square base, apex at the top: pointed ears and the like. Flat faces, outward.</summary>
+        public static GameObject Pyramid(string name, Transform parent, Vector3 pos, Vector3 size, Color color)
+        {
+            Vector3 fl = new Vector3(-.5f, 0, -.5f), fr = new Vector3(.5f, 0, -.5f), bl = new Vector3(-.5f, 0, .5f), br = new Vector3(.5f, 0, .5f), top = new Vector3(0, 1, 0);
+            Vector3[] v = { fl, fr, br, bl, fl, top, fr, fr, top, br, br, top, bl, bl, top, fl };
+            int[] tris = { 0,1,2, 0,2,3, 4,5,6, 7,8,9, 10,11,12, 13,14,15 };
+            var go = MeshObject(name, parent, v, tris, color); go.transform.localPosition = pos; go.transform.localScale = size;
             return go;
         }
         public static void MakeBreakable(Transform root, float health = 40, bool explosive = false, ExplosionKind kind = ExplosionKind.Gasoline, int score = 20)

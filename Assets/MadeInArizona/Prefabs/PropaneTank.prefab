@@ -108,6 +108,8 @@ MonoBehaviour:
   <Kind>k__BackingField: 1
   score: 150
   brittle: 0
+  plowable: 0
+  splinters: 0
   toppleMass: 0
   debrisColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!1 &6262374252307509136
@@ -168,7 +170,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 91d43ab6b65930c4985021f488ffca1c, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

@@ -13,12 +13,14 @@ namespace MadeInArizona
     public sealed class SmokeTestRunner : MonoBehaviour
     {
         public static bool Active => Array.IndexOf(Environment.GetCommandLineArgs(), "-miaSmokeTest") >= 0;
+        /// <summary>Seconds before a hung run is abandoned; an escort run on a larger map needs longer.</summary>
+        static float TimeLimit => Array.Exists(Environment.GetCommandLineArgs(), a => a.StartsWith("-miaEscortSize=")) ? 720 : 240;
         readonly List<string> checks = new List<string>();
         readonly List<string> failures = new List<string>();
         readonly List<string> fixtureTrace = new List<string>();
         void Update()
         {
-            if (Active && Time.realtimeSinceStartup > 240) { Debug.LogError("MIA_SMOKE_TIMEOUT: test did not finish; inspect earlier exceptions."); Application.Quit(2); }
+            if (Active && Time.realtimeSinceStartup > TimeLimit) { Debug.LogError("MIA_SMOKE_TIMEOUT: test did not finish; inspect earlier exceptions."); Application.Quit(2); }
         }
         IEnumerator Start()
         {
@@ -69,6 +71,7 @@ namespace MadeInArizona
                 FinishResults();yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDriveProbe")>=0){yield return DriveProbe.Run(Check);FinishResults();yield break;}
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGarageReview")>=0){yield return GarageReview.Run(Check,Capture);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaUiCapture")>=0)
             {
                 // Visual review of the HUD, map and garage (needs a real window; run hidden, not in batch mode).
@@ -1220,6 +1223,13 @@ namespace MadeInArizona
             var game=GameManager.Instance;game.Save.unlockedMission=14;
             // One mission per run keeps the suite inside the runner's time limit: -miaEscortMission=8 picks the other.
             string only=Array.Find(Environment.GetCommandLineArgs(),a=>a.StartsWith("-miaEscortMission="));
+            // Always the same map. The world config persists between runs, and a suite run just before (the mountain
+            // suite ends on a 4.8 km map) used to leave legs three times longer than the time limit allows.
+            // -miaEscortSize=3200 drives the same seed on a larger map, with the time limit scaled to match.
+            string sizeArg=Array.Find(Environment.GetCommandLineArgs(),a=>a.StartsWith("-miaEscortSize="));
+            float mapSize=sizeArg!=null?float.Parse(sizeArg.Substring(15),System.Globalization.CultureInfo.InvariantCulture):1600;
+            game.WorldConfig.seed=173;game.WorldConfig.size=mapSize;WorldConfigStore.Save(game.WorldConfig);
+            float timeLimit=150*Mathf.Max(1,mapSize/1600);
             foreach(int mission in new[]{only!=null?int.Parse(only.Substring(18)):3})
             {
                 game.StartMission(mission);
@@ -1229,8 +1239,8 @@ namespace MadeInArizona
                 foreach(var v in VehicleController.Active){var ai0=v?v.GetComponent<EnemyAI>():null;if(ai0&&ai0.IsFriendly){van=v;break;}}
                 if(!van){Check("mission "+mission+" escort van spawns",false);continue;}
                 var ai=van.GetComponent<EnemyAI>();
-                var track=new List<(Vector3 p,float t)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
-                while(Time.time-start<150&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
+                var track=new List<(Vector3 p,float t,int leg)>();float start=Time.time;int loops=0,legs=0,worstLeg=0;float worstRatio=0;Vector3 lastGoal=Vector3.positiveInfinity;
+                while(Time.time-start<timeLimit&&game.State==GameState.Playing&&game.Mission.Stage==0&&van&&!van.Damage.IsDead)
                 {
                     QuietMissionHostiles();van.Damage.Repair(10000);
                     // Keep the player alongside so the van never waits to regroup.
@@ -1249,13 +1259,15 @@ namespace MadeInArizona
                         if(ratio>worstRatio){worstRatio=ratio;worstLeg=legs;}
                     }
                     Vector3 here=van.transform.position;
-                    foreach(var (p,t) in track)if(Time.time-t>25&&Flat(here-p)<20){loops++;if(loops<=3)Debug.Log("MIA_ESCORT_LOOP t="+(Time.time-start).ToString("0")+" at "+here.ToString("0")+" was here at t="+(t-start).ToString("0")+" goal="+ai.Destination.ToString("0")+" leg="+legs);break;}
-                    if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTrace")>=0&&track.Count%4==0){float nearest=float.MaxValue;int at=-1;for(int i=0;i<ai.Route.Count;i++){float d=Flat(ai.Route[i]-here);if(d<nearest){nearest=d;at=i;}}Debug.Log("MIA_ESCORT_TRACE t="+(Time.time-start).ToString("0")+" pos="+here.ToString("0")+" toGoal="+Flat(ai.Destination-here).ToString("0")+" speed="+van.Body.linearVelocity.magnitude.ToString("0")+" nearestRoute="+at+"/"+ai.Route.Count+" off="+nearest.ToString("0")+" hold="+ai.HoldPosition+" fwd="+van.transform.forward.ToString("0.0"));}
-                    track.Add((here,Time.time));
+                    // Circling is a return to the same spot on the same leg. A new leg may rightly drive back down the road
+                    // the last one came in on (a drop at the end of a spur or a town at the end of the highway).
+                    foreach(var (p,t,leg) in track)if(leg==legs&&Time.time-t>25&&Flat(here-p)<20){loops++;if(loops<=3)Debug.Log("MIA_ESCORT_LOOP t="+(Time.time-start).ToString("0")+" at "+here.ToString("0")+" was here at t="+(t-start).ToString("0")+" goal="+ai.Destination.ToString("0")+" leg="+legs);break;}
+                    if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTrace")>=0&&track.Count%4==0){float nearest=float.MaxValue;int at=-1;for(int i=0;i<ai.Route.Count;i++){float d=Flat(ai.Route[i]-here);if(d<nearest){nearest=d;at=i;}}Debug.Log("MIA_ESCORT_TRACE t="+(Time.time-start).ToString("0")+" pos="+here.ToString("0")+" toGoal="+Flat(ai.Destination-here).ToString("0")+" speed="+van.Body.linearVelocity.magnitude.ToString("0")+" nearestRoute="+at+"/"+ai.Route.Count+" off="+nearest.ToString("0")+" hold="+ai.HoldPosition+" fwd="+van.transform.forward.ToString("0.0")+" "+ai.SteerDebug+" avoid="+ai.AvoidDebug);}
+                    track.Add((here,Time.time,legs));
                     yield return new WaitForSecondsRealtime(.5f);
                 }
                 float driven=0;for(int i=1;i<track.Count;i++)driven+=Flat(track[i].p-track[i-1].p);
-                Debug.Log("MIA_ESCORT mission "+mission+": legs="+legs+" stage="+game.Mission.Stage+" seconds="+(Time.time-start).ToString("0")+" driven="+driven.ToString("0")+" loop samples="+loops+" worst planned ratio="+worstRatio.ToString("0.00")+" (leg "+worstLeg+")");
+                Debug.Log("MIA_ESCORT mission "+mission+" on "+mapSize.ToString("0")+" m: legs="+legs+" stage="+game.Mission.Stage+" seconds="+(Time.time-start).ToString("0")+" driven="+driven.ToString("0")+" loop samples="+loops+" worst planned ratio="+worstRatio.ToString("0.00")+" (leg "+worstLeg+")");
                 Check("mission "+mission+" escort completes its transfers",game.Mission.Stage>=1);
                 Check("mission "+mission+" escort never loops back over its own track",loops==0);
                 Check("mission "+mission+" escort routes stay direct (planned at most 1.6x the straight line)",worstRatio<=1.6f);

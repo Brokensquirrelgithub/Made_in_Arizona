@@ -33,7 +33,7 @@ namespace MadeInArizona
             Text(x+580,y+305,120,28,(worldSize/1000).ToString("0.0")+" km",19,Lime,true);
             Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);
-            if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid&&!CoopSession.IsRemoteClient))game.StartCampaign(seed,Mathf.Round(worldSize/50)*50);
+            if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid&&!CoopSession.IsRemoteClient))BeginOpening(seed,Mathf.Round(worldSize/50)*50);
             if(Button(x+25,y+512,220,48,"GARAGE / SAVED",false,!CoopSession.IsRemoteClient))game.ReturnToGarage();
             if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();

@@ -16,7 +16,7 @@ namespace MadeInArizona
         [Tooltip("Tall narrow buttes and spires, 16-26 m across.")] public GameObject[] buttes;
         [Tooltip("Long cliff walls and ridges; the longest horizontal axis follows the wall.")] public GameObject[] cliffs;
         [Tooltip("Large boulders and boulder piles that cars cannot cross.")] public GameObject[] boulders;
-        [Tooltip("Medium rocks, about 4-6 m across and 2-3.5 m tall, that stop gunfire.")] public GameObject[] coverRocks;
+        [Tooltip("Cover rocks, 13-18 m across (three car lengths or more) and 3-5.5 m tall, that stop gunfire and cars.")] public GameObject[] coverRocks;
         [Tooltip("Large closed rock models piled along mountain chains and the boundary rim (two per footprint, scaled up). " +
             "When empty, chains fall back to the cliff models.")] public GameObject[] mountainRocks;
         [Tooltip("Render the models with the terrain's rock shader (matches the ground and turns see-through when it hides the car).")]

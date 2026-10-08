@@ -73,7 +73,7 @@ namespace MadeInArizona
             sunObj.transform.SetParent(transform, false);
             Sun = sunObj.AddComponent<Light>();
             Sun.type = LightType.Directional;
-            Sun.shadows = LightShadows.Soft;
+            Sun.shadows = LightShadows.Hard; // ApplySettings makes it soft at high shadow detail
             sunObj.transform.rotation = Quaternion.Euler(68, -35, 0);
             CreatePostProcessing();
             gameObject.AddComponent<GameUpdater>();
@@ -105,6 +105,13 @@ namespace MadeInArizona
             // DevVisuals is the sole writer, at startup and when any slider changes.
         }
 
+        /// <summary>
+        /// Soft (filtered) shadow edges, from Settings > Shadow detail. The render pipeline supports them, but every light
+        /// casts hard shadows unless the player asks for more detail, which keeps the presets looking as they always have.
+        /// </summary>
+        public static bool SoftShadows { get; private set; }
+        /// <summary>Shadow map size for the sun: the preset's own, or 4096 / 8192 at high / ultra shadow detail.</summary>
+        public static int SunShadowResolution(GameSettings s) => s.shadowDetail == 2 ? 8192 : s.shadowDetail == 1 ? 4096 : s.quality == 3 ? 4096 : 2048;
         /// <summary>Shadow atlas size for explosion, fire and muzzle lights at each graphics preset.</summary>
         public static int AdditionalShadowAtlas(int quality) => quality >= 2 ? 4096 : 1024;
 
@@ -116,9 +123,20 @@ namespace MadeInArizona
             QualitySettings.vSyncCount = s.frameSync == 0 ? 1 : 0;
             Application.targetFrameRate = s.frameSync == 1 ? 120 : -1;
             QualitySettings.globalTextureMipmapLimit = s.quality==0?2:s.quality==1?1:0;
-            QualitySettings.shadows = s.quality == 0 ? UnityEngine.ShadowQuality.Disable : UnityEngine.ShadowQuality.All;
-            QualitySettings.shadowDistance = new[] { 0f, 65f, 110f, 160f }[s.quality];
-            QualitySettings.shadowResolution = s.quality >= 2 ? UnityEngine.ShadowResolution.VeryHigh : UnityEngine.ShadowResolution.Medium;
+            s.shadowDetail = Mathf.Clamp(s.shadowDetail, 0, 2);
+            bool detailedShadows = s.shadowDetail > 0;
+            SoftShadows = detailedShadows;
+            QualitySettings.shadows = s.quality == 0 && !detailedShadows ? UnityEngine.ShadowQuality.Disable : UnityEngine.ShadowQuality.All;
+            // Detailed shadows spend the bigger map on the play area only: 110 m past the framing distance covers the
+            // view at full dynamic zoom (the Arizona Summer preset's 160 m spread its map over hills nobody sees).
+            QualitySettings.shadowDistance = detailedShadows ? 110f : new[] { 0f, 65f, 110f, 160f }[s.quality];
+            QualitySettings.shadowResolution = s.quality >= 2 || detailedShadows ? UnityEngine.ShadowResolution.VeryHigh : UnityEngine.ShadowResolution.Medium;
+            if (Sun)
+            {
+                Sun.shadows = detailedShadows ? LightShadows.Soft : LightShadows.Hard;
+                var sunData = Sun.GetUniversalAdditionalLightData();
+                if (sunData) sunData.softShadowQuality = s.shadowDetail == 2 ? SoftShadowQuality.High : SoftShadowQuality.Medium;
+            }
             QualitySettings.lodBias = new[] { .65f, 1f, 1.5f, 2f }[s.quality];
             var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             if (pipeline) {
@@ -126,7 +144,7 @@ namespace MadeInArizona
                 pipeline.shadowDistance = QualitySettings.shadowDistance;
                 CameraController.RefreshDepthEffects(); // re-adds the camera's backed-off distance
                 pipeline.msaaSampleCount = s.quality < 2 ? 1 : 4;
-                pipeline.mainLightShadowmapResolution = s.quality == 3 ? 4096 : 2048;
+                pipeline.mainLightShadowmapResolution = SunShadowResolution(s);
                 pipeline.maxAdditionalLightsCount = s.quality == 0 ? 0 : s.quality == 3 ? 8 : 4;
                 // Explosion and fire lights cast shadows on High Octane and Arizona Summer. A big fight puts up to 36
                 // point-light shadow maps in this atlas, and at 2048 URP halved their resolution. The lower presets'

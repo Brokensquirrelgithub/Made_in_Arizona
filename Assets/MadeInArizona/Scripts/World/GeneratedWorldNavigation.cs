@@ -15,6 +15,8 @@ namespace MadeInArizona
         const float RoadCost = 1, ShoulderCost = 1.8f, TrailCost = 2.6f, OpenCost = 5, WaterCost = 9;
         int navSize; float navStep;
         float[] navCost, navHeight;
+        /// <summary>Nodes on a bridge deck, which stands well above the river bed the heightfield holds there.</summary>
+        bool[] navDeck;
         float[] navG; int[] navParent; bool[] navClosed; int[] navStamp; int navSearch;
         readonly List<int> navHeap = new List<int>();
         readonly List<float> navHeapF = new List<float>();
@@ -26,7 +28,7 @@ namespace MadeInArizona
             int grid = Chunks * Cells; float step = size / grid;
             navSize = grid / NavStride + 1; navStep = step * NavStride;
             int count = navSize * navSize;
-            navCost = new float[count]; navHeight = new float[count];
+            navCost = new float[count]; navHeight = new float[count]; navDeck = new bool[count];
             navG = new float[count]; navParent = new int[count]; navClosed = new bool[count]; navStamp = new int[count];
             for (int z = 0; z < navSize; z++)
                 for (int x = 0; x < navSize; x++)
@@ -36,14 +38,18 @@ namespace MadeInArizona
                     if (!InsideVertex(gx, gz, step)) { navCost[i] = -1; continue; }
                     Vector2 p = new Vector2(-half + gx * step, -half + gz * step);
                     float road = RoadDistance(p), cost;
+                    // A road over the carved channel is a bridge deck: route at the deck's height, not the river bed's.
+                    if (road < 6.5f && OverRiver(p) && NearestRoad(p, out float deck) < 6.5f && deck > navHeight[i] + .9f)
+                    { navHeight[i] = deck; navDeck[i] = true; }
                     if (road < 6.5f || TownDistance(p) < 30) cost = RoadCost;
                     else if (road < 11) cost = ShoulderCost;
                     else if (TrailEdgeDistance(p) < 0) cost = TrailCost;
                     else cost = OpenCost;
                     if (cost > RoadCost && riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < riverWidth) cost = WaterCost;
-                    // Landforms and cover rocks are solid; the margin keeps routes from clipping their edges. Landforms also
-                    // block half a cell round them, so one lying between nodes on a coarse (large-map) grid is still avoided.
-                    if (ObstacleDistance(p) < 2.5f || LandformDistance(p) < Mathf.Max(2.5f, navStep * .5f)) cost = -1;
+                    // Landforms and cover rocks are solid; the margin keeps routes from clipping their edges. Both block half a
+                    // cell round them, so one lying between nodes on a coarse (large-map) grid is still avoided, and rocks
+                    // count their overhang past the planned circle.
+                    if (DrivingObstacleDistance(p) < Mathf.Max(2.5f, navStep * .5f)) cost = -1;
                     navCost[i] = cost;
                 }
         }
@@ -81,7 +87,9 @@ namespace MadeInArizona
         /// </summary>
         /// <param name="offRoad">Scales how much more than road the other ground costs: 1 keeps routes on the road network
         /// wherever it goes the right way; lower values let a vehicle cut across country rather than follow a winding road.</param>
-        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path, float offRoad = 1)
+        /// <param name="maxExpansions">Search budget in nodes; past it the search gives up as if there were no route
+        /// (keeps an unreachable goal from scanning the whole map during play).</param>
+        public bool FindPath(Vector3 from, Vector3 to, List<Vector3> path, float offRoad = 1, int maxExpansions = int.MaxValue)
         {
             path.Clear();
             BuildNavigation();
@@ -90,12 +98,13 @@ namespace MadeInArizona
             if (start < 0 || goal < 0) { path.Add(from); path.Add(to); return false; }
             navSearch++; navHeap.Clear(); navHeapF.Clear();
             Touch(start); navG[start] = 0; navParent[start] = -1; Push(start, Heuristic(start, goal));
-            bool found = false;
+            bool found = false; int expanded = 0;
             while (navHeap.Count > 0)
             {
                 int current = Pop();
                 if (navClosed[current]) continue;
                 navClosed[current] = true;
+                if (++expanded > maxExpansions) break;
                 if (current == goal) { found = true; break; }
                 int cx = current % navSize, cz = current / navSize;
                 for (int dz = -1; dz <= 1; dz++)
@@ -110,6 +119,9 @@ namespace MadeInArizona
                         if (navClosed[next]) continue;
                         float run = navStep * (dx != 0 && dz != 0 ? 1.41421f : 1);
                         float rise = Mathf.Abs(navHeight[next] - navHeight[current]);
+                        // Between a deck and the river bed below it there are parapets and piers: only along the road,
+                        // where the deck meets ground at its own level. Routes used to run under bridges into the piers.
+                        if (navDeck[current] != navDeck[next] && rise > 1.2f) continue;
                         // Elevation blockage: cliff walls and anything steeper than a car can climb.
                         if (rise > MaxDriveGrade * run) continue;
                         float grade = rise / run;
@@ -137,6 +149,31 @@ namespace MadeInArizona
                 path.Add(p); last = p;
             }
             path.Add(to);
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a car could drive the straight line between two points: no landform, cover rock, map edge or grade
+        /// steeper than the climb limit on the way (cliff walls between elevation levels). Hostiles check this before
+        /// spending an A* search on a detour. The first and last few metres are not checked for obstacles, so a car
+        /// already tucked against a rock still sees open ground ahead.
+        /// </summary>
+        public bool DirectDrivable(Vector3 from, Vector3 to)
+        {
+            if (heights == null) return true;
+            Vector2 a = XZ(from), b = XZ(to);
+            float length = Vector2.Distance(a, b);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(length / 4));
+            float stepLength = length / steps, previous = SampleHeight(from);
+            for (int i = 1; i <= steps; i++)
+            {
+                Vector2 p = Vector2.Lerp(a, b, i / (float)steps);
+                float h = SampleHeight(new Vector3(p.x, 0, p.y));
+                if (Mathf.Abs(h - previous) > MaxDriveGrade * stepLength * 1.15f) return false;
+                previous = h;
+                float along = i * stepLength;
+                if (along > 6 && length - along > 6 && (DrivingObstacleDistance(p) < 1 || !InOutline(p / size))) return false;
+            }
             return true;
         }
 

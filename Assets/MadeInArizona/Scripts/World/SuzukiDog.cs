@@ -4,7 +4,7 @@ using static MadeInArizona.WorldArt;
 namespace MadeInArizona
 {
     /// <summary>Suzuki is cosmetic, has no damage component or collision, and always returns safely to the garage.</summary>
-    public class SuzukiDog : MonoBehaviour
+    public partial class SuzukiDog : MonoBehaviour
     {
         Transform tail, head; readonly Transform[] legs=new Transform[4];
         Vector3 home;Vector3[] roamingRoute;float clock,pauseUntil;bool riding,sniffing;int cosmetic,waypoint,loopStart;
@@ -41,8 +41,9 @@ namespace MadeInArizona
             {
                 Shape("Eye",head,PrimitiveType.Sphere,new Vector3(side*.15f,.055f,.188f),Vector3.one*.085f,new Color(.12f,.63f,.95f));
                 Shape("Eye glint",head,PrimitiveType.Sphere,new Vector3(side*.15f+.012f,.07f,.217f),Vector3.one*.018f,Color.white);
-                var ear=Wedge("Pointed ear",head,new Vector3(side*.19f,.11f,-.03f),new Vector3(.19f,.34f,.16f),tan); ear.transform.localRotation=Quaternion.Euler(0,side*15,-side*13);
-                Wedge("Silver inner ear",ear.transform,new Vector3(0,.1f,.27f),new Vector3(.55f,.65f,.35f),new Color(.58f,.66f,.75f));
+                // Upright triangular husky ears with a silver inner face toward the front.
+                var ear=Pyramid("Pointed ear",head,new Vector3(side*.15f,.13f,-.02f),new Vector3(.17f,.3f,.09f),tan); ear.transform.localRotation=Quaternion.Euler(-6,side*12,-side*14);
+                Pyramid("Silver inner ear",ear.transform,new Vector3(0,.08f,.22f),new Vector3(.62f,.72f,.5f),new Color(.58f,.66f,.75f));
                 Shape("Black pupil",head,PrimitiveType.Sphere,new Vector3(side*.15f,.055f,.228f),Vector3.one*.034f,dark);
             }
             for(int i=0;i<4;i++)
@@ -79,21 +80,27 @@ namespace MadeInArizona
         void Update()
         {
             if(Time.timeScale<=0) return; clock+=Time.deltaTime;
-            if(tail) tail.localRotation=Quaternion.Euler(0,Mathf.Sin(clock*8)*27,Mathf.Sin(clock*8)*9);
+            float wag=IsWashing?13:8;
+            if(tail) tail.localRotation=Quaternion.Euler(0,Mathf.Sin(clock*wag)*27,Mathf.Sin(clock*wag)*9);
             bool walking=!riding&&roamingRoute!=null&&roamingRoute.Length>1&&clock>=pauseUntil;
-            if(walking)
+            // A dirty car in the garage: she fetches the hose and washes it (SuzukiDogWash).
+            bool washing=UpdateWash(ref walking);
+            if(washing){}
+            else if(walking)
             {
                 sniffing=false;
                 Vector3 target=roamingRoute[waypoint];
                 Vector3 delta=target-transform.localPosition;
                 delta.y=0;
                 if(delta.sqrMagnitude>.002f)transform.localRotation=Quaternion.Slerp(transform.localRotation,Quaternion.LookRotation(delta),Time.deltaTime*3.8f);
-                transform.localPosition=Vector3.MoveTowards(transform.localPosition,target,Time.deltaTime*.82f);
+                // A dusty car waiting: she trots the rest of her round to the hose instead of strolling.
+                transform.localPosition=Vector3.MoveTowards(transform.localPosition,target,Time.deltaTime*(WashPending?Trot:.82f));
                 if((transform.localPosition-target).sqrMagnitude<.025f)
                 {
                     int reached=waypoint;
                     waypoint++;if(waypoint>=roamingRoute.Length)waypoint=loopStart;
-                    if(reached<loopStart){pauseUntil=clock;sniffing=false;}
+                    if(reached==WashStartWaypoint&&WashPending){BeginWash();}
+                    else if(reached<loopStart||WashPending){pauseUntil=clock;sniffing=false;}
                     else
                     {
                         float pause=1.8f+Mathf.Abs(Mathf.Sin((waypoint+1)*2.17f+cosmetic))*3.2f;
@@ -102,7 +109,7 @@ namespace MadeInArizona
                 }
             }
             else if(clock>=pauseUntil)sniffing=false;
-            if(head)
+            if(head&&!washing)
             {
                 float pitch=sniffing?34+Mathf.Sin(clock*4.2f)*5:Mathf.Sin(clock*.8f)*5;
                 float yaw=sniffing?Mathf.Sin(clock*2.3f)*8:Mathf.Sin(clock*.6f)*17;

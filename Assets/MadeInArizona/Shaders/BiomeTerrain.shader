@@ -182,10 +182,12 @@ Shader "MadeInArizona/BiomeTerrain"
                     float foot=smoothstep(.1,.3,slope)*(1-smoothstep(.3,.5,slope));
                     albedo*=1-foot*.18*saturate(dot(i.n.xz,i.n.xz)*4);
                 }
-                // Grades above the car's 0.65 climb limit (normal.y < 0.84) use a dark,
-                // side-projected fractured face with bright horizontal seams. This begins at
-                // the actual traversal threshold, including slopes too shallow for cliffWeight.
+                // Grades above the car's 0.65 climb limit (normal.y < 0.84) wear the cliff-face set (array slice 14):
+                // layered sandstone with stepped ledges, joints and desert varnish, side-projected so the strata stay
+                // level, with its own normal and occlusion maps. Darker and redder than any drivable ground, so "too
+                // steep" still reads at a glance. It begins at the actual traversal threshold.
                 float blockedGrade=smoothstep(.14,.17,slope)*(1-_UseModelAlbedo);
+                float3 cliffBump=0;float cliffOcclusion=1;
                 UNITY_BRANCH if(_UseModelAlbedo>0)
                 {
                     // Pack rock: its own texture and colour, with a little large-scale variation so repeats don't match.
@@ -198,15 +200,30 @@ Shader "MadeInArizona/BiomeTerrain"
                 }
                 UNITY_BRANCH if(blockedGrade>.001)
                 {
-                    float3 an=abs(normalize(i.n));float2 side=an.xz/max(an.x+an.z,.001);
-                    float3 faceX=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.zy*.18,13).rgb;
-                    float3 faceZ=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,i.world.xy*.18+.41,13).rgb;
-                    float grain=dot(faceX*side.x+faceZ*side.y,float3(.299,.587,.114));
-                    float strata=sin(i.world.y*4.2+Fbm(p*.12)*3.5);
-                    float seam=smoothstep(.58,.88,strata);
-                    float3 warningRock=lerp(float3(.105,.12,.13),float3(.27,.29,.27),saturate(grain*1.8));
-                    warningRock=lerp(warningRock,float3(.65,.47,.24),seam*.72);
-                    albedo=lerp(albedo,warningRock,blockedGrade*(.82+.18*_UseGroundTextures));
+                    // Triplanar: two side projections keep the strata level on steep faces, and a top projection takes over
+                    // on the gentler part of the band, where a side projection alone stretched the rock into streaks.
+                    float3 an=abs(normalize(i.n));float3 tw=an*an*an*an;tw/=max(tw.x+tw.y+tw.z,.0001);
+                    // One tile spans about 11 m of face; a slow wobble keeps the repeats from lining up.
+                    float2 uvX=float2(i.world.z,i.world.y+Fbm(p*.02)*3)*.09,uvZ=float2(i.world.x,i.world.y+Fbm(p*.02+7)*3)*.09+.37,uvY=p*.09+.71;
+                    float4 faceX=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uvX,14);
+                    float4 faceZ=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uvZ,14);
+                    float4 faceY=SAMPLE_TEXTURE2D_ARRAY(_GroundAlbedoArray,sampler_GroundAlbedoArray,uvY,14);
+                    float4 bumpX=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uvX,14);
+                    float4 bumpZ=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uvZ,14);
+                    float4 bumpY=SAMPLE_TEXTURE2D_ARRAY(_GroundNormalArray,sampler_GroundAlbedoArray,uvY,14);
+                    float3 face=faceX.rgb*tw.x+faceY.rgb*tw.y+faceZ.rgb*tw.z;
+                    // Biome grade: warm sandstone in the desert and red rock, cooler weathered grey up on the plateau and Rim.
+                    float faceLuma=dot(face,float3(.299,.587,.114));
+                    float3 graded=lerp(lerp(faceLuma.xxx,face,.45)*float3(.92,.9,.88),face*float3(1.04,.94,.86),desert);
+                    // Darker than the drivable ground around it, with sunlit ledges kept bright enough to show the steps.
+                    float ledges=faceX.a*tw.x+faceY.a*tw.y+faceZ.a*tw.z;
+                    float3 cliffRock=graded*lerp(.5,.82,ledges);
+                    float cover=blockedGrade*(.82+.18*_UseGroundTextures);
+                    albedo=lerp(albedo,cliffRock,cover);
+                    // Tangent normals from the side projections: u runs along the face, v up it.
+                    float2 tX=bumpX.xy*2-1,tY=bumpY.xy*2-1,tZ=bumpZ.xy*2-1;
+                    cliffBump=(float3(0,tX.y,tX.x)*tw.x+float3(tY.x,0,tY.y)*tw.y+float3(tZ.x,tZ.y,0)*tw.z)*cover;
+                    cliffOcclusion=lerp(1,bumpX.b*tw.x+bumpY.b*tw.y+bumpZ.b*tw.z,cover);
                 }
                 // River bed (vertex alpha: 1 dry, .5 waterline, 0 deepest): rounded wet gravel with silt drifts under the
                 // water, darkening and turning olive with depth, plus a darker wet band just above the waterline.
@@ -238,7 +255,7 @@ Shader "MadeInArizona/BiomeTerrain"
                 float2 nx0=n0.xy*2-1,nx1=n1.xy*2-1,nx2=n2.xy*2-1;
                 float2 packNormal=(nx0*layerWeight.x+float2(nx1.y,-nx1.x)*layerWeight.y+float2(-nx2.y,nx2.x)*layerWeight.z)*_UseGroundTextures;
                 // Ground micro-relief is world-space and horizontal; on model rock faces it would only smear the facets.
-                float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22)*(1-_UseModelAlbedo*.9));
+                float3 n=normalize(i.n+(float3(-gx,0,-gz)*.72+float3(a.x,0,a.y)*.18+float3(b.x,0,b.y)*.11+float3(packNormal.x,0,packNormal.y)*.48)*(1-rock*.22)*(1-_UseModelAlbedo*.9)*(1-blockedGrade*.8)+cliffBump*1.1);
                 Light sun=GetMainLight(TransformWorldToShadowCoord(i.world));sun.shadowAttenuation*=CloudShadow(i.world);float ao=1,directAO=1;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor occlusion=GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(i.p));ao=occlusion.indirectAmbientOcclusion;directAO=occlusion.directAmbientOcclusion;
@@ -247,7 +264,7 @@ Shader "MadeInArizona/BiomeTerrain"
                 // Faint ground-only mottling, replaced by the real drifting cloud shadows (CloudShadows.hlsl) when they are on.
                 float cloudShade=lerp(lerp(.91,1.0,smoothstep(.38,.68,cloud)),1,saturate(_CloudShadowParams.x));
                 float packAO=n0.b*layerWeight.x+n1.b*layerWeight.y+n2.b*layerWeight.z;
-                ao*=lerp(1,lerp(.62,1,packAO),_UseGroundTextures*.72);
+                ao*=lerp(1,lerp(.62,1,packAO),_UseGroundTextures*.72)*cliffOcclusion;directAO*=lerp(1,cliffOcclusion,.6);
                 float3 lit=albedo*(SampleSH(n)*ao+sun.color*saturate(dot(n,sun.direction))*sun.shadowAttenuation*cloudShade*directAO);
                 // Sun caustics dancing on the submerged bed.
                 UNITY_BRANCH if(underwater>.001)
