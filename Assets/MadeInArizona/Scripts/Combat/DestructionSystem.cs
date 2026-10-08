@@ -11,7 +11,7 @@ namespace MadeInArizona
         [field: SerializeField] public bool Explosive { get; private set; }
         [field: SerializeField] public ExplosionKind Kind { get; private set; }
         [SerializeField] int score = 10;
-        [SerializeField] bool brittle;
+        [SerializeField] bool brittle, plowable, splinters;
         [SerializeField] float toppleMass;
         [SerializeField] Color debrisColor;
         /// <summary>Props up to this size (and brittle ones) break within two projectile hits.</summary>
@@ -46,6 +46,14 @@ namespace MadeInArizona
         /// </summary>
         public void MakeBrittle() { brittle = true; size = -1; }
         public bool Brittle => brittle;
+        /// <summary>
+        /// Cars drive straight through it at any size and speed without losing pace: loose rock, cacti and dead snags.
+        /// Brittle props always are; <see cref="MakePlowable"/> marks others.
+        /// </summary>
+        public bool Plowable => brittle || plowable;
+        public void MakePlowable() { plowable = true; }
+        /// <summary>Breaks into long wooden pieces (trunk sections and limbs) instead of toppling or crumbling: dead snags.</summary>
+        public void MakeSplinter() { splinters = true; plowable = true; toppleMass = 0; }
         /// <summary>Colour of the pieces, for props whose material has no base colour (shared scenery shaders).</summary>
         public void SetDebrisColor(Color color) { debrisColor = color; debrisColor.a = 1; }
         /// <summary>Instead of shattering, the prop topples as one heavy body of the given mass and fades (trees).</summary>
@@ -95,7 +103,8 @@ namespace MadeInArizona
                 Topple(bounds, hitPoint, push);
                 return;
             }
-            ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color, push);
+            if (splinters) Splinter(bounds, color, push);
+            else ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color, push);
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);
             if (Explosive)
             {
@@ -109,10 +118,28 @@ namespace MadeInArizona
         {
             if (IsDestroyed) return;
             IsDestroyed = true;
+            var bounds = WorldBounds;
+            Color color = debrisColor.a > 0 ? debrisColor : new Color(.53f, .33f, .19f);
             foreach (var renderer in GetComponentsInChildren<Renderer>()) renderer.enabled = false;
             foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
             ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);
+            // Guests see the same kind of pieces fly, though not the host's exact ones.
+            if (splinters) Splinter(bounds, color, Vector3.zero);
+            else if (brittle) ExplosionSystem.ScatterDebris(bounds.center, 4, 5, color);
             Destroy(gameObject, .05f);
+        }
+        /// <summary>A dead snag snaps into trunk sections and limbs that tumble away with whatever broke it.</summary>
+        void Splinter(Bounds bounds, Color color, Vector3 push)
+        {
+            float height = Mathf.Max(1.5f, bounds.size.y);
+            Color wood = Color.Lerp(color, new Color(.42f, .33f, .24f), .5f);
+            // Thick trunk sections from the lower half, thin limbs from the crown, then bark chips.
+            ExplosionSystem.ScatterPieces(new Vector3(bounds.center.x, bounds.min.y + height * .3f, bounds.center.z), 3.5f, 4, wood, push,
+                new Vector3(.22f, .22f, height * .2f), new Vector3(.34f, .34f, height * .32f), height * .25f);
+            ExplosionSystem.ScatterPieces(new Vector3(bounds.center.x, bounds.min.y + height * .7f, bounds.center.z), 5, 7, wood * 1.08f, push,
+                new Vector3(.06f, .06f, .6f), new Vector3(.12f, .12f, 1.5f), height * .3f);
+            ExplosionSystem.ScatterDebris(bounds.center, 4, 6, wood * .9f, push * .8f);
+            ExplosionSystem.Burst(new Vector3(bounds.center.x, bounds.min.y + .4f, bounds.center.z), new Color(.55f, .45f, .33f, .5f), 10, 2.2f);
         }
         /// <summary>
         /// A bullet, pellet or bolt strike. Small props break within two hits, so they soak up fire without slowing a car,

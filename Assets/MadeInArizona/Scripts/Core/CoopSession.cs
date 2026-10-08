@@ -17,7 +17,12 @@ namespace MadeInArizona
         public Vector2 move, aim;
         public float elevation;
         public bool primary, secondary, drift, boost, interact, swap;
+        /// <summary>Reverse button held, and whether the guest drives with shoulder reverse (no automatic stick reverse).</summary>
+        public bool reverse, manualReverse;
     }
+
+    /// <summary>One-off effects the host replicates to guests: things guests cannot work out from vehicle snapshots.</summary>
+    public enum CoopFx { BowlingLaunch = 1, BowlingStrike = 2 }
 
     /// <summary>
     /// A small host-authoritative bridge for the existing code-created world. Relay supplies the
@@ -36,7 +41,8 @@ namespace MadeInArizona
         const string MissionMessage = "mia.coop.mission.v1";
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
-        const int Protocol = 2;
+        const string FxMessage = "mia.coop.fx.v1";
+        const int Protocol = 3;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -96,6 +102,11 @@ namespace MadeInArizona
             public float health, maximum, boost, rpm, throttle, yawRate;
             public bool boosting;
             public int fieldAmmo;
+            // Death ray beam (continuous while held) and the car on this one's tow cable (0 = none).
+            public bool beam;
+            public Vector3 beamEnd;
+            public float beamHeat;
+            public int tow;
         }
         [Serializable] sealed class PickupPacket
         {
@@ -115,6 +126,11 @@ namespace MadeInArizona
             public Vector3 position;
             public float radius;
             public int kind;
+        }
+        [Serializable] sealed class FxPacket
+        {
+            public int kind;
+            public Vector3 position, velocity;
         }
         [Serializable] sealed class PropBreakPacket
         {
@@ -159,6 +175,7 @@ namespace MadeInArizona
             messages.RegisterNamedMessageHandler(MissionMessage, ReceiveMission);
             messages.RegisterNamedMessageHandler(TuningMessage, ReceiveTuning);
             messages.RegisterNamedMessageHandler(PinStateMessage, ReceivePinState);
+            messages.RegisterNamedMessageHandler(FxMessage, ReceiveFx);
             RegisterBalanceMessages(messages);
             RegisterDraftMessages(messages);
         }
@@ -392,6 +409,8 @@ namespace MadeInArizona
                 packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
+            car.Weapons.SetNetworkBeam(packet.beam, packet.beamEnd, packet.beamHeat);
+            if (packet.tow > 0 && proxies.TryGetValue(packet.tow, out var towed) && towed) TowLink.ShowNetwork(car, towed);
             seenAt[packet.id] = Time.unscaledTime;
             if (packet.player && packet.owner == (int)network.LocalClientId && GameManager.Instance.Player != car)
                 GameManager.Instance.SetCoopPlayer(car);
@@ -422,6 +441,26 @@ namespace MadeInArizona
             foreach (ulong clientId in network.ConnectedClientsIds)
                 if (clientId != NetworkManager.ServerClientId)
                     Send(ProjectileMessage, clientId, packet, NetworkDelivery.Unreliable);
+        }
+
+        /// <summary>Host: sends a one-off effect to every guest (bowling balls, which are field ordnance the snapshots miss).</summary>
+        public void PublishFx(CoopFx kind, Vector3 position, Vector3 velocity)
+        {
+            if (!IsHost) return;
+            var packet = new FxPacket { kind = (int)kind, position = position, velocity = velocity };
+            foreach (ulong clientId in network.ConnectedClientsIds)
+                if (clientId != NetworkManager.ServerClientId)
+                    Send(FxMessage, clientId, packet, NetworkDelivery.Unreliable);
+        }
+
+        void ReceiveFx(ulong sender, FastBufferReader reader)
+        {
+            if (!IsClient || sender != NetworkManager.ServerClientId || !remoteWorldReady || remoteMode == 0) return;
+            reader.ReadValueSafe(out string json);
+            var packet = JsonUtility.FromJson<FxPacket>(json);
+            if (packet == null) return;
+            if (packet.kind == (int)CoopFx.BowlingLaunch) FieldOrdnance.RollReplica(packet.position, packet.velocity);
+            else if (packet.kind == (int)CoopFx.BowlingStrike) FieldOrdnance.ReplicaStrike(packet.position, packet.velocity);
         }
 
         public void PublishExplosion(Vector3 position, float radius, ExplosionKind kind)
@@ -554,6 +593,7 @@ namespace MadeInArizona
                     var input = InputManager.Instance;
                     var controls = new CoopControls { move = input.Move, aim = input.Aim, elevation = input.AimElevation,
                         primary = input.Primary, secondary = input.Secondary, drift = input.Drift, boost = input.Boost,
+                        reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
                     Send(InputMessage, NetworkManager.ServerClientId, new InputPacket { controls = controls }, NetworkDelivery.Unreliable);
                     queuedInteract = queuedSwap = false;
@@ -623,7 +663,11 @@ namespace MadeInArizona
                         maximum = car.Damage.MaxHealth, boost = car.BoostCharge,
                         weapon = car.Weapons && car.Weapons.GarageWeapon ? car.Weapons.GarageWeapon.id : "",
                         fieldWeapon = car.Weapons && car.Weapons.FieldWeapon ? car.Weapons.FieldWeapon.id : "",
-                        fieldAmmo = car.Weapons ? car.Weapons.FieldAmmo : 0 };
+                        fieldAmmo = car.Weapons ? car.Weapons.FieldAmmo : 0,
+                        beam = car.Weapons && car.Weapons.BeamActive,
+                        beamEnd = car.Weapons ? car.Weapons.BeamEnd : Vector3.zero,
+                        beamHeat = car.Weapons ? car.Weapons.BeamHeat : 0,
+                        tow = car.Towing && vehicleIds.TryGetValue(car.Towing, out int towId) ? towId : 0 };
                     foreach (ulong clientId in network.ConnectedClientsIds)
                         if (clientId != NetworkManager.ServerClientId)
                             Send(VehicleMessage, clientId, packet, NetworkDelivery.Unreliable);

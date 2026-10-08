@@ -133,3 +133,36 @@ The proposed [Customizable Rocks and Cliffs PBR - Sample](https://assetstore.uni
 The Windows x64 build succeeded with zero errors. The native enemy-balance suite passed **20 checks**, including fourfold mission/trial/hideout populations, 0.2 enemy health, preserved player/escort health, live health tuning, larger kill gates, unique boss companions and off-screen patrol squads capped at eight. [Enemy results](Validation/enemy-balance-results.txt). Fixtures pause/freeze encounters, unlock missions in the isolated test save and use controlled kills; these checks verify rules and progression gates rather than natural combat balance.
 
 The imported-weapon-audio suite passed **20 checks**, covering all 13 weapon references, actual player/enemy primary fire, enemy rockets, imported ordnance explosions and weapon-volume muting. [Weapon audio results](Validation/weapon-audio-results.txt). All 40 imported WAV payload hashes match the downloaded package, and every file decoded successfully. The final rebuild only corrected enemy-test fixtures; production audio was unchanged after its passing run. At the user's request, broader campaign/combat regression reruns were deferred to manual playtesting to conserve remaining usage.
+
+## Playtest revision — 6 October 2026
+
+Windows x64 builds (built to a separate folder with `MIA_BUILD_ROOT`) succeeded with zero errors. Native Windows/D3D11 suites, run one after another:
+
+| Suite | Result |
+|---|---|
+| `-miaSmokeTest -miaCombatTest -miaDevTest` | 44 / 44 pass |
+| `-miaSmokeTest -miaHandlingTest` | 45 / 45 pass |
+| `-miaSmokeTest -miaWorldTest` | 46 / 46 pass (cover 42, base rocks 359, landform rules hold) |
+| `-miaSmokeTest -miaMountainTest` | 12 / 12 pass at 1600, 3200 and 4800 m |
+| `-miaSmokeTest -miaEnemyBalanceTest` | 20 / 20 pass |
+| `-miaSmokeTest -miaReachabilityTest` | 24 / 24 pass |
+| `-miaSmokeTest -miaGarageReview` (new) | 8 / 8 pass: garage ramps face outward, Suzuki washes a dusty car (dust 1.00 to 0.44 in one pass), cliff found, death ray stays on while held and goes out on release |
+| `-miaSmokeTest -miaEscortTest` | Failed 1 / 3 in this run; fixed on 7 October (see below). The failure was partly test interference and partly real route-following bugs on larger maps. |
+
+The first world and mountain runs placed no cover or base rocks at all: trail distances were capped at 8 m, below the clearance the new 13 m+ rocks need. `TrailQueryReach` is now 16 m. The garage review captures (orbit, close-ups, wash, cliff, clouds on/off, beam) were inspected by eye. They confirmed the ramp, siding, lift-arm, bench, board, shelving and CRT fixes, and showed two further defects that were fixed: sign text drawn through walls, and Suzuki's boxy ears. Not verified: listening to the new sounds (their spectrograms were checked offline), real gamepad input for shoulder reverse and nitro-on-A, live multi-PC co-op for the replicated beam, tow cable and bowling ball, and the 8K shadow option's cost on target hardware.
+
+## Escort routing — 7 October 2026
+
+The escort suite failed for two reasons. It inherited whatever map the previous suite saved, and run after the mountain suite that was a 4.8 km map, too long for its time limit. It now pins seed 173 at 1600 m. Larger maps (`-miaEscortSize=3200`/`4800`) also showed real route-following bugs: circling a drop beyond a ring of cover rocks, a navigation grid too coarse for the rocks, overshooting drops, staying wedged against a parked car, and routes under bridges into piers. All are fixed; see [development notes](DEVELOPMENT.md).
+
+| Suite (Windows player, run one after another) | Result |
+|---|---|
+| `-miaEscortTest` (mission 3, 1600 m) | 3 / 3, 107 s, no loop samples |
+| `-miaEscortTest -miaEscortSize=3200` | 3 / 3, 111 s, no loop samples (was 158) |
+| `-miaEscortTest -miaEscortSize=4800` | 3 / 3, 165 s, no loop samples (was 46–130) |
+| `-miaEscortTest -miaEscortMission=8` | 3 / 3, 127 s, no loop samples |
+| `-miaReachabilityTest` | 24 / 24 |
+| `-miaWorldTest` | 46 / 46 |
+
+The navigation margin change was also checked with `-miaMountainTest` (12 / 12). An intermediate version that simply lowered the van's stuck threshold broke mission 8, and was replaced by the obstacle-aware rule above. These are single runs; route following involves physics and some randomness, so occasional variation between runs is possible.
+

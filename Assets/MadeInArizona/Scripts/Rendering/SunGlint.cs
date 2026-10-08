@@ -5,9 +5,9 @@ namespace MadeInArizona
     /// <summary>
     /// Feeds the sun-glint shader code (Shaders/SunGlint.hlsl) used by car paint, reflective props and the river:
     /// the Dev Tuning > Reflections values, the procedural wear and micro-normal maps, and a virtual perspective eye.
-    /// The gameplay camera is orthographic, so every pixel shares one fixed view direction; reflections of the sun
-    /// are instead evaluated from an eye point behind the camera, which makes highlights slide and flash across
-    /// surfaces as the camera travels.
+    /// With the orthographic camera every pixel shares one fixed view direction, so reflections of the sun are
+    /// evaluated from an eye point behind the camera instead, which makes highlights slide and flash across surfaces
+    /// as the camera travels. The perspective camera style uses the camera itself.
     /// </summary>
     public static class SunGlint
     {
@@ -35,7 +35,9 @@ namespace MadeInArizona
         public static void UpdateEye(Transform camera)
         {
             if (!camera) { Shader.SetGlobalVector("_GlintEye", Vector4.zero); return; }
-            Vector3 eye = camera.position - camera.forward * EyeBack;
+            // The perspective camera style is a real eye already; only the orthographic lens needs the stand-in behind it.
+            var lens = camera.GetComponent<Camera>();
+            Vector3 eye = lens && !lens.orthographic ? camera.position : camera.position - camera.forward * EyeBack;
             Shader.SetGlobalVector("_GlintEye", new Vector4(eye.x, eye.y, eye.z, 1));
         }
 

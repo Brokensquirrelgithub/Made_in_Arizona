@@ -26,6 +26,8 @@ namespace MadeInArizona
             var g=Shape("Faceted sandstone",parent,PrimitiveType.Sphere,pos,scale,new Color(.47f+hue,.26f+hue*.6f,.17f+hue*.3f),true).transform;
             g.localRotation=Quaternion.Euler(13,scale.x*28,24);
             MakeBreakable(g,Mathf.Clamp(12+scale.magnitude*3,16,30),false,ExplosionKind.Ammunition,3);
+            // Loose sandstone: cars plough straight through it whatever its size.
+            g.GetComponent<DestructionSystem>().MakePlowable();
             return g;
         }
         public static Transform Propane(Transform parent,Vector3 pos, bool large = false)

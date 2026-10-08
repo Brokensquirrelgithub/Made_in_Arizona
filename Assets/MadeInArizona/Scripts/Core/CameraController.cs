@@ -23,6 +23,12 @@ namespace MadeInArizona
         /// </summary>
         public static float DepthOffset { get; private set; }
         const float Headroom = 42f; // two elevation levels (2 x 13 m) plus a tall pine above the car
+        /// <summary>
+        /// Vertical field of view for the optional perspective gameplay camera (Settings > Graphics &amp; Camera). The
+        /// lens keeps the orthographic angle and stands back until the car's surroundings fill the same height on
+        /// screen, so switching styles keeps the framing at the car while adding depth toward the top of the screen.
+        /// </summary>
+        public const float PerspectiveFov = 45f;
         float shake, dynamicZoom = 1, dynamicZoomVelocity, dynamicZoomHoldUntil;
         /// <summary>Garage orbit around the car: right-mouse drag, Q / E, or the right stick.</summary>
         float garageYaw, manualOrbitUntil;
@@ -35,6 +41,13 @@ namespace MadeInArizona
         /// </summary>
         const float MaxLead = 4f, LeadSmoothing = .22f;
         Vector3 lead, leadVelocity; Rigidbody targetBody; Transform leadTarget;
+        /// <summary>
+        /// Terrain sway (Settings > Graphics &amp; Camera): the camera arm tips a few degrees as the car climbs, dips and
+        /// travels, plus a slow drift, so the orthographic view picks up parallax and hills read as hills. Degrees at
+        /// full setting; the default of 50% keeps it to about +/-3.
+        /// </summary>
+        const float SwayPitch = 6.5f, SwayYaw = 3.5f, SwaySmoothing = .55f;
+        Vector2 sway, swayVelocity; float swayClock;
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
         void Start()
         {
@@ -49,6 +62,7 @@ namespace MadeInArizona
         {
             Position(false);
             var game = GameManager.Instance;
+            TimeOfDay.Tick();
             CloudShadows.Tick(game && game.State != GameState.Garage && game.State != GameState.MainMenu);
         }
         void Position(bool snap)
@@ -60,6 +74,7 @@ namespace MadeInArizona
             // the mission board) turns around the car, so it stays framed the same way from every side.
             Quaternion orbit = garage ? Quaternion.Euler(0, garageYaw, 0) : Quaternion.identity;
             var offset = garage ? orbit * new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
+            if (!garage) offset = Sway(snap) * offset;
             // Offset the garage composition so the car sits to the right of the mission board.
             var focus = Target.position + (garage ? orbit * new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
             FocusPoint = focus; HasFocus = true;
@@ -67,12 +82,17 @@ namespace MadeInArizona
             var desired = focus + offset;
             if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+9);
             var rotation = Quaternion.LookRotation((focus-desired).normalized, Vector3.up);
-            view.orthographic = true;
+            bool perspective = !garage && GameManager.Instance.Save != null && GameManager.Instance.Save.settings.perspectiveCamera;
+            view.orthographic = !perspective;
+            if (perspective) view.fieldOfView = PerspectiveFov;
+            // The ortho lens can sit just behind scenery; a perspective lens is always tens of metres out, and a
+            // farther near plane keeps depth precision for roads and decals across the deeper view.
+            view.nearClipPlane = perspective ? 1f : .2f;
             float zoom = Mathf.Clamp(DevTuning.Current.cameraZoom, 8f, 40f);
             float size = garage ? 10f * zoom / 21f : zoom;
             // Preserve vertical play space at ultrawide and playable horizontal space at narrow aspects.
             size *= Mathf.Max(1, 1.55f / view.aspect);
-            UpdateDynamicZoom(garage, snap, focus, rotation, size);
+            UpdateDynamicZoom(garage, perspective, snap, focus, rotation, size);
             size *= dynamicZoom;
             // Death sequence: close in on the wreck.
             if (!garage && GameManager.Instance.Dying) size *= Mathf.Lerp(1, .68f, Mathf.SmoothStep(0, 1, (Time.unscaledTime - GameManager.Instance.DyingStarted) / 1.4f));
@@ -80,20 +100,32 @@ namespace MadeInArizona
             // Back the lens off far enough that the bottom screen edge clears Headroom metres above the car.
             Vector3 forward = rotation * Vector3.forward;
             float extra = 0;
-            if (!garage)
+            if (perspective)
+            {
+                // The smoothed orthographic size doubles as the height to frame at the car; stand back until it fits.
+                float distance = view.orthographicSize / Mathf.Tan(PerspectiveFov * .5f * Mathf.Deg2Rad);
+                desired = focus - forward * distance;
+                // Stay above tall pines on higher ground behind the car; a lens among them would fill the screen.
+                if (GeneratedWorld.Active) desired.y = Mathf.Max(desired.y, GeneratedWorld.HeightAt(desired) + 24);
+                rotation = Quaternion.LookRotation((focus - desired).normalized, Vector3.up);
+                forward = rotation * Vector3.forward;
+                // Not a lens back-off: shadows are still measured from the car, and hearing stays at the 40 m framing.
+                extra = distance - offset.magnitude;
+            }
+            else if (!garage)
             {
                 float sinPitch = Mathf.Max(.2f, -forward.y), cosPitch = Mathf.Sqrt(1 - sinPitch * sinPitch);
                 float needed = (Mathf.Max(size, view.orthographicSize) * cosPitch + Headroom) / sinPitch + 3;
                 extra = Mathf.Max(0, needed - Vector3.Distance(focus, desired));
             }
-            DepthOffset = extra;
-            desired -= forward * extra;
+            DepthOffset = Mathf.Max(0, extra);
+            if (!perspective) desired -= forward * extra;
             transform.position = snap ? desired : Vector3.SmoothDamp(transform.position, desired, ref velocity, garage ? .22f : .13f, Mathf.Infinity, Time.unscaledDeltaTime);
             transform.rotation = rotation;
             SunGlint.UpdateEye(transform);
-            view.farClipPlane = 450 + extra;
+            view.farClipPlane = 450 + Mathf.Max(0, extra);
             if (listener) listener.SetPositionAndRotation(transform.position + forward * extra, rotation);
-            ApplyDepthOffset(extra);
+            ApplyDepthOffset(DepthOffset);
             shake = Mathf.MoveTowards(shake, 0, Time.unscaledDeltaTime * 2.5f);
             if (!garage && shake > 0) transform.position += Random.insideUnitSphere * shake * GameManager.Instance.Save.settings.shake * Mathf.Clamp(DevTuning.Current.shake, 0f, 3f) * .35f;
         }
@@ -112,6 +144,28 @@ namespace MadeInArizona
             if (snap) { lead = wanted; leadVelocity = Vector3.zero; }
             else lead = Vector3.SmoothDamp(lead, wanted, ref leadVelocity, LeadSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
             return lead;
+        }
+
+        /// <summary>Rotation applied to the gameplay camera arm for the terrain-sway option (identity when it is off).</summary>
+        Quaternion Sway(bool snap)
+        {
+            var game = GameManager.Instance;
+            float amount = game.Save != null ? Mathf.Clamp01(game.Save.settings.cameraSway) : 0;
+            Vector2 wanted = Vector2.zero;
+            if (amount > 0 && !game.Dying && game.IsPlaying)
+            {
+                swayClock += Time.unscaledDeltaTime;
+                Vector3 velocity = targetBody ? targetBody.linearVelocity : Vector3.zero;
+                // Climbing lowers the arm to look along the slope; heading up-screen lowers it to look ahead; sideways
+                // travel swings it a little. A slow drift keeps some parallax even when parked.
+                float pitch = -Mathf.Clamp(velocity.y / 4, -1, 1) * .55f - Mathf.Clamp(velocity.z / 28, -1, 1) * .35f + Mathf.Sin(swayClock * .39f) * .18f;
+                float yaw = Mathf.Clamp(velocity.x / 28, -1, 1) * .7f + Mathf.Sin(swayClock * .23f + 1.3f) * .3f;
+                wanted = new Vector2(pitch * SwayPitch, yaw * SwayYaw) * amount;
+            }
+            // Paused: hold the current angle.
+            if (snap) { sway = wanted; swayVelocity = Vector2.zero; }
+            else if (game.IsPlaying || game.Dying) sway = Vector2.SmoothDamp(sway, wanted, ref swayVelocity, SwaySmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
+            return Quaternion.AngleAxis(sway.y, Vector3.up) * Quaternion.AngleAxis(sway.x, Vector3.right);
         }
 
         void OrbitGarage()
@@ -149,7 +203,7 @@ namespace MadeInArizona
         /// current aspect. Zooming out is quicker than zooming in, and a short hold prevents pumping when
         /// an enemy hovers on the margin.
         /// </summary>
-        void UpdateDynamicZoom(bool garage, bool snap, Vector3 focus, Quaternion rotation, float baseSize)
+        void UpdateDynamicZoom(bool garage, bool perspective, bool snap, Vector3 focus, Quaternion rotation, float baseSize)
         {
             float target = 1;
             var game = GameManager.Instance;
@@ -160,12 +214,15 @@ namespace MadeInArizona
                 float usable = 1 - 2 * Mathf.Clamp(tuning.dynamicZoomMargin, .05f, .35f);
                 var inverse = Quaternion.Inverse(rotation);
                 float aspect = Mathf.Max(.1f, view.aspect);
+                // Perspective: points beyond the car shrink on screen and nearer ones grow, measured at the lens distance.
+                float depth = baseSize * dynamicZoom / Mathf.Tan(PerspectiveFov * .5f * Mathf.Deg2Rad);
                 foreach (var vehicle in VehicleController.Active)
                 {
                     if (!vehicle || vehicle.IsPlayer || vehicle.Damage == null || vehicle.Damage.IsDead) continue;
                     var ai = vehicle.GetComponent<EnemyAI>();
                     if (ai == null || ai.IsFriendly) continue;
                     Vector3 local = inverse * (vehicle.transform.position - focus);
+                    if (perspective) { float scale = depth / Mathf.Max(1, depth + local.z); local.x *= scale; local.y *= scale; }
                     // Size needed for this enemy to sit inside the unmarginned part of the screen.
                     float required = Mathf.Max(Mathf.Abs(local.y), Mathf.Abs(local.x) / aspect) / usable / baseSize;
                     // Distant enemies well beyond the maximum pull-back are ignored rather than pinning the camera out.

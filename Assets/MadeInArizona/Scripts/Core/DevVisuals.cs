@@ -10,9 +10,6 @@ namespace MadeInArizona
     {
         /// <summary>Far-blur eye-depth range (start, full, radius) for the original 40 m camera framing.</summary>
         public static Vector4 OrthoDof = new Vector4(43f, 64f, 0f, 0f);
-        static readonly Color DefaultAmbientSky = new Color(.70f, .80f, .92f);
-        static readonly Color DefaultAmbientEquator = new Color(.68f, .59f, .45f);
-        static readonly Color DefaultAmbientGround = new Color(.44f, .35f, .25f);
         static readonly FieldInfo AmbientOcclusionSettings = typeof(ScreenSpaceAmbientOcclusion)
             .GetField("m_Settings", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -28,6 +25,15 @@ namespace MadeInArizona
             SunGlint.Apply(tuning);
         }
 
+        /// <summary>The time-of-day part of <see cref="Apply"/> (sun, sky, haze and grading), cheap enough for every frame of a transition.</summary>
+        public static void ApplyTimeOfDay()
+        {
+            var tuning = DevTuning.Current;
+            if (tuning == null) return;
+            ApplyPostProcessing(tuning);
+            ApplyLighting(tuning);
+        }
+
         static void ApplyPostProcessing(DevTuning tuning)
         {
             var volume = GameManager.Instance ? GameManager.Instance.PresentationVolume : null;
@@ -38,9 +44,10 @@ namespace MadeInArizona
             tonemap.active = true;
             tonemap.mode.Override(TonemappingMode.Neutral);
 
+            var look = TimeOfDay.Current;
             var bloom = GetOrAdd<Bloom>(profile);
             bloom.active = GameManager.Instance.Save.settings.quality > 0 && tuning.bloom > 0f;
-            bloom.intensity.Override(Mathf.Clamp(tuning.bloom, 0f, 10f));
+            bloom.intensity.Override(Mathf.Clamp(tuning.bloom * (1 + look.bloom), 0f, 10f));
             // High threshold: ordinary sunlit surfaces stay crisp and only HDR highlights (sun glints, fire) bloom.
             bloom.threshold.Override(Mathf.Clamp(tuning.bloomThreshold, .1f, 10f));
             bloom.scatter.Override(.72f);
@@ -52,9 +59,20 @@ namespace MadeInArizona
 
             var color = GetOrAdd<ColorAdjustments>(profile);
             color.active = true;
-            color.postExposure.Override(Mathf.Clamp(tuning.exposure, -10f, 10f));
-            color.contrast.Override(Mathf.Clamp(tuning.contrast, -100f, 100f));
-            color.saturation.Override(Mathf.Clamp(tuning.saturation, -100f, 100f));
+            color.postExposure.Override(Mathf.Clamp(tuning.exposure + look.exposure, -10f, 10f));
+            color.contrast.Override(Mathf.Clamp(tuning.contrast + look.contrast, -100f, 100f));
+            color.saturation.Override(Mathf.Clamp(tuning.saturation + look.saturation, -100f, 100f));
+
+            // Sunset grading: a warmer white balance, and split toning that cools the shadows and warms the highlights.
+            var balance = GetOrAdd<WhiteBalance>(profile);
+            balance.active = look.temperature != 0 || look.tint != 0;
+            balance.temperature.Override(look.temperature);
+            balance.tint.Override(look.tint);
+            var toning = GetOrAdd<SplitToning>(profile);
+            toning.active = look.shadowTone != look.highlightTone;
+            toning.shadows.Override(look.shadowTone);
+            toning.highlights.Override(look.highlightTone);
+            toning.balance.Override(-10f);
 
             var chromatic = GetOrAdd<ChromaticAberration>(profile);
             chromatic.active = tuning.chromatic > 0f;
@@ -81,32 +99,40 @@ namespace MadeInArizona
             CameraController.RefreshDepthEffects();
 
             var vignette = GetOrAdd<Vignette>(profile);
-            vignette.active = tuning.vignette > 0f;
-            vignette.intensity.Override(Mathf.Clamp01(tuning.vignette));
+            float vignetteAmount = Mathf.Clamp01(tuning.vignette + look.vignette);
+            vignette.active = vignetteAmount > 0f;
+            vignette.intensity.Override(vignetteAmount);
             vignette.color.Override(Color.black);
             vignette.center.Override(new Vector2(.5f, .5f));
             vignette.rounded.Override(true);
-            vignette.smoothness.Override(Mathf.Lerp(.48f, .78f, Mathf.Clamp01(tuning.vignette)));
+            vignette.smoothness.Override(Mathf.Lerp(.48f, .78f, vignetteAmount));
         }
 
         static void ApplyLighting(DevTuning tuning)
         {
+            // Midday or sunset (TimeOfDay): sun height and colour, the sky's fill light, haze and background.
+            var look = TimeOfDay.Current;
             if (GameManager.Instance != null && GameManager.Instance.Sun != null)
             {
-                GameManager.Instance.Sun.color = new Color(1f, .95f, .83f);
-                GameManager.Instance.Sun.intensity = 2.6f * Mathf.Clamp(tuning.sunlight, 0f, 3f);
+                GameManager.Instance.Sun.transform.rotation = look.sun;
+                GameManager.Instance.Sun.color = look.sunColor;
+                GameManager.Instance.Sun.intensity = look.sunIntensity * Mathf.Clamp(tuning.sunlight, 0f, 3f);
                 RenderSettings.sun = GameManager.Instance.Sun;
             }
 
             float ambient = Mathf.Clamp(tuning.ambient, 0f, 3f);
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = DefaultAmbientSky * ambient;
-            RenderSettings.ambientEquatorColor = DefaultAmbientEquator * ambient;
-            RenderSettings.ambientGroundColor = DefaultAmbientGround * ambient;
+            RenderSettings.ambientSkyColor = look.ambientSky * ambient;
+            RenderSettings.ambientEquatorColor = look.ambientEquator * ambient;
+            RenderSettings.ambientGroundColor = look.ambientGround * ambient;
             RenderSettings.fog = tuning.haze > 0f;
-            RenderSettings.fogColor = new Color(.80f, .76f, .65f);
+            RenderSettings.fogColor = look.fog;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = Mathf.Clamp(tuning.haze, 0f, .03f);
+            RenderSettings.fogDensity = Mathf.Clamp(tuning.haze * look.fogScale, 0f, .03f);
+            var camera = CameraController.Instance ? CameraController.Instance.GetComponent<Camera>() : Camera.main;
+            if (camera) camera.backgroundColor = look.background;
+            Shader.SetGlobalVector("_SkySunset", new Vector4(Mathf.SmoothStep(0, 1, TimeOfDay.Blend), 0, 0, 0));
+            TimeOfDay.ApplySky(Mathf.SmoothStep(0, 1, TimeOfDay.Blend), TimeOfDay.Settled);
         }
 
         static T GetOrAdd<T>(VolumeProfile profile) where T : VolumeComponent

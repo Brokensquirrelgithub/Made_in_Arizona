@@ -72,6 +72,13 @@ namespace MadeInArizona
         public int Gear { get; private set; } = 1;
         /// <summary>0–1 blend of the player's drift handling; eases out over the tuned recovery time.</summary>
         public float DriftBlend { get; private set; }
+        /// <summary>
+        /// The car holding this one on a tow-hook cable (<see cref="TowLink"/>). A towed car slides sideways freely so it
+        /// can be whipped round, and a hard hit into anything solid while towed wrecks it.
+        /// </summary>
+        public VehicleController TowedBy { get; internal set; }
+        /// <summary>The car this one is currently towing, for co-op cable replication.</summary>
+        public VehicleController Towing { get; internal set; }
         /// <summary>AI pace multiplier on acceleration and top speed, raised by EnemyAI to catch up from off screen.</summary>
         public float Pace { get; set; } = 1;
         Vector2 aiMove;
@@ -123,6 +130,8 @@ namespace MadeInArizona
         float stuckTime;
         /// <summary>How far past full droop a wheel may be and still count as supporting the car sideways.</summary>
         const float SideSupportMargin = .3f;
+        /// <summary>Steepest face (about 53°) a suspension spring pushes against. Drivable grades top out near 33°.</summary>
+        const float MinSpringNormal = .6f;
         /// <summary>Steepest surface (45°) that counts as ground to rest on; cliff faces are walls, not support.</summary>
         const float MinSupportNormal = .7f;
         /// <summary>Tilt probes start this far above each suspension point, so ground rising ahead on a climb is still read.</summary>
@@ -200,13 +209,16 @@ namespace MadeInArizona
             Weapons.Initialize(this);
             ExplosionSystem.IgnoreVehicleCollisions(this);
             VehicleDamage.IgnoreWrecks(this);
-            // Tyre smoke, skid marks and gravel spray; dust that builds up on the body.
+            // Tyre smoke, skid marks and gravel spray; dust that builds up on the body; headlights at sunset.
             var tires = GetComponent<TireEffects>();
             if (tires == null) tires = gameObject.AddComponent<TireEffects>();
             tires.Bind(this);
             var dust = GetComponent<VehicleDust>();
             if (dust == null) dust = gameObject.AddComponent<VehicleDust>();
             dust.Bind(this, definition);
+            var lights = GetComponent<VehicleLights>();
+            if (lights == null) lights = gameObject.AddComponent<VehicleLights>();
+            lights.Bind(this);
             initialized = true;
         }
         public static Transform FindChild(Transform parent, string childName)
@@ -248,6 +260,13 @@ namespace MadeInArizona
                 Quaternion rotation = Quaternion.Slerp(transform.rotation, networkRotation, blend);
                 transform.SetPositionAndRotation(position, rotation);
                 if (Body) { Body.position = position; Body.rotation = rotation; }
+                // Guests do not simulate the host's cars; slide state for tyre audio is read from the replicated motion.
+                Vector3 flat = new Vector3(networkVelocity.x, 0, networkVelocity.z);
+                float sideways = Mathf.Abs(Vector3.Dot(flat, transform.right));
+                DriftAmount = Mathf.Clamp01(sideways / 12);
+                SideSlip = Mathf.MoveTowards(SideSlip, Mathf.Clamp01((sideways - 1.5f) / 5f), Time.unscaledDeltaTime * 6);
+                Surface = WorldBuilder.SurfaceAt(transform.position);
+                Grounded = true;
                 if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying) AnimateBody();
                 return;
             }
@@ -287,6 +306,11 @@ namespace MadeInArizona
             }
             CoopControls remote = FreshRemoteControls;
             Vector2 input = IsPlayer && HasRemoteInput ? remote.move : IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
+            // Shoulder reverse (Settings > Controls): the button selects reverse and the stick never does. Held with the
+            // stick centred it backs straight up; with the stick pushed, the tail swings toward that direction.
+            bool reverseHeld = IsPlayer && (HasRemoteInput ? remote.reverse : InputManager.Instance != null && InputManager.Instance.Reverse);
+            bool manualReverse = IsPlayer && (HasRemoteInput ? remote.manualReverse : InputManager.Instance != null && InputManager.Instance.ManualReverse);
+            if (reverseHeld && input.sqrMagnitude < .04f) input = new Vector2(-transform.forward.x, -transform.forward.z);
             // A stalled engine (shock weapons) coasts; steering and throttle return when it restarts.
             if (VehicleAfflictions.Stalled(this)) input = Vector2.zero;
             bool drifting = IsPlayer && (HasRemoteInput ? remote.drift : InputManager.Instance != null && InputManager.Instance.Drift);
@@ -336,7 +360,8 @@ namespace MadeInArizona
             {
                 Vector3 desired = new Vector3(input.x, 0, input.y);
                 float forwardAlignment = Vector3.Dot(transform.forward, desired.normalized);
-                if (IsPlayer || AutoReverse) driveDirection = SelectDriveDirection(forwardAlignment, forwardSpeed, driveDirection);
+                if (IsPlayer && (reverseHeld || manualReverse)) driveDirection = reverseHeld ? -1 : 1;
+                else if (IsPlayer || AutoReverse) driveDirection = SelectDriveDirection(forwardAlignment, forwardSpeed, driveDirection);
                 else driveDirection = aiReverse ? -1 : 1;
                 if (driveDirection < 0) boosting = false;
                 Vector3 driveForward = transform.forward * driveDirection;
@@ -398,12 +423,14 @@ namespace MadeInArizona
             {
                 driveDirection = 1;
                 RPM = Mathf.Lerp(RPM, 900, Time.fixedDeltaTime * 3);
-                if (Grounded) Body.AddForce(-planar * 1.8f, ForceMode.Acceleration);
+                if (Grounded && !TowedBy) Body.AddForce(-planar * 1.8f, ForceMode.Acceleration);
             }
             if (Grounded)
             {
                 float lateralDamping = Mathf.Lerp(Mathf.Clamp(grip * 5.5f, 1.5f, 12), tuning.driftGrip, DriftBlend);
                 if (Stats.drivetrain == Drivetrain.RWD && Throttle > .8f && speed < 15) lateralDamping *= .8f;
+                // On a tow cable the tyres skid sideways, so the car swings out wide on the line instead of tracking.
+                if (TowedBy) lateralDamping *= TowLink.TowedGrip;
                 Body.AddForce(-transform.right * lateralSpeed * lateralDamping, ForceMode.Acceleration);
                 if (DriftBlend > 0 && speed > 1) Body.AddForce(-planar / speed * tuning.driftSpeedLoss * DriftBlend, ForceMode.Acceleration);
                 // After a catch-up burst ends, AI settles back to its normal top speed instead of coasting in fast.
@@ -466,7 +493,9 @@ namespace MadeInArizona
                 Vector3 point = Vector3.zero, normal = Vector3.up;
                 for (int h = 0; h < count; h++)
                 {
-                    if (groundHits[h].rigidbody == Body || groundHits[h].normal.y < .3f || groundHits[h].distance >= nearest) continue;
+                    // Faces steeper than ~53 degrees are walls, not road: a spring compressed against a rock face used to
+                    // launch the car up and over it (the "bonk" off boulders and lips).
+                    if (groundHits[h].rigidbody == Body || groundHits[h].normal.y < MinSpringNormal || groundHits[h].distance >= nearest) continue;
                     nearest = groundHits[h].distance; point = groundHits[h].point; normal = groundHits[h].normal;
                 }
                 if (nearest == float.MaxValue || nearest > reach) continue;
@@ -664,29 +693,49 @@ namespace MadeInArizona
             if (prop != null)
             {
                 float propDamage = IsPlayer ? DevTuning.Current.propDamage : 1f;
-                bool plowable = prop.Size < BodyLength * BreakAwayScale;
+                bool plowable = prop.Plowable || prop.Size < BodyLength * BreakAwayScale;
                 // A prop the car plows through costs no speed: the velocity from before the contact is restored in full.
                 if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && plowable)
+                {
                     Body.linearVelocity = preCollisionVelocity;
+                    return;
+                }
             }
+            var other = collision.collider.GetComponentInParent<VehicleDamage>();
+            bool ground = IsGroundContact(collision, other, prop);
+            // Crash strength is the closing speed into the surface; sliding along a wall or rock is a scrape, not a crash.
+            float impact = ground ? 0 : ImpactSpeed(collision);
+            if (TowedBy && !ground && other != Damage) TowLink.WhipImpact(this, other, impact, point);
             if(force<6 || Time.time<collisionCooldown)return;
             collisionCooldown=Time.time+.25f;
-            var other = collision.collider.GetComponentInParent<VehicleDamage>();
             // VehicleDamage refuses non-explosive damage between vehicles on the same side, so crews never ram-kill each other.
             if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3), point, gameObject);
-            // No vehicle is hurt by landing on, scraping or bottoming out against the ground.
-            if (!IsGroundContact(collision, other, prop)) Damage.ApplyDamage(Mathf.Max(0, force - 11) * .5f, point, collision.gameObject);
+            // Landing on, scraping or bottoming out against the ground never hurts and throws no sparks.
+            if (ground) return;
+            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f, point, collision.gameObject);
+            if (impact < 4 && other == null) return;
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);
-            if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(force / 28) * .25f);
+            if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(impact / 28) * .25f);
         }
-        /// <summary>Terrain meshes, graded surfaces and any mostly horizontal contact count as ground.</summary>
+        /// <summary>
+        /// Ground is judged by the contact normals alone: any mostly horizontal contact (the terrain, roads, a rock's
+        /// flat top). Rock and mesa faces are mesh colliders just like the terrain, and the old rule that every mesh
+        /// collider counted as ground meant slamming into a cliff or boulder never registered as a crash.
+        /// </summary>
         static bool IsGroundContact(Collision collision, VehicleDamage vehicle, DestructionSystem prop)
         {
             if (vehicle != null || prop != null) return false;
-            if (collision.collider is MeshCollider mesh && !mesh.convex) return true;
             for (int i = 0; i < collision.contactCount; i++)
                 if (Mathf.Abs(collision.GetContact(i).normal.y) < .55f) return false;
             return collision.contactCount > 0;
+        }
+        /// <summary>Closing speed along the contact normal, the part of the relative velocity that is a head-on hit.</summary>
+        static float ImpactSpeed(Collision collision)
+        {
+            float best = 0;
+            for (int i = 0; i < collision.contactCount; i++)
+                best = Mathf.Max(best, Mathf.Abs(Vector3.Dot(collision.relativeVelocity, collision.GetContact(i).normal)));
+            return collision.contactCount > 0 ? best : collision.relativeVelocity.magnitude;
         }
 
         // ---- Scenery sweep (every vehicle; hostiles get the same small-obstacle rules as the player) ----
@@ -717,8 +766,9 @@ namespace MadeInArizona
                 var prop = hit.GetComponentInParent<DestructionSystem>();
                 if (!prop || prop.IsDestroyed) continue;
                 float size = prop.Size;
-                if (size >= length * BreakAwayScale) continue;
-                bool small = size < length * SmallPropScale;
+                // Rocks, cacti and dead snags are plowable at any size: they shatter in front of the car.
+                bool small = prop.Plowable || size < length * SmallPropScale;
+                if (!small && size >= length * BreakAwayScale) continue;
                 if (!small && speed < BreakAwaySpeed) continue;
                 if (ghosted.Add(prop)) prop.SetVehicleCollision(body, false);
                 if (car.Intersects(prop.WorldBounds)) prop.SmashFromVehicle(hit.ClosestPointOnBounds(center), gameObject);
@@ -729,7 +779,7 @@ namespace MadeInArizona
             foreach (var prop in ghosted)
             {
                 if (!prop || prop.IsDestroyed) { ghostScratch.Add(prop); continue; }
-                bool small = prop.Size < length * SmallPropScale;
+                bool small = prop.Plowable || prop.Size < length * SmallPropScale;
                 if (!small && speed < BreakAwaySpeed && !car.Intersects(prop.WorldBounds)) { prop.SetVehicleCollision(body, true); ghostScratch.Add(prop); }
             }
             foreach (var prop in ghostScratch) ghosted.Remove(prop);

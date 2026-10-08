@@ -13,7 +13,9 @@ namespace MadeInArizona
         sealed class Trail { public Vector2[] points; public float width; public bool dirtRoad; }
         struct TrailSegment { public Vector2 a, b; public float half; }
 
-        const float TrailCell = 32, TrailQueryReach = 8, TownTrailClearance = 60;
+        // Trail distances are exact out to TrailQueryReach and capped beyond it. Cover and base rocks (at least 13 m
+        // across) need about 10.5 m of clearance from a trail edge, so the reach must exceed that or none can be placed.
+        const float TrailCell = 32, TrailQueryReach = 16, TownTrailClearance = 60;
         readonly List<Trail> trails = new List<Trail>();
         readonly List<TrailSegment> trailSegments = new List<TrailSegment>();
         readonly Dictionary<long, List<int>> trailCells = new Dictionary<long, List<int>>();

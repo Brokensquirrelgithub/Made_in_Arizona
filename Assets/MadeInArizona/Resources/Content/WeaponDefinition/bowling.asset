@@ -14,10 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: bowling
   displayName: Bowling-Ball Cannon
-  description: SHELL + RAM. A leaf-blower barrel launching a bowling ball that rolls
-    through every car in its lane.
+  description: 'SHELL + RAM. A leaf-blower barrel launching a bowling ball that bowls over every car in its lane, bouncing off each one. Strike.'
   role: LANE CLEARER
-  strength: Rolls through several cars and knocks them aside.
+  strength: Rolls through several cars and hurls them aside.
   weakness: Only goes where the ground goes; hills and walls deflect it.
   contentOrder: 23
   damage: 65

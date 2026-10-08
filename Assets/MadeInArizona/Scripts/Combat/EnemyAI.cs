@@ -32,12 +32,38 @@ namespace MadeInArizona
         VehicleController vehicle;
         AttackWarningVisual sniperWarning;
         float phase, specialAt, primaryAt, primaryBurstUntil, stuckTime, hazardAt, telegraphFireAt, ramUntil;
+        Vector3 stuckSpot; float stuckAt = float.NegativeInfinity;
         Vector3 avoidance, committedAim;
         float committedDistance;
         float orbitSign;
         readonly List<Vector3> route = new List<Vector3>();
         int routeIndex; Vector3 routeGoal; float routePlannedAt = float.NegativeInfinity, reverseUntil, offRouteSince = -1;
         const float BrakeForTurnSpeed = 9; // m/s: route followers slow to this before a sharp turn
+        /// <summary>
+        /// Top forward speed for a route follower: 9 m/s for a sharp bend, and on the last 60 m to a drop slow enough
+        /// to curve onto it. A van that arrived at full speed overshot, then circled the drop at 9 m/s because its
+        /// turning circle at that speed was wider than the drop was close. The cap keeps the circle that passes
+        /// through the drop within the van's turning ability, and eases the arrival to about 11 m/s at the trigger.
+        /// </summary>
+        float ArrivalSpeedCap(Vector3 heading, Vector3 desired, float toDrop)
+        {
+            float cap = Vector3.Angle(heading, desired) > 70 ? BrakeForTurnSpeed : float.MaxValue;
+            if (toDrop >= 60) return cap;
+            float bearing = Mathf.Min(90, Vector3.Angle(heading, FlatDelta(Destination, transform.position)));
+            float circle = toDrop / (2 * Mathf.Max(.15f, Mathf.Sin(bearing * Mathf.Deg2Rad)));
+            float turning = Mathf.Max(20, vehicle.Stats.turnSpeed) * Mathf.Deg2Rad * .6f;
+            return Mathf.Min(cap, Mathf.Max(3, turning * circle), 6 + toDrop * .5f);
+        }
+        // Detours round impassable terrain (hostiles): the A* route, when it was planned and toward what.
+        readonly List<Vector3> detour = new List<Vector3>();
+        int detourIndex; Vector3 detourGoal; float detourCheckAt, detourPlannedAt = float.NegativeInfinity; bool detouring;
+        /// <summary>Frame of the last detour search by any hostile: one A* search a frame across them all.</summary>
+        static int detourPlanFrame = -1;
+        const float DetourCheckInterval = .8f, DetourReplanMove = 30, DetourMaxAge = 8;
+        const int DetourSearchBudget = 40000;
+        /// <summary>The detour being followed, for tests and the minimap.</summary>
+        public IReadOnlyList<Vector3> Detour => detour;
+        public bool Detouring => detouring && detour.Count > 0;
         readonly RaycastHit[] hits = new RaycastHit[16];
         readonly Collider[] hazards = new Collider[24];
 
@@ -101,7 +127,12 @@ namespace MadeInArizona
             if (UseDestination && !IsFriendly && AttackTelegraph != EnemyAttackTelegraph.Ram && Time.time >= ramUntil)
                 desired = travelDistance > 4 ? towardTravel : CombatSteering(towardTarget, tangent, targetDistance) * .35f;
 
-            desired = UpdateCatchUp(desired, towardTarget, targetDistance);
+            // A cliff, ridge or mesa between this car and where it is going: follow a planned way round instead of
+            // grinding against the rock. Guns stay on the target.
+            Vector3? detourHeading = IsFriendly ? null : DetourHeading(UseDestination ? Destination : Target.transform.position);
+            if (detourHeading.HasValue && AttackTelegraph != EnemyAttackTelegraph.Ram && Time.time >= ramUntil) desired = detourHeading.Value;
+
+            desired = UpdateCatchUp(desired, detourHeading ?? towardTarget, targetDistance);
             UpdateHazardAvoidance(); desired = AvoidBlockedRoute(desired);
             RecoverIfStuck(ref desired, towardTarget, tangent);
             bool reversing = Time.time < reverseUntil;
@@ -112,8 +143,10 @@ namespace MadeInArizona
             bool braking = false;
             if (IsFriendly && UseDestination && FollowRoads && !reversing && desired.sqrMagnitude > .01f)
             {
-                float error = Vector3.Angle(Vector3.ProjectOnPlane(transform.forward, Vector3.up), desired);
-                braking = error > 70 && vehicle.Body.linearVelocity.magnitude > BrakeForTurnSpeed;
+                Vector3 heading = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+                float forwardSpeed = Vector3.Dot(vehicle.Body.linearVelocity, heading);
+                // Brakes only while rolling forward, so it never backs away from the drop it is slowing for.
+                braking = forwardSpeed > ArrivalSpeedCap(heading, desired, travelDistance);
                 if (braking) desired = -transform.forward;
             }
             bool firePrimary = !IsFriendly && Time.time < primaryBurstUntil && targetDistance > 7 && targetDistance < primaryRange && clearShot && AttackTelegraph == EnemyAttackTelegraph.None;
@@ -141,7 +174,48 @@ namespace MadeInArizona
             var camera = Camera.main;
             if (!camera) return false;
             Vector3 view = camera.WorldToViewportPoint(transform.position);
-            return view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
+            return view.z < 0 || view.x < -.02f || view.x > 1.02f || view.y < -.02f || view.y > 1.02f;
+        }
+
+        /// <summary>
+        /// Hostiles drive straight at their target or destination until the straight line is blocked by terrain a car
+        /// cannot cross (cliff walls between elevation levels, mountain chains, mesas, big rocks, the map rim). Then they
+        /// follow an A* route over the navigation grid: through ridge passes, up the ramps between levels and across
+        /// bridges and fords. Returns the heading to steer, or null to fight normally.
+        /// </summary>
+        Vector3? DetourHeading(Vector3 goal)
+        {
+            var world = GeneratedWorld.Active;
+            if (!world) return null;
+            Vector3 here = transform.position;
+            if (FlatDelta(goal, here).magnitude < 18) { detouring = false; return null; }
+            if (Time.time >= detourCheckAt)
+            {
+                detourCheckAt = Time.time + DetourCheckInterval * Random.Range(.8f, 1.2f);
+                if (world.DirectDrivable(here, goal)) { detouring = false; detour.Clear(); }
+                else
+                {
+                    bool stale = !detouring || detour.Count == 0 || FlatDelta(goal, detourGoal).magnitude > DetourReplanMove || Time.time - detourPlannedAt > DetourMaxAge;
+                    if (stale && detourPlanFrame != Time.frameCount)
+                    {
+                        detourPlanFrame = Time.frameCount;
+                        detourGoal = goal; detourPlannedAt = Time.time; detourIndex = 0;
+                        // Hostiles cut across country rather than keeping to roads: off-road ground costs about twice road.
+                        detouring = world.FindPath(here, goal, detour, .45f, DetourSearchBudget);
+                        if (!detouring) detour.Clear();
+                    }
+                    else if (stale) detourCheckAt = Time.time; // another hostile planned this frame: try the next one
+                }
+            }
+            if (!detouring || detour.Count == 0) return null;
+            // Never turn back for a waypoint already passed; look ahead further at speed.
+            float nearest = float.MaxValue; int ahead = detourIndex;
+            for (int i = detourIndex; i < Mathf.Min(detour.Count, detourIndex + 10); i++) { float d = FlatDelta(detour[i], here).sqrMagnitude; if (d < nearest) { nearest = d; ahead = i; } }
+            detourIndex = ahead;
+            float lookAhead = 8 + vehicle.Body.linearVelocity.magnitude * .5f;
+            while (detourIndex < detour.Count - 1 && FlatDelta(detour[detourIndex], here).magnitude < lookAhead) detourIndex++;
+            Vector3 heading = FlatDelta(detour[detourIndex], here);
+            return heading.sqrMagnitude > .01f ? heading.normalized : (Vector3?)null;
         }
 
         Vector3 FriendlySteering(Vector3 towardDestination, float destinationDistance)
@@ -173,8 +247,40 @@ namespace MadeInArizona
             for (int i = routeIndex; i < Mathf.Min(route.Count, routeIndex + 10); i++) { float d = FlatDelta(route[i], here).sqrMagnitude; if (d < nearest) { nearest = d; ahead = i; } }
             routeIndex = ahead;
             float lookAhead = 9 + vehicle.Body.linearVelocity.magnitude * .55f;
-            while (routeIndex < route.Count - 1 && FlatDelta(route[routeIndex], here).magnitude < lookAhead) routeIndex++;
+            // Look ahead only to a waypoint the van can see. Skipping past the waypoint in a gap between rocks (the ring
+            // of cover round a trail junction) aimed it straight at the drop across a rock; obstacle avoidance then pushed
+            // it sideways for good, and it circled the drop about 30 m out. Within a few metres of a waypoint it always
+            // moves on, so it never doubles back to touch one.
+            while (routeIndex < route.Count - 1 && FlatDelta(route[routeIndex], here).magnitude < lookAhead &&
+                (FlatDelta(route[routeIndex], here).magnitude < WaypointReached || ClearRun(here, route[routeIndex + 1]))) routeIndex++;
+            SteerDebug = "idx=" + routeIndex + "/" + route.Count;
             return route.Count > 0 ? route[routeIndex] : Destination;
+        }
+        const float WaypointReached = 4;
+        /// <summary>Route steering state for the escort trace (-miaEscortTrace).</summary>
+        public string SteerDebug { get; private set; } = "";
+        /// <summary>Name of whatever the local obstacle avoidance last steered round, for the escort trace.</summary>
+        public string AvoidDebug { get; private set; } = "";
+        /// <summary>
+        /// A straight run from here to a waypoint with no wall, rock face, building or big prop in the way. Vehicles,
+        /// props the van would break through and the ground itself (mostly horizontal hits) do not count.
+        /// </summary>
+        bool ClearRun(Vector3 from, Vector3 to)
+        {
+            Vector3 a = from + Vector3.up * .9f, b = to + Vector3.up * .9f, delta = b - a;
+            float length = delta.magnitude;
+            if (length < .5f) return true;
+            int count = Physics.SphereCastNonAlloc(a, .8f, delta / length, hits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                var hit = hits[i];
+                if (!hit.collider || hit.collider.transform.IsChildOf(transform) || hit.distance <= 0 || hit.normal.y > .5f) continue;
+                if (hit.collider.GetComponentInParent<VehicleController>()) continue;
+                var prop = hit.collider.GetComponentInParent<DestructionSystem>();
+                if (prop && (prop.Plowable || prop.MaxHealth < 80)) continue;
+                return false;
+            }
+            return true;
         }
         public void PlanRoute()
         {
@@ -424,22 +530,42 @@ namespace MadeInArizona
             Vector3 travel = desired.normalized;
             if (Blocked(travel, out Vector3 normal))
             {
+                AvoidDebug = blockedBy;
                 Vector3 side = Vector3.Cross(Vector3.up, normal);
                 if (Vector3.Dot(side, travel) < 0) side = -side;
                 desired = (travel + normal * 1.1f + side * 1.6f).normalized;
             }
+            else AvoidDebug = "";
             return Vector3.ClampMagnitude(desired + avoidance, 1);
         }
+        string blockedBy = "";
 
         void RecoverIfStuck(ref Vector3 desired, Vector3 towardTarget, Vector3 tangent)
         {
             if (!vehicle.AutoReverse)
             {
-                // Vehicles that never auto-reverse back off deliberately when wedged, then re-plan their route.
-                if (desired.sqrMagnitude > .2f && vehicle.SpeedKph < 2 && Time.time >= reverseUntil)
+                // Vehicles that never auto-reverse back off deliberately when wedged, then re-plan their route. Easing in
+                // toward a drop at low throttle counts too when something solid is right in front (a parked car left the
+                // van pressed against it for half a minute); a slow pull-away from a standstill does not.
+                Vector3 nose = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+                bool pushing = desired.sqrMagnitude > .2f ||
+                    desired.sqrMagnitude > .01f && Vector3.Dot(desired, nose) > 0 && vehicle.SpeedKph < 2 && Blocked(nose, out _);
+                if (pushing && vehicle.SpeedKph < 2 && Time.time >= reverseUntil)
                 {
                     stuckTime += Time.deltaTime;
-                    if (stuckTime > 1.4f) { reverseUntil = Time.time + 1.3f; stuckTime = 0; route.Clear(); }
+                    if (stuckTime > 1.4f)
+                    {
+                        // Still wedged where backing off last time did not free it (a bridge pier, a gap between rocks):
+                        // hop clear sideways as well.
+                        bool again = (transform.position - stuckSpot).sqrMagnitude < 4 && Time.time - stuckAt < 8;
+                        stuckSpot = transform.position; stuckAt = Time.time;
+                        reverseUntil = Time.time + 1.3f; stuckTime = 0; route.Clear();
+                        if (again)
+                        {
+                            Vector3 side = Vector3.Cross(Vector3.up, nose) * (Random.value > .5f ? 1 : -1);
+                            vehicle.Body.AddForce(side * 5 + Vector3.up * 4 - nose * 2, ForceMode.VelocityChange);
+                        }
+                    }
                 }
                 else stuckTime = 0;
                 return;
@@ -452,6 +578,8 @@ namespace MadeInArizona
                 {
                     vehicle.Body.AddForce((tangent + Vector3.up * .65f) * 7, ForceMode.VelocityChange);
                     stuckTime = 0; orbitSign *= -1;
+                    // Wedged while detouring: plan again from here.
+                    detourCheckAt = 0; detourPlannedAt = float.NegativeInfinity;
                 }
             }
             else stuckTime = 0;
@@ -470,7 +598,7 @@ namespace MadeInArizona
                 var prop = hits[i].collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && prop.MaxHealth < 80 && Archetype != 3 && Archetype != 4) continue;
                 if (hits[i].normal.y > .5f) continue;
-                if (hits[i].distance < nearest) { nearest = hits[i].distance; normal = hits[i].normal; }
+                if (hits[i].distance < nearest) { nearest = hits[i].distance; normal = hits[i].normal; blockedBy = hits[i].collider.name; }
             }
             normal.y = 0; return nearest < float.MaxValue;
         }

@@ -474,6 +474,12 @@ namespace MadeInArizona
         public static void ScatterDebris(Vector3 point, float force, int count, Color color) { Get().Scatter(point, force, count, color, Vector3.zero); }
         /// <summary>Debris thrown by a hit: <paramref name="push"/> (m/s) carries the pieces along a shot, away from a blast or with a car.</summary>
         public static void ScatterDebris(Vector3 point, float force, int count, Color color, Vector3 push) { Get().Scatter(point, force, count, color, push); }
+        /// <summary>
+        /// Pieces of a chosen size range (min/max box scale), spread up and down by <paramref name="spread"/> metres:
+        /// trunk sections and limbs of a broken snag rather than the usual small chips.
+        /// </summary>
+        public static void ScatterPieces(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread)
+            => Get().Scatter(point, force, count, color, push, minScale, maxScale, spread, 12);
         /// <summary>Velocity a blast gives the pieces of a prop it breaks: outwards and a little upwards, stronger close in.</summary>
         static Vector3 BlastPush(DestructionSystem prop, Vector3 center, float falloff)
         {
@@ -481,7 +487,9 @@ namespace MadeInArizona
             if (away.sqrMagnitude < .01f) away = Vector3.up;
             return (away.normalized + Vector3.up * .35f) * (4 + 9 * falloff);
         }
-        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push)
+        static readonly Vector3 ChipMin = new Vector3(.1f, .07f, .15f), ChipMax = new Vector3(.45f, .24f, .7f);
+        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push) => Scatter(point, force, count, color, push, ChipMin, ChipMax, .5f, 4);
+        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread, float mass)
         {
             count = Mathf.Min(count, quality == 0 ? 5 : quality == 1 ? 12 : quality==3?48:24);
             for (int i = 0; i < count; i++)
@@ -502,9 +510,10 @@ namespace MadeInArizona
                     if (vehicle != null)
                         foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
                             if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, true);
-                f.scale = new Vector3(Random.Range(.1f, .45f), Random.Range(.07f, .24f), Random.Range(.15f, .7f));
+                f.scale = new Vector3(Random.Range(minScale.x, maxScale.x), Random.Range(minScale.y, maxScale.y), Random.Range(minScale.z, maxScale.z));
                 f.t.localScale = f.scale;
-                f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * .3f, Random.rotation);
+                f.body.mass = mass;
+                f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * (.3f + Random.Range(-spread, spread)), Random.rotation);
                 Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + 2;
                 velocity += push * Random.Range(.55f, 1.1f);
                 f.body.linearVelocity = velocity; f.body.angularVelocity = Random.insideUnitSphere * 18;
@@ -529,7 +538,7 @@ namespace MadeInArizona
             if(light){
                 light.transform.position=point+Vector3.up*2;light.range=Mathf.Clamp(radius*3f,8,30);light.renderMode=LightRenderMode.ForcePixel;
                 light.GetUniversalAdditionalLightData().additionalLightsShadowResolutionTier=0;
-                light.shadows=quality==3?LightShadows.Soft:LightShadows.None;light.shadowStrength=.72f;light.enabled=true;
+                light.shadows=quality==3?(GameManager.SoftShadows?LightShadows.Soft:LightShadows.Hard):LightShadows.None;light.shadowStrength=.72f;light.enabled=true;
             }
             return light;
         }
@@ -542,7 +551,7 @@ namespace MadeInArizona
                 var go = new GameObject("Pooled explosion light"); go.transform.SetParent(transform);
                 var light = go.AddComponent<Light>(); light.type = LightType.Point; light.renderMode = LightRenderMode.ForcePixel;
                 light.GetUniversalAdditionalLightData().additionalLightsShadowResolutionTier=1;
-                light.shadows = quality >= 2 ? LightShadows.Soft : LightShadows.None; light.shadowStrength = .9f; light.shadowBias = .08f; light.shadowNormalBias = .2f;
+                light.shadows = quality >= 2 ? (GameManager.SoftShadows ? LightShadows.Soft : LightShadows.Hard) : LightShadows.None; light.shadowStrength = .9f; light.shadowBias = .08f; light.shadowNormalBias = .2f;
                 flash = new Flash { light = light }; flashes.Add(flash);
             }
             if (flash == null) return;

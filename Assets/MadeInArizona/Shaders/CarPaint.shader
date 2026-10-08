@@ -61,13 +61,18 @@ Shader "MadeInArizona/CarPaint"
                 float3 env=r.y>=0?sky:ground;
                 // A bright skyline band and two soft "studio" panels overhead give every panel a readable reflection.
                 env+=float3(1,.94,.84)*.45*exp(-abs(r.y-.05)*18);
-                env+=float3(1,.98,.94)*.55*smoothstep(.93,.985,dot(r,normalize(float3(.35,.8,.45))));
-                env+=float3(1,.98,.94)*.35*smoothstep(.95,.99,dot(r,normalize(float3(-.55,.7,-.25))));
+                // At sunset (TimeOfDay.cs) the paint mirrors the dusk sky instead, and the studio panels dim and warm.
+                float sunset=saturate(_SkySunset.x);
+                env=lerp(env,SunsetSky(r),sunset);
+                float3 panel=lerp(float3(1,.98,.94),float3(.55,.4,.32),sunset);
+                env+=panel*.55*smoothstep(.93,.985,dot(r,normalize(float3(.35,.8,.45))));
+                env+=panel*.35*smoothstep(.95,.99,dot(r,normalize(float3(-.55,.7,-.25))));
                 // The gameplay camera looks down steeply from the south, so roofs and hoods reflect only a narrow patch
                 // of sky to the north. Two softboxes sit near that patch in world space: highlights roll across the
                 // curved panels as a car turns, while other views (garage, close-ups) do not wash the paint out.
-                env+=float3(1,.97,.92)*1.4*smoothstep(.975,.995,dot(r,normalize(float3(.2,.74,.64))));
-                env+=float3(1,.97,.92)*.6*smoothstep(.94,.975,dot(r,normalize(float3(-.32,.78,.54))));
+                float3 softbox=lerp(float3(1,.97,.92),float3(.55,.4,.32),sunset);
+                env+=softbox*1.4*smoothstep(.975,.995,dot(r,normalize(float3(.2,.74,.64))));
+                env+=softbox*.6*smoothstep(.94,.975,dot(r,normalize(float3(-.32,.78,.54))));
                 float s=saturate(dot(r,sunDir));
                 env+=sunColor*(pow(s,700)*8+pow(s,28)*.3);
                 return env;

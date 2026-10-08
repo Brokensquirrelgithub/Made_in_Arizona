@@ -186,7 +186,7 @@ namespace MadeInArizona
                 {float h=Next(random,.6f,1.2f);BreakableCactus(root,p,h,random,nature.agaves,"Breakable agave");}
                 // Weathered dead snags in red rock and the Sonoran.
                 else if(density>0&&(red||sonoran)&&i%11==5&&patch<.4f&&nature&&nature.deadTrees!=null&&nature.deadTrees.Length>0)
-                {float h=Next(random,3,5.5f);BreakableTree(root,p,h,false,random,nature.deadTrees,"Breakable snag");Trees++;}
+                {float h=Next(random,3,5.5f);BreakableTree(root,p,h,false,random,nature.deadTrees,"Breakable snag",snag:true);Trees++;}
                 // Red sand: prickly pear and small barrels, otherwise little more than scattered brush.
                 else if(density>0&&red&&i%4==0)
                 {float h=Next(random,.8f,1.8f);BreakableCactus(root,p,h,random,nature?nature.redRockPlants:null,"Breakable prickly pear");}
@@ -209,7 +209,7 @@ namespace MadeInArizona
             WorldArt.MakeBreakable(root.transform,Mathf.Clamp(12+size*6,18,28),false,ExplosionKind.Ammunition,3);
             var prop=root.GetComponent<DestructionSystem>();prop.MakeBrittle();prop.SetDebrisColor(color);
         }
-        void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random,Mesh[] choices=null,string label=null,Color? tint=null)
+        void BreakableTree(GameObject tile,Vector3 at,float height,bool pine,System.Random random,Mesh[] choices=null,string label=null,Color? tint=null,bool snag=false)
         {
             var root=new GameObject(label??(pine?"Breakable ponderosa":"Breakable cottonwood"));root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
             var shape=propMesh;shape.Clear();
@@ -224,7 +224,9 @@ namespace MadeInArizona
             collider.center=Vector3.up*(pine?height*.325f:2f);collider.height=pine?height*.65f:4f;collider.radius=pine?height*.023f:.24f;
             WorldArt.MakeBreakable(root.transform,pine?26:22,false,ExplosionKind.Ammunition,5);
             // Trees fall over rather than shatter; the mass only sets how little a blast or car can shove the trunk.
-            root.GetComponent<DestructionSystem>().MakeTopple(pine?height*60:450);
+            var prop=root.GetComponent<DestructionSystem>();prop.MakeTopple(pine?height*60:450);
+            // Dead snags are dry and brittle: a car ploughs through without losing pace and they snap into pieces.
+            if(snag){prop.MakeSplinter();prop.SetDebrisColor(new Color(.46f,.38f,.29f));}
         }
         /// <summary>A biome's own models when the catalog has them, otherwise the general set (older catalogs lack the biome lists).</summary>
         static Mesh[] Choose(Mesh[] biome,Mesh[] general)=>biome!=null&&biome.Length>0?biome:general;

@@ -42,16 +42,32 @@ namespace MadeInArizona
             WeaponDefinition weapon=tab=="SLOT 1"?player&&player.Weapons?player.Weapons.GarageWeapon:null:
                 tab=="SLOT 2"?player&&player.Weapons?player.Weapons.FieldWeapon:null:null;
             bool weaponEditable=!weapon||coop==null||coop.CanEditWeapon(weapon.id);
-            string scope=tab=="COMBAT"?"WORLD BALANCE • HOST CONTROLLED":
-                tab=="DRIVING"||tab=="DRIFT"||tab=="ENGINE"?car==null?"NO CAR SELECTED":
-                    carEditable?"CAR PROFILE • "+player.Definition.displayName:"CAR PROFILE • SHARED OWNER CONTROLS THIS CAR":
-                tab=="SLOT 1"||tab=="SLOT 2"?weapon?weapon.displayName+(weaponEditable?" • EQUIPPED WEAPON PROFILE":" • SHARED OWNER CONTROLS THIS WEAPON"):
-                    "NO WEAPON EQUIPPED IN THIS SLOT":"LOCAL PRESENTATION • SAVED ON THIS PC";
-            Text(x+24,y+61,w-48,44,scope,15,Muted);
+            // Name exactly what the sliders on this tab change: which car, which weapon, or whose settings.
+            bool carTab=tab=="DRIVING"||tab=="DRIFT"||tab=="ENGINE",slotTab=tab=="SLOT 1"||tab=="SLOT 2";
+            string editing=tab=="COMBAT"?"WORLD BALANCE":
+                carTab?car==null?"NO CAR SELECTED":player.Definition.displayName.ToUpperInvariant():
+                slotTab?weapon?weapon.displayName.ToUpperInvariant():"EMPTY "+tab:"THIS PC'S "+tab;
+            string detail=tab=="COMBAT"?"Enemy health, damage and pacing for everyone in the session • host controlled":
+                carTab?car==null?"Pick a car in the garage to tune its profile":
+                    (carEditable?"This car's "+tab.ToLowerInvariant()+" profile • saved for this car only":"Another player owns this car's tuning this session • read only")+
+                    (tab=="DRIVING"?" (prop impact damage is world balance)":""):
+                slotTab?weapon?(tab=="SLOT 1"?"Garage weapon (slot 1)":"Field weapon (slot 2)")+
+                    (weaponEditable?" • this weapon's balance profile, wherever it is equipped":" • another player owns this weapon's tuning • read only"):
+                    tab=="SLOT 1"?"No garage weapon equipped":"Pick up a field weapon to tune slot 2":
+                "Local presentation • saved on this PC only, never shared";
+            Text(x+24,y+58,w-48,26,"EDITING  ›  "+editing,19,carTab||slotTab?Lime:tab=="COMBAT"?Orange:Cream,true);
+            Text(x+24,y+84,w-48,22,detail,13,Muted);
             float tabW=(w-40)/5;
+            var garageWeapon=player&&player.Weapons?player.Weapons.GarageWeapon:null;
+            var fieldWeapon=player&&player.Weapons?player.Weapons.FieldWeapon:null;
             for(int i=0;i<devTabs.Length;i++)
-                if(Button(x+20+(i%5)*tabW,y+109+(i/5)*40,tabW-8,34,devTabs[i],devTab==i,size:12))
+            {
+                string label=devTabs[i];
+                if(label=="SLOT 1")label="SLOT 1 • "+ShortName(garageWeapon);
+                else if(label=="SLOT 2")label="SLOT 2 • "+ShortName(fieldWeapon);
+                if(Button(x+20+(i%5)*tabW,y+109+(i/5)*40,tabW-8,34,label,devTab==i,size:label.Length>16?10:12))
                 {devTab=i;devScroll=Vector2.zero;}
+            }
             bool engineTab=tab=="ENGINE";
             if(engineTab && car!=null)
             {
@@ -83,6 +99,19 @@ namespace MadeInArizona
             if(Button(x+464,y+h-53,236,36,resumeLabel,true)){SaveDev();devMenu=false;game.Resume();}
         }
 
+        /// <summary>A weapon's name cut down to fit a dev-menu tab ("Satellite-Dish Death Ray" becomes "DEATH RAY").</summary>
+        static string ShortName(WeaponDefinition weapon)
+        {
+            if(!weapon)return "EMPTY";
+            string name=weapon.displayName.ToUpperInvariant();
+            if(name.Length<=12)return name;
+            string[] words=name.Split(' ');
+            string tail=words.Length>1?words[words.Length-2]+" "+words[words.Length-1]:name;
+            if(tail.Length<=12)return tail;
+            string last=words[words.Length-1];
+            return last.Length<=12?last:name.Substring(0,12);
+        }
+
         void DrawDevControls(float x,float y,float w,float h,string tab,string carId,bool carEditable)
         {
             int count=0;foreach(var c in DevControl.All)if(c.group==tab)count++;
@@ -97,7 +126,9 @@ namespace MadeInArizona
                 if(source==null)continue;
                 float yy=row++*68;
                 float value=control.scope==DevScope.Car?(float)carField.GetValue(source):(float)control.field.GetValue(source);
-                Text(4,yy,540,24,control.label,16,Cream);
+                // Mixed tabs mark the rows that are not part of the car profile.
+                string scopeTag=control.scope==DevScope.Shared&&tab!="COMBAT"?"  [WORLD • HOST]":"";
+                Text(4,yy,540,24,control.label+scopeTag,16,Cream);
                 Text(565,yy,70,24,value.ToString(control.max<=.02f?"0.0000":"0.00"),15,Lime,true);
                 bool editable=control.scope==DevScope.Local||control.scope==DevScope.Shared&&!CoopSession.IsRemoteClient||
                     control.scope==DevScope.Car&&carEditable;
@@ -118,6 +149,8 @@ namespace MadeInArizona
         {
             if(!weapon)
             {Text(x+8,y+18,w-16,80,"This slot is empty. Pick up a field weapon to tune slot 2.",18,Muted);return;}
+            Text(x+8,y-2,w-16,24,"Base values are "+weapon.displayName+"'s catalogue stats.",13,Muted);
+            y+=24;h-=24;
             var profile=BalanceTuning.Weapon(weapon.id);
             if(profile==null)return;
             int count=weapon.blastRadius>0?4:3;

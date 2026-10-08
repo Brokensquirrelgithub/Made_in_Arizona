@@ -11,6 +11,8 @@ namespace MadeInArizona
     public sealed class VehicleAfflictions : MonoBehaviour
     {
         public const int SpinesToRupture = 7;
+        /// <summary>Fire ticks hit three times harder than the burn rates weapons declare (torch, sprinkler, death ray).</summary>
+        public const float BurnTickMultiplier = 3;
         VehicleController vehicle;
         float burnUntil, burnDps, burnTick, stallUntil, stallFx, spineDecayAt, spineDamage, spineRadius;
         GameObject burnSource, spineSource;
@@ -76,7 +78,7 @@ namespace MadeInArizona
             if (Burning && !Dead && Time.time >= burnTick)
             {
                 burnTick = Time.time + .25f;
-                vehicle.Damage.ApplyDamage(burnDps * .25f, transform.position + Vector3.up, burnSource);
+                vehicle.Damage.ApplyDamage(burnDps * .25f * BurnTickMultiplier, transform.position + Vector3.up, burnSource);
                 ExplosionSystem.Burst(transform.position + Vector3.up * 1.2f + Random.insideUnitSphere * .6f, new Color(1, .42f, .08f), 6, 2.2f);
             }
             if (IsStalled && !Dead && Time.time >= stallFx)
@@ -97,7 +99,7 @@ namespace MadeInArizona
         }
     }
 
-    /// <summary>Short-lived pooled line effects: beams, lightning arcs and winch cables.</summary>
+    /// <summary>Short-lived pooled line effects: railgun beams and lightning arcs.</summary>
     public sealed class WeaponFx : MonoBehaviour
     {
         sealed class Line { public LineRenderer renderer; public float start, until, width; public Color color; public Transform from, to; public Vector3 fromOffset, toOffset; public float jag; }
@@ -123,26 +125,10 @@ namespace MadeInArizona
             material.SetFloat("_ZWrite", 0); material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.SetColor("_BaseColor", new Color(3, 3, 3, 1));
         }
-        /// <summary>A straight beam (railgun, death ray) that fades over <paramref name="duration"/>.</summary>
+        /// <summary>A straight beam (railgun) that fades over <paramref name="duration"/>.</summary>
         public static void Beam(Vector3 a, Vector3 b, Color color, float width, float duration) => Get().Show(a, b, null, null, color, width, duration, 0);
-        /// <summary>Layered sunlight ray with a moving hot pulse and a narrow white core.</summary>
-        public static void Ray(Vector3 a, Vector3 b, float heat)
-        {
-            var fx = Get();
-            const float duration = .13f;
-            fx.Show(a, b, null, null, new Color(1.1f, .42f, .08f, .2f), .48f + heat * .22f, duration, 0);
-            fx.Show(a, b, null, null, new Color(1.5f, .72f, .18f, .58f), .17f + heat * .07f, duration, 0);
-            fx.Show(a, b, null, null, new Color(1.8f, 1.7f, 1.25f, .95f), .055f + heat * .025f, duration, 0);
-            float phase = Mathf.Repeat(Time.time * 5.5f, 1);
-            Vector3 pulseStart = Vector3.Lerp(a, b, phase);
-            Vector3 pulseEnd = Vector3.Lerp(a, b, Mathf.Min(1, phase + .16f));
-            fx.Show(pulseStart, pulseEnd, null, null, new Color(2.4f, 1.5f, .42f, .85f), .23f + heat * .08f, duration, 0);
-        }
         /// <summary>A jagged electric arc between two points.</summary>
         public static void Lightning(Vector3 a, Vector3 b, Color color, float duration = .18f) => Get().Show(a, b, null, null, color, .09f, duration, .7f);
-        /// <summary>A cable that follows two moving transforms (harpoon winch).</summary>
-        public static void Tether(Transform from, Transform to, Color color, float duration) =>
-            Get().Show(from ? from.position : Vector3.zero, to ? to.position : Vector3.zero, from, to, color, .07f, duration, 0);
 
         void Show(Vector3 a, Vector3 b, Transform from, Transform to, Color color, float width, float duration, float jag)
         {
