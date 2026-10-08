@@ -74,7 +74,7 @@ namespace MadeInArizona
                 if (pad.buttonEast.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame) { settings = false; game.ApplySettings(); }
                 if (pad.leftShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 2) % 3;
                 if (pad.rightShoulder.wasPressedThisFrame) settingsPage = (settingsPage + 1) % 3;
-                int rowCount = settingsPage == 0 ? 9 : settingsPage == 1 ? 6 : 2 + actions.Length;
+                int rowCount = settingsPage == 0 ? 10 : settingsPage == 1 ? 6 : 2 + actions.Length;
                 if (pad.dpad.up.wasPressedThisFrame) menuFocus = (menuFocus + rowCount - 1) % rowCount;
                 if (pad.dpad.down.wasPressedThisFrame) menuFocus = (menuFocus + 1) % rowCount;
                 int direction = pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.left.wasPressedThisFrame ? -1 : 0;
@@ -592,8 +592,8 @@ namespace MadeInArizona
         void DrawSettings()
         {
             Rect(0, 0, width, height, new Color(.02f, .03f, .035f, .90f));
-            float x = (width - 930) / 2, y = Mathf.Max(25, (height - 790) / 2);
-            Rect(x, y, 930, 790, Ink);
+            float x = (width - 930) / 2, y = Mathf.Max(25, (height - 845) / 2);
+            Rect(x, y, 930, 845, Ink);
             Tag(x + 35, y + 25, "OWNER’S MANUAL / THE USEFUL PAGES", Orange);
             Text(x + 35, y + 59, 750, 57, "SHOP SETTINGS", 40, Cream, true);
             string[] tabs = { "DISPLAY & ACCESS", "AUDIO", "CONTROLS" };
@@ -614,6 +614,7 @@ namespace MadeInArizona
                 SettingLabel(x, y + 572, "SUBTITLES", 6); if (Button(x + 465, y + 567, 426, 38, s.subtitles ? "ON" : "OFF")) s.subtitles = !s.subtitles;
                 SettingLabel(x, y + 673, "VSYNC", 8); if (Button(x + 465, y + 668, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
                 SettingLabel(x, y + 625, "DYNAMIC CAMERA ZOOM", 7); if (Button(x + 465, y + 620, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
+                SettingLabel(x, y + 726, "TIME OF DAY", 9); if (Button(x + 465, y + 721, 426, 38, TimeOfDayLabel(s.sunset))) s.sunset = !s.sunset;
             }
             if (settingsPage == 1) {
                 string[] labels = { "MASTER", "MUSIC", "ENGINES", "WEAPONS", "DIALOGUE CUES", "ENVIRONMENT" };
@@ -638,11 +639,12 @@ namespace MadeInArizona
                 if (Button(x + 35, y + 648, 273, 37, "RESET INPUT BINDINGS")) InputManager.Instance.ResetBindings();
                 if (InputManager.Instance.Rebinding) { Rect(x + 180, y + 309, 570, 180, Panel); Text(x + 200, y + 336, 530, 85, "PRESS A NEW KEY OR CONTROL\nEscape cancels. Devices are saved separately.", 23, Cream, true, TextAnchor.MiddleCenter); if (Button(x + 345, y + 431, 240, 37, "CANCEL REBIND")) InputManager.Instance.CancelRebind(); }
             }
-            if (Button(x + 570, y + 718, 320, 48, "SAVE & CLOSE  /  B", true)) { game.ApplySettings(); settings = false; }
-            Text(x + 35, y + 730, 520, 35, "LB/RB tabs · D-pad select/adjust · A toggle · B close", 12, Muted);
+            if (Button(x + 570, y + 773, 320, 48, "SAVE & CLOSE  /  B", true)) { game.ApplySettings(); settings = false; }
+            Text(x + 35, y + 785, 520, 35, "LB/RB tabs · D-pad select/adjust · A toggle · B close", 12, Muted);
         }
 
         static readonly string[] FrameSyncLabels = { "ON • MATCH DISPLAY REFRESH", "OFF • 120 FPS CAP", "OFF • UNCAPPED" };
+        static string TimeOfDayLabel(bool sunset) => sunset ? "SUNSET • LOW SUN, LONG SHADOWS" : "MIDDAY • FULL DESERT SUN";
         void SettingLabel(float x, float y, string label, int index)
         { Text(x + 35, y, 420, 32, (InputManager.Instance.UsingGamepad && menuFocus == index ? "›  " : "") + label, 17, InputManager.Instance.UsingGamepad && menuFocus == index ? Orange : Cream, true); }
         float Slider(float x, float y, float w, float value, float min, float max)
@@ -675,6 +677,7 @@ namespace MadeInArizona
                 if (menuFocus == 6) s.subtitles = !s.subtitles;
                 if (menuFocus == 7) s.dynamicZoom = !s.dynamicZoom;
                 if (menuFocus == 8) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
+                if (menuFocus == 9) s.sunset = !s.sunset;
             } else if (settingsPage == 1) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
                 if (menuFocus == 1) s.music = Mathf.Clamp01(s.music + .1f * direction);

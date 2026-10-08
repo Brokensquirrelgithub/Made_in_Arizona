@@ -30,7 +30,9 @@ Shader "MadeInArizona/FlowRiver"
     float3 view=GetWorldSpaceNormalizeViewDir(i.world);float fresnel=pow(1-saturate(dot(n,view)),4);
     float edge=smoothstep(.86,1,abs(i.uv.x-.5)*2);
     float pulse=.5+.5*sin(i.world.z*2+i.world.x*.8-_Time.y*2.6);
-    float3 water=lerp(float3(.025,.19,.22),float3(.22,.43,.46),fresnel);
+    // At sunset (TimeOfDay.cs) the water darkens and mirrors the dusk sky.
+    float sunset=saturate(_SkySunset.x);
+    float3 water=lerp(lerp(float3(.025,.19,.22),float3(.02,.08,.12),sunset),lerp(float3(.22,.43,.46),SunsetSky(reflect(-view,n))*.7,sunset),fresnel);
     float shoal=smoothstep(.4,.98,abs(i.uv.x-.5)*2);
     water=lerp(water,float3(.18,.31,.24),shoal*.62);
     float ribbons=sin(i.world.x*2.1+sin(i.world.z*.77-_Time.y*.6)*1.8+_Time.y*.8)*sin(i.world.z*4-_Time.y*2.1);

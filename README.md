@@ -63,7 +63,7 @@ The streamed wilderness uses the Pandazole Nature pack with batched conifers, br
 - Nine terrain types, localized component damage, twenty scrap garage weapons and limited-ammo field weapons, enemy supply drops, tactical enemy archetypes, destructible structures/props, nine explosion profiles, bounded debris and projectile pools.
 - Suzuki the white husky with four cosmetics, discoveries, achievements, a Wonton Destruction food truck, a 14-track supplied soundtrack, imported weapon recordings and synthesized engine/interface effects.
 - HDR bloom, normal-mapped surfaces, fur backlighting, garage light shafts, blast heat shimmer, animated six-way-lit smoke/fire using Unity’s free fluid samples, lingering embers, and layered engine/exhaust sound.
-- Saved progression/settings, keyboard/controller rebinding, audio sliders, subtitles, aim assist, dynamic camera zoom (Settings → Display; pulls back when a hostile nears the screen edge), difficulty, shake/UI scale, window/resolution controls and four graphics presets including **Arizona Summer**.
+- Saved progression/settings, keyboard/controller rebinding, audio sliders, subtitles, aim assist, dynamic camera zoom (Settings → Display; pulls back when a hostile nears the screen edge), a **sunset** time of day (Settings → Display → Time of Day: a low, warm western sun with long shadows, a dusk sky in reflections, darker overall and easier on the eyes, with headlights on), difficulty, shake/UI scale, window/resolution controls and four graphics presets including **Arizona Summer**.
 
 ## Scope and development
 

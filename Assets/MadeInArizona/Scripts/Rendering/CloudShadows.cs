@@ -26,7 +26,9 @@ namespace MadeInArizona
             var sun = GameManager.Instance ? GameManager.Instance.Sun : null;
             if (!sun) return;
             var tuning = DevTuning.Current;
-            float strength = Mathf.Clamp(tuning.cloudShadows, 0, .95f), cover = Mathf.Clamp(tuning.cloudCover, 0, .8f);
+            // Low evening sun leaves more of the light to the sky, so cloud shadows are softer at sunset. Rounded so a
+            // time-of-day transition rebuilds the map a few dozen times rather than every frame.
+            float strength = Mathf.Round(Mathf.Clamp(tuning.cloudShadows, 0, .95f) * TimeOfDay.Current.clouds * 50) / 50, cover = Mathf.Clamp(tuning.cloudCover, 0, .8f);
             if (!outdoors || strength < .01f || cover < .005f)
             {
                 if (sun.cookie && sun.cookie == cookie) sun.cookie = null;

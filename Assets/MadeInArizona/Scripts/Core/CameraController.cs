@@ -49,6 +49,7 @@ namespace MadeInArizona
         {
             Position(false);
             var game = GameManager.Instance;
+            TimeOfDay.Tick();
             CloudShadows.Tick(game && game.State != GameState.Garage && game.State != GameState.MainMenu);
         }
         void Position(bool snap)

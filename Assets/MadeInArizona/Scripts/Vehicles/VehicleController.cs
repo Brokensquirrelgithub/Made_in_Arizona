@@ -200,13 +200,16 @@ namespace MadeInArizona
             Weapons.Initialize(this);
             ExplosionSystem.IgnoreVehicleCollisions(this);
             VehicleDamage.IgnoreWrecks(this);
-            // Tyre smoke, skid marks and gravel spray; dust that builds up on the body.
+            // Tyre smoke, skid marks and gravel spray; dust that builds up on the body; headlights at sunset.
             var tires = GetComponent<TireEffects>();
             if (tires == null) tires = gameObject.AddComponent<TireEffects>();
             tires.Bind(this);
             var dust = GetComponent<VehicleDust>();
             if (dust == null) dust = gameObject.AddComponent<VehicleDust>();
             dust.Bind(this, definition);
+            var lights = GetComponent<VehicleLights>();
+            if (lights == null) lights = gameObject.AddComponent<VehicleLights>();
+            lights.Bind(this);
             initialized = true;
         }
         public static Transform FindChild(Transform parent, string childName)

@@ -115,6 +115,14 @@ Weather and grime (Dev Tuning → Dirt & Sky):
   Paved ground no longer throws generic dust. `TireMarks` holds marks in a ring of mesh chunks; they fade after about four minutes (`Shaders/SkidMarks.shader`).
 - **Dust on cars.** `VehicleDust` gives each car its own copies of its materials and feeds `Shaders/CarDust.hlsl` the body transform and a dust amount. Parts that used URP Lit switch to the Reflective shader so they can take dust too. Dust builds with speed, slides and wheelspin: sand and mud fastest, pavement barely, and fording water rinses some off. The mask starts at the wheel wells, sills and bumpers, climbs the lower body, coats rear-facing surfaces, and leaves a light film on horizontal panels. It takes the gloss and clear coat where it sits and takes its colour from the ground. At the default rate, about ten minutes off-road makes a car filthy. The player's dust lasts the session per vehicle; hostile cars spawn already dusty.
 
+Time of day (Settings → Display & Access → Time of Day, `GameSettings.sunset`). `TimeOfDay.cs` holds a midday look (the original lighting, unchanged) and a sunset look, and eases between them over three seconds when the setting changes, so the sun visibly goes down. `DevVisuals` applies the current look on top of the Dev Tuning sliders. At sunset:
+
+- **Sun:** 15° up in the west-southwest, so shadows stretch about four times an object's height toward the east-northeast. The light is warm orange, and the ground gets less direct light.
+- **Fill light and haze:** a blue-violet dusk sky fills the shadows with a dim ground bounce. The haze and camera background turn dusky.
+- **Sky and reflections:** the procedural skybox, which URP Lit materials and the river reflect, gets a thicker, warmer atmosphere. Its environment reflection is re-rendered once the change settles. The custom shaders' reflections (`CarPaint`, `Reflective`, `FlowRiver`) blend to `SunsetSky()` in `SunGlint.hlsl` through `_SkySunset`: an orange horizon brightest under the sun, a pink belt opposite, and deep blue overhead.
+- **Grading:** slightly less exposure, a warmer white balance, split toning that cools shadows and warms highlights, a bit more contrast, saturation, vignette and bloom.
+- **Clouds and headlights:** cloud shadows are softer. Headlights come on (`VehicleLights`, one spot light per car near the camera, none on the Low preset).
+
 Garage, mission and combat-trial transitions also apply DevVisuals instead of overwriting the sun with legacy dark intensity values. This closes the transition-specific version of the slider-refresh brightness bug.
 
 `-miaDevTest` adds health/damage, persistence, effect, AO-feature and menu-resume coverage to the native smoke suite; `-miaHandlingTest` includes the stronger turn and breakable momentum tests.

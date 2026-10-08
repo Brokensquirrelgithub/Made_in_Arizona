@@ -121,12 +121,30 @@ float3 SunGlint(float3 n, float3 v, float3 l, float3 radiance, float perceptualR
     return radiance * kept;
 }
 
-// A soft sky for rough reflections when a shader has no environment of its own.
+float4 _SkySunset; // x 0 at midday, 1 at sunset (TimeOfDay.cs)
+
+// Sunset sky for reflections: hot orange along the horizon, brightest under the low sun and fading to a dusty pink
+// belt opposite it, through violet to deep blue overhead; the ground below the horizon is dark dusk.
+float3 SunsetSky(float3 r)
+{
+    float3 sunDir = _MainLightPosition.xyz;
+    float up = saturate(r.y);
+    float toward = dot(normalize(r.xz + 1e-4), normalize(sunDir.xz + 1e-4)) * .5 + .5;
+    float3 horizon = lerp(float3(.55, .32, .38), float3(1.25, .55, .2), toward);
+    float3 sky = lerp(horizon, float3(.34, .26, .44), smoothstep(0, .35, up));
+    sky = lerp(sky, float3(.08, .11, .28), smoothstep(.3, .9, up));
+    sky += float3(1.4, .62, .22) * pow(saturate(dot(r, sunDir)), 6) * (1 - smoothstep(0, .6, up));
+    float3 ground = lerp(float3(.3, .18, .15), float3(.08, .06, .07), saturate(-r.y * 3));
+    return (r.y >= 0 ? sky : ground) + float3(1.1, .5, .22) * .35 * exp(-abs(r.y - .03) * 22) * (.4 + .6 * toward);
+}
+
+// A soft sky for rough reflections when a shader has no environment of its own; the desert noon sky, or the sunset.
 float3 GlintSky(float3 r)
 {
     float up = saturate(r.y);
     float3 sky = lerp(float3(.95, .88, .76), float3(.30, .52, .86), pow(up, .5));
     float3 ground = lerp(float3(.66, .55, .42), float3(.27, .21, .16), saturate(-r.y * 3));
-    return (r.y >= 0 ? sky : ground) + float3(1, .94, .84) * .4 * exp(-abs(r.y - .05) * 18);
+    float3 noon = (r.y >= 0 ? sky : ground) + float3(1, .94, .84) * .4 * exp(-abs(r.y - .05) * 18);
+    return lerp(noon, SunsetSky(r), saturate(_SkySunset.x));
 }
 #endif

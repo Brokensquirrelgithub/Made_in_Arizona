@@ -14,6 +14,8 @@ namespace MadeInArizona
         // 0 = VSync on (match display), 1 = off with 120 FPS cap, 2 = off and uncapped.
         public int frameSync=0;
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
+        /// <summary>Sunset instead of midday: a low warm sun, long shadows and a darker, easier-on-the-eyes look (TimeOfDay).</summary>
+        public bool sunset;
         public string bindingOverrides="";
         public DevTuning dev=new DevTuning();
         public List<CarTuning> cars=new List<CarTuning>();
