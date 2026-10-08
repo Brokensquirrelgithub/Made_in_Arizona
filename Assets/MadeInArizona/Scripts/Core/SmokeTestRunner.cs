@@ -697,6 +697,13 @@ namespace MadeInArizona
             var pipeline=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
             Check("orthographic blur renderer feature packaged",Resources.FindObjectsOfTypeAll<OrthographicDepthBlurFeature>().Length>0&&Shader.Find("MadeInArizona/OrthographicDepthBlur").isSupported);
             Check("orthographic blur slider drives pixel radius",Shader.GetGlobalVector("_ArizonaOrthoDofParams").z>1);
+            // Settings > Graphics & Camera > Camera style: the lens switches projection and still frames the car.
+            var settings=game.Save.settings;bool oldPerspective=settings.perspectiveCamera;
+            settings.perspectiveCamera=true;yield return new WaitForSecondsRealtime(.5f);Capture("40-perspective-camera");
+            var lens=Camera.main;var carView=lens.WorldToViewportPoint(game.Player.transform.position);
+            Check("perspective camera option frames the car",!lens.orthographic&&Mathf.Approximately(lens.fieldOfView,CameraController.PerspectiveFov)&&carView.z>0&&carView.x>.3f&&carView.x<.7f&&carView.y>.25f&&carView.y<.75f);
+            settings.perspectiveCamera=oldPerspective;yield return new WaitForSecondsRealtime(.3f);
+            Check("camera style switches back",Camera.main.orthographic==!oldPerspective);
             tuning.depthOfField=oldDof;tuning.vignette=oldVignette;DevTuning.Apply();game.Resume();
             ExplosionSystem.Detonate(game.Player.transform.position+Vector3.right*8,6,0,game.Player.gameObject,ExplosionKind.FuelTank);
             yield return new WaitForSecondsRealtime(.04f);game.Pause();
