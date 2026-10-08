@@ -14,6 +14,7 @@ namespace MadeInArizona
         sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float born, until; public Vector3 scale; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
+        sealed class ConeVisual { public LineRenderer outline, innerLeft, innerRight; public float start, until; public Color color; }
         sealed class Burn { public Vector3 point;public Color flame;public float until,radius,next;public Light light; }
         sealed class GroundFire { public GameObject view; public ParticleSystem[] particles; public float until, scale; }
         readonly List<Burn> burns=new List<Burn>();
@@ -33,6 +34,7 @@ namespace MadeInArizona
         readonly Stack<Fragment> fragmentPool = new Stack<Fragment>();
         readonly List<Flash> flashes = new List<Flash>();
         readonly List<Wave> waves = new List<Wave>();
+        readonly List<ConeVisual> cones = new List<ConeVisual>();
         readonly List<Scorch> scorches = new List<Scorch>();
         ParticleSystem fire, smoke, sparks, tireSmoke;
         GameObject groundFirePrefab;
@@ -96,9 +98,12 @@ namespace MadeInArizona
             particleMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha); particleMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
             particleMaterial.SetFloat("_ZWrite", 0); particleMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             particleMaterial.SetColor("_BaseColor", Color.white);
-            var unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            waveMaterial = new Material(unlit) { name = "Pressure wave", enableInstancing = true };
-            waveMaterial.SetColor("_BaseColor", new Color(2.3f, 1.2f, .3f));
+            var markerShader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default");
+            waveMaterial = new Material(markerShader) { name = "Pressure waves and blast cones", renderQueue = 3000 };
+            waveMaterial.SetFloat("_Surface", 1); waveMaterial.SetFloat("_Blend", 2);
+            waveMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha); waveMaterial.SetFloat("_DstBlend", (float)BlendMode.One);
+            waveMaterial.SetFloat("_ZWrite", 0); waveMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            waveMaterial.SetColor("_BaseColor", Color.white);
             // Tumbling scraps flash in the sun: reflective metal that the wear map dulls in patches.
             var reflective = Shader.Find("MadeInArizona/Reflective");
             if (reflective && reflective.isSupported)
@@ -221,6 +226,26 @@ namespace MadeInArizona
             var tint = new Color(.93f, .92f, .9f, Mathf.Clamp01(opacity));
             system.tireSmoke.Emit(new ParticleSystem.EmitParams { position = position, velocity = velocity, startColor = tint, startSize = size, startLifetime = life, rotation = Random.Range(-30, 30) }, 1);
         }
+        /// <summary>Small six-way fire patches distributed over a vehicle while a weapon's burn damage is active.</summary>
+        public static void VehicleBurn(VehicleController vehicle)
+        {
+            if (!vehicle || !vehicle.Hull) return;
+            var system = Get();
+            Bounds hull = vehicle.Hull.bounds;
+            float halfWidth = Mathf.Clamp(Mathf.Min(hull.extents.x, hull.extents.z), .7f, 1.7f);
+            float halfLength = Mathf.Clamp(Mathf.Max(hull.extents.x, hull.extents.z), 1.1f, 2.8f);
+            Vector3 drift = vehicle.Body ? vehicle.Body.linearVelocity * .2f : Vector3.zero;
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 point = hull.center + vehicle.transform.right * Random.Range(-halfWidth, halfWidth) +
+                    vehicle.transform.forward * Random.Range(-halfLength, halfLength) + Vector3.up * Random.Range(.1f, .55f);
+                system.Emit(system.fire, point, drift + Vector3.up * Random.Range(.5f, 1.3f),
+                    new Color(2.6f, Random.Range(.65f, 1.05f), .14f, 1f), Random.Range(.7f, 1.05f), Random.Range(.7f, 1.05f));
+                if (Random.value < .35f)
+                    system.Emit(system.smoke, point + Vector3.up * .4f, drift * .6f + Vector3.up,
+                        new Color(.22f, .19f, .17f, .55f), Random.Range(.3f, .6f), 1.1f);
+            }
+        }
         public static void Burst(Vector3 position, Color color, int count, float speed)
         {
             var system = Get();
@@ -301,6 +326,19 @@ namespace MadeInArizona
                 wave.line.startColor = wave.line.endColor = wave.color * (1 - t);
                 if (Time.time > wave.until) wave.line.enabled = false;
             }
+            foreach (var cone in cones)
+            {
+                if (!cone.outline.enabled) continue;
+                float fade = Mathf.InverseLerp(cone.until, cone.start, Time.time);
+                cone.outline.widthMultiplier = Mathf.Lerp(.08f, .36f, fade);
+                Color edge = cone.color; edge.a *= fade;
+                cone.outline.startColor = cone.outline.endColor = edge;
+                edge.a *= .62f;
+                cone.innerLeft.startColor = cone.innerLeft.endColor = edge;
+                cone.innerRight.startColor = cone.innerRight.endColor = edge;
+                if (Time.time >= cone.until)
+                    cone.outline.enabled = cone.innerLeft.enabled = cone.innerRight.enabled = false;
+            }
             foreach (var scorch in scorches)
             {
                 if (!scorch.t.gameObject.activeSelf) continue;
@@ -314,7 +352,7 @@ namespace MadeInArizona
         void Perform(Blast blast)
         {
             float radius = blast.radius;
-            float visualRadius = blast.cone ? radius * .3f : radius;
+            float visualRadius = blast.cone ? radius * .55f : radius;
             Color flame = new Color(1.6f, .56f, .08f, .9f);
             Color dust = new Color(.35f, .27f, .2f, .58f);
             float fireScale = 1, smokeScale = 1, sparkScale = 1, upward = 1;
@@ -331,8 +369,8 @@ namespace MadeInArizona
                 case ExplosionKind.Massive: fireScale = 2; smokeScale = 2.5f; sparkScale = 3; upward = 2; break;
             }
             int multiplier = quality + 1;
-            int fireCount = Mathf.Clamp(Mathf.RoundToInt((1+quality*.5f)*fireScale),1,4);
-            int smokeCount = Mathf.Clamp(Mathf.RoundToInt((quality+2)*smokeScale),3,14);
+            int fireCount = Mathf.Clamp(Mathf.RoundToInt((2+quality*.85f)*fireScale),2,7);
+            int smokeCount = Mathf.Clamp(Mathf.RoundToInt((quality+3)*smokeScale),4,18);
             int sparkCount = Mathf.RoundToInt((12 + radius * 5) * multiplier * sparkScale);
             for (int i = 0; i < fireCount; i++)
             {
@@ -350,6 +388,14 @@ namespace MadeInArizona
                 Vector3 velocity = Random.onUnitSphere * radius * Random.Range(2, 4.8f); velocity.y = Mathf.Abs(velocity.y) * .65f;
                 Emit(sparks, blast.point, velocity, flame * 1.5f, Random.Range(.06f, .19f), Random.Range(.25f, .9f));
             }
+            // Thin streamer flames leave the blast along with the metal sparks instead of only billowing upward.
+            for (int i = 0; i < Mathf.Clamp(3 + quality * 2, 3, 9); i++)
+            {
+                Vector3 outward = Random.insideUnitSphere; outward.y = Mathf.Abs(outward.y) * .35f + .2f;
+                Emit(fire, blast.point + outward * radius * .12f, outward.normalized * Random.Range(radius * .7f, radius * 1.5f),
+                    Color.Lerp(flame, new Color(2.6f, 1.45f, .25f, .9f), Random.value),
+                    Random.Range(.24f, .52f), Random.Range(.55f, 1.1f));
+            }
             AtmosphereSystem.Heat(blast.point,radius*.75f,quality==3?7:4);
             bool fuel=blast.kind==ExplosionKind.Gasoline||blast.kind==ExplosionKind.FuelTank||blast.kind==ExplosionKind.Vehicle||blast.kind==ExplosionKind.Massive;
             if(fuel && quality>0 && burns.Count<(quality==3?32:12)) burns.Add(new Burn{point=blast.point,flame=flame,radius=Mathf.Min(radius,8),until=Time.time+3+quality*2,light=BurnLight(blast.point,radius)});
@@ -364,11 +410,12 @@ namespace MadeInArizona
                 }
                 else StartGroundFire(blast.point, radius, fuel);
             }
-            MakeFlash(blast.point + Vector3.up * 2, blast.cone ? radius * .45f : radius, flame);
+            MakeFlash(blast.point + Vector3.up * 2, blast.cone ? radius * .6f : radius, flame);
             // Expanding dust and refraction replace the neon-ring blast outline.
             Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*(blast.cone ? .22f : .7f));
             if (blast.cone)
             {
+                ShowCone(blast.point, blast.direction, radius);
                 // Trace both edges and the centre so the damaging footprint reads from the overhead camera.
                 for (int row = 1; row <= 5; row++) for (int lane = -2; lane <= 2; lane++)
                 {
@@ -379,6 +426,17 @@ namespace MadeInArizona
                 }
             }
             MakeScorch(blast.point, radius * (blast.cone ? .18f : .5f));
+            if (blast.cone) MakeScorch(blast.point + blast.direction * radius * .48f, radius * .16f);
+            else if (quality > 0 && radius >= 7f)
+            {
+                for (int mark = 0; mark < Mathf.Min(3, 1 + quality); mark++)
+                {
+                    Vector2 offset = Random.insideUnitCircle * radius * .48f;
+                    MakeScorch(blast.point + new Vector3(offset.x, 0, offset.y), radius * Random.Range(.13f, .24f));
+                }
+            }
+            if (quality > 0 && radius >= 6f && (blast.kind == ExplosionKind.Massive || Random.value < .3f))
+                MakeWave(blast.point, radius * .9f, new Color(.95f, .74f, .5f, .65f));
             Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
             AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
@@ -572,10 +630,64 @@ namespace MadeInArizona
                 wave = new Wave { line = line }; waves.Add(wave);
             }
             if (wave == null) return;
-            wave.line.transform.position = new Vector3(point.x, Mathf.Max(.08f, point.y - .6f), point.z);
+            wave.line.transform.position = GroundPoint(point, radius, out _) + Vector3.up * .16f;
             wave.line.transform.localScale = Vector3.one * .1f;
             wave.start = Time.time; wave.until = Time.time + .65f; wave.radius = radius; wave.color = color;
             wave.line.enabled = true;
+        }
+        Vector3 GroundPoint(Vector3 point, float radius, out Vector3 normal)
+        {
+            normal = Vector3.up;
+            float height = Mathf.Max(7f, radius + 5f), nearest = float.MaxValue;
+            Vector3 result = point;
+            int count = Physics.RaycastNonAlloc(point + Vector3.up * height, Vector3.down, groundHits,
+                height * 2f + 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                var hit = groundHits[i];
+                if (!hit.collider || hit.normal.y < .35f || hit.collider.GetComponentInParent<VehicleController>()) continue;
+                if (hit.distance >= nearest) continue;
+                nearest = hit.distance; result = hit.point; normal = hit.normal;
+            }
+            return result;
+        }
+        LineRenderer ConeLine(string name, int points, float width)
+        {
+            var go = new GameObject(name); go.transform.SetParent(transform);
+            var line = go.AddComponent<LineRenderer>();
+            line.sharedMaterial = waveMaterial; line.useWorldSpace = true; line.positionCount = points;
+            line.widthMultiplier = width; line.numCapVertices = 5; line.numCornerVertices = 5;
+            line.shadowCastingMode = ShadowCastingMode.Off; line.receiveShadows = false;
+            line.enabled = false;
+            return line;
+        }
+        void ShowCone(Vector3 point, Vector3 direction, float radius)
+        {
+            ConeVisual cone = null;
+            foreach (var candidate in cones) if (!candidate.outline.enabled) { cone = candidate; break; }
+            if (cone == null && cones.Count < 18)
+            {
+                cone = new ConeVisual {
+                    outline = ConeLine("Bazooka blast cone outline", 16, .36f),
+                    innerLeft = ConeLine("Bazooka blast cone left fill", 2, .16f),
+                    innerRight = ConeLine("Bazooka blast cone right fill", 2, .16f) };
+                cones.Add(cone);
+            }
+            if (cone == null) return;
+            Vector3 origin = GroundPoint(point, radius, out _) + Vector3.up * .23f;
+            cone.outline.SetPosition(0, origin);
+            for (int i = 0; i <= 13; i++)
+            {
+                Vector3 radial = Quaternion.AngleAxis(-45f + 90f * i / 13f, Vector3.up) * direction;
+                cone.outline.SetPosition(i + 1, GroundPoint(point + radial * radius, radius, out _) + Vector3.up * .23f);
+            }
+            cone.outline.SetPosition(15, origin);
+            cone.innerLeft.SetPosition(0, origin); cone.innerRight.SetPosition(0, origin);
+            cone.innerLeft.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(-20, Vector3.up) * direction * radius * .9f, radius, out _) + Vector3.up * .24f);
+            cone.innerRight.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(20, Vector3.up) * direction * radius * .9f, radius, out _) + Vector3.up * .24f);
+            cone.color = new Color(2.4f, .85f, .2f, .85f);
+            cone.start = Time.time; cone.until = Time.time + .72f;
+            cone.outline.enabled = cone.innerLeft.enabled = cone.innerRight.enabled = true;
         }
         void MakeScorch(Vector3 point, float radius)
         {
@@ -590,12 +702,7 @@ namespace MadeInArizona
                 scorch = new Scorch { t = go.transform, renderer = renderer }; scorches.Add(scorch);
             }
             if (scorch == null) return;
-            Vector3 position = point, normal = Vector3.up;
-            float castHeight = Mathf.Max(4, radius + 2);
-            if (Physics.Raycast(point + Vector3.up * castHeight, Vector3.down, out RaycastHit ground, castHeight * 2 + 8, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            {
-                position = ground.point; normal = ground.normal;
-            }
+            Vector3 position = GroundPoint(point, radius, out Vector3 normal);
             Vector3 tangent = Vector3.ProjectOnPlane(Random.value < .5f ? Vector3.forward : Vector3.right, normal).normalized;
             if (tangent.sqrMagnitude < .2f) tangent = Vector3.Cross(normal, Vector3.right).normalized;
             Quaternion rotation = Quaternion.LookRotation(-normal, tangent) * Quaternion.AngleAxis(Random.Range(0, 360), Vector3.forward);
@@ -604,7 +711,7 @@ namespace MadeInArizona
             scorch.t.SetPositionAndRotation(position + normal * (.022f + Random.value * .006f), rotation);
             scorch.scale = new Vector3(width, depth, 1); scorch.t.localScale = scorch.scale;
             scorch.born = Time.time; scorch.until = Time.time + Random.Range(58, 76) + quality * 10; scorch.fadeAt = scorch.until - Random.Range(14, 22);
-            scorch.color = Color.Lerp(new Color(.10f, .055f, .025f, .78f), new Color(.17f, .105f, .055f, .64f), Random.value);
+            scorch.color = Color.Lerp(new Color(.055f, .044f, .037f, .9f), new Color(.11f, .07f, .046f, .82f), Random.value);
             block.SetColor("_BaseColor", scorch.color); scorch.renderer.SetPropertyBlock(block);
         }
         void OnDestroy()

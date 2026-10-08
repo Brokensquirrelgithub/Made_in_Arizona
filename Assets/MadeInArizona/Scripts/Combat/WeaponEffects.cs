@@ -14,7 +14,7 @@ namespace MadeInArizona
         /// <summary>Fire ticks hit three times harder than the burn rates weapons declare (torch, sprinkler, death ray).</summary>
         public const float BurnTickMultiplier = 3;
         VehicleController vehicle;
-        float burnUntil, burnDps, burnTick, stallUntil, stallFx, spineDecayAt, spineDamage, spineRadius;
+        float burnUntil, burnDps, burnTick, burnFxAt, stallUntil, stallFx, spineDecayAt, spineDamage, spineRadius;
         GameObject burnSource, spineSource;
         sealed class Charge { public Transform marker; public float at, damage, radius; public GameObject source; }
         readonly List<Charge> charges = new List<Charge>();
@@ -75,11 +75,15 @@ namespace MadeInArizona
         void Update()
         {
             if (!vehicle || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
+            if (Burning && !Dead && Time.time >= burnFxAt)
+            {
+                burnFxAt = Time.time + .09f;
+                ExplosionSystem.VehicleBurn(vehicle);
+            }
             if (Burning && !Dead && Time.time >= burnTick)
             {
                 burnTick = Time.time + .25f;
                 vehicle.Damage.ApplyDamage(burnDps * .25f * BurnTickMultiplier, transform.position + Vector3.up, burnSource);
-                ExplosionSystem.Burst(transform.position + Vector3.up * 1.2f + Random.insideUnitSphere * .6f, new Color(1, .42f, .08f), 6, 2.2f);
             }
             if (IsStalled && !Dead && Time.time >= stallFx)
             {

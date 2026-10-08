@@ -360,6 +360,32 @@ namespace MadeInArizona
             }
             return Clip("Original • bowling pin strike " + variant, samples);
         }
+        /// <summary>A short impact and tumbling fragments when a car breaks scenery; wood and stone have different bodies.</summary>
+        public static AudioClip DebrisBreak(bool wood)
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .55f)];
+            uint seed = wood ? 84617u : 41773u;
+            float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, wood ? .16f : .06f);
+                float attack = Mathf.Exp(-t * (wood ? 22f : 17f));
+                float body = Wave((wood ? 155f : 92f) * t - 35f * t * t) * attack * (wood ? .45f : .65f);
+                float crack = (noise - low) * attack * (wood ? .62f : .48f);
+                float pieces = 0;
+                for (int p = 0; p < 4; p++)
+                {
+                    float local = t - .035f - p * (wood ? .052f : .065f);
+                    if (local < 0) continue;
+                    float envelope = Mathf.Exp(-local * (wood ? 38f : 24f)) * (1 - p * .16f);
+                    pieces += ((noise - low) * .42f + Wave((wood ? 470f : 310f) * local) * .23f) * envelope;
+                }
+                samples[i] = SoftLimit((body + crack + pieces) * .9f) * Mathf.Min(1, t * 2000f) *
+                    Mathf.Min(1, (samples.Length - i) / (Rate * .025f));
+            }
+            return Clip(wood ? "Original • wood break and splinters" : "Original • rock break and debris", samples);
+        }
         /// <summary>
         /// Kill confirmation: a heavy punched thunk with a short crunch, topped by a bright two-note ding, so a kill
         /// lands clearly above the ordinary hit tick.

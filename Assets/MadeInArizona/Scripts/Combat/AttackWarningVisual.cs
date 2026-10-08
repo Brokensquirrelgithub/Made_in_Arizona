@@ -7,12 +7,10 @@ namespace MadeInArizona
     public sealed class AttackWarningVisual : MonoBehaviour
     {
         const int RingSteps = 48;
-        const float BeamFadeStartsAt = 5f, BeamFadeEndsAt = 20f;
         static readonly Color Red = new Color(1f, .055f, .035f);
         readonly RaycastHit[] groundHits = new RaycastHit[16];
         Material material, coreMaterial;
         LineRenderer beamGlow, beamHalo, beamCore, impactRing, timerRing;
-        float beamFadeLength = -1f;
         Vector3 impact;
         Transform impactFollow;
         float radius, impactAt, impactDuration;
@@ -48,63 +46,27 @@ namespace MadeInArizona
         {
             if (!beamGlow)
             {
-                beamGlow = MakeLine("Sniper warning glow", 2, .65f, new Color(1, .025f, .02f, .32f));
-                beamHalo = MakeLine("Sniper warning halo", 2, .28f, new Color(1, .2f, .14f, .62f));
-                beamCore = MakeLine("Sniper warning core", 2, .11f, new Color(1, .58f, .5f, .95f));
+                beamGlow = MakeLine("Sniper warning glow", 2, .85f, new Color(1, .025f, .02f, .45f));
+                beamHalo = MakeLine("Sniper warning halo", 2, .38f, new Color(1, .2f, .14f, .75f));
+                beamCore = MakeLine("Sniper warning core", 2, .13f, new Color(1, .72f, .6f, 1));
                 beamCore.sharedMaterial = coreMaterial;
             }
             float charge = 1 - Mathf.Clamp01(remaining / Mathf.Max(.01f, duration));
-            beamGlow.widthMultiplier = Mathf.Lerp(.55f, .85f, charge);
-            beamHalo.widthMultiplier = Mathf.Lerp(.22f, .35f, charge);
-            beamCore.widthMultiplier = Mathf.Lerp(.08f, .13f, charge);
-            float length = Vector3.Distance(start, end);
-            if (Mathf.Abs(length - beamFadeLength) > .25f)
-            {
-                SetBeamFade(beamGlow, new Color(1, .025f, .02f), .32f, length);
-                SetBeamFade(beamHalo, new Color(1, .2f, .14f), .62f, length);
-                SetBeamFade(beamCore, new Color(1, .58f, .5f), .95f, length);
-                beamFadeLength = length;
-            }
-            SetBeamPath(beamGlow, start, end, length);
-            SetBeamPath(beamHalo, start, end, length);
-            SetBeamPath(beamCore, start, end, length);
+            float pulse = .78f + .22f * Mathf.Sin(Time.time * 19f);
+            beamGlow.widthMultiplier = Mathf.Lerp(.78f, 1.15f, charge) * pulse;
+            beamHalo.widthMultiplier = Mathf.Lerp(.32f, .5f, charge) * pulse;
+            beamCore.widthMultiplier = Mathf.Lerp(.1f, .18f, charge) * pulse;
+            SetBeamPath(beamGlow, start, end);
+            SetBeamPath(beamHalo, start, end);
+            SetBeamPath(beamCore, start, end);
             beamGlow.enabled = beamHalo.enabled = beamCore.enabled = true;
         }
 
-        static void SetBeamPath(LineRenderer line, Vector3 start, Vector3 end, float length)
+        static void SetBeamPath(LineRenderer line, Vector3 start, Vector3 end)
         {
-            int points = length <= BeamFadeStartsAt ? 2 : length <= BeamFadeEndsAt ? 3 : 4;
-            line.positionCount = points;
+            line.positionCount = 2;
             line.SetPosition(0, start);
-            if (points > 2) line.SetPosition(1, start + (end - start) * (BeamFadeStartsAt / length));
-            if (points > 3) line.SetPosition(2, start + (end - start) * (BeamFadeEndsAt / length));
-            line.SetPosition(points - 1, end);
-        }
-
-        static void SetBeamFade(LineRenderer line, Color color, float opacity, float length)
-        {
-            var gradient = new Gradient();
-            var colors = new[] { new GradientColorKey(color, 0), new GradientColorKey(color, 1) };
-            GradientAlphaKey[] alphas;
-            if (length <= BeamFadeStartsAt)
-                alphas = new[] { new GradientAlphaKey(opacity, 0), new GradientAlphaKey(opacity, 1) };
-            else if (length <= BeamFadeEndsAt)
-                alphas = new[]
-                {
-                    new GradientAlphaKey(opacity, 0),
-                    new GradientAlphaKey(opacity, BeamFadeStartsAt / length),
-                    new GradientAlphaKey(opacity * (BeamFadeEndsAt - length) / (BeamFadeEndsAt - BeamFadeStartsAt), 1)
-                };
-            else
-                alphas = new[]
-                {
-                    new GradientAlphaKey(opacity, 0),
-                    new GradientAlphaKey(opacity, BeamFadeStartsAt / length),
-                    new GradientAlphaKey(0, BeamFadeEndsAt / length),
-                    new GradientAlphaKey(0, 1)
-                };
-            gradient.SetKeys(colors, alphas);
-            line.colorGradient = gradient;
+            line.SetPosition(1, end);
         }
 
         public void HideSniper()

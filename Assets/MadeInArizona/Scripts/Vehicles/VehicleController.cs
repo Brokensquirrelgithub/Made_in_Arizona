@@ -712,7 +712,10 @@ namespace MadeInArizona
             if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3), point, gameObject);
             // Landing on, scraping or bottoming out against the ground never hurts and throws no sparks.
             if (ground) return;
-            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f, point, collision.gameObject);
+            // A defeated car in its spinout is wreckage, not an allied attacker: it can hurt any combatant it hits.
+            bool spinningWreck = other != null && other.IsSpinningWreck;
+            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f, point,
+                spinningWreck ? null : collision.gameObject, environmental: spinningWreck);
             if (impact < 4 && other == null) return;
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);
             if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(impact / 28) * .25f);

@@ -226,7 +226,10 @@ namespace MadeInArizona
                         new ShotFx { effect = ShotEffect.Stall, duration = 1.1f, chain = 2, castRadius = .3f });
                     break;
                 case "torch":
-                    ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(Random.Range(-7f, 7f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, .42f,
+                    // Burning fuel keeps the car's momentum after it leaves the nozzle, including sideways drift.
+                    Vector3 flameVelocity = (Quaternion.AngleAxis(Random.Range(-7f, 7f), Vector3.up) * aimDirection) * weapon.speed +
+                        (owner.Body ? owner.Body.linearVelocity : Vector3.zero);
+                    ProjectileSystem.Fire(muzzle, flameVelocity.normalized, flameVelocity.magnitude, damage, 0, source, color, ExplosionKind.Ammunition, .42f,
                         new ShotFx { effect = ShotEffect.Burn, power = 28, duration = 3, flame = true, castRadius = .35f });
                     break;
                 case "railgun": Railgun(weapon, muzzle, damage); break;

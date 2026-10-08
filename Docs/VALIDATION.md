@@ -1,6 +1,10 @@
-# Validation — 12 September 2026
+# Validation
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
+
+## Perspective combat trial release — 9 October 2026
+
+The Windows x64 player built with zero errors. The native `-miaSmokeTest -miaCombatTest -miaDevTest` suite passed all 46 checks; its driver defeated both 12-car waves with real projectiles in 15.6 seconds. Both waves spawned within the proving ground walls, and enemy weapons damaged the player. The authored and generated spawn checks passed with all 24 added cars outside the camera view; the nearest generated-world car began 65.5 m away. The `-miaSmokeTest -miaWorldTest` suite passed all 49 checks. These runs used the perspective camera default and an isolated test save.
 
 ## Builds
 

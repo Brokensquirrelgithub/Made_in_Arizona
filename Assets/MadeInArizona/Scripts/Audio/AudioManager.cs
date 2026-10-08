@@ -11,7 +11,7 @@ namespace MadeInArizona
         readonly List<AudioClip> clips=new List<AudioClip>();
         AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
-        AudioClip[] pinStrikes;
+        AudioClip[] pinStrikes, debrisBreaks;
         /// <summary>Death ray beam: the sustained hum loop and the ignition zap (played by each car's DeathRayBeam).</summary>
         public AudioClip RayLoop { get; private set; }
         public AudioClip RayStart { get; private set; }
@@ -33,7 +33,7 @@ namespace MadeInArizona
         /// <summary>Physical engine voice (dev model C), rendered on the audio thread for the player's own engine layout.</summary>
         EngineVoiceSource physicalEngine;
         public EngineVoiceSource PhysicalEngine => physicalEngine;
-        AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,nitroLevel,nitroOffAt=-10;
+        AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,debrisAt,nitroLevel,nitroOffAt=-10;
         bool wasBoosting;
         MusicManager music;
         void Awake()
@@ -67,6 +67,7 @@ namespace MadeInArizona
             // Bowling pins: the supplied strike recordings (Resources/Audio/Bowling); the synthesized rack only if they are missing.
             pinStrikes=Resources.LoadAll<AudioClip>("Audio/Bowling");
             if(pinStrikes.Length==0){pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));}
+            debrisBreaks=new[]{Keep(AudioSynthesis.DebrisBreak(true)),Keep(AudioSynthesis.DebrisBreak(false))};
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
@@ -299,6 +300,13 @@ namespace MadeInArizona
         {
             if(Settings==null||pinStrikes==null||pinStrikes.Length==0)return;
             PlayAt(pinStrikes[Random.Range(0,pinStrikes.Length)],position,Settings.weapons*.9f*duck,Random.Range(.96f,1.04f),40);
+        }
+        public void PlayDebrisBreak(Vector3 position, float size, bool wood)
+        {
+            if(Settings==null||debrisBreaks==null||Time.unscaledTime<debrisAt)return;
+            debrisAt=Time.unscaledTime+.07f;
+            PlayAt(debrisBreaks[wood?0:1],position,Settings.environment*Mathf.Clamp(.4f+size*.035f,.45f,.85f)*duck,
+                Random.Range(.88f,1.12f),55);
         }
         /// <summary>A car whipped into scenery on the tow cable: a heavy body crunch, louder for a harder hit.</summary>
         public void PlayCrash(Vector3 position,float strength)

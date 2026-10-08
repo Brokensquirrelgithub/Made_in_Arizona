@@ -7,6 +7,8 @@ namespace MadeInArizona
         public float Health { get; private set; }
         public float MaxHealth { get; private set; }
         public bool IsDead { get; private set; }
+        /// <summary>Some defeated hostiles keep moving briefly and can collide with live cars.</summary>
+        public bool IsSpinningWreck { get; private set; }
         public float Engine { get; private set; } = 1;
         public float Radiator { get; private set; } = 1;
         public float Transmission { get; private set; } = 1;
@@ -25,7 +27,7 @@ namespace MadeInArizona
 
         public void Initialize(VehicleController owner, float health)
         {
-            vehicle = owner; baseHealth=health; durabilityMultiplier=1; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false;
+            vehicle = owner; baseHealth=health; durabilityMultiplier=1; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false; IsSpinningWreck = false;
             Engine = Radiator = Transmission = Wheels = Suspension = 1;
         }
         public void SetNetworkHealth(float health, float maximum)
@@ -115,7 +117,7 @@ namespace MadeInArizona
             var own = GetComponentsInChildren<Collider>();
             foreach (var other in VehicleController.Active)
             {
-                if (!other || other == vehicle) continue;
+                if (IsSpinningWreck || !other || other == vehicle) continue;
                 foreach (var theirs in other.GetComponentsInChildren<Collider>())
                     foreach (var mine in own) Physics.IgnoreCollision(mine, theirs, true);
             }
@@ -131,7 +133,7 @@ namespace MadeInArizona
             var colliders = vehicle.GetComponentsInChildren<Collider>();
             foreach (var other in VehicleController.Active)
             {
-                if (!other || other == vehicle || other.Damage == null || !other.Damage.IsDead) continue;
+                if (!other || other == vehicle || other.Damage == null || !other.Damage.IsDead || other.Damage.IsSpinningWreck) continue;
                 foreach (var wreck in other.GetComponentsInChildren<Collider>())
                     foreach (var mine in colliders) Physics.IgnoreCollision(mine, wreck, true);
             }
@@ -173,12 +175,13 @@ namespace MadeInArizona
         void Die(GameObject source)
         {
             IsDead = true;
-            vehicle.Body.linearDamping = 2;
-            vehicle.Body.angularDamping = 3;
             var ai = GetComponent<EnemyAI>();
             if (ai != null) ai.enabled = false;
             var sourceVehicle = source != null ? source.GetComponentInParent<VehicleController>() : null;
             var friendly = ai != null && ai.IsFriendly;
+            IsSpinningWreck = !vehicle.IsPlayer && !friendly && Random.value < .25f;
+            vehicle.Body.linearDamping = IsSpinningWreck ? .35f : 2;
+            vehicle.Body.angularDamping = IsSpinningWreck ? .22f : 3;
             if (!vehicle.IsPlayer && !friendly)
             {
                 GameManager.Instance?.Mission?.RegisterKill(sourceVehicle);
@@ -198,11 +201,19 @@ namespace MadeInArizona
                 }
             }
             BecomeWreck();
+            if (IsSpinningWreck && !vehicle.Body.isKinematic)
+            {
+                float side = Random.value < .5f ? -1f : 1f;
+                vehicle.Body.maxAngularVelocity = 10f;
+                vehicle.Body.linearVelocity = Vector3.ClampMagnitude(vehicle.Body.linearVelocity, 30f) +
+                    transform.right * side * Random.Range(7f, 12f) + transform.forward * 3f;
+                vehicle.Body.angularVelocity += Vector3.up * side * Random.Range(6f, 10f);
+            }
             if (vehicle.IsPlayer) GameManager.Instance?.BeginPlayerDeath();
             else
             {
-                // Salvage is credited by MissionManager; the wreck is visual only and burns out shortly.
-                Destroy(gameObject, 3.5f);
+                // The soot colour still marks it as defeated; only the brief spinout can hit another car.
+                Destroy(gameObject, IsSpinningWreck ? 5f : 3.5f);
             }
         }
     }

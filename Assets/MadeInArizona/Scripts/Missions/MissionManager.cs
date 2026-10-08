@@ -118,7 +118,7 @@ namespace MadeInArizona
         {
             int total=SpawnManager.EnemyCount(6);
             if(Stage==0 && Kills>=SpawnManager.EnemyCount(3)) {
-                SetStage(1);SpawnWave(3,Point(0));
+                SetStage(1);SpawnWave(3,PlayerPosition);
                 DialogueSystem.Instance?.Say("JOHNNY","Second wave: open-house sharks, snowbird roadblocks, and neon tuner cars. Grab their drops and keep moving.",7);
             }
             Progress=Kills/(float)total;
@@ -420,27 +420,40 @@ namespace MadeInArizona
             return TerrainPoint(p)+Vector3.up;
         }
         /// <summary>
-        /// Wave members never pop in on screen: a spawn point inside the camera's view is pushed straight away from the
-        /// player (or, if that leaves the map, to the side or behind) until it is out of view.
+        /// On the open map, place new crews outside the camera and far enough away to approach as a wave.
         /// </summary>
         Vector3 OffScreen(Vector3 p)
         {
             var cam=Camera.main;var player=Game.Player;
-            if(!cam||!player||!InView(cam,p))return p;
+            if(!cam||!player)return p;
+            float minimumDistance=GeneratedWorld.Active?65f:24f;
+            Vector3 initial=p-player.transform.position;initial.y=0;
+            if(!InView(cam,p)&&initial.sqrMagnitude>=minimumDistance*minimumDistance)return p;
             Vector3 away=p-player.transform.position;away.y=0;
             if(away.sqrMagnitude<.01f)away=Vector3.forward;
             away.Normalize();
+            Vector3 best=p;float bestTravel=float.MaxValue;
             for(int turn=0;turn<4;turn++)
             {
                 Vector3 dir=Quaternion.Euler(0,turn*90,0)*away,q=p;
                 for(int step=0;step<45;step++)
                 {
-                    q=Ground(q+dir*6);
-                    if(GeneratedWorld.Active&&!GeneratedWorld.Contains(q))break;
-                    if(!InView(cam,q))return q;
+                    Vector3 next=Ground(q+dir*6);
+                    if((next-q).sqrMagnitude<.01f||GeneratedWorld.Active&&!GeneratedWorld.Contains(next))break;
+                    q=next;
+                    Vector3 fromPlayer=q-player.transform.position;fromPlayer.y=0;
+                    if(fromPlayer.sqrMagnitude<minimumDistance*minimumDistance)continue;
+                    if(!InView(cam,q))
+                    {
+                        // A perspective lens sees much farther down the road. Pick the closest of all four exits
+                        // so a wave does not get stranded at the distant map edge when a side exit was nearby.
+                        Vector3 travel=q-p;travel.y=0;
+                        if(travel.sqrMagnitude<bestTravel){best=q;bestTravel=travel.sqrMagnitude;}
+                        break;
+                    }
                 }
             }
-            return p;
+            return best;
         }
         static bool InView(Camera cam,Vector3 p){var v=cam.WorldToViewportPoint(p);return v.z>0&&v.x>-.12f&&v.x<1.12f&&v.y>-.12f&&v.y<1.12f;}
         void SpawnWave(int count,Vector3 center)
@@ -449,6 +462,30 @@ namespace MadeInArizona
         }
         void SpawnGroup(int count,Vector3 center)
         {
+            if(missionIndex<0&&Game.IsCombatTrial)
+            {
+                // The proving ground is only 108 by 92 metres. Its concrete walls make open-map
+                // off-screen placement unusable, so trial crews enter at evenly spaced inner edges.
+                var player=Game.Player.transform.position;
+                var used=new bool[24];
+                for(int i=0;i<count;i++)
+                {
+                    int slot=(i*2+Stage)%24;
+                    for(int offset=0;offset<24;offset++)
+                    {
+                        int candidate=(slot+offset)%24;
+                        float candidateAngle=candidate*Mathf.PI/12f;
+                        var candidatePoint=new Vector3(Mathf.Cos(candidateAngle)*46f,1.2f,Mathf.Sin(candidateAngle)*38f);
+                        Vector3 delta=candidatePoint-player;delta.y=0;
+                        if(!used[candidate]&&delta.sqrMagnitude>=22f*22f){slot=candidate;break;}
+                    }
+                    used[slot]=true;
+                    float angle=slot*Mathf.PI/12f;
+                    Vector3 p=new Vector3(Mathf.Cos(angle)*46f,1.2f,Mathf.Sin(angle)*38f);
+                    Spawn(p,i%3+(Stage>0?2:0));
+                }
+                return;
+            }
             for(int i=0;i<count;i++)
             {
                 float angle=(i*137.5f+missionIndex*31)*Mathf.Deg2Rad;

@@ -157,6 +157,7 @@ namespace MadeInArizona
             smallProp = Size <= 3f;
             if (IsDestroyed || amount <= 0) return false;
             ApplyDamage(amount, hitPoint, source, CarriedBy(source));
+            if (IsDestroyed) PlayVehicleBreakSound(source);
             return IsDestroyed;
         }
         /// <summary>Knocks the prop apart as a car drives through it: full destruction, explosions included.</summary>
@@ -165,6 +166,14 @@ namespace MadeInArizona
         {
             if (IsDestroyed) return;
             ApplyDamage(Health + 1, hitPoint, source, push);
+            if (IsDestroyed) PlayVehicleBreakSound(source);
+        }
+        void PlayVehicleBreakSound(GameObject source)
+        {
+            var car = source ? source.GetComponentInParent<VehicleController>() : null;
+            if (!car || !car.IsPlayer) return;
+            bool wood = toppleMass > 0 || splinters || name.ToLowerInvariant().Contains("tree") || name.ToLowerInvariant().Contains("crate");
+            AudioManager.Instance?.PlayDebrisBreak(WorldBounds.center, Size, wood);
         }
         /// <summary>Pieces of a prop a car runs through are carried along at most of the car's speed.</summary>
         static Vector3 CarriedBy(GameObject source)

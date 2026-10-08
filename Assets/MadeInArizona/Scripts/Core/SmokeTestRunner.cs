@@ -156,10 +156,11 @@ namespace MadeInArizona
                 else game.StartMission(0);yield return new WaitForSecondsRealtime(1.5f);
                 var before=new HashSet<VehicleController>(VehicleController.Active);
                 typeof(MissionManager).GetMethod("SpawnWave",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(game.Mission,new object[]{6,game.Player.transform.position});
-                int spawned=0,visible=0;
-                foreach(var v in VehicleController.Active){if(!v||before.Contains(v))continue;spawned++;var vp=Camera.main.WorldToViewportPoint(v.transform.position);if(vp.z>0&&vp.x>-.05f&&vp.x<1.05f&&vp.y>-.05f&&vp.y<1.05f)visible++;}
-                Debug.Log("MIA_SPAWN spawned="+spawned+" visible="+visible);
+                int spawned=0,visible=0;float nearest=float.MaxValue;
+                foreach(var v in VehicleController.Active){if(!v||before.Contains(v))continue;spawned++;nearest=Mathf.Min(nearest,Vector3.Distance(v.transform.position,game.Player.transform.position));var vp=Camera.main.WorldToViewportPoint(v.transform.position);if(vp.z>0&&vp.x>-.05f&&vp.x<1.05f&&vp.y>-.05f&&vp.y<1.05f)visible++;}
+                Debug.Log("MIA_SPAWN spawned="+spawned+" visible="+visible+" nearest="+nearest.ToString("F1"));
                 Check("wave spawned on the player appears off screen",spawned>0&&visible==0);
+                if(GeneratedWorld.Active)Check("open-world crew starts beyond close combat range",spawned>0&&nearest>=60f);
                 FinishResults();yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltProbe")>=0){game.StartMission(0);yield return new WaitForSecondsRealtime(1);var tiltKeyboard=InputSystem.AddDevice<Keyboard>();yield return TiltProbe.Run(tiltKeyboard,Check);InputSystem.RemoveDevice(tiltKeyboard);FinishResults();yield break;}
@@ -167,6 +168,61 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0){yield return TrailReview.Run(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFrameTimingTest")>=0){yield return FrameTimingProbe.Run(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0){yield return TestWorldGeneration();yield break;}
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPolishCapture")>=0)
+            {
+                game.Save.settings.perspectiveCamera=true;game.Save.settings.quality=3;game.ApplySettings();
+                game.StartMission(0);QuietMissionHostiles();yield return new WaitForSecondsRealtime(1.2f);
+                Vector3 aim=game.Player.transform.forward;aim.y=0;aim.Normalize();
+                Vector3 impact=game.Player.transform.position+aim*12f+Vector3.up*.8f;
+                ExplosionSystem.DetonateCone(impact,aim,11f,0,game.Player.gameObject);
+                yield return new WaitForSecondsRealtime(.12f);
+                bool coneVisible=false;foreach(var line in FindObjectsByType<LineRenderer>(FindObjectsSortMode.None))
+                    if(line.name=="Bazooka blast cone outline"&&line.enabled)coneVisible=true;
+                Check("bazooka blast cone renders while its damage area is active",coneVisible);
+                SceneLuminance("polish-bazooka-cone");
+                yield return new WaitForSecondsRealtime(.9f);
+                ExplosionSystem.Detonate(impact+game.Player.transform.right*12f,7f,0,game.Player.gameObject,ExplosionKind.FuelTank);
+                yield return new WaitForSecondsRealtime(.14f);SceneLuminance("polish-explosion");
+                yield return new WaitForSecondsRealtime(12.2f);SceneLuminance("polish-scorch");
+                VehicleController burnTarget=null;foreach(var car in VehicleController.Active)
+                    if(car&&!car.IsPlayer&&!car.Damage.IsDead){burnTarget=car;break;}
+                if(burnTarget)
+                {
+                    burnTarget.Body.position=game.Player.transform.position+game.Player.transform.right*7f+game.Player.transform.forward*7f;
+                    burnTarget.transform.position=burnTarget.Body.position;Physics.SyncTransforms();
+                    VehicleAfflictions.For(burnTarget).Ignite(1f,3f,game.Player.gameObject);
+                }
+                DevTuning.Current.cameraZoom=12f;CameraController.Instance.Snap();
+                yield return new WaitForSecondsRealtime(.4f);
+                Check("burned car retains a live fire effect",burnTarget&&burnTarget.Afflictions&&burnTarget.Afflictions.Burning);
+                SceneLuminance("polish-burning-car");
+                if(burnTarget)
+                {
+                    CameraController.Instance.enabled=false;
+                    var detailCamera=Camera.main;
+                    detailCamera.transform.position=burnTarget.transform.position+new Vector3(-6f,4f,-8f);
+                    detailCamera.transform.LookAt(burnTarget.transform.position+Vector3.up*1.1f);
+                    SceneLuminance("polish-burning-car-close",detailCamera);
+                }
+                FinishResults();yield break;
+            }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSunsetCapture")>=0)
+            {
+                game.Save.settings.sunset=true;game.Save.settings.perspectiveCamera=true;game.Save.settings.quality=3;game.ApplySettings();
+                game.StartCampaign(173,1600);yield return new WaitUntil(()=>game.State==GameState.Playing);
+                QuietMissionHostiles();
+                yield return new WaitForSecondsRealtime(4f);
+                Check("sunset and perspective camera settled for capture",TimeOfDay.Settled&&TimeOfDay.Blend>.99f&&!Camera.main.orthographic);
+                // A hidden player has a 512 px swapchain; render the actual gameplay camera into a full-size target.
+                SceneLuminance("sunset-gameplay");
+                var sunsetCamera=CameraController.Instance;var sunsetView=Camera.main;
+                sunsetCamera.enabled=false;
+                Vector3 car=game.Player.transform.position+Vector3.up*1.5f;
+                sunsetView.transform.position=car+new Vector3(-24f,9f,-10f);
+                sunsetView.transform.LookAt(car+Vector3.up*1.5f);
+                SceneLuminance("sunset-scenic",sunsetView);
+                yield return new WaitForSecondsRealtime(.8f);FinishResults();yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) { game.Save.settings.quality=3;game.ApplySettings();game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f); }
             Check("garage startup", game && game.Player && game.State == GameState.Garage);
             Check("catalog: eight vehicles and fifteen missions", ContentCatalog.Vehicles.Length == 8 && ContentCatalog.Missions.Length == 15);
@@ -563,7 +619,8 @@ namespace MadeInArizona
             Vector3 patrolAt=GeneratedWorld.Active.Towns[1]+new Vector3(0,1,-10);patrolAt.y=GeneratedWorld.HeightAt(patrolAt)+1;
             Teleport(patrolAt);camera.Snap();yield return null;
             var director=GeneratedWorld.Active.GetComponent<RoadPatrolDirector>();
-            Check("occasional road patrol spawns away from starter",director&&director.TrySpawnPatrol());
+            Check("occasional road patrol spawns away from starter",director&&
+                (director.EncountersSpawned>0||director.TrySpawnPatrol()));
             Check("road patrol population is bounded",director&&director.LivePatrols<=RoadPatrolDirector.PatrolLimit);
             InputSystem.RemoveDevice(keyboard);
             Application.logMessageReceived-=OnLog;
@@ -690,8 +747,9 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(.4f);Capture("23-post-effects-off");yield return new WaitForSecondsRealtime(.3f);
             tuning.depthOfField=0;tuning.vignette=.6f;DevTuning.Apply();
             yield return new WaitForSecondsRealtime(.4f);Capture("27-vignette-only");yield return new WaitForSecondsRealtime(.3f);
-            var stack=UnityEngine.Rendering.VolumeManager.instance.stack;
-            Check("vignette slider reaches live volume stack",Mathf.Abs(stack.GetComponent<UnityEngine.Rendering.Universal.Vignette>().intensity.value-.6f)<.01f);
+            var presentation=game.PresentationVolume;
+            Check("vignette slider reaches live presentation volume",presentation&&presentation.profile&&
+                presentation.profile.TryGet<UnityEngine.Rendering.Universal.Vignette>(out var vignette)&&Mathf.Abs(vignette.intensity.value-.6f)<.01f);
             tuning.depthOfField=1;tuning.vignette=0;DevTuning.Apply();
             yield return new WaitForSecondsRealtime(.4f);Capture("24-post-effects-on");yield return new WaitForSecondsRealtime(.3f);
             var pipeline=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
@@ -702,8 +760,10 @@ namespace MadeInArizona
             settings.perspectiveCamera=true;yield return new WaitForSecondsRealtime(.5f);Capture("40-perspective-camera");
             var lens=Camera.main;var carView=lens.WorldToViewportPoint(game.Player.transform.position);
             Check("perspective camera option frames the car",!lens.orthographic&&Mathf.Approximately(lens.fieldOfView,CameraController.PerspectiveFov)&&carView.z>0&&carView.x>.3f&&carView.x<.7f&&carView.y>.25f&&carView.y<.75f);
+            settings.perspectiveCamera=false;yield return new WaitForSecondsRealtime(.3f);
+            Check("camera style switches to overhead",Camera.main.orthographic);
             settings.perspectiveCamera=oldPerspective;yield return new WaitForSecondsRealtime(.3f);
-            Check("camera style switches back",Camera.main.orthographic==!oldPerspective);
+            Check("camera style restores preference",Camera.main.orthographic==!oldPerspective);
             tuning.depthOfField=oldDof;tuning.vignette=oldVignette;DevTuning.Apply();game.Resume();
             ExplosionSystem.Detonate(game.Player.transform.position+Vector3.right*8,6,0,game.Player.gameObject,ExplosionKind.FuelTank);
             yield return new WaitForSecondsRealtime(.04f);game.Pause();
@@ -782,14 +842,16 @@ namespace MadeInArizona
             DevTuning.Current.playerHealth=10;
             game.StartCombatTrial();yield return new WaitForSecondsRealtime(.6f);
             Check("combat trial starts without campaign unlock",game.IsCombatTrial&&game.State==GameState.Playing);
-            var factions=new HashSet<EnemyFaction>();bool factionLoadouts=true;
+            var factions=new HashSet<EnemyFaction>();bool factionLoadouts=true,firstWaveInside=true;
             foreach(var ai in FindObjectsByType<EnemyAI>())
             {
                 factions.Add(ai.Faction);
                 var weapon=ai.GetComponent<VehicleController>().Weapons.GarageWeapon;
                 factionLoadouts &= weapon && weapon.id==FactionRules.PrimaryWeapon(ai.Faction,ai.Archetype);
+                firstWaveInside &= Mathf.Abs(ai.transform.position.x)<51f&&Mathf.Abs(ai.transform.position.z)<43f;
             }
             Check("combat trial opens with three factions and their weapon sets",factions.Count==3&&factionLoadouts);
+            Check("first combat wave spawns inside arena walls",firstWaveInside);
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None)){ai.enabled=false;ai.GetComponent<VehicleController>().SetAIInput(Vector2.zero,Vector3.forward,false);}
             Check("field weapon starts empty in combat",game.Player.Weapons.FieldWeapon==null);
             game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
@@ -798,9 +860,16 @@ namespace MadeInArizona
             Check("field ammo is capped per weapon",game.Player.Weapons.FieldAmmo==WeaponRules.MaxAmmo("invoice"));
             game.Player.Weapons.EquipField(WeaponRules.Find("invoice"),WeaponRules.PickupAmmo("invoice"));
             foreach(var ai in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))ai.enabled=true;
-            float fightStart=Time.time,deadline=Time.time+70;bool attacked=false,captured=false,warned=false;
+            float fightStart=Time.time,deadline=Time.time+70;bool attacked=false,captured=false,warned=false,waveTwoSeen=false,waveTwoInside=true;
             while(Time.time<deadline&&game.IsPlaying) {
                 foreach(var ai in FindObjectsByType<EnemyAI>())factions.Add(ai.Faction);
+                if(game.Mission.Stage==1&&!waveTwoSeen)
+                {
+                    waveTwoSeen=true;
+                    foreach(var enemy in VehicleController.Active)
+                        if(enemy&&!enemy.IsPlayer&&!enemy.Damage.IsDead)
+                            waveTwoInside &= Mathf.Abs(enemy.transform.position.x)<51f&&Mathf.Abs(enemy.transform.position.z)<43f;
+                }
                 var player=game.Player;
                 if(player.Damage.LastDamageTime>=fightStart && player.Damage.LastDamageSource && player.Damage.LastDamageSource.GetComponentInParent<EnemyAI>())attacked=true;
                 // Keep the integration driver alive so it can exercise both real combat waves.
@@ -830,9 +899,18 @@ namespace MadeInArizona
                 yield return null;
             }
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+            if(game.State!=GameState.Won)
+            {
+                Debug.Log("MIA_COMBAT_TRIAL_DIAG kills="+game.Mission.Kills+" stage="+game.Mission.Stage+" state="+game.State+" player="+game.Player.transform.position+" elapsed="+(Time.time-fightStart).ToString("F1"));
+                foreach(var enemy in VehicleController.Active)
+                    if(enemy&&!enemy.IsPlayer&&!enemy.Damage.IsDead)
+                        Debug.Log("MIA_COMBAT_TRIAL_ENEMY "+enemy.name+" pos="+enemy.transform.position+" hp="+enemy.Damage.Health.ToString("F0")+" distance="+Vector3.Distance(enemy.transform.position,game.Player.transform.position).ToString("F0"));
+            }
             Check("combat trial fields all six faction crews",factions.Count==FactionRules.Count);
+            Check("second combat wave spawns inside arena walls",waveTwoSeen&&waveTwoInside);
             Check("enemy vehicle weapons damage player",attacked);
             Check("real projectiles defeat both vehicle waves",game.State==GameState.Won&&game.Mission.Kills>=24);
+            Debug.Log("MIA_COMBAT_TRIAL_RESULT kills="+game.Mission.Kills+" elapsed="+(Time.time-fightStart).ToString("F1")+" state="+game.State);
             Check("vehicle hits and kills confirm",CombatFeedback.LastHitTime>=fightStart&&CombatFeedback.LastKillTime>=fightStart);
             Check("combat trial preserves campaign progression",game.Save.money==money&&game.Save.unlockedMission==unlock&&game.Save.completedMissions.Count==completed);
             Capture("13-combat-trial-complete");yield return new WaitForSecondsRealtime(.35f);

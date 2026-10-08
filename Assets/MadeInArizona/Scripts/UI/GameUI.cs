@@ -470,9 +470,11 @@ namespace MadeInArizona
                 else Text(point.x-82,point.y-10,164,24,label,12,color,true,TextAnchor.MiddleCenter);
             }
             string[] names={"FLANKER","TECHNICAL","RAMMER","SNIPER","ROCKET CARRIER","JUNK BOMB","HEAVY","COMMAND"};
+            bool sniperThreat=false;
             foreach(var vehicle in VehicleController.Active) {
                 if(!vehicle||vehicle.IsPlayer||vehicle.Damage.IsDead)continue;
                 var ai=vehicle.GetComponent<EnemyAI>();if(!ai)continue;
+                if(ai.IsTelegraphingAttack&&ai.AttackTelegraph==EnemyAttackTelegraph.Sniper&&ai.Target==game.Player)sniperThreat=true;
                 var view=Camera.main.WorldToViewportPoint(vehicle.transform.position);
                 if(view.z<0 || view.x<0 || view.x>1 || view.y<0 || view.y>1)continue;
                 var point=ScreenPoint(vehicle.transform.position+Vector3.up*3);
@@ -483,6 +485,11 @@ namespace MadeInArizona
                 if(ai.IsTelegraphingAttack) {
                     Text(point.x-110,point.y+20,220,25,ai.AttackTelegraph.ToString().ToUpperInvariant()+"  "+ai.TelegraphRemaining.ToString("0.0")+"s",13,Orange,true,TextAnchor.MiddleCenter);
                 }
+            }
+            if(sniperThreat) {
+                float warningY=height*.18f;
+                Rect(width*.5f-190,warningY,380,42,new Color(.22f,.015f,.018f,.86f));
+                Text(width*.5f-180,warningY+3,360,35,"SNIPER LOCK  •  MOVE",21,new Color(1f,.73f,.62f),true,TextAnchor.MiddleCenter);
             }
             if(Time.time-CombatFeedback.LastHitTime<.16f) {
                 Vector2 point=ScreenPoint(CombatFeedback.LastHitPoint);

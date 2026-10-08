@@ -426,7 +426,7 @@ namespace MadeInArizona
             committedAim = aim.sqrMagnitude > .01f ? aim.normalized : transform.forward;
             committedDistance = distance;
             TelegraphDirection = committedAim;
-            float warning = attack == EnemyAttackTelegraph.Rocket ? 1.2f : attack == EnemyAttackTelegraph.Mortar ? 1.1f : attack == EnemyAttackTelegraph.Mine ? .65f : attack == EnemyAttackTelegraph.Sniper ? .9f : .8f;
+            float warning = attack == EnemyAttackTelegraph.Rocket ? 1.2f : attack == EnemyAttackTelegraph.Mortar ? 1.1f : attack == EnemyAttackTelegraph.Mine ? .65f : attack == EnemyAttackTelegraph.Sniper ? 1.25f : .8f;
             telegraphFireAt = Time.time + warning;
             // Aim is locked at the warning start, so player movement produces a real dodge window.
             specialAt = telegraphFireAt + SpecialRecovery(attack);
@@ -453,7 +453,7 @@ namespace MadeInArizona
                 if (!hit.collider || hit.collider.transform.IsChildOf(transform)) continue;
                 if (hit.distance < nearest) { nearest = hit.distance; end = hit.point; }
             }
-            sniperWarning.ShowSniper(muzzle, end, TelegraphRemaining, .9f);
+            sniperWarning.ShowSniper(muzzle, end, TelegraphRemaining, 1.25f);
         }
 
         void FireCommittedAttack(bool clearShot)
@@ -477,7 +477,13 @@ namespace MadeInArizona
                     committedAim, mortar, 55, Mathf.Clamp(committedDistance / 1.94f, 12, 42));
             }
             else if (attack == EnemyAttackTelegraph.Sniper)
+            {
+                Vector3 muzzle = transform.position + Vector3.up * .85f + committedAim * 2.5f;
+                ExplosionSystem.Burst(muzzle, new Color(2.4f, .32f, .4f), 14, 4f);
+                WeaponFx.Beam(muzzle, muzzle + committedAim * Mathf.Min(105f, committedDistance + 8f),
+                    new Color(2.8f, .28f, .36f, .95f), .2f, .2f);
                 ProjectileSystem.Fire(transform.position + Vector3.up * .85f + committedAim * 2.5f, committedAim, 150, 28, 0, gameObject, new Color(1, .16f, .34f), ExplosionKind.Ammunition, .7f);
+            }
         }
 
         float PrimaryRange()
