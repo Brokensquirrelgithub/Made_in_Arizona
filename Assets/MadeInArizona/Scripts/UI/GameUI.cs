@@ -16,6 +16,23 @@ namespace MadeInArizona
         static readonly Color Lime = new Color(.80f, .90f, .42f);
         static readonly Color Blue = new Color(.30f, .83f, .87f);
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
+        // Every rectangle the latest pass painted outside a scroll view, in window pixels from the top left: where a
+        // click belongs to the interface and not to the shop behind it.
+        static readonly List<Rect> painted = new List<Rect>();
+        static Vector2 guiOrigin;
+        static float guiScale = 1;
+        static bool shopShowing;
+        /// <summary>
+        /// Whether a click at <paramref name="pointer"/> (screen pixels from the bottom left) lands in the garage itself:
+        /// the garage screen is up, and no panel or button is under the pointer.
+        /// </summary>
+        public static bool ShopUnderPointer(Vector2 pointer)
+        {
+            if (!shopShowing) return false;
+            var point = new Vector2(pointer.x, Screen.height - pointer.y);
+            foreach (var rect in painted) if (rect.Contains(point)) return false;
+            return true;
+        }
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause" };
@@ -120,6 +137,8 @@ namespace MadeInArizona
         void Rect(float x, float y, float w, float h, Color color)
         {
             var previous = GUI.color; GUI.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color; GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture); GUI.color = previous;
+            // Inside a scroll view the coordinates are the view's own; the panel it sits on is already recorded.
+            if (GUIUtility.GUIToScreenPoint(Vector2.zero) == guiOrigin) painted.Add(new Rect(x * guiScale, y * guiScale, w * guiScale, h * guiScale));
         }
         void Text(float x, float y, float w, float h, string text, int size = 18, Color? color = null, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
         {
@@ -149,6 +168,7 @@ namespace MadeInArizona
             scale = Mathf.Max(.45f, scale);
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * scale);
             width = Screen.width / scale; height = Screen.height / scale;
+            painted.Clear(); shopShowing = false; guiScale = scale; guiOrigin = GUIUtility.GUIToScreenPoint(Vector2.zero);
             if (introActive) { DrawOpening(); GUI.matrix = Matrix4x4.identity; return; }
             if (CoopSession.Instance && (CoopSession.Instance.EndChoicePending || CoopSession.Instance.EndingSession))
             { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
@@ -186,6 +206,7 @@ namespace MadeInArizona
 
         void DrawGarage()
         {
+            shopShowing = true;
             Rect(0, 0, width, 92, Ink);
             Rect(30, 22, 4, 44, Orange);
             Text(48, 17, 420, 35, "MADE IN ARIZONA", 29, Cream, true);

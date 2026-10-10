@@ -80,7 +80,8 @@ namespace MadeInArizona
         void Update()
         {
             if(Time.timeScale<=0) return; clock+=Time.deltaTime;
-            float wag=IsWashing?13:8;
+            UpdateTreats();
+            float wag=IsWashing?13:IsFussed?17:8;
             if(tail) tail.localRotation=Quaternion.Euler(0,Mathf.Sin(clock*wag)*27,Mathf.Sin(clock*wag)*9);
             bool walking=!riding&&roamingRoute!=null&&roamingRoute.Length>1&&clock>=pauseUntil;
             // A dirty car in the garage: she fetches the hose and washes it (SuzukiDogWash).
@@ -113,6 +114,8 @@ namespace MadeInArizona
             {
                 float pitch=sniffing?34+Mathf.Sin(clock*4.2f)*5:Mathf.Sin(clock*.8f)*5;
                 float yaw=sniffing?Mathf.Sin(clock*2.3f)*8:Mathf.Sin(clock*.6f)*17;
+                // Patted or fed: she looks up at whoever did it.
+                if(IsFussed){pitch=-14+Mathf.Sin(clock*9)*4;yaw=Mathf.Sin(clock*5)*7;}
                 head.localRotation=Quaternion.Euler(pitch,yaw,Mathf.Sin(clock*.42f)*4);
             }
             for(int i=0;i<legs.Length;i++)if(legs[i])

@@ -251,6 +251,8 @@ namespace MadeInArizona
             Check("all sheet vehicles retain their years in motor pool names",rosterYears);
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaRosterTest")>=0)
             { yield return TestVehicleRoster(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSuzukiTest")>=0)
+            { yield return TestSuzukiTreats(); FinishResults(); yield break; }
             Check("six-way texture pairs and shader",Resources.Load<Texture2D>("SixWay/Fireball_P") && Resources.Load<Texture2D>("SixWay/Fireball_N") && Resources.Load<Texture2D>("SixWay/Smoke_P") && Resources.Load<Texture2D>("SixWay/Smoke_N") && Shader.Find("MadeInArizona/SixWaySmoke").isSupported);
             Check("Suzuki present", FindFirstObjectByType<SuzukiDog>() != null);
             Capture("01-garage");
@@ -2015,6 +2017,100 @@ namespace MadeInArizona
             float low=float.MaxValue,high=float.MinValue;
             for(int i=0;i<20;i++){float h=GeneratedWorld.HeightAt(new Vector3(-220+i*22,0,-250+i*24));low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
             Check("generated terrain keeps gentle finite relief",WorldGenConfig.Finite(low)&&WorldGenConfig.Finite(high)&&high-low>3&&high-low<game.WorldConfig.terrainHeight);
+        }
+        /// <summary>
+        /// Clicks Suzuki's head and her bowl with an injected mouse while the garage interface is up: a heart for the
+        /// head, a bone for the bowl, and nothing for a click that lands on a panel or on empty air.
+        /// </summary>
+        IEnumerator TestSuzukiTreats()
+        {
+            var game=GameManager.Instance;
+            var dog=Array.Find(FindObjectsByType<SuzukiDog>(FindObjectsSortMode.None),d=>!d.IsRiding);
+            Check("garage Suzuki has a bowl",dog&&dog.Bowl);
+            if(!dog||!dog.Bowl)yield break;
+            var camera=Camera.main;var rig=CameraController.Instance;rig.enabled=false;camera.orthographic=false;camera.fieldOfView=45;
+            var mouse=InputSystem.AddDevice<Mouse>();
+            // An eye point 3.5 m from the target, above it, with nothing solid in between: she wanders, and the car,
+            // the lift and the office furniture all take clicks meant for her.
+            Vector3 EyeFor(Vector3 target)
+            {
+                for(int i=0;i<12;i++)
+                {
+                    float angle=(200+i*30)*Mathf.Deg2Rad;
+                    Vector3 eye=target+new Vector3(Mathf.Sin(angle)*2.9f,1.9f,Mathf.Cos(angle)*2.9f);
+                    if(!Physics.CheckSphere(eye,.35f)&&!Physics.Linecast(eye,target+(eye-target).normalized*.6f))return eye;
+                }
+                return target+new Vector3(0,3.4f,-.6f);
+            }
+            IEnumerator Press(Vector2 pointer)
+            {
+                InputSystem.QueueStateEvent(mouse,new MouseState{position=pointer});yield return null;
+                InputSystem.QueueStateEvent(mouse,new MouseState{position=pointer}.WithButton(MouseButton.Left));yield return null;yield return null;
+                InputSystem.QueueStateEvent(mouse,new MouseState{position=pointer});yield return null;
+            }
+            // Looks straight at a target, which puts it in the open middle of the garage screen, and clicks it. Tilted
+            // down, the same view lifts the target under the bar across the top of the screen instead.
+            IEnumerator Click(Func<Vector3> target,float tilt)
+            {
+                Vector3 at=target(),eye=EyeFor(at);
+                camera.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(at-eye)*Quaternion.Euler(tilt,0,0));
+                yield return null;yield return null;
+                yield return Press(camera.WorldToScreenPoint(target()));
+            }
+            Vector3 bowl=dog.Bowl.position;
+
+            yield return Click(()=>dog.HeadPosition,0);
+            Vector2 middle=new Vector2(Screen.width*.5f,Screen.height*.5f);
+            Check("clicks reach the shop between the panels, not through them",GameUI.ShopUnderPointer(middle)&&
+                !GameUI.ShopUnderPointer(new Vector2(Screen.width*.5f,Screen.height-20))&&!GameUI.ShopUnderPointer(new Vector2(Screen.width*.12f,Screen.height*.5f))&&
+                !GameUI.ShopUnderPointer(new Vector2(Screen.width*.5f,20)));
+            Check("a click on Suzuki's head raises a heart",dog.HeartsGiven==1&&dog.HeartsShowing==1&&dog.IsFussed&&
+                VehicleController.FindChild(game.World.transform,"Suzuki heart"));
+            yield return new WaitForSecondsRealtime(.45f);Capture("suzuki-heart");
+            yield return new WaitForSecondsRealtime(1.6f);
+            Check("the heart floats off and is gone",dog.HeartsShowing==0&&!VehicleController.FindChild(game.World.transform,"Suzuki heart"));
+
+            // The same click with her head under the top bar belongs to the bar.
+            Vector3 headAt=dog.HeadPosition,headEye=EyeFor(headAt);
+            camera.transform.SetPositionAndRotation(headEye,Quaternion.LookRotation(headAt-headEye)*Quaternion.Euler(20.5f,0,0));
+            yield return null;yield return null;
+            Vector3 covered=camera.WorldToScreenPoint(dog.HeadPosition);
+            yield return Press(covered);
+            Check("a click on her head under a panel does nothing (pointer "+covered.y.ToString("0")+" of "+Screen.height+")",
+                covered.y>Screen.height*.9f&&!GameUI.ShopUnderPointer(covered)&&dog.HeartsGiven==1);
+
+            yield return Click(()=>bowl,0);
+            Check("a click on her bowl sends a bone down",dog.BonesGiven==1&&VehicleController.FindChild(game.World.transform,"Suzuki bone")&&dog.NewestBone.y>bowl.y+.5f);
+            yield return new WaitForSecondsRealtime(.42f);Capture("suzuki-bone-falling");
+            float deadline=Time.realtimeSinceStartup+4;
+            while(dog.BonesInBowl<1&&Time.realtimeSinceStartup<deadline)yield return null;
+            Vector3 bone=dog.NewestBone;
+            Check("the bone comes to rest in the bowl ("+(bone-bowl).ToString("0.00")+" from its centre)",dog.BonesInBowl==1&&
+                new Vector2(bone.x-bowl.x,bone.z-bowl.z).magnitude<.2f&&bone.y>bowl.y&&bone.y<bowl.y+.3f);
+            // The capture is taken at the end of a later frame: hold the view until it has been.
+            yield return new WaitForSecondsRealtime(.3f);Capture("suzuki-bone");yield return new WaitForSecondsRealtime(.4f);
+
+            // Open sky: in the shop, but on nothing.
+            camera.transform.SetPositionAndRotation(new Vector3(0,3,-9),Quaternion.LookRotation(new Vector3(0,1,-.4f)));
+            yield return null;yield return null;
+            yield return Press(middle);
+            Check("a click on nothing gives nothing",GameUI.ShopUnderPointer(middle)&&dog.HeartsGiven==1&&dog.BonesGiven==1);
+
+            // Five fill the bowl; the sixth empties it first.
+            for(int i=0;i<4;i++)dog.Treat();
+            deadline=Time.realtimeSinceStartup+4;
+            while(dog.BonesInBowl<5&&Time.realtimeSinceStartup<deadline)yield return null;
+            bool full=dog.BonesInBowl==5;
+            dog.Treat();
+            deadline=Time.realtimeSinceStartup+4;
+            while(dog.BonesInBowl<1&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return new WaitForSecondsRealtime(.2f);
+            Check("the bowl holds five bones and is emptied for the sixth",full&&dog.BonesInBowl==1&&dog.BonesGiven==6);
+            // A bowlful from straight overhead, where she cannot wander in front of the lens.
+            for(int i=0;i<4;i++)dog.Treat();
+            camera.transform.SetPositionAndRotation(bowl+new Vector3(0,1.5f,-.3f),Quaternion.LookRotation(new Vector3(0,-1.5f,.3f)));
+            yield return new WaitForSecondsRealtime(1.6f);Capture("suzuki-bowl-full");yield return new WaitForSecondsRealtime(.4f);
+            InputSystem.RemoveDevice(mouse);rig.enabled=true;
         }
         IEnumerator TestVehicleRoster()
         {

@@ -2,6 +2,14 @@
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
 
+## Suzuki's treats — 11 October 2026
+
+The Windows x64 player built with zero errors. `-miaSmokeTest -miaSuzukiTest` passed 12 / 12 and `-miaSmokeTest -miaGarageReview` passed 9 / 9 on that build (the review covers her hose routine, which shares her update loop).
+
+The new suite injects a mouse and clicks with the garage interface drawn. It checks that the open floor of the screen takes clicks and its panels do not; that a click on her head raises one heart, which floats off and is gone; that the same click with her head under the top bar does nothing; that a click on her bowl sends a bone down which comes to rest within 20 cm of the bowl's centre; that a click on open sky gives nothing; and that the bowl holds five bones and is emptied for the sixth. Captures 40 and 41 show the heart and the bone.
+
+The pointer is injected, so this does not prove a physical mouse reaches the same code on every setup, and the clicks were made from a camera placed 3.5 m away rather than the garage's own orbit, where her head is a smaller target. The other suites were not re-run for this change, which touches only the garage dog, the bowl and the interface's record of what it painted.
+
 ## Roster car bodies, larger rocks and rock seating — 10 October 2026
 
 The Windows x64 player built with zero errors. Native Windows/D3D11 suites, run one after another on that build in a minimized window:

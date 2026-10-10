@@ -131,8 +131,9 @@ namespace MadeInArizona
             Box("Suzuki dog bed",shop,new Vector3(4.7f,.12f,-3.5f),new Vector3(2.15f,.24f,1.65f),new Color(.40f,.24f,.15f));
             Box("Bed cushion",shop,new Vector3(4.7f,.27f,-3.5f),new Vector3(1.86f,.14f,1.35f),new Color(.74f,.47f,.24f));
             Text("SUZUKI • MANAGEMENT",shop,new Vector3(4.7f,.18f,-4.34f),.16f,Cream);
-            Cylinder("Water bowl",shop,new Vector3(6,.13f,-4.2f),.27f,.21f,new Color(.45f,.54f,.56f));
-            Cylinder("Water",shop,new Vector3(6,.212f,-4.2f),.235f,.015f,Turquoise);
+            var bowl=Cylinder("Water bowl",shop,new Vector3(6,.13f,-4.2f),.27f,.21f,new Color(.45f,.54f,.56f));
+            // The water lies just proud of the bowl's top inside its rim; set lower, it was hidden in the solid bowl.
+            Cylinder("Water",shop,new Vector3(6,.238f,-4.2f),.235f,.012f,Turquoise);
             var suzuki=SuzukiDog.Create(shop,new Vector3(4.5f,.38f,-3.25f),GameManager.Instance?.Save?.dogCosmetic??0,false,new[]{
                 // One-time cushion egress stays high until her paws clear the mattress; the loop then remains on the floor.
                 new Vector3(5.0f,.30f,-2.3f),new Vector3(6.0f,0,-2.3f),new Vector3(5.3f,0,-8.6f),
@@ -141,6 +142,8 @@ namespace MadeInArizona
                 new Vector3(3.8f,0,7.5f),new Vector3(5.2f,0,5.2f),new Vector3(5.0f,0,1.0f),new Vector3(5.0f,0,-2.3f)
             },1);
             suzuki.HoseReel=SuzukiDog.BuildHoseReel(shop,new Vector3(11.85f,0,-9.4f));
+            // Click her head for a heart, her bowl for a bone (SuzukiDogTreats).
+            suzuki.Bowl=bowl.transform;
             int souvenirs=GameManager.Instance?.Save?.completedMissions?.Count??0;
             for(int i=0;i<Mathf.Min(16,souvenirs);i++)
             {

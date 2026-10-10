@@ -168,6 +168,14 @@ Bridge decks: the heightfield holds the carved river bed under a bridge, so rout
 
 The escort suite now pins its own map (seed 173, 1600 m). The world config persists between runs, and a suite run just before it (the mountain suite ends on a 4.8 km map) left legs three times longer than its time limit, which is what made it fail. `-miaEscortSize=3200` (or 4800) drives the same seed on a larger map, with the time limit scaled to match. Its loop check counts a return to the same spot within one leg; a new leg may rightly drive back down the road the last leg came in on. `-miaEscortTrace` also logs the route index and anything local avoidance steered round.
 
+## Suzuki's treats — 11 October 2026
+
+In the garage, a left click on Suzuki's head sends a heart up from it, and a click on her water bowl drops a bone in (`SuzukiDogTreats`, part of `SuzukiDog`). She has no colliders, so a click is a ray from the camera that passes within about 0.4 m of her head or the bowl; anything solid nearer the camera (the car, a lift column, a wall) takes the click instead. For a moment afterwards her tail goes double time and she looks up. Bones tumble in from 1.7 m, hop twice and lie in the water; the bowl holds five and is emptied before a sixth. Nothing is saved.
+
+The garage interface is immediate-mode and has no notion of what is under the pointer, so `GameUI` records every rectangle it paints each pass (in window pixels, skipping those inside scroll views, whose panel is already recorded) and `GameUI.ShopUnderPointer` answers whether a click belongs to the shop: the garage screen is up and no panel or button is under it. The bowl's water was drawn inside the solid bowl and never showed; it now sits just proud of the top, inside the rim.
+
+`-miaSmokeTest -miaSuzukiTest` clicks her head and bowl through an injected mouse with the interface up, and checks that a click under a panel or on empty air does nothing.
+
 ## Roster car bodies, larger rocks and rock seating — 10 October 2026
 
 **Roster cars.** The fourteen roster cars are low-poly versions of their inspiration cars. `CarShell` lofts a body from a row of cross-sections (stations) running nose to tail; each station gives the beltline, the height of the hood, roof or deck on the centre line, and the half-widths of the body side and of the top's edge. Skinning between stations produces the tapered nose and tail, raked glass with painted pillars and frames, tumblehome, a flat-centred roof and hood, and two-tone lower panels. Wheel arches are cut as polygons with a well behind each; a station is added at every arch corner so the opening stays crisp. An open tub replaces the top for a roadster's cockpit or a pickup's bed. Faces are grouped by material, one mesh per material, so a roster car is about 70 renderers and 3,000 triangles (the boxed rigs are about 155 and 24,000).
