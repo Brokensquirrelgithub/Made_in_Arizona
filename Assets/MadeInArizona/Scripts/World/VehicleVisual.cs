@@ -3,14 +3,18 @@ using static MadeInArizona.WorldArt;
 
 namespace MadeInArizona
 {
-    /// <summary>Original mechanically readable vehicle models, generated without imported vehicle artwork.</summary>
-    public static class VehicleVisual
+    /// <summary>
+    /// Original vehicle models, generated without imported vehicle artwork. The off-road rigs here are assembled from
+    /// boxes on a visible ladder frame; the roster cars are lofted low-poly bodies (see VehicleVisualRoster).
+    /// </summary>
+    public static partial class VehicleVisual
     {
         public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             Transform root=Group("Original procedural vehicle model",parent,Vector3.zero);
-            string id=definition.id ?? "thimble";
-            bool tiny=id=="thimble", jeep=id=="juniper", buggy=id=="skitter", van=id=="sidehustle", trophy=id=="sunskip", diesel=id=="foreclosure", monster=id=="vincent";
+            string id=definition.id ?? "juniper";
+            if(BuildRoster(definition,root,enemy,faction)) return root;
+            bool jeep=id=="juniper", buggy=id=="skitter", van=id=="sidehustle", trophy=id=="sunskip", diesel=id=="foreclosure", monster=id=="vincent";
             bool pickup=trophy||diesel||id=="perennial"||monster;
             float width=definition.trackWidth+.06f, length=definition.wheelbase+1.12f;
             float lift=Mathf.Clamp(definition.rideHeight-.56f,0,.45f);
@@ -41,7 +45,7 @@ namespace MadeInArizona
             for(int i=0;i<7;i++) Use(Box("Cooling fin",root,new Vector3((i-3)*width*.065f,sill+.16f,length*.531f),new Vector3(.025f,.2f,.026f),metal),Chrome(chrome,.8f,1.2f));
             for(int side=-1;side<=1;side+=2)
             {
-                Shape("Headlight",root,jeep?PrimitiveType.Sphere:PrimitiveType.Cube,new Vector3(side*width*.35f,sill+.17f,length*.515f),new Vector3(width*.19f,.2f,.07f),new Color(1,.81f,.42f),false,0,.8f,2.6f);
+                Shape("Headlight",root,jeep?PrimitiveType.Sphere:PrimitiveType.Cube,new Vector3(side*width*.35f,sill+.17f,length*.515f),new Vector3(width*.19f,.2f,.07f),VehicleLights.HeadlightAmber,false,0,.8f,2.6f);
                 Box("Tail light",root,new Vector3(side*width*.39f,sill+.05f,-length*.508f),new Vector3(.16f,.22f,.05f),new Color(.95f,.035f,.025f),false,1.4f);
                 PaintBox("Door armor",root,new Vector3(side*(width*.508f),sill+.14f,-.2f),new Vector3(.055f,.37f,length*.3f),Color.Lerp(paint,Ink,.18f));
                 if(enemy) Box("Faction stripe",root,new Vector3(side*width*.54f,sill+.23f,-.2f),new Vector3(.025f,.095f,length*.3f),FactionRules.Accent(faction),false,1.1f);
@@ -54,12 +58,12 @@ namespace MadeInArizona
                     PaintBox("Squared fender flare",root,new Vector3(side*width*.50f,sill+.12f,z),new Vector3(.23f,.12f,.9f),jeep||trophy||monster?Ink:paint);
                     Beam("Suspension damper",root,new Vector3(side*width*.38f,.34f,z+.15f),new Vector3(side*width*.42f,sill+.28f,z-.15f),.044f,Orange);
                     Transform wheel=Group(ax>0?(side<0?"Wheel_FL":"Wheel_FR"):(side<0?"Wheel_RL":"Wheel_RR"),root,new Vector3(side*(definition.trackWidth*.5f+.06f),.36f+lift*.3f,z));
-                    float radius=tiny?.35f:buggy?.4f:trophy||monster?.52f:.43f;
+                    float radius=buggy?.4f:trophy||monster?.52f:.43f;
                     var tire=Cylinder("All terrain tire",wheel,Vector3.zero,radius,.31f,rubber); tire.transform.localRotation=Quaternion.Euler(0,0,90);
                     var rim=Use(Cylinder("Beadlock rim",wheel,new Vector3(side*.17f,0,0),radius*.62f,.036f,jeep?Cream:metal),jeep?CarPaint(Cream):Chrome(chrome,.9f,1.3f)); rim.transform.localRotation=Quaternion.Euler(0,0,90);
                     var hub=Cylinder("Hub",wheel,new Vector3(side*.194f,0,0),radius*.2f,.04f,Ink); hub.transform.localRotation=Quaternion.Euler(0,0,90);
                     for(int lug=0;lug<6;lug++) { float a=lug*Mathf.PI/3; Use(Shape("Wheel bolt",wheel,PrimitiveType.Sphere,new Vector3(side*.206f,Mathf.Sin(a)*radius*.36f,Mathf.Cos(a)*radius*.36f),Vector3.one*.044f,Cream),Chrome(chrome,.86f)); }
-                    if(!tiny) for(int tread=0;tread<12;tread++) { float a=tread*Mathf.PI/6; var block=Box("Tread block",wheel,new Vector3(0,Mathf.Sin(a)*radius,Mathf.Cos(a)*radius),new Vector3(.33f,.085f,.12f),rubber); block.transform.localRotation=Quaternion.Euler(-a*Mathf.Rad2Deg,0,0); }
+                    for(int tread=0;tread<12;tread++) { float a=tread*Mathf.PI/6; var block=Box("Tread block",wheel,new Vector3(0,Mathf.Sin(a)*radius,Mathf.Cos(a)*radius),new Vector3(.33f,.085f,.12f),rubber); block.transform.localRotation=Quaternion.Euler(-a*Mathf.Rad2Deg,0,0); }
                 }
             }
             float roofY=sill+.45f+cabHeight;
@@ -116,6 +120,16 @@ namespace MadeInArizona
             }
             if(trophy||monster) for(int side=-1;side<=1;side+=2) Beam("Bed cage",root,new Vector3(side*width*.43f,sill+.35f,-length*.44f),new Vector3(side*width*.36f,roofY,-length*.08f),.075f,monster?Cream:Ink);
             if(monster) { Box("Salvaged hood armor",root,new Vector3(.12f,sill+.48f,length*.31f),new Vector3(width*.64f,.14f,length*.26f),new Color(.20f,.49f,.43f)); Box("Questionable plow",root,new Vector3(0,sill-.08f,length*.6f),new Vector3(width*1.3f,.65f,.16f),Rust); }
+            Outfit(root,enemy,faction,width,roofY,cabZ,-length*.49f,new Vector3(0,sill-.085f,-length*.55f),new Vector3(0,roofY+.14f,cabZ+.1f));
+            return root;
+        }
+
+        /// <summary>
+        /// What every car carries whatever its body: a hostile crew's roof sign, luggage or wing, the plate, and the
+        /// turret with its side beacon.
+        /// </summary>
+        static void Outfit(Transform root,bool enemy,EnemyFaction faction,float width,float roofY,float cabZ,float wingZ,Vector3 plate,Vector3 turretAt)
+        {
             if(enemy && faction==EnemyFaction.OpenHouseRealty)
             {
                 Box("Open house roof sign",root,new Vector3(0,roofY+.33f,cabZ-.28f),new Vector3(width*.68f,.46f,.08f),FactionRules.Accent(faction));
@@ -128,14 +142,13 @@ namespace MadeInArizona
             }
             if(enemy && faction==EnemyFaction.CarOtaku)
             {
-                Box("Otaku rear wing",root,new Vector3(0,roofY+.08f,-length*.49f),new Vector3(width*1.08f,.08f,.31f),FactionRules.Accent(faction),false,1.7f);
-                for(int side=-1;side<=1;side+=2) Box("Otaku wing mount",root,new Vector3(side*width*.32f,roofY-.1f,-length*.49f),new Vector3(.07f,.4f,.08f),Ink);
+                Box("Otaku rear wing",root,new Vector3(0,roofY+.08f,wingZ),new Vector3(width*1.08f,.08f,.31f),FactionRules.Accent(faction),false,1.7f);
+                for(int side=-1;side<=1;side+=2) Box("Otaku wing mount",root,new Vector3(side*width*.32f,roofY-.1f,wingZ),new Vector3(.07f,.4f,.08f),Ink);
             }
-            Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,new Vector3(0,sill-.085f,-length*.55f),.115f,Cream);
-            Transform turret=BuildTurret(root,new Vector3(0,roofY+.14f,cabZ+.1f),enemy);
+            Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,plate,.115f,Cream);
+            Transform turret=BuildTurret(root,turretAt,enemy);
             if(enemy) Box("Faction turret beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.1f,.08f,.12f),FactionRules.Accent(faction),false,2);
             if(!enemy) Box("Turquoise friend beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.10f,.08f,.12f),Turquoise,false,3);
-            return root;
         }
 
         /// <summary>Painted body panels use the glossy clear-coat material; glass gets a mirror finish.</summary>

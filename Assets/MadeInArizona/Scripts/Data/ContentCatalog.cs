@@ -45,20 +45,38 @@ namespace MadeInArizona
             v.engineLayout = EngineLayouts.ForVehicle(id);
             return v;
         }
-        /// <summary>#4d8a78, the factory green of the Geo Metro the Thimble Sprint is based on.</summary>
-        public static readonly Color GeoMetroGreen = new Color(0x4d / 255f, 0x8a / 255f, 0x78 / 255f);
+        /// <summary>Aqua metallic on the Atlas Shift; all roster colours are game-side approximations of the sheet's paint names.</summary>
+        public static readonly Color GeoMetroGreen = new Color(.31f, .62f, .61f);
         static void BuildVehicles()
         {
             Vehicles = new[] {
-                Car(0,"thimble","1991 Thimble Sprint","Three cylinders, 760 kilos, one outstanding invoice. Low mass makes every honest horsepower count.",760,58,85,102,1.08f,112,240,Drivetrain.FWD,Differential.Open,GeoMetroGreen,0,0,.23f,.56f,2.23f,1.36f,4.1f),
+                Car(0,"ronin","1989 Shizuki Ronin","Short-wheelbase trail rig with old-fashioned road manners. Rear drive in town; fit the transfer case for four-wheel traction.",980,72,110,94,1.06f,92,310,Drivetrain.RWD,Differential.LimitedSlip,new Color(.67f,.13f,.13f),0,0,.42f,.82f,2.08f,1.34f,4.56f),
                 Car(1,"juniper","1988 Juniper JX","A tiny 4x4 with a huge sense of duty. Narrow track rewards smooth inputs; dirt is its natural habitat.",980,72,110,88,1.14f,94,310,Drivetrain.AWD,Differential.LimitedSlip,new Color(.9f,.58f,.22f),0,0,.42f,.82f,2.08f,1.34f,4.56f),
                 Car(2,"sunskip","Sunskip Trophy 900","Long travel, wide stance, enough speed to discover a wash the hard way. Heavy tires cost acceleration.",1900,420,570,148,1.1f,72,450,Drivetrain.RWD,Differential.LimitedSlip,new Color(.98f,.25f,.14f),2200,3,.78f,.95f,3.15f,2.15f,4.88f),
                 Car(3,"foreclosure","Foreclosure 6.8D","Its torque curve is a mesa. Its turning circle is a county. Includes a payment schedule longer than either.",3000,290,920,99,.94f,48,640,Drivetrain.RWD,Differential.Locked,new Color(.25f,.29f,.34f),2800,5,.32f,.82f,3.55f,1.94f,3.73f),
                 Car(4,"sidehustle","Side Hustle Tradesman","Former AC van. The ladders are structural. Weapon room and armor at the expense of everything involving a corner.",2250,195,320,105,.92f,59,520,Drivetrain.RWD,Differential.Open,new Color(.86f,.82f,.67f),1800,4,.3f,.68f,3.3f,1.84f,3.9f),
                 Car(5,"perennial","Perennial Half-Ton","The odometer stopped when the mechanic graduated. Forgiving weight distribution and a frame made of stubbornness.",1770,168,285,109,1.04f,76,540,Drivetrain.RWD,Differential.LimitedSlip,new Color(.42f,.62f,.48f),1400,2,.4f,.73f,2.95f,1.76f,4.1f),
                 Car(6,"skitter","Skitter Sport 1000","A roll cage surrounding an argument. Extraordinary response, almost no protection from the consequences.",640,112,103,126,1.15f,126,180,Drivetrain.AWD,Differential.LimitedSlip,new Color(.68f,.34f,.95f),2600,7,.61f,.78f,2.2f,1.7f,5.1f),
-                Car(7,"vincent","VINcent, The Uninsurable","Four donor cars; three conflicting wheelbases; a transfer case with judicial immunity. Built from the campaign's worst ideas.",2550,520,780,134,1.03f,65,790,Drivetrain.AWD,Differential.Locked,new Color(.72f,.26f,.12f),5400,11,.57f,1.03f,3.45f,2.03f,4.56f)
+                Car(7,"vincent","VINcent, The Uninsurable","Four donor cars; three conflicting wheelbases; a transfer case with judicial immunity. Built from the campaign's worst ideas.",2550,520,780,134,1.03f,65,790,Drivetrain.AWD,Differential.Locked,new Color(.72f,.26f,.12f),5400,11,.57f,1.03f,3.45f,2.03f,4.56f),
+                Car(8,"shift","1991 Atlas Shift","Aqua three-door economy hatch. Carry speed through corners; the tiny engine has little to give back.",760,58,85,102,1.08f,112,240,Drivetrain.FWD,Differential.Open,GeoMetroGreen,0,0,.23f,.56f,2.23f,1.36f,4.1f),
+                Car(9,"monsoon","2007 Volkswerks Monsoon","Boxy European compact. Planted and predictable until its heavier nose starts to push wide.",1120,100,140,116,1.08f,94,290,Drivetrain.FWD,Differential.Open,new Color(.24f,.43f,.43f),800,1,.27f,.59f,2.48f,1.48f,3.94f),
+                Car(10,"sonora","2001 Hanmi Sonora","A soft family sedan with patient steering, visible roll and a gentle breakaway.",1480,168,225,125,.97f,76,355,Drivetrain.FWD,Differential.Open,new Color(.73f,.75f,.78f),1150,2,.35f,.62f,2.7f,1.56f,3.88f),
+                Car(11,"dustback","2002 Sixstar Dustback","Sapphire-and-titanium raised wagon. All-wheel drive finds grip where the sedans run out.",1510,165,225,125,1.11f,83,375,Drivetrain.AWD,Differential.LimitedSlip,new Color(.12f,.24f,.43f),1450,3,.39f,.72f,2.65f,1.55f,4.11f),
+                Car(12,"monument","1990 Asuka Monument","A maroon premium sedan: smooth at speed, heavy at the nose when asked to turn quickly.",1490,160,220,130,1.03f,81,390,Drivetrain.FWD,Differential.Open,new Color(.38f,.08f,.14f),1700,4,.28f,.61f,2.76f,1.58f,3.92f),
+                Car(13,"executive","1990 Coronado Executive","Black, enormous and unhurried. Torque and comfort arrive well before cornering enthusiasm.",1750,180,270,118,.91f,63,455,Drivetrain.FWD,Differential.Open,new Color(.055f,.06f,.07f),2050,5,.36f,.64f,2.89f,1.62f,3.58f),
+                Car(14,"heat","1991 Senda Heat","Mid-engine kei roadster. Instant direction changes reward momentum and punish rough hands.",760,65,67,132,1.15f,132,205,Drivetrain.RWD,Differential.Open,new Color(.76f,.07f,.06f),1250,3,.23f,.53f,2.28f,1.4f,5.07f),
+                Car(15,"citizen","1993 Senda Citizen","Crisp blue hatch with useful lift-off rotation. The benchmark light front-driver.",1040,102,135,123,1.14f,112,275,Drivetrain.FWD,Differential.Open,new Color(.13f,.33f,.55f),1450,4,.26f,.56f,2.57f,1.48f,4.25f),
+                Car(16,"roam4","2005 Takumi Roam4","Early crossover with a high seating position, forgiving understeer and steady all-wheel traction.",1450,160,220,124,1.03f,82,410,Drivetrain.AWD,Differential.LimitedSlip,new Color(.19f,.36f,.56f),1700,5,.38f,.78f,2.49f,1.53f,4.04f),
+                Car(17,"ae867","1985 Takumi AE 867 Runner","White-over-black lightweight liftback. Low power, lively chassis and easy throttle-adjusted slides.",940,112,132,131,1.01f,119,255,Drivetrain.RWD,Differential.LimitedSlip,new Color(.89f,.87f,.79f),1800,6,.26f,.55f,2.4f,1.46f,4.3f),
+                Car(18,"espresso","1991 Shizuki Espresso","A tiny front-engine turbo roadster with a punchy exit and controllable rear rotation.",725,64,85,132,1.12f,122,200,Drivetrain.RWD,Differential.LimitedSlip,new Color(.49f,.1f,.13f),1600,6,.22f,.52f,2.06f,1.4f,5.12f),
+                Car(19,"copperado","1988 Heartland Copperado","Full-size white pickup. Big low-speed traction, slow steering and a tail that moves under throttle.",2050,210,400,116,.99f,67,570,Drivetrain.AWD,Differential.Locked,new Color(.88f,.87f,.82f),2300,7,.44f,.88f,3.34f,1.81f,3.73f),
+                Car(20,"contender","1970 Dodson Contender","Orange V8 muscle coupe. Huge torque outruns its brakes and classic soft chassis.",1720,390,660,153,.98f,78,460,Drivetrain.RWD,Differential.LimitedSlip,new Color(.91f,.28f,.055f),3000,8,.31f,.62f,2.79f,1.58f,3.91f)
             };
+            foreach (var car in Vehicles)
+            {
+                if (car.id == "sonora" || car.id == "executive") { car.springStiffness *= .72f; car.damping *= .78f; }
+                if (car.id == "heat" || car.id == "citizen" || car.id == "ae867" || car.id == "espresso") { car.springStiffness *= 1.12f; car.damping *= 1.1f; }
+            }
         }
         static VehiclePart Part(string id, string name, string category, string desc, int cost, int unlock, float mass = 0, float hp = 1, float grip = 1, float cooling = 1, float health = 0)
         {
@@ -72,17 +90,17 @@ namespace MadeInArizona
                 Part("intake","Sealed desert airbox","Intake","Keeps the filter out of the fan wash. +6% power; +3 kg. A real seal beats a chrome hot-air cone.",180,0,3,1.06f),
                 Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9% at the cost of 3% low-end torque. +5 kg.",240,0,5,1.09f),
                 Part("cam","Mild tow cam","Camshaft","More usable torque, 8% power and 12% torque. Lumpy idle remains a personality flaw. +2 kg.",350,1,2,1.08f),
-                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Thimble only.",760,2,34,1.48f,1,1,-25),
+                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift only.",760,2,34,1.48f,1,1,-25),
                 Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and -4% top speed while the belt takes its cut. Larger RWD vehicles only.",950,4,68,1.32f),
                 Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +5% torque, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f),
                 Part("radiator","Three-row aluminum radiator","Cooling","+5% power and +25 structure: the engine stays out of limp mode on a hot day. +12 kg.",260,0,12,1.05f,1,1,25),
                 Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; -15 structure from the aggressive timing.",540,3,4,1.16f,1,1,-15),
-                Part("swap","1.8L salvage-yard engine swap","Engine","Thimble or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose. Mounts included.",1700,6,96,1.7f),
+                Part("swap","1.8L salvage-yard engine swap","Engine","Shift, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.",1700,6,96,1.7f),
                 Part("lsd","Helical limited-slip carrier","Differential","Shares useful torque across the axle. +7% grip, +8 kg. Retains civilized corner exits.",380,0,8,1,1.07f),
                 Part("locker","Selectable trail locker","Differential","AWD rigs: locked axles, +15% grip, -12% turn response and +16 kg. The pavement will notice.",440,1,16,1,1.15f),
                 Part("welded","Welded spare differential","Differential","+10% grip, -18% turn response. Costs $90; the tire bill arrives separately.",90,0,3,1,1.1f),
                 Part("crawler","4.88 crawler final drive","Final drive","+22% final drive improves acceleration; top speed -15%. +6 kg. Gearing is a lever, not free horsepower.",330,1,6),
-                Part("awd","Floorpan surgery AWD kit","Drivetrain","Thimble only. AWD and +12% grip, +145 kg, -5% top speed. The original carpet will never fit again.",1350,5,145,1,1.12f),
+                Part("awd","Selectable four-wheel transfer case","Drivetrain","Ronin only. Engages four-wheel traction and +12% grip; +145 kg and -5% top speed.",1350,5,145,1,1.12f),
                 Part("rally","Progressive rally dampers","Suspension","+35% travel, +12% grip, +0.10 m height, +22 kg. Composed over washboard without a skyscraper lift.",410,0,22,1,1.12f),
                 Part("longtravel","Long-travel desert package","Suspension","Juniper, truck and UTV: +65% travel, +0.18 m height, +9% grip, -8% turning and +65 kg.",820,4,65,1,1.09f),
                 Part("street","Summer street tires","Tires","+17% base grip and +5% speed, -5 kg. Road-biased construction lowers suspension compliance by 12%.",270,0,-5,1,1.17f),
@@ -110,15 +128,15 @@ namespace MadeInArizona
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             Find("cam").torqueMultiplier = 1.12f;
-            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "thimble" }; Find("turbo").turbocharger = true;
+            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "shift" }; Find("turbo").turbocharger = true;
             Find("blower").torqueMultiplier = 1.38f; Find("blower").compatibleVehicles = new[] { "foreclosure", "perennial", "sidehustle", "sunskip" };
-            Find("ecu").torqueMultiplier = 1.12f; Find("swap").torqueMultiplier = 1.55f; Find("swap").compatibleVehicles = new[] { "thimble", "juniper" };
+            Find("ecu").torqueMultiplier = 1.12f; Find("swap").torqueMultiplier = 1.55f; Find("swap").compatibleVehicles = new[] { "shift", "ronin", "juniper" };
             foreach (string id in new[] { "lsd", "locker", "welded" }) Find(id).changesDifferential = true;
             Find("lsd").differential = Differential.LimitedSlip;
             Find("locker").differential = Differential.Locked; Find("locker").turnMultiplier = .88f; Find("locker").compatibleVehicles = new[] { "juniper", "skitter", "vincent" };
             Find("welded").differential = Differential.Locked; Find("welded").turnMultiplier = .82f;
             Find("crawler").finalDriveMultiplier = 1.22f; Find("crawler").maxSpeedMultiplier = .85f;
-            Find("awd").changesDrivetrain = true; Find("awd").drivetrain = Drivetrain.AWD; Find("awd").compatibleVehicles = new[] { "thimble" }; Find("awd").maxSpeedMultiplier = .95f;
+            Find("awd").changesDrivetrain = true; Find("awd").drivetrain = Drivetrain.AWD; Find("awd").compatibleVehicles = new[] { "ronin" }; Find("awd").maxSpeedMultiplier = .95f;
             Find("rally").suspensionMultiplier = 1.35f; Find("rally").dampingMultiplier = 1.15f; Find("rally").rideHeightBonus = .1f;
             Find("longtravel").suspensionMultiplier = 1.65f; Find("longtravel").rideHeightBonus = .18f; Find("longtravel").turnMultiplier = .92f; Find("longtravel").compatibleVehicles = new[] { "juniper", "sunskip", "perennial", "skitter", "vincent" };
             Find("street").maxSpeedMultiplier = 1.05f; Find("street").suspensionMultiplier = .88f;

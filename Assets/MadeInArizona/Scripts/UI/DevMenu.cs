@@ -47,7 +47,7 @@ namespace MadeInArizona
             string editing=tab=="COMBAT"?"WORLD BALANCE":
                 carTab?car==null?"NO CAR SELECTED":player.Definition.displayName.ToUpperInvariant():
                 slotTab?weapon?weapon.displayName.ToUpperInvariant():"EMPTY "+tab:"THIS PC'S "+tab;
-            string detail=tab=="COMBAT"?"Enemy health, damage and pacing for everyone in the session • host controlled":
+            string detail=tab=="COMBAT"?"Health, damage, pacing and explosion multipliers for everyone • host controlled; 1 = each blast's default":
                 carTab?car==null?"Pick a car in the garage to tune its profile":
                     (carEditable?"This car's "+tab.ToLowerInvariant()+" profile • saved for this car only":"Another player owns this car's tuning this session • read only")+
                     (tab=="DRIVING"?" (prop impact damage is world balance)":""):

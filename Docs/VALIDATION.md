@@ -2,6 +2,28 @@
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
 
+## Roster car bodies, larger rocks and rock seating — 10 October 2026
+
+The Windows x64 player built with zero errors. Native Windows/D3D11 suites, run one after another on that build in a minimized window:
+
+| Suite | Result |
+|---|---|
+| `-miaSmokeTest -miaRosterTest` | 46 / 46 pass. New: each of the fourteen roster cars has a lofted body shell longer than its wheelbase, lit headlamps and tyres below the body origin; the Heat's zebra print is a texture on its seat panels and no modelled stripes remain |
+| `-miaSmokeTest -miaWorldTest` | 49 / 49 pass (cover 42, base rocks 372, landform rules hold) |
+| `-miaSmokeTest -miaMountainTest` | 12 / 12 pass at 1600, 3200 and 4800 m (cover 41 / 165 / 165; 22 / 113 / 114 ridge passes, none blocked, narrowest 8.0 m) |
+| `-miaSmokeTest -miaCombatTest -miaDevTest` | 47 / 47 pass |
+| `-miaSmokeTest -miaHandlingTest` | 46 / 46 pass |
+| `-miaSmokeTest -miaReachabilityTest` | 24 / 24 pass |
+| `-miaSmokeTest -miaEffectsRevisionTest` | 5 / 5 pass |
+
+Not run for this change: the escort, enemy balance and campaign suites, and the macOS build.
+
+The car bodies were judged by eye from `VehicleLineupReview` sheets (screenshots 36 and 37) and from garage captures of every roster car (38 shows the Heat's seats). Three faults found that way were fixed before the final build: a dark wedge along the sills where a cross-section fell just outside a wheel arch, washed-out paint from reflections that all leaned skyward, and tyres standing 5–12 cm into the garage lift once the bodies rode at their true height.
+
+The rocks were judged from the mountain suite's captures (39). The first pass (rims seated on the ground) removed the undersides showing beneath the boundary chain but left cover and base rocks standing as teeth about 70% as tall as they were wide; the planned-height burial followed. Two placement traps were caught on the way: trail distances were capped at 16 m, which would have rejected every rock over 14.5 m in radius, and outcrops, sized from the mountain rock they stand beside, would have reached 36 m in radius without a cap.
+
+These checks establish that the models build, stand correctly and leave the world's routes open. They do not establish how the larger rocks play in a firefight; that needs a playtest.
+
 ## Perspective combat trial release — 9 October 2026
 
 The Windows x64 player built with zero errors. The native `-miaSmokeTest -miaCombatTest -miaDevTest` suite passed all 46 checks; its driver defeated both 12-car waves with real projectiles in 15.6 seconds. Both waves spawned within the proving ground walls, and enemy weapons damaged the player. The authored and generated spawn checks passed with all 24 added cars outside the camera view; the nearest generated-world car began 65.5 m away. The `-miaSmokeTest -miaWorldTest` suite passed all 49 checks. These runs used the perspective camera default and an isolated test save.

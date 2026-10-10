@@ -95,7 +95,7 @@ namespace MadeInArizona
         {
             point=townCenter+frame*offset;point.y=HeightAt(point)+.025f;
             if(townIndex<townLots.Count&&LotTaken(townLots[townIndex],offset.x,offset.z,2,2))return false;
-            return RoadDistance(XZ(point))>=RoadKeepOut-2;
+            return RoadDistance(XZ(point))>=RoadKeepOut-2&&CrossStreetDistance(townIndex,point)>=6.5f;
         }
 
         static void TownBox(SceneryMesh mesh,Vector3 c,Vector3 s,Color color)

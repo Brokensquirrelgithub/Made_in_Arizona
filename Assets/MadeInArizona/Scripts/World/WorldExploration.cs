@@ -63,6 +63,15 @@ namespace MadeInArizona
             for (int i=0;i<world.Pins.Count;i++)
             {
                 WorldPin pin = world.Pins[i];
+                if(pin.kind=="garage")
+                {
+                    if(FlatDistance(player,pin.position)<9)
+                    {
+                        if(interact && actor==game.Player) { game.ReturnToGarage(); return; }
+                        if(warned.Add("garage:use"))game.Notify("Press E / gamepad South to enter 117° Auto Care.");
+                    }
+                    continue;
+                }
                 string key = PinKey(world, pin);
                 string seen = SeenKey(pin);
                 bool saved = game.Save.collectibles.Contains(key);

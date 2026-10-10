@@ -7,6 +7,7 @@ Shader "MadeInArizona/Reflective"
     Properties
     {
         _BaseColor("Albedo",Color)=(1,1,1,1)
+        _BaseMap("Albedo map (upholstery, grilles)",2D)="white"{}
         _Metallic("Metallic",Range(0,1))=1
         _Smoothness("Smoothness",Range(0,1))=.85
         _GlintType("Glint material type (1 chrome, 2 glass, 3 sign, 5 metal, 6 plastic)",Float)=1
@@ -22,20 +23,21 @@ Shader "MadeInArizona/Reflective"
         #include "CloudShadows.hlsl"
         #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
-        half4 _BaseColor;half _Metallic;half _Smoothness;half _GlintType;half _Wear;half _Micro;
+        half4 _BaseColor;float4 _BaseMap_ST;half _Metallic;half _Smoothness;half _GlintType;half _Wear;half _Micro;
         // Per-car dust (VehicleDust.cs sets these on a car's own copy of the material; zero means clean).
         float4 _DustRow0,_DustRow1,_DustRow2,_DustState,_DustAxles,_DustTint;
         CBUFFER_END
         #include "CarDust.hlsl"
-        struct A {float4 p:POSITION;float3 n:NORMAL;};
-        struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 local:TEXCOORD2;float3 objN:TEXCOORD3;float fog:TEXCOORD4;};
+        TEXTURE2D(_BaseMap);SAMPLER(sampler_BaseMap);
+        struct A {float4 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;};
+        struct V {float4 p:SV_POSITION;float3 world:TEXCOORD0;float3 n:TEXCOORD1;float3 local:TEXCOORD2;float3 objN:TEXCOORD3;float fog:TEXCOORD4;float2 uv:TEXCOORD5;};
         V vert(A v)
         {
             V o;o.world=TransformObjectToWorld(v.p.xyz);o.p=TransformWorldToHClip(o.world);
             o.n=TransformObjectToWorldNormal(v.n);o.objN=v.n;
             // Metric object-space position keeps wear and micro detail fixed to the part while it moves.
             float3 scale=float3(length(UNITY_MATRIX_M._m00_m10_m20),length(UNITY_MATRIX_M._m01_m11_m21),length(UNITY_MATRIX_M._m02_m12_m22));
-            o.local=v.p.xyz*scale;o.fog=ComputeFogFactor(o.p.z);return o;
+            o.local=v.p.xyz*scale;o.uv=v.uv*_BaseMap_ST.xy+_BaseMap_ST.zw;o.fog=ComputeFogFactor(o.p.z);return o;
         }
         ENDHLSL
         Pass
@@ -65,7 +67,7 @@ Shader "MadeInArizona/Reflective"
                 float3 micro=TransformObjectToWorldNormal(MicroNormalOffset(i.local,i.objN,_Micro),false);
                 float3 ns=normalize(n+micro);
                 float metal=_Metallic;
-                float3 albedo=_BaseColor.rgb;
+                float3 albedo=_BaseColor.rgb*SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb;
                 // Oxidation shows as a dull, warm film on metals.
                 albedo=lerp(albedo,albedo*float3(.82,.7,.58)+float3(.05,.03,.015),saturate(wear.a*_Wear*_GlintSurface.y)*metal*.6);
                 // Road dust on car parts (bumpers, tyres, trim): matte and tan, it takes the shine where it sits.

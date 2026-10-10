@@ -69,6 +69,14 @@ namespace MadeInArizona
         {
             if (IsDestroyed || amount <= 0) return;
             Health -= amount;
+            var hazard=GetComponent<WorldHazard>();
+            if (hazard && hazard.ArmFromHit(hitPoint,source))
+            {
+                Health=Mathf.Max(1,Health);
+                return;
+            }
+            if (hazard && source && source.GetComponentInParent<VehicleController>() &&
+                (hazard.Kind==WorldHazardKind.FuelTanker || hazard.Kind==WorldHazardKind.BlastingCrates)) Health=0;
             if (Health > 0)
             {
                 if (amount > 10) ExplosionSystem.Burst(hitPoint, new Color(1, .65f, .18f), 4, 2);
@@ -108,8 +116,12 @@ namespace MadeInArizona
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);
             if (Explosive)
             {
-                float radius = Kind == ExplosionKind.FuelTank ? 12 : Kind == ExplosionKind.Massive ? 22 : Kind == ExplosionKind.Propane ? 8 : Kind == ExplosionKind.Electrical ? 7 : 6;
-                ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind, environmental:true);
+                if (hazard) hazard.Detonate(bounds.center,source);
+                else
+                {
+                    float radius = Kind == ExplosionKind.FuelTank ? 12 : Kind == ExplosionKind.Massive ? 22 : Kind == ExplosionKind.Propane ? 8 : Kind == ExplosionKind.Electrical ? 7 : 6;
+                    ExplosionSystem.Detonate(bounds.center, radius, radius * 18, source, Kind, environmental:true);
+                }
             }
             if (!hostileCaused) GetComponent<WorldDiscovery>()?.OnDestroyed(source);
             Destroy(gameObject, .05f);
@@ -119,7 +131,15 @@ namespace MadeInArizona
             if (IsDestroyed) return;
             IsDestroyed = true;
             var bounds = WorldBounds;
+            GetComponent<WorldHazard>()?.NetworkBreak(bounds.center);
             Color color = debrisColor.a > 0 ? debrisColor : new Color(.53f, .33f, .19f);
+            if (toppleMass > 0 && name == "Utility pole")
+            {
+                foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
+                ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);
+                Topple(bounds, transform.position + Vector3.up, Vector3.zero);
+                return;
+            }
             foreach (var renderer in GetComponentsInChildren<Renderer>()) renderer.enabled = false;
             foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
             ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);

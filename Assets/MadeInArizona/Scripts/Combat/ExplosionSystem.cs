@@ -5,7 +5,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace MadeInArizona
 {
-    public enum ExplosionKind { Gasoline, Propane, Ammunition, Electrical, Grenade, Rocket, FuelTank, Vehicle, Massive }
+    public enum ExplosionKind { Gasoline, Propane, Ammunition, Electrical, Grenade, Rocket, FuelTank, Vehicle, Massive, Chemical }
 
     /// <summary>World-scoped effect pools with a bounded chain-reaction queue and quality-dependent budgets.</summary>
     public sealed class ExplosionSystem : MonoBehaviour
@@ -120,7 +120,7 @@ namespace MadeInArizona
             scorchMaterial = new Material(particleMaterial) { name = "Explosion scorch" };
             scorchMaterial.SetTexture("_BaseMap", scorchTexture); scorchMaterial.SetTexture("_MainTex", scorchTexture);
             scorchMaterial.SetColor("_BaseColor", new Color(.12f, .07f, .045f, .68f));
-            smokeMaterial=SixWayMaterial("Smoke",0,2.4f);
+            smokeMaterial=SixWayMaterial("Smoke",0,3.6f);
             // HDR flame values deliberately clear the post-process bloom threshold during a blast.
             fireMaterial=SixWayMaterial("Fireball",20,3.8f);
             fire = Bank("Six-way fluid fireballs", 100 + quality * 100, 1.15f, false);
@@ -129,7 +129,7 @@ namespace MadeInArizona
             smoke = Bank("Six-way rolling smoke", 200 + quality * 200, 1.6f, true);
             sparks = Bank("Incandescent fragments", 2000 + quality * 2200, .15f, false);
             // Tyre smoke has its own budget, so a long burnout never starves explosions of smoke.
-            tireSmokeMaterial = SixWayMaterial("Smoke", 0, 1.35f); tireSmokeMaterial.name = "Tyre smoke • baked six-direction fluid lighting";
+            tireSmokeMaterial = SixWayMaterial("Smoke", 0, 1.8f); tireSmokeMaterial.name = "Tyre smoke • baked six-direction fluid lighting";
             tireSmokeMaterial.SetFloat("_Bright", .62f);
             tireSmoke = Bank("Six-way tyre smoke", 160 + quality * 150, 3f, true);
             tireSmoke.GetComponent<ParticleSystemRenderer>().sharedMaterial = tireSmokeMaterial;
@@ -167,7 +167,7 @@ namespace MadeInArizona
                 renderer.SetActiveVertexStreams(new List<ParticleSystemVertexStream>{ParticleSystemVertexStream.Position,ParticleSystemVertexStream.Normal,ParticleSystemVertexStream.Tangent,ParticleSystemVertexStream.Color,ParticleSystemVertexStream.UV,ParticleSystemVertexStream.UV2,ParticleSystemVertexStream.AnimBlend});
                 main.gravityModifier=0;
                 size.size=new ParticleSystem.MinMaxCurve(1,new AnimationCurve(new Keyframe(0,flame?.85f:.65f),new Keyframe(.35f,1),new Keyframe(1,growth)));
-                gradient.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(flame?1:0,0),new GradientAlphaKey(1,.12f),new GradientAlphaKey(.9f,.65f),new GradientAlphaKey(0,1)});color.color=gradient;
+                gradient.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(flame?1:0,0),new GradientAlphaKey(1,.12f),new GradientAlphaKey(flame?.9f:1f,.65f),new GradientAlphaKey(0,1)});color.color=gradient;
             }
             renderer.renderMode = ParticleSystemRenderMode.Billboard; renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = false; renderer.sortMode = ParticleSystemSortMode.Distance;
@@ -197,9 +197,11 @@ namespace MadeInArizona
         {
             var system = Get();
             radius = Mathf.Clamp(radius, .5f, 4);
-            Burst(position, color * 1.6f, 10, radius * 2.2f);
-            Burst(position, new Color(.4f, .36f, .3f, .55f), 3, radius);
-            system.Emit(system.fire, position, Vector3.up, new Color(2, 1.1f, .35f), radius * 1.1f, .45f);
+            var tuning = DevTuning.Current;
+            Burst(position, color * 1.6f, Mathf.RoundToInt(10*tuning.explosionFire), radius * 2.2f);
+            Burst(position, new Color(.4f, .36f, .3f, .55f), Mathf.RoundToInt(3*tuning.explosionDust), radius);
+            for (int i = 0; i < Mathf.RoundToInt(tuning.explosionFire); i++)
+                system.Emit(system.fire, position, Vector3.up, new Color(2, 1.1f, .35f), radius * 1.1f, .45f);
             system.damagedVehicles.Clear(); system.damagedProps.Clear();
             int count = Physics.OverlapSphereNonAlloc(position, radius, system.overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
@@ -210,7 +212,7 @@ namespace MadeInArizona
                 if (vehicle != null && system.damagedVehicles.Add(vehicle))
                     vehicle.ApplyDamage(damage * falloff * (source != null && vehicle.gameObject == source ? .18f : 1), position, source, true);
                 var prop = collider.GetComponentInParent<DestructionSystem>();
-                if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source, BlastPush(prop, position, falloff));
+                if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source, BlastPush(prop, position, falloff)*tuning.explosionForce);
             }
             if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .06f; AudioManager.Instance?.PlayExplosion(position, 1.5f, ExplosionKind.Ammunition); }
         }
@@ -246,6 +248,16 @@ namespace MadeInArizona
                         new Color(.22f, .19f, .17f, .55f), Random.Range(.3f, .6f), 1.1f);
             }
         }
+        /// <summary>Small exposed fuel flame used while a tanker is leaking, without a second blast.</summary>
+        public static void FuelLeak(Vector3 position)
+        {
+            var system=Get();
+            for(int i=0;i<3;i++)
+                system.Emit(system.fire,position+Random.insideUnitSphere*.22f,
+                    new Vector3(Random.Range(-.4f,.4f),Random.Range(1.5f,2.5f),Random.Range(-.4f,.4f)),
+                    new Color(2.8f,Random.Range(.7f,1.1f),.13f),Random.Range(.7f,1f),Random.Range(.55f,.8f));
+            system.Emit(system.smoke,position+Vector3.up*.5f,Vector3.up*1.3f,new Color(.29f,.26f,.23f,.7f),.55f,1.4f);
+        }
         public static void Burst(Vector3 position, Color color, int count, float speed)
         {
             var system = Get();
@@ -270,13 +282,16 @@ namespace MadeInArizona
             if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
             for(int i=burns.Count-1;i>=0;i--) {
                 var burn=burns[i];if(Time.time>burn.until){if(burn.light)burn.light.enabled=false;burns.RemoveAt(i);continue;}
-                if(burn.light)burn.light.intensity=(11+Mathf.PerlinNoise(Time.time*7,burn.point.x)*16)*Mathf.Clamp01((burn.until-Time.time)*2);
+                if(burn.light)burn.light.intensity=(11+Mathf.PerlinNoise(Time.time*7,burn.point.x)*16)*Mathf.Clamp01((burn.until-Time.time)*2)*DevTuning.Current.explosionFire;
                 if(Time.time<burn.next)continue;burn.next=Time.time+.24f;
-                for(int j=0;j<(quality==3?2:1);j++) {
+                int basePuffs=quality==3?2:1;
+                int firePuffs=Mathf.RoundToInt(basePuffs*DevTuning.Current.explosionFire);
+                int smokePuffs=Mathf.RoundToInt(basePuffs*DevTuning.Current.explosionDust);
+                for(int j=0;j<Mathf.Max(firePuffs,smokePuffs);j++) {
                     Vector3 p=burn.point+Random.insideUnitSphere*burn.radius*.2f;p.y=Mathf.Max(.15f,p.y);
-                    Emit(fire,p,Vector3.up*Random.Range(1.3f,3f),burn.flame,Random.Range(.75f,1.2f)*burn.radius*.7f,Random.Range(1.2f,2.1f));
-                    Emit(smoke,p+Vector3.up*.6f,new Vector3(.4f,1.7f,.2f),new Color(.28f,.27f,.25f,.8f),burn.radius*.8f,4+quality*.5f);
-                    if(quality==3)Emit(sparks,p,new Vector3(Random.Range(-1f,1f),3,Random.Range(-1f,1f)),new Color(2,1,.2f),.06f,2);
+                    if (j<firePuffs) Emit(fire,p,Vector3.up*Random.Range(1.3f,3f),burn.flame,Random.Range(.75f,1.2f)*burn.radius*.7f,Random.Range(1.2f,2.1f));
+                    if (j<smokePuffs) Emit(smoke,p+Vector3.up*.6f,new Vector3(.4f,1.7f,.2f),new Color(.28f,.27f,.25f,.8f),burn.radius*.8f,4+quality*.5f);
+                    if(quality==3 && j<firePuffs)Emit(sparks,p,new Vector3(Random.Range(-1f,1f),3,Random.Range(-1f,1f)),new Color(2,1,.2f),.06f,2);
                 }
             }
             for (int i = groundFires.Count - 1; i >= 0; i--)
@@ -361,6 +376,7 @@ namespace MadeInArizona
                 case ExplosionKind.Propane: flame = new Color(.35f, .75f, 2.4f, .9f); upward = 2.7f; sparkScale = .5f; break;
                 case ExplosionKind.Ammunition: flame = new Color(2.4f, 1.6f, .38f); sparkScale = 3; fireScale = .55f; break;
                 case ExplosionKind.Electrical: flame = new Color(.3f, 1.6f, 2.8f); sparkScale = 3.5f; smokeScale = .4f; fireScale = .6f; break;
+                case ExplosionKind.Chemical: flame = new Color(.48f, 1.7f, .18f); sparkScale = .7f; smokeScale = 1.5f; fireScale = .45f; break;
                 case ExplosionKind.Grenade: flame = new Color(1.3f, .9f, .38f); fireScale = .65f; sparkScale = 1.7f; break;
                 case ExplosionKind.Rocket: sparkScale = 2; upward = .8f; break;
                 case ExplosionKind.Gasoline: fireScale = 1.3f; smokeScale = 1.4f; break;
@@ -368,9 +384,11 @@ namespace MadeInArizona
                 case ExplosionKind.Vehicle: sparkScale = 1.8f; smokeScale = 1.5f; break;
                 case ExplosionKind.Massive: fireScale = 2; smokeScale = 2.5f; sparkScale = 3; upward = 2; break;
             }
+            var tuning = DevTuning.Current;
+            float fireAmount = tuning.explosionFire, dustAmount = tuning.explosionDust, forceAmount = tuning.explosionForce;
             int multiplier = quality + 1;
-            int fireCount = Mathf.Clamp(Mathf.RoundToInt((2+quality*.85f)*fireScale),2,7);
-            int smokeCount = Mathf.Clamp(Mathf.RoundToInt((quality+3)*smokeScale),4,18);
+            int fireCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp(Mathf.RoundToInt((2+quality*.85f)*fireScale),2,7)*fireAmount),0,21);
+            int smokeCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp(Mathf.RoundToInt((quality+3)*smokeScale),4,18)*dustAmount),0,54);
             int sparkCount = Mathf.RoundToInt((12 + radius * 5) * multiplier * sparkScale);
             for (int i = 0; i < fireCount; i++)
             {
@@ -389,7 +407,7 @@ namespace MadeInArizona
                 Emit(sparks, blast.point, velocity, flame * 1.5f, Random.Range(.06f, .19f), Random.Range(.25f, .9f));
             }
             // Thin streamer flames leave the blast along with the metal sparks instead of only billowing upward.
-            for (int i = 0; i < Mathf.Clamp(3 + quality * 2, 3, 9); i++)
+            for (int i = 0; i < Mathf.RoundToInt(Mathf.Clamp(3 + quality * 2, 3, 9)*fireAmount); i++)
             {
                 Vector3 outward = Random.insideUnitSphere; outward.y = Mathf.Abs(outward.y) * .35f + .2f;
                 Emit(fire, blast.point + outward * radius * .12f, outward.normalized * Random.Range(radius * .7f, radius * 1.5f),
@@ -398,21 +416,21 @@ namespace MadeInArizona
             }
             AtmosphereSystem.Heat(blast.point,radius*.75f,quality==3?7:4);
             bool fuel=blast.kind==ExplosionKind.Gasoline||blast.kind==ExplosionKind.FuelTank||blast.kind==ExplosionKind.Vehicle||blast.kind==ExplosionKind.Massive;
-            if(fuel && quality>0 && burns.Count<(quality==3?32:12)) burns.Add(new Burn{point=blast.point,flame=flame,radius=Mathf.Min(radius,8),until=Time.time+3+quality*2,light=BurnLight(blast.point,radius)});
-            if (blast.kind != ExplosionKind.Electrical)
+            if(fuel && quality>0 && (fireAmount>0 || dustAmount>0) && burns.Count<(quality==3?32:12)) burns.Add(new Burn{point=blast.point,flame=flame,radius=Mathf.Min(radius,8),until=Time.time+3+quality*2,light=fireAmount>0?BurnLight(blast.point,radius):null});
+            if (fireAmount>0 && blast.kind != ExplosionKind.Electrical && blast.kind != ExplosionKind.Chemical)
             {
                 if (radius >= 4f)
                 {
                     float angle = Random.Range(0f, Mathf.PI * 2f);
                     Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius * .6f;
-                    StartGroundFire(blast.point + offset, radius, fuel);
-                    StartGroundFire(blast.point - offset, radius, fuel);
+                    StartGroundFire(blast.point + offset, radius, fuel, fireAmount);
+                    StartGroundFire(blast.point - offset, radius, fuel, fireAmount);
                 }
-                else StartGroundFire(blast.point, radius, fuel);
+                else StartGroundFire(blast.point, radius, fuel, fireAmount);
             }
             MakeFlash(blast.point + Vector3.up * 2, blast.cone ? radius * .6f : radius, flame);
             // Expanding dust and refraction replace the neon-ring blast outline.
-            Burst(blast.point,new Color(.52f,.39f,.26f,.7f),12+quality*6,radius*(blast.cone ? .22f : .7f));
+            Burst(blast.point,new Color(.52f,.39f,.26f,.7f),Mathf.RoundToInt((12+quality*6)*dustAmount),radius*(blast.cone ? .22f : .7f));
             if (blast.cone)
             {
                 ShowCone(blast.point, blast.direction, radius);
@@ -422,7 +440,7 @@ namespace MadeInArizona
                     float reach = radius * row / 5f;
                     Vector3 ray = Quaternion.AngleAxis(lane * 22.5f, Vector3.up) * blast.direction;
                     Vector3 at = blast.point + ray * reach + Vector3.up * .35f;
-                    Burst(at, lane == 0 ? new Color(1, .38f, .08f, .8f) : new Color(.65f, .43f, .22f, .7f), 3, 1.4f + row * .4f);
+                    Burst(at, lane == 0 ? new Color(1, .38f, .08f, .8f) : new Color(.65f, .43f, .22f, .7f), Mathf.RoundToInt(3*dustAmount), 1.4f + row * .4f);
                 }
             }
             MakeScorch(blast.point, radius * (blast.cone ? .18f : .5f));
@@ -437,7 +455,7 @@ namespace MadeInArizona
             }
             if (quality > 0 && radius >= 6f && (blast.kind == ExplosionKind.Massive || Random.value < .3f))
                 MakeWave(blast.point, radius * .9f, new Color(.95f, .74f, .5f, .65f));
-            Scatter(blast.point, radius, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
+            Scatter(blast.point, radius*forceAmount, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
             AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (player != null)
@@ -447,7 +465,7 @@ namespace MadeInArizona
             }
             foreach (var fragment in fragments)
                 if (!fragment.body.isKinematic && (fragment.t.position - blast.point).sqrMagnitude < radius * radius)
-                    fragment.body.AddExplosionForce(radius * 22, blast.point, radius, radius * .18f, ForceMode.Impulse);
+                    fragment.body.AddExplosionForce(radius * 22 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
             if (CoopSession.IsRemoteClient) return; // network explosions are visual; the host applies all damage and forces
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
             int count = Physics.OverlapSphereNonAlloc(blast.point, radius, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
@@ -474,12 +492,12 @@ namespace MadeInArizona
                     vehicle.ApplyDamage(blast.damage * falloff * self, point, blast.source, true, blast.environmental);
                 }
                 var prop = collider.GetComponentInParent<DestructionSystem>();
-                if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source, BlastPush(prop, blast.point, falloff));
+                if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source, BlastPush(prop, blast.point, falloff)*forceAmount);
                 var body = collider.attachedRigidbody;
-                if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390, blast.point, radius, radius * .18f, ForceMode.Impulse);
+                if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
             }
         }
-        void StartGroundFire(Vector3 point, float radius, bool fuel)
+        void StartGroundFire(Vector3 point, float radius, bool fuel, float fireAmount)
         {
             int limit = quality == 0 ? 4 : quality == 1 ? 8 : quality == 2 ? 12 : 18;
             if (!groundFirePrefab || groundFires.Count >= limit) return;
@@ -516,7 +534,7 @@ namespace MadeInArizona
                 }
                 effect = new GroundFire { view = view, particles = particles };
             }
-            effect.scale = Mathf.Clamp(radius * .18f, .55f, 1.5f);
+            effect.scale = Mathf.Clamp(radius * .18f, .55f, 1.5f) * Mathf.Sqrt(fireAmount);
             effect.view.transform.SetPositionAndRotation(ground + Vector3.up * effect.scale * .85f,
                 Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up));
             effect.view.transform.localScale = Vector3.one * effect.scale;
@@ -572,9 +590,9 @@ namespace MadeInArizona
                 f.t.localScale = f.scale;
                 f.body.mass = mass;
                 f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * (.3f + Random.Range(-spread, spread)), Random.rotation);
-                Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + 2;
+                Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + (force > 0 ? 2 : 0);
                 velocity += push * Random.Range(.55f, 1.1f);
-                f.body.linearVelocity = velocity; f.body.angularVelocity = Random.insideUnitSphere * 18;
+                f.body.linearVelocity = velocity; f.body.angularVelocity = force > 0 ? Random.insideUnitSphere * 18 : Vector3.zero;
                 f.born = Time.time; f.until = Time.time + 2.8f + Random.value * 1.4f;
                 block.SetColor("_BaseColor", color * Random.Range(.75f, 1.3f)); f.renderer.SetPropertyBlock(block);
                 fragments.Add(f);

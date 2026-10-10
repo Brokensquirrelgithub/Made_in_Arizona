@@ -11,6 +11,8 @@ Shader "MadeInArizona/CarPaint"
         _ClearCoat("Clear coat",Range(0,1))=1
         _Flake("Flake sparkle",Range(0,1))=.5
         _Pillow("Panel curvature for reflections",Range(0,3))=1.9
+        _PillowCentre("Centre the panel curves about (object space)",Vector)=(0,0,0,0)
+        _PillowLength("Share of the curvature applied along the body",Range(0,1))=1
         _GlintType("Glint material type (0 paint, 2 glass)",Float)=0
         _Wear("Dust and wear response",Range(0,2))=1
     }
@@ -23,7 +25,7 @@ Shader "MadeInArizona/CarPaint"
         #include "CloudShadows.hlsl"
         #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
-        half4 _BaseColor;half _Metallic;half _Smoothness;half _ClearCoat;half _Flake;half _Pillow;half _GlintType;half _Wear;
+        half4 _BaseColor;float4 _PillowCentre;half _Metallic;half _Smoothness;half _ClearCoat;half _Flake;half _Pillow;half _PillowLength;half _GlintType;half _Wear;
         // Per-car dust (VehicleDust.cs sets these on the car's own copy of the material; zero means clean).
         float4 _DustRow0,_DustRow1,_DustRow2,_DustState,_DustAxles,_DustTint;
         CBUFFER_END
@@ -34,7 +36,8 @@ Shader "MadeInArizona/CarPaint"
         {
             V o;o.world=TransformObjectToWorld(v.p.xyz);o.p=TransformWorldToHClip(o.world);
             o.n=TransformObjectToWorldNormal(v.n);
-            o.bent=TransformObjectToWorldNormal(normalize(v.n+v.p.xyz*_Pillow));
+            float3 fromCentre=v.p.xyz-_PillowCentre.xyz;fromCentre.z*=_PillowLength;
+            o.bent=TransformObjectToWorldNormal(normalize(v.n+fromCentre*_Pillow));
             // Metric object-space position keeps flakes fixed to the panel while the car moves.
             float3 scale=float3(length(UNITY_MATRIX_M._m00_m10_m20),length(UNITY_MATRIX_M._m01_m11_m21),length(UNITY_MATRIX_M._m02_m12_m22));
             o.local=v.p.xyz*scale;o.objN=v.n;o.fog=ComputeFogFactor(o.p.z);return o;

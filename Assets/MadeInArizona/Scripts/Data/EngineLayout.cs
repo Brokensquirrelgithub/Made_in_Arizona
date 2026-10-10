@@ -176,7 +176,12 @@ namespace MadeInArizona
         {
             switch (vehicleId)
             {
-                case "thimble": return "inline3";
+                case "shift": case "heat": case "espresso": return "inline3";
+                case "ronin": case "monsoon": case "dustback": case "citizen": case "roam4": return "inline4";
+                case "ae867": return "inline4-bike";
+                case "sonora": case "monument": return "v6";
+                case "executive": case "copperado": return "v8-truck";
+                case "contender": return Default;
                 case "juniper": return "inline4";
                 case "skitter": return "v3-bike";
                 case "sidehustle": return "v6";

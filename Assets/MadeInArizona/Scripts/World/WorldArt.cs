@@ -31,27 +31,37 @@ namespace MadeInArizona
         /// Glossy clear-coated car paint (MadeInArizona/CarPaint). Falls back to a smooth URP Lit finish when the
         /// custom shader is unavailable on the current graphics device.
         /// </summary>
-        public static Material CarPaint(Color color, float metallic = .35f, float clearCoat = 1)
+        /// <param name="pillow">
+        /// How strongly reflections curve with distance from the centre of curvature. The default suits one box per
+        /// panel, curving about its own middle (a box's corners are half a unit out, whatever its size). A whole body
+        /// in one mesh (see <see cref="CarShell"/>) is measured in metres: it curves about a point
+        /// <paramref name="pillowHeight"/> up the body, so the flanks turn under toward the ground and over toward the
+        /// sky instead of all leaning up from the mesh origin on the road, and takes only <paramref name="pillowLength"/>
+        /// of the curve along its length, or the nose and tail, metres from the centre, mirror the bright horizon.
+        /// </param>
+        public static Material CarPaint(Color color, float metallic = .35f, float clearCoat = 1, float pillow = 1.9f, float pillowHeight = 0, float pillowLength = 1)
         {
-            string key = "paint/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + metallic + "/" + clearCoat;
+            string key = "paint/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + metallic + "/" + clearCoat + "/" + pillow + "/" + pillowHeight + "/" + pillowLength;
             if (Materials.TryGetValue(key, out Material result) && result) return result;
             Shader shader = Shader.Find("MadeInArizona/CarPaint");
             if (!shader || !shader.isSupported) return Material(color, metallic * .6f, .86f);
             result = new Material(shader) { name = "MIA_CarPaint_" + key };
             result.SetColor("_BaseColor", color); result.SetFloat("_Metallic", metallic); result.SetFloat("_ClearCoat", clearCoat);
+            result.SetFloat("_Pillow", pillow); result.SetVector("_PillowCentre", new Vector4(0, pillowHeight, 0, 0)); result.SetFloat("_PillowLength", pillowLength);
             result.SetFloat("_GlintType", SunGlint.Paint);
             Materials[key] = result;
             return result;
         }
         /// <summary>Vehicle window glass: the car-paint shader with a near-mirror coat, no flake and lighter wear.</summary>
-        public static Material CarGlass(Color color)
+        public static Material CarGlass(Color color, float pillow = 1.9f, float pillowHeight = 0, float pillowLength = 1)
         {
-            string key = "carglass/" + ColorUtility.ToHtmlStringRGBA(color);
+            string key = "carglass/" + ColorUtility.ToHtmlStringRGBA(color) + "/" + pillow + "/" + pillowHeight + "/" + pillowLength;
             if (Materials.TryGetValue(key, out Material result) && result) return result;
             Shader shader = Shader.Find("MadeInArizona/CarPaint");
             if (!shader || !shader.isSupported) return Material(color, 0, .92f);
             result = new Material(shader) { name = "MIA_CarGlass_" + key };
             result.SetColor("_BaseColor", color); result.SetFloat("_Metallic", 0); result.SetFloat("_Flake", 0); result.SetFloat("_Smoothness", .95f);
+            result.SetFloat("_Pillow", pillow); result.SetVector("_PillowCentre", new Vector4(0, pillowHeight, 0, 0)); result.SetFloat("_PillowLength", pillowLength);
             result.SetFloat("_GlintType", SunGlint.Glass); result.SetFloat("_Wear", .6f);
             Materials[key] = result;
             return result;
@@ -75,6 +85,24 @@ namespace MadeInArizona
             return result;
         }
         public static Material Chrome(Color color, float smoothness = .9f, float wear = 1) => Reflective(color, SunGlint.Chrome, smoothness, 1, wear);
+        /// <summary>
+        /// A Reflective material carrying a pattern as its albedo map (seat fabric, grille slats), repeated
+        /// <paramref name="tiling"/> times across each face. Car dust settles over it like any other Reflective part.
+        /// </summary>
+        public static Material Patterned(Texture2D map, Color tint, Vector2 tiling, float smoothness = .3f, float metallic = 0)
+        {
+            string key = "pattern/" + map.name + "/" + ColorUtility.ToHtmlStringRGBA(tint) + "/" + tiling.x + "/" + tiling.y + "/" + smoothness + "/" + metallic;
+            if (Materials.TryGetValue(key, out Material result) && result) return result;
+            Shader shader = Shader.Find("MadeInArizona/Reflective");
+            if (!shader || !shader.isSupported) shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            result = new Material(shader) { name = "MIA_Pattern_" + key };
+            result.color = tint; if (result.HasProperty("_BaseColor")) result.SetColor("_BaseColor", tint);
+            result.SetTexture("_BaseMap", map); result.SetTextureScale("_BaseMap", tiling);
+            result.SetFloat("_Smoothness", smoothness); result.SetFloat("_Metallic", metallic);
+            if (result.HasProperty("_GlintType")) { result.SetFloat("_GlintType", metallic > .5f ? SunGlint.Chrome : SunGlint.Plastic); result.SetFloat("_Wear", 1); result.SetFloat("_Micro", .6f); }
+            Materials[key] = result;
+            return result;
+        }
         public static Material Glass(Color color, float wear = 1) => Reflective(color, SunGlint.Glass, .94f, 0, wear, .4f);
         /// <summary>Assigns <paramref name="material"/> to a primitive built by Box/Shape/Cylinder/Beam and returns it.</summary>
         public static GameObject Use(GameObject part, Material material)

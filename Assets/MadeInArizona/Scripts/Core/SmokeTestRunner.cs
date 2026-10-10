@@ -51,6 +51,8 @@ namespace MadeInArizona
             { yield return TestEscortRoute(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaAssetBehaviourTest")>=0)
             { yield return TestAssetBehaviour(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEffectsRevisionTest")>=0)
+            { yield return TestEffectsRevision(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0)
             {
                 var campaignKeyboard=InputSystem.AddDevice<Keyboard>();
@@ -163,6 +165,18 @@ namespace MadeInArizona
                 if(GeneratedWorld.Active)Check("open-world crew starts beyond close combat range",spawned>0&&nearest>=60f);
                 FinishResults();yield break;
             }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPowerLineTest")>=0)
+            {
+                yield return TestPowerLines();FinishResults();yield break;
+            }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTownRevisionTest")>=0)
+            {
+                yield return TestTownRevision();FinishResults();yield break;
+            }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHazardTest")>=0)
+            {
+                yield return TestWorldHazards();FinishResults();yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltProbe")>=0){game.StartMission(0);yield return new WaitForSecondsRealtime(1);var tiltKeyboard=InputSystem.AddDevice<Keyboard>();yield return TiltProbe.Run(tiltKeyboard,Check);InputSystem.RemoveDevice(tiltKeyboard);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReachabilityTest")>=0){yield return TrailReview.Reachability(Check);FinishResults();yield break;}
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0){yield return TrailReview.Run(Check);FinishResults();yield break;}
@@ -225,7 +239,18 @@ namespace MadeInArizona
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) { game.Save.settings.quality=3;game.ApplySettings();game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f); }
             Check("garage startup", game && game.Player && game.State == GameState.Garage);
-            Check("catalog: eight vehicles and fifteen missions", ContentCatalog.Vehicles.Length == 8 && ContentCatalog.Missions.Length == 15);
+            Check("catalog: twenty-one vehicles and fifteen missions", ContentCatalog.Vehicles.Length == 21 && ContentCatalog.Missions.Length == 15);
+            string[] datedCars={"ronin:1989","shift:1991","monsoon:2007","sonora:2001","dustback:2002","monument:1990","executive:1990","heat:1991","citizen:1993","roam4:2005","ae867:1985","espresso:1991","copperado:1988","contender:1970"};
+            bool rosterYears=true;
+            foreach(string entry in datedCars)
+            {
+                string[] parts=entry.Split(':');
+                var car=Array.Find(ContentCatalog.Vehicles,v=>v.id==parts[0]);
+                rosterYears&=car&&car.displayName.StartsWith(parts[1]+" ",StringComparison.Ordinal);
+            }
+            Check("all sheet vehicles retain their years in motor pool names",rosterYears);
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaRosterTest")>=0)
+            { yield return TestVehicleRoster(); FinishResults(); yield break; }
             Check("six-way texture pairs and shader",Resources.Load<Texture2D>("SixWay/Fireball_P") && Resources.Load<Texture2D>("SixWay/Fireball_N") && Resources.Load<Texture2D>("SixWay/Smoke_P") && Resources.Load<Texture2D>("SixWay/Smoke_N") && Shader.Find("MadeInArizona/SixWaySmoke").isSupported);
             Check("Suzuki present", FindFirstObjectByType<SuzukiDog>() != null);
             Capture("01-garage");
@@ -496,6 +521,284 @@ namespace MadeInArizona
             Debug.Log("MIA_MINIMAP_CAPTURE: screen="+Screen.width+"x"+Screen.height+" screenshot="+
                 File.Exists(Path.Combine(directory,"mountain-minimap-screen.png")));
         }
+        IEnumerator TestWorldHazards()
+        {
+            var game=GameManager.Instance;
+            game.StartCampaign(173,1600);
+            float deadline=Time.realtimeSinceStartup+80;
+            while((game.State!=GameState.Playing||!GeneratedWorld.Active)&&Time.realtimeSinceStartup<deadline)yield return null;
+            var world=GeneratedWorld.Active;
+            Check("hazard test generated a playable world",world&&game.State==GameState.Playing);
+            if(!world)yield break;
+            yield return new WaitForSecondsRealtime(.4f);
+            QuietMissionHostiles();
+            var hazards=world.GetComponentsInChildren<WorldHazard>();
+            var first=new WorldHazard[6];var counts=new int[6];bool breakable=true;
+            foreach(var hazard in hazards)
+            {
+                int index=(int)hazard.Kind;counts[index]++;
+                if(!first[index])first[index]=hazard;
+                var prop=hazard.GetComponent<DestructionSystem>();
+                if(!prop||!prop.Explosive||hazard.GetComponentsInChildren<Collider>().Length==0)breakable=false;
+            }
+            for(int i=0;i<first.Length;i++)Check("generated "+((WorldHazardKind)i)+" hazards",counts[i]>0);
+            Check("all generated hazards have colliders and explosive damage",breakable);
+            Debug.Log("MIA_HAZARDS tanker="+counts[0]+" pumps="+counts[1]+" mining="+counts[2]+" fireworks="+counts[3]+" chemical="+counts[4]+" transformer="+counts[5]);
+            var camera=Camera.main;
+            if(camera&&CameraController.Instance)
+            {
+                CameraController.Instance.enabled=false;
+                for(int i=0;i<first.Length;i++)
+                {
+                    var hazard=first[i];if(!hazard)continue;
+                    float distance=i==0?17:10;
+                    camera.transform.position=hazard.transform.position-hazard.transform.forward*distance+hazard.transform.right*distance*.42f+Vector3.up*distance*.55f;
+                    camera.transform.LookAt(hazard.transform.position+Vector3.up*(i==0?1.8f:1.25f));
+                    yield return new WaitForSecondsRealtime(.12f);
+                    SceneLuminance("hazard-"+hazard.Kind,camera);
+                }
+                CameraController.Instance.enabled=true;
+            }
+            var mining=first[(int)WorldHazardKind.BlastingCrates];
+            if(mining)
+            {
+                var prop=mining.GetComponent<DestructionSystem>();
+                prop.ApplyDamage(prop.Health+5,mining.transform.position+Vector3.up,null);
+                Check("mining charges arm a visible fuse before destruction",mining.IsArmed&&!prop.IsDestroyed);
+                yield return new WaitForSecondsRealtime(1.1f);
+                Check("mining fuse detonates",!prop||prop.IsDestroyed);
+            }
+            var tanker=first[(int)WorldHazardKind.FuelTanker];
+            if(tanker)
+            {
+                var prop=tanker.GetComponent<DestructionSystem>();
+                prop.ApplyDamage(prop.Health+5,tanker.transform.position+Vector3.up*2,null);
+                Check("fuel tanker leaks before detonation",tanker.IsArmed&&!prop.IsDestroyed&&tanker.DetonateAt>Time.time+1);
+                yield return new WaitForSecondsRealtime(.45f);
+                if(camera&&CameraController.Instance)
+                {
+                    CameraController.Instance.enabled=false;
+                    camera.transform.position=tanker.transform.position-tanker.transform.forward*15+tanker.transform.right*6+Vector3.up*8;
+                    camera.transform.LookAt(tanker.transform.position+Vector3.up*2);
+                    SceneLuminance("hazard-FuelTanker-leaking",camera);
+                    CameraController.Instance.enabled=true;
+                }
+                yield return new WaitForSecondsRealtime(2f);
+                Check("leaking tanker detonates",!prop||prop.IsDestroyed);
+            }
+            var pump=first[(int)WorldHazardKind.GasPump];
+            if(pump)
+            {
+                var pair=pump.transform.parent.GetComponentsInChildren<WorldHazard>();
+                var prop=pump.GetComponent<DestructionSystem>();
+                prop.ApplyDamage(prop.Health+5,pump.transform.position,null);
+                yield return new WaitForSecondsRealtime(.35f);
+                Check("gas pump blast chains to its paired pump",pair.Length==2&&(!pair[1]||pair[1].GetComponent<DestructionSystem>().IsDestroyed));
+            }
+            var chemical=first[(int)WorldHazardKind.ChemicalDrum];
+            if(chemical)
+            {
+                var prop=chemical.GetComponent<DestructionSystem>();
+                Vector3 center=chemical.transform.position;
+                prop.ApplyDamage(prop.Health+5,chemical.transform.position,null);
+                yield return new WaitForSecondsRealtime(.1f);
+                bool patch=false;foreach(var effect in FindObjectsByType<WorldHazardAftermath>(FindObjectsSortMode.None))if(effect.Kind==WorldHazardKind.ChemicalDrum)patch=true;
+                Check("chemical drums leave a timed corrosive spill",patch);
+                yield return new WaitForSecondsRealtime(.45f);
+                if(camera&&CameraController.Instance)
+                {
+                    CameraController.Instance.enabled=false;
+                    camera.transform.position=center+new Vector3(-7,5,-8);
+                    camera.transform.LookAt(center+Vector3.up*.5f);
+                    SceneLuminance("hazard-ChemicalSpill",camera);
+                    CameraController.Instance.enabled=true;
+                }
+                Vector3 inside=center;inside.y=GeneratedWorld.HeightAt(inside)+1.1f;
+                Teleport(inside);yield return new WaitForSecondsRealtime(.15f);
+                float before=game.Player.Damage.Health;
+                yield return new WaitForSecondsRealtime(.7f);
+                Check("corrosive spill damages a car left inside it",game.Player.Damage.Health<before);
+                Vector3 safe=world.Towns[0]+new Vector3(80,0,80);safe.y=GeneratedWorld.HeightAt(safe)+1.1f;Teleport(safe);
+            }
+            var fireworks=first[(int)WorldHazardKind.Fireworks];
+            if(fireworks)
+            {
+                var prop=fireworks.GetComponent<DestructionSystem>();
+                Vector3 center=fireworks.transform.position;
+                prop.ApplyDamage(prop.Health+5,fireworks.transform.position,null);
+                yield return new WaitForSecondsRealtime(.3f);
+                bool barrage=false;foreach(var effect in FindObjectsByType<WorldHazardAftermath>(FindObjectsSortMode.None))if(effect.Kind==WorldHazardKind.Fireworks)barrage=true;
+                Check("fireworks stand launches a timed barrage",barrage);
+                if(camera&&CameraController.Instance)
+                {
+                    CameraController.Instance.enabled=false;
+                    camera.transform.position=center+new Vector3(-8,6,-10);
+                    camera.transform.LookAt(center+Vector3.up*1.5f);
+                    SceneLuminance("hazard-Fireworks-barrage",camera);
+                    CameraController.Instance.enabled=true;
+                }
+            }
+            var transformer=first[(int)WorldHazardKind.Transformer];
+            if(transformer&&game.Player)
+            {
+                Vector3 near=transformer.transform.position-transformer.transform.forward*3;near.y=GeneratedWorld.HeightAt(near)+1.1f;
+                Teleport(near);yield return new WaitForSecondsRealtime(.1f);
+                var prop=transformer.GetComponent<DestructionSystem>();
+                prop.ApplyDamage(prop.Health+5,transformer.transform.position,null);
+                Check("transformer burst briefly stalls nearby cars",VehicleAfflictions.Stalled(game.Player));
+            }
+        }
+
+        IEnumerator TestTownRevision()
+        {
+            var game=GameManager.Instance;
+            foreach(int seed in new[]{173,271})
+            {
+                game.StartCampaign(seed,1600);
+                float deadline=Time.realtimeSinceStartup+80;
+                while((game.State!=GameState.Playing||!GeneratedWorld.Active||GeneratedWorld.Active.Seed!=seed)&&Time.realtimeSinceStartup<deadline)yield return null;
+                var world=GeneratedWorld.Active;
+                Check("seed "+seed+" generates a garage and town roads",world&&world.Seed==seed&&world.HasGarage);
+                if(!world||world.Seed!=seed)yield break;
+                yield return new WaitForSecondsRealtime(.3f);
+                QuietMissionHostiles();
+                var children=world.GetComponentsInChildren<Transform>();
+                Transform garage=null;int junctions=0,stops=0,bulkPiles=0,smallPiles=0,tanks=0,logos=0;
+                bool markedTanks=true,clearCaches=true;
+                foreach(var child in children)
+                {
+                    if(child.name=="117° Auto Care Garage")garage=child;
+                    if(child.name=="Paved town crossroads")junctions++;
+                    if(child.name=="Crossroads stop bar")stops++;
+                    bool bulk=child.name=="Propane tank pile",small=child.name=="Small propane cylinder stack";
+                    if(!bulk&&!small)continue;
+                    if(bulk)bulkPiles++;else smallPiles++;
+                    if(world.ObstacleDistance(child.position)<6)clearCaches=false;
+                    var damage=child.GetComponentsInChildren<DestructionSystem>();
+                    int marks=0;foreach(var part in child.GetComponentsInChildren<Transform>())if(part.name=="Red Texas logo")marks++;
+                    tanks+=damage.Length;logos+=marks;
+                    if(damage.Length!=(bulk?5:9)||marks<damage.Length*2)markedTanks=false;
+                    foreach(var tank in damage)if(!tank.Explosive||tank.Kind!=ExplosionKind.Propane)markedTanks=false;
+                }
+                Check("seed "+seed+" garage is a permanent physical building",garage&&garage.GetComponentsInChildren<Collider>().Length>=4&&garage.GetComponentsInChildren<DestructionSystem>().Length==0);
+                Check("seed "+seed+" each town has a paved crossroads",junctions==world.Towns.Count&&stops==world.Towns.Count*2);
+                Check("seed "+seed+" both propane cache variants have marked explosive tanks",bulkPiles>0&&smallPiles>0&&markedTanks&&tanks==bulkPiles*5+smallPiles*9&&logos>=tanks*2);
+                Check("seed "+seed+" propane piles clear generated rock footprints",clearCaches);
+                Check("seed "+seed+" garage is shown on world map",world.Pins.Exists(pin=>pin.id=="garage"&&pin.kind=="garage"));
+                Debug.Log("MIA_TOWN_REVISION seed="+seed+" garage="+world.HasGarage+" junctions="+junctions+" bulkPiles="+bulkPiles+" smallPiles="+smallPiles+" tanks="+tanks+" logos="+logos);
+                if(seed==173&&garage)
+                {
+                    Vector3 front=garage.position-garage.forward*9;front.y=GeneratedWorld.HeightAt(front)+1.1f;
+                    Teleport(front);yield return new WaitForSecondsRealtime(.3f);
+                    var camera=Camera.main;CameraController.Instance.enabled=false;
+                    camera.transform.position=garage.position-garage.forward*23+Vector3.up*9;
+                    camera.transform.LookAt(garage.position+Vector3.up*3);
+                    SceneLuminance("town-garage",camera);
+                    CameraController.Instance.enabled=true;
+                    Vector3 center=world.Towns[1];center.y=GeneratedWorld.HeightAt(center)+1.1f;
+                    Teleport(center);yield return new WaitForSecondsRealtime(.3f);SceneLuminance("town-crossroads");
+                    Transform pile=null,smallPile=null;
+                    foreach(var child in children)
+                    {
+                        if(!pile&&child.name=="Propane tank pile")pile=child;
+                        if(!smallPile&&child.name=="Small propane cylinder stack")smallPile=child;
+                    }
+                    if(smallPile)
+                    {
+                        Vector3 p=smallPile.position+Vector3.back*7;p.y=GeneratedWorld.HeightAt(p)+1.1f;Teleport(p);
+                        yield return new WaitForSecondsRealtime(.3f);
+                        CameraController.Instance.enabled=false;
+                        camera.transform.position=smallPile.position+new Vector3(-6,4,-8);
+                        camera.transform.LookAt(smallPile.position+Vector3.up*1.2f);
+                        SceneLuminance("small-propane-stack",camera);
+                        CameraController.Instance.enabled=true;
+                    }
+                    if(pile)
+                    {
+                        Vector3 p=pile.position+Vector3.back*8;p.y=GeneratedWorld.HeightAt(p)+1.1f;Teleport(p);
+                        yield return new WaitForSecondsRealtime(.3f);
+                        CameraController.Instance.enabled=false;
+                        camera.transform.position=pile.position+new Vector3(-7,5,-10);
+                        camera.transform.LookAt(pile.position+Vector3.up*1.1f);
+                        SceneLuminance("texas-propane-pile",camera);
+                        CameraController.Instance.enabled=true;
+                        var canisters=pile.GetComponentsInChildren<DestructionSystem>();
+                        Vector3 safe=world.Towns[0]+new Vector3(80,0,80);safe.y=GeneratedWorld.HeightAt(safe)+1.1f;
+                        Teleport(safe);
+                        canisters[0].ApplyDamage(100,canisters[0].transform.position,null);
+                        yield return new WaitForSecondsRealtime(.25f);
+                        int detonated=0;foreach(var canister in canisters)if(!canister||canister.IsDestroyed)detonated++;
+                        Check("propane pile detonates neighboring tanks",detonated>=2);
+                    }
+                }
+                if(seed==271&&garage)
+                {
+                    Vector3 front=garage.position-garage.forward*8;front.y=GeneratedWorld.HeightAt(front)+1.1f;
+                    Teleport(front);
+                    var keyboard=InputSystem.AddDevice<Keyboard>();
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.E));
+                    yield return new WaitForSecondsRealtime(.5f);
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+                    Check("physical garage interaction opens service scene",game.State==GameState.Garage);
+                    InputSystem.RemoveDevice(keyboard);
+                }
+            }
+        }
+
+        IEnumerator TestPowerLines()
+        {
+            var game=GameManager.Instance;
+            game.StartCampaign(173,1600);
+            float deadline=Time.realtimeSinceStartup+75;
+            while((game.State!=GameState.Playing||!GeneratedWorld.Active)&&Time.realtimeSinceStartup<deadline)yield return null;
+            Check("generated world starts for power-line test",game.State==GameState.Playing&&GeneratedWorld.Active);
+            if(game.State!=GameState.Playing||!GeneratedWorld.Active)yield break;
+            yield return new WaitForSecondsRealtime(.5f);
+            QuietMissionHostiles();
+            var poles=new List<DestructionSystem>();
+            foreach(var prop in FindObjectsByType<DestructionSystem>(FindObjectsSortMode.None))
+                if(prop.name=="Utility pole")poles.Add(prop);
+            var spans=FindObjectsByType<PowerLineSpan>(FindObjectsSortMode.None);
+            Check("generated roads carry linked utility poles",poles.Count>15&&spans.Length>8);
+            DestructionSystem shot=null,rammed=null;PowerLineSpan shotSpan=null,rammedSpan=null;
+            foreach(var pole in poles)
+            {
+                PowerLineSpan linked=null;
+                foreach(var span in spans)if(span.Connects(pole.transform)){linked=span;break;}
+                if(!linked)continue;
+                if(!shot){shot=pole;shotSpan=linked;}
+                else if(linked!=shotSpan&&Vector3.Distance(shot.transform.position,pole.transform.position)>80){rammed=pole;rammedSpan=linked;break;}
+            }
+            Check("two separate poles have live cable spans",shot&&rammed&&shotSpan&&rammedSpan);
+            if(!shot||!rammed)yield break;
+
+            Vector3 target=shot.transform.position+Vector3.up*2.5f;
+            Vector3 origin=target-shot.transform.forward*4f;
+            ProjectileSystem.Fire(origin,(target-origin).normalized,90,5,0,null,
+                VehicleLights.HeadlightAmber,ExplosionKind.Ammunition,1);
+            yield return new WaitForSecondsRealtime(.3f);
+            bool shotToppled=shot.IsDestroyed&&shot.GetComponent<Rigidbody>()&&!shot.Explosive;
+            Check("projectile topples pole without detonating it",shotToppled);
+            yield return new WaitForSecondsRealtime(.8f);
+            var line=shotSpan.GetComponentInChildren<LineRenderer>();
+            Vector3 middle=line?line.GetPosition(line.positionCount/2):Vector3.zero;
+            Check("broken power line flops to terrain",line&&shotSpan.Collapse>.98f&&middle.y-GeneratedWorld.HeightAt(middle)<2f);
+
+            Vector3 approach=rammed.transform.right;
+            Vector3 start=rammed.transform.position+approach*7f;
+            start.y=GeneratedWorld.HeightAt(start)+1.1f;
+            Teleport(start);
+            Quaternion facing=Quaternion.LookRotation(-approach,Vector3.up);
+            game.Player.Body.rotation=facing;game.Player.transform.rotation=facing;
+            game.Player.Body.linearVelocity=-approach*26f;
+            yield return new WaitForSecondsRealtime(.65f);
+            Check("vehicle impact topples pole",rammed.IsDestroyed&&rammed.GetComponent<Rigidbody>());
+            yield return new WaitForSecondsRealtime(.9f);
+            Check("vehicle-hit cables also fall",rammedSpan.Collapse>.98f);
+            Debug.Log("MIA_POWER_LINES poles="+poles.Count+" spans="+spans.Length+" firstMid="+middle+" shot="+shotToppled+" rammed="+rammed.IsDestroyed);
+            if(!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR")))SceneLuminance("fallen-power-lines");
+        }
+
         IEnumerator TestWorldGeneration()
         {
             var game=GameManager.Instance;
@@ -970,7 +1273,7 @@ namespace MadeInArizona
                 yield return new WaitForSecondsRealtime(.2f);
                 if(game.UseGeneratedWorld)Check("generated terrain active for mission " + (index+1),GeneratedWorld.Active!=null);
 
-                if (index == 5) Check("forced inappropriate vehicle", game.CurrentVehicle.id == "thimble");
+                if (index == 5) Check("forced inappropriate vehicle", game.CurrentVehicle.id == "shift");
                 if(game.UseGeneratedWorld && index==0) {
                     Teleport(game.World.PlayerSpawn);
                     yield return new WaitForSecondsRealtime(.6f);
@@ -1117,8 +1420,8 @@ namespace MadeInArizona
                 layoutsValid&=valid;
             }
             Check("every vehicle resolves a valid engine layout",layoutsValid);
-            var thimble=Array.Find(ContentCatalog.Vehicles,v=>v.id=="thimble");
-            Check("Thimble Sprint (Geo Metro) uses the three-cylinder layout",thimble&&thimble.Engine.id=="inline3"&&thimble.Engine.Cylinders==3);
+            var shift=Array.Find(ContentCatalog.Vehicles,v=>v.id=="shift");
+            Check("Atlas Shift uses the three-cylinder layout",shift&&shift.Engine.id=="inline3"&&shift.Engine.Cylinders==3);
 
             string wavDir=Environment.GetEnvironmentVariable("MIA_AUDIO_DIR");
             bool allBounded=true;float worstLoad=0;
@@ -1145,29 +1448,31 @@ namespace MadeInArizona
             Check("every engine layout renders finite, audible, unclipped audio",allBounded);
             Debug.Log("MIA_ENGINE_CPU: worst smoothed render load "+(worstLoad*100).ToString("0.00")+"% of one core per voice");
             Check("physical engine voice stays under 5% of one core",worstLoad>0&&worstLoad<.05f);
-            Check("Thimble three-cylinder firing period is present at 3000 rpm",FiringPeriodPresent(thimble.Engine,3000));
-            float stockHigh=HighBandShare(new EngineVoice(thimble.Engine,48000),out _,out _);
-            float turboHigh=HighBandShare(new EngineVoice(thimble.Engine,48000,true),out float boostSpool,out float liftSpool);
+            Check("Shift three-cylinder firing period is present at 3000 rpm",FiringPeriodPresent(shift.Engine,3000));
+            float stockHigh=HighBandShare(new EngineVoice(shift.Engine,48000),out _,out _);
+            float turboHigh=HighBandShare(new EngineVoice(shift.Engine,48000,true),out float boostSpool,out float liftSpool);
             Debug.Log("MIA_ENGINE_TURBO: spool at boost "+boostSpool.ToString("0.00")+", after 1 s lift "+liftSpool.ToString("0.00")+", exhaust >2 kHz share stock "+stockHigh.ToString("0.000")+" turbo "+turboHigh.ToString("0.000"));
-            Check("Thimble turbo spools under load and coasts down on lift",boostSpool>.5f&&liftSpool<boostSpool*.75f);
-            Check("Thimble turbo turbine softens the exhaust pulses",turboHigh<stockHigh*.9f);
+            Check("Shift turbo spools under load and coasts down on lift",boostSpool>.5f&&liftSpool<boostSpool*.75f);
+            Check("Shift turbo turbine softens the exhaust pulses",turboHigh<stockHigh*.9f);
 
             game.Save.settings.dev.enginePhysical=true;
-            if(game.Player==null||game.Player.Definition==null||game.Player.Definition.id!="thimble")
-            {GarageManager.SelectVehicle(0,game.Save);game.RefreshGarageVehicle();}
+            if(game.Player==null||game.Player.Definition==null||game.Player.Definition.id!="shift")
+            {GarageManager.SelectVehicle(8,game.Save);game.RefreshGarageVehicle();}
             yield return new WaitForSecondsRealtime(.6f);
             var live=audio.PhysicalEngine;
             Check("live physical voice follows the player's vehicle",live&&live.Layout!=null&&live.Layout.id==game.Player.Definition.Engine.id);
             Check("live physical voice renders on the audio thread",live&&live.GetComponent<AudioSource>().isPlaying&&live.Voice.Gain>0&&live.Voice.Load>0);
-            game.Save.settings.dev.enginePhysical=false;
+            BalanceTuning.LocalCar("shift").enginePhysical=false;
+            DevTuning.Apply();
             yield return new WaitForSecondsRealtime(.4f);
             Check("choosing model A or B silences the physical voice",live.Voice.Gain==0);
-            game.Save.settings.dev.enginePhysical=true;
+            BalanceTuning.LocalCar("shift").enginePhysical=true;
+            DevTuning.Apply();
 
             var save=game.Save;bool owned=save.ownedParts.Contains("turbo"),installed=save.installedParts.Contains("turbo");
             if(!owned)save.ownedParts.Add("turbo");if(!installed)save.installedParts.Add("turbo");
             game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
-            Check("installing the Thimble turbo rebuilds the live voice with a turbocharger",game.Player.Stats.turbocharged&&live.Voice.Turbocharged&&live.Layout.id=="inline3");
+            Check("installing the Shift turbo rebuilds the live voice with a turbocharger",game.Player.Stats.turbocharged&&live.Voice.Turbocharged&&live.Layout.id=="inline3");
             if(!installed)save.installedParts.Remove("turbo");if(!owned)save.ownedParts.Remove("turbo");
             game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
             Check("removing the turbo restores the stock voice",!game.Player.Stats.turbocharged&&!live.Voice.Turbocharged);
@@ -1710,6 +2015,96 @@ namespace MadeInArizona
             float low=float.MaxValue,high=float.MinValue;
             for(int i=0;i<20;i++){float h=GeneratedWorld.HeightAt(new Vector3(-220+i*22,0,-250+i*24));low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
             Check("generated terrain keeps gentle finite relief",WorldGenConfig.Finite(low)&&WorldGenConfig.Finite(high)&&high-low>3&&high-low<game.WorldConfig.terrainHeight);
+        }
+        IEnumerator TestVehicleRoster()
+        {
+            var game=GameManager.Instance;
+            var ids=new[]{"ronin","shift","monsoon","sonora","dustback","monument","executive","heat","citizen","roam4","ae867","espresso","copperado","contender"};
+            var details=new[]{"Ronin rear spare","Shift tail strip","Monsoon shield grille","Sonora satin grille",
+                "Dustback roof rail","Monument tail lamp bar","Executive eggcrate grille","Heat zebra seat fabric",
+                "Citizen hatch spoiler","Roam4 rear spare","AE 867 pop-up lamp","Espresso targa hoop",
+                "Copperado chrome grille","Contender hood scoop"};
+            game.Save.unlockedMission=14;
+            for(int i=0;i<ids.Length;i++)
+            {
+                var car=Array.Find(ContentCatalog.Vehicles,v=>v.id==ids[i]);
+                if(!car) { Check("roster car exists: "+ids[i],false);continue; }
+                if(!game.Save.ownedVehicles.Contains(car.id))game.Save.ownedVehicles.Add(car.id);
+                Check("select roster car: "+car.id,GarageManager.SelectVehicle(car.contentOrder,game.Save));
+                game.RefreshGarageVehicle();
+                yield return new WaitForSecondsRealtime(.12f);
+                Check("distinct model detail: "+car.id,game.Player&&game.Player.Definition.id==car.id&&
+                    VehicleController.FindChild(game.Player.Visual,details[i]));
+                // Each roster car is one lofted shell standing on its tyres, with lit headlamps for the beams to find.
+                var shell=game.Player?VehicleController.FindChild(game.Player.Visual,"Body \u2022 paint"):null;
+                var shellMesh=shell?shell.GetComponent<MeshFilter>().sharedMesh:null;
+                var frontWheel=game.Player?game.Player.Wheel(0):null;
+                Check("lofted body shell: "+car.id,shellMesh&&shellMesh.triangles.Length>=600&&shellMesh.bounds.size.z>car.wheelbase+.9f&&
+                    VehicleController.FindChild(game.Player.Visual,"Headlight")&&frontWheel&&frontWheel.localPosition.y<.36f);
+                if(car.id=="heat")
+                {
+                    // The zebra print is a texture on the seat panels, not modelled stripes.
+                    var fabric=VehicleController.FindChild(game.Player.Visual,details[i]);
+                    var map=fabric?fabric.GetComponent<Renderer>().sharedMaterial.GetTexture("_BaseMap"):null;
+                    Check("Heat seats wear a zebra-print texture",map&&map.name=="Zebra print"&&!VehicleController.FindChild(game.Player.Visual,"Heat zebra cushion stripe"));
+                }
+                if(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR")))continue;
+                var camera=Camera.main;var rig=CameraController.Instance;var ui=game.GetComponent<GameUI>();
+                rig.enabled=false;ui.enabled=false;camera.orthographic=false;camera.fieldOfView=48;
+                Vector3 center=game.Player.transform.position+Vector3.up*.85f;
+                Vector3 side=game.Player.transform.position+game.Player.transform.right*5.4f+
+                    game.Player.transform.forward*1.2f+Vector3.up*1.85f;
+                camera.transform.SetPositionAndRotation(side,Quaternion.LookRotation(center-side));
+                yield return new WaitForSecondsRealtime(.1f);
+                SceneLuminance("roster-profile-"+car.id,camera);
+                if(i!=0&&i!=1&&i!=4&&i!=7){rig.enabled=true;ui.enabled=true;continue;}
+                // The Heat is seen from ahead and above, down into the cockpit at its seats; the others from behind.
+                Vector3 view=i==7?game.Player.transform.position+game.Player.transform.forward*2.5f+game.Player.transform.right*1.3f+Vector3.up*2.3f:
+                    game.Player.transform.position-game.Player.transform.forward*5f+Vector3.up*2.2f;
+                camera.transform.SetPositionAndRotation(view,Quaternion.LookRotation(center-view));
+                yield return new WaitForSecondsRealtime(.1f);
+                SceneLuminance("roster-"+car.id,camera);
+                rig.enabled=true;ui.enabled=true;
+            }
+        }
+        IEnumerator TestEffectsRevision()
+        {
+            var game=GameManager.Instance;
+            var player=game.Player;
+            // The shell closes the tail: the old box body left an open strip under the rear window.
+            Check("Ronin has a closed body shell",player && player.Visual &&
+                VehicleController.FindChild(player.Visual,"Body \u2022 paint") &&
+                VehicleController.FindChild(player.Visual,"Ronin rear spare"));
+            var tuning=JsonUtility.FromJson<DevTuning>("{\"explosionVersion\":0}");
+            tuning.Clamp();
+            Check("older saves receive neutral explosion multipliers",Mathf.Approximately(tuning.explosionFire,1) &&
+                Mathf.Approximately(tuning.explosionDust,1) && Mathf.Approximately(tuning.explosionForce,1));
+            int controls=0;
+            foreach(var control in DevControl.All)
+                if(control.field.Name=="explosionFire" || control.field.Name=="explosionDust" || control.field.Name=="explosionForce")
+                    if(control.group=="COMBAT" && control.scope==DevScope.Shared) controls++;
+            Check("three host-shared explosion sliders are available",controls==3);
+            if(player)
+            {
+                var camera=Camera.main; var rig=CameraController.Instance; var ui=game.GetComponent<GameUI>();
+                rig.enabled=false;ui.enabled=false;camera.orthographic=false;camera.fieldOfView=48;
+                Vector3 rear=player.transform.position-player.transform.forward*5+Vector3.up*2.1f;
+                camera.transform.SetPositionAndRotation(rear,Quaternion.LookRotation(player.transform.position+Vector3.up*.85f-rear));
+                yield return new WaitForSecondsRealtime(.3f);
+                SceneLuminance("effects-ronin-rear",camera);
+                camera.orthographic=true;rig.enabled=true;ui.enabled=true;
+            }
+            var root=new GameObject("Power line fade test");
+            var first=new GameObject("First pole");var second=new GameObject("Second pole");
+            first.transform.position=new Vector3(100,0,100);second.transform.position=new Vector3(112,0,100);
+            var span=PowerLineSpan.Connect(root.transform,first.transform,second.transform);
+            var line=span.GetComponentInChildren<LineRenderer>();
+            Destroy(first);yield return null;
+            yield return new WaitForSecondsRealtime(1.65f);
+            Check("fallen wire fades without narrowing",line && line.enabled && line.startColor.a<1 && line.startColor.a>0 && Mathf.Approximately(line.widthMultiplier,.06f));
+            yield return new WaitForSecondsRealtime(.65f);
+            Check("fallen wire disappears after the pole fade",line && !line.enabled);
+            Destroy(second);Destroy(root);
         }
         static float SceneLuminance(string name,Camera view=null)
         {

@@ -8,6 +8,9 @@ namespace MadeInArizona
     {
         public float steering=1.6f, acceleration=1.2f, grip=1f, propDamage=2f, nitro=1f;
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
+        // Multipliers on each explosion kind's own visual and physical baseline.
+        public float explosionFire=1f, explosionDust=1f, explosionForce=1f;
+        public int explosionVersion=1;
         public float bloom=.75f, exposure=.45f, contrast=6f, saturation=8f, chromatic=.02f, motionBlur=.12f, depthOfField=0f, vignette=.08f;
         public float haze=.0012f, sunlight=1.25f, ambient=1.15f, shake=1f, cameraZoom=21f, ao=.30f, cameraLead=.12f;
         public float dynamicZoomOut=1.45f, dynamicZoomMargin=.16f, enemyCatchUp=2.2f;
@@ -78,6 +81,11 @@ namespace MadeInArizona
         }
         public void Clamp()
         {
+            if (explosionVersion < 1)
+            {
+                explosionFire=defaults.explosionFire; explosionDust=defaults.explosionDust; explosionForce=defaults.explosionForce;
+                explosionVersion=1;
+            }
             if (presentationVersion < 1)
             {
                 // Update the old shipped look in existing saves without resetting custom sliders.
@@ -186,6 +194,9 @@ namespace MadeInArizona
             new DevControl("COMBAT","playerDamage","Player weapon damage",.1f,5),
             new DevControl("COMBAT","incomingDamage","Damage received by player",0,3),
             new DevControl("COMBAT","enemyCatchUp","Off-screen enemy catch-up pace (1 = normal)",1,4),
+            new DevControl("COMBAT","explosionFire","Explosion fire amount (1 = each blast's default)",0,3),
+            new DevControl("COMBAT","explosionDust","Explosion dust and smoke amount (1 = default)",0,3),
+            new DevControl("COMBAT","explosionForce","Explosion physical force (1 = default)",0,3),
             new DevControl("DRIFT","driftGrip","Sideways grip while drifting (lower slides more)",.1f,6),
             new DevControl("DRIFT","driftYaw","Rotation rate while drifting",1,3),
             new DevControl("DRIFT","driftKick","Entry flick when drift starts (deg/s)",0,160),

@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: monument
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: monument
+  displayName: 1990 Asuka Monument
+  description: 'A maroon premium sedan: smooth at speed, heavy at the nose when asked
+    to turn quickly.'
+  contentOrder: 12
+  cost: 1700
+  unlockMission: 4
+  mass: 1490
+  horsepower: 160
+  torque: 220
+  maxSpeed: 130
+  grip: 1.03
+  turnSpeed: 81
+  maxHealth: 390
+  rideHeight: 0.61
+  wheelbase: 2.76
+  trackWidth: 1.58
+  suspensionTravel: 0.28
+  springStiffness: 56620
+  damping: 6705
+  finalDrive: 3.92
+  color: {r: 0.38, g: 0.08, b: 0.14, a: 1}
+  drivetrain: 0
+  differential: 0
+  engineLayout: v6

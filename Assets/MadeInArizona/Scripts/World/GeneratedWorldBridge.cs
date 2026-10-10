@@ -22,9 +22,9 @@ namespace MadeInArizona
             if(missionIndex%2==0){beats.Add(town1);if(junction1.HasValue)beats.Add(junction1.Value);beats.Add(town2);if(junction2.HasValue)beats.Add(junction2.Value);}
             else{if(junction1.HasValue)beats.Add(junction1.Value);beats.Add(town1);if(junction2.HasValue)beats.Add(junction2.Value);beats.Add(town2);}
             foreach(var beat in beats)ObjectivePoints.Add(Ground(beat,.15f));
-            for(int i=0;i<world.Pins.Count && ObjectivePoints.Count<4;i++) if(world.Pins[i].kind!="town") ObjectivePoints.Add(Ground(world.Pins[i].position,.15f));
+            for(int i=0;i<world.Pins.Count && ObjectivePoints.Count<4;i++) if(world.Pins[i].kind!="town"&&world.Pins[i].kind!="garage") ObjectivePoints.Add(Ground(world.Pins[i].position,.15f));
             for(int i=0;i<world.Pins.Count && EnemySpawns.Count<12;i++) {
-                WorldPin pin=world.Pins[(i*5+missionIndex)%world.Pins.Count]; if(pin.kind=="town")continue;
+                WorldPin pin=world.Pins[(i*5+missionIndex)%world.Pins.Count]; if(pin.kind=="town"||pin.kind=="garage")continue;
                 float a=(i*137.5f+missionIndex*19)*Mathf.Deg2Rad;Vector3 p=pin.position+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*(16+i%3*7);
                 if(GeneratedWorld.Contains(p))EnemySpawns.Add(Ground(p,1));
             }

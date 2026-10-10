@@ -32,6 +32,15 @@ namespace MadeInArizona
         /// breakable prop the car ploughs through.
         /// </summary>
         public const float MinSolidRockRadius = 6.5f;
+        /// <summary>
+        /// Medium impassable rocks (cover rocks, the fallen blocks at a mountain's foot, outcrops and boulder piles) are
+        /// built 1.2-2.5 times their original size, each with its own factor: at the old 13-18 m they still read as
+        /// scenery to drive over rather than something to steer round or hide behind.
+        /// </summary>
+        public const float MediumRockScaleMin = 1.2f, MediumRockScaleMax = 2.5f;
+        /// <summary>The largest cover rock's radius; outcrops, sized from the mountain rock they stand by, stop here too.</summary>
+        const float MaxMediumRockRadius = 9 * MediumRockScaleMax;
+        static float MediumRockScale(System.Random random) => Rand(random, MediumRockScaleMin, MediumRockScaleMax);
         const float ObstacleCell = 48, ObstacleQueryReach = 48;
         readonly List<Landform> landforms = new List<Landform>();
         readonly List<Landform> boundaryChains = new List<Landform>();
@@ -448,14 +457,14 @@ namespace MadeInArizona
                 }
                 default:
                 {
-                    // A pile of big rounded boulders, each overlapping the one it leans on.
-                    float first = Rand(random, 6.5f, 9);
+                    // A pile of big rounded boulders, each overlapping the one it leans on. One factor enlarges the whole pile.
+                    float grow = MediumRockScale(random), first = Rand(random, 6.5f, 9) * grow;
                     shape.Add(new Vector3(0, 0, first));
                     int count = random.Next(3, 6);
                     for (int i = 1; i < count; i++)
                     {
                         var lean = shape[random.Next(shape.Count)];
-                        float r = Rand(random, 4.5f, 7), angle = Rand(random, 0, Mathf.PI * 2), gap = (lean.z + r) * Rand(random, .5f, .75f);
+                        float r = Rand(random, 4.5f, 7) * grow, angle = Rand(random, 0, Mathf.PI * 2), gap = (lean.z + r) * Rand(random, .5f, .75f);
                         shape.Add(new Vector3(lean.x + Mathf.Cos(angle) * gap, lean.y + Mathf.Sin(angle) * gap, r));
                     }
                     return first * Rand(random, 1.2f, 1.45f);
@@ -656,8 +665,9 @@ namespace MadeInArizona
 
         bool TryCover(Vector2 p, System.Random random, List<Vector2> objectives)
         {
-            // Footprint radius bounds a slab 13-18 m long (three to four car lengths); 3-5.5 m tall hides a car and stops rounds.
-            float radius = Rand(random, MinSolidRockRadius, 9), height = Rand(random, 3, 5.5f), yaw = Rand(random, 0, 360);
+            // Footprint radius bounds a slab 16-45 m long (the old 13-18 m slab, enlarged); 3.5-14 m tall hides a car and stops rounds.
+            float grow = MediumRockScale(random);
+            float radius = Rand(random, MinSolidRockRadius, 9) * grow, height = Rand(random, 3, 5.5f) * grow, yaw = Rand(random, 0, 360);
             if (!InOutline(p / size) || RoadDistance(p) < radius + CoverRoadClearance || TownDistance(p) < radius + CoverTownClearance) return false;
             if (TrailEdgeDistance(p) < radius + 1.5f || ObstacleDistance(p) < radius + CoverGap || ArchSpanDistance(p) < radius) return false;
             if (riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < radius + riverWidth + 4) return false;
@@ -742,12 +752,13 @@ namespace MadeInArizona
                         // Occasional outlying boulders break up the chain's edge.
                         if (!shoulder && random.NextDouble() < .22)
                         {
-                            float angle = Rand(random, 0, Mathf.PI * 2), radius = Mathf.Max(MinSolidRockRadius, f.radius * Rand(random, .25f, .42f));
+                            float grow = MediumRockScale(random);
+                            float angle = Rand(random, 0, Mathf.PI * 2), radius = Mathf.Min(MaxMediumRockRadius, Mathf.Max(MinSolidRockRadius, f.radius * Rand(random, .25f, .42f)) * grow);
                             Vector2 at = f.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * f.radius * Rand(random, 1f, 1.25f);
-                            if (RoadDistance(at) >= radius + 6 && TrailEdgeDistance(at) >= radius + 1.5f && TownDistance(at) >= radius + CoverTownClearance && ArchSpanDistance(at) >= radius && JunctionDistance(at) >= radius + CoverObjectiveClearance)
-                                if (PlaceScaledModel(catalog.PickMountainRock(random), at, radius, Mathf.Max(3, f.height * Rand(random, .2f, .45f)),
+                            if (RubbleFits(at, radius, 6))
+                                if (PlaceScaledModel(catalog.PickMountainRock(random), at, radius, Mathf.Max(3, f.height * Rand(random, .2f, .45f)) * grow,
                                     Rand(random, 0, 360), chain, catalog.useTerrainMaterial, "Mountain outcrop", Tilt(random)))
-                                    AddFootprint(at, radius * .85f, f.height * .3f, true);
+                                    AddFootprint(at, radius * .85f, f.height * .3f * grow, true);
                         }
                     }
                     AddChainBarriers(landform, chain);
@@ -943,7 +954,45 @@ namespace MadeInArizona
                 foreach (var renderer in renderers) { var materials = renderer.sharedMaterials; for (int i = 0; i < materials.Length; i++) materials[i] = keepPackColours ? PackRockMaterial(materials[i]) : landformMaterial; renderer.sharedMaterials = materials; }
             if (!go.GetComponentInChildren<Collider>())
                 foreach (var filter in go.GetComponentsInChildren<MeshFilter>()) if (filter.sharedMesh) filter.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
+            // Seated by its lowest point a pack rock stood far too proud. Two things pull it down, whichever asks for
+            // more, up to MaxBury of its height: its rim must meet the ground (RimSink), and it may stand no taller than
+            // planned. The pack rocks are nearly as tall as they are wide and are never squashed below three quarters
+            // of that, so a cover rock planned 4 m tall and 16 m across came out a 12 m tooth; the surplus goes underground.
+            bounds = ModelBounds(renderers);
+            float bury = Mathf.Min(Mathf.Max(RimSink(go, bounds), bounds.size.y - height), bounds.size.y * MaxBury);
+            if (bury > 0) go.transform.position += Vector3.down * bury;
             return true;
+        }
+
+        const int RimSamples = 12;
+        const float RimReach = .7f, RimBurial = .3f, MaxBury = .45f;
+        /// <summary>
+        /// How much further to lower a placed pack rock so its rim meets the ground. Seated by its lowest point alone, a
+        /// rock showed its underside wherever that point was not under the rim: the chains tilt their rocks up to 7
+        /// degrees (lifting the far edge of a 30 m block by metres), two of the pack models are undercut on one side by
+        /// up to half their height, and slopes fall away under the downhill edge. Rays cast up from below find the
+        /// underside at twelve points round the rim, each measured against the ground there; the answer buries all but
+        /// the worst of them.
+        /// </summary>
+        float RimSink(GameObject go, Bounds bounds)
+        {
+            var colliders = go.GetComponentsInChildren<Collider>();
+            if (colliders.Length == 0) return 0;
+            Physics.SyncTransforms();
+            float worst = 0, second = 0;
+            for (int i = 0; i < RimSamples; i++)
+            {
+                float angle = i * Mathf.PI * 2 / RimSamples;
+                var from = new Vector3(bounds.center.x + Mathf.Cos(angle) * bounds.extents.x * RimReach, bounds.min.y - 1, bounds.center.z + Mathf.Sin(angle) * bounds.extents.z * RimReach);
+                float underside = float.MaxValue;
+                foreach (var collider in colliders)
+                    if (collider.Raycast(new Ray(from, Vector3.up), out var hit, bounds.size.y + 2)) underside = Mathf.Min(underside, hit.point.y);
+                if (underside == float.MaxValue) continue; // the rock does not reach this far on this side
+                float gap = underside - SampleHeight(from);
+                if (gap > worst) { second = worst; worst = gap; }
+                else if (gap > second) second = gap;
+            }
+            return second <= 0 ? 0 : second + RimBurial;
         }
 
         /// <summary>
@@ -966,6 +1015,20 @@ namespace MadeInArizona
             packRockMaterials[source] = material;
             return material;
         }
+        /// <summary>
+        /// Whether a loose rock at a mountain's foot may stand here: off roads, trails, junctions, town pads and
+        /// objectives, clear of the drive-through under an arch, and never in a ridge's pass (a big block from the stack
+        /// beside a pass shoulder reaches that far).
+        /// </summary>
+        bool RubbleFits(Vector2 at, float radius, float roadClearance)
+        {
+            if (RoadDistance(at) < radius + roadClearance || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance) return false;
+            if (ArchSpanDistance(at) < radius || JunctionDistance(at) < radius + CoverObjectiveClearance) return false;
+            for (int i = 0; i < PassPoints.Count; i++)
+                if (Vector2.Distance(at, XZ(PassPoints[i])) < radius + PassWidths[i] * .5f + 3) return false;
+            foreach (var pin in Pins) if (pin.kind != "town" && Vector2.Distance(at, XZ(pin.position)) < radius + CoverObjectiveClearance) return false;
+            return true;
+        }
         void ScatterBaseRocks(Landform landform, Transform root, DesertLandformCatalog catalog, System.Random random)
         {
             int stride = landform.boundary ? 3 : landform.kind == LandformKind.Cliff ? 2 : 1;
@@ -981,10 +1044,11 @@ namespace MadeInArizona
                         new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * side;
                     // Big fallen blocks, at least three car lengths across: clearly an obstacle to steer round. The old
                     // 6-8 m stones read as pebbles yet stopped cars dead, like hooks for the tyres.
-                    float radius = Rand(random, MinSolidRockRadius, 8.5f), height = Rand(random, 3, 5);
+                    float grow = MediumRockScale(random);
+                    float radius = Rand(random, MinSolidRockRadius, 8.5f) * grow, height = Rand(random, 3, 5) * grow;
                     Vector2 at = f.center + direction * f.radius * Rand(random, .7f, .85f);
                     // Larger stones reach further from the mountain: keep them off roads, trails, junctions and town pads.
-                    if (RoadDistance(at) < radius + 4 || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance || ArchSpanDistance(at) < radius || JunctionDistance(at) < radius + CoverObjectiveClearance) continue;
+                    if (!RubbleFits(at, radius, 4)) continue;
                     var rock = catalog ? catalog.Pick(LandformKind.Cover, random) : null;
                     if (!rock || !PlaceScaledModel(rock, at, radius, height,
                         Rand(random, 0, 360), root, catalog.useTerrainMaterial, "Mountain base rock"))

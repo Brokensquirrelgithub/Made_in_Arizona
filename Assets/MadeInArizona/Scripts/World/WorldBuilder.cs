@@ -324,19 +324,13 @@ namespace MadeInArizona
             RoadsideProps.Crate(transform,new Vector3(-22,0,-26),1.1f);
             RoadsideProps.JunkCar(transform,new Vector3(-39,0,-23),new Color(.43f,.50f,.36f),90);
             RoadsideProps.JunkCar(transform,new Vector3(43,0,-29),new Color(.65f,.42f,.22f),-15);
+            Transform previousPole=null;
             for(int i=0;i<8;i++)
             {
                 float z=-83+i*29;
-                RoadsideProps.PowerPole(transform,new Vector3(-11.5f,0,z));
-                if(i<7)
-                {
-                    // Sagging wires sit high above the playable lanes.
-                    for(int wire=-1;wire<=1;wire++)
-                    {
-                        Vector3 a=new Vector3(-11.5f+wire*1.22f,8.95f,z), b=a+new Vector3(0,0,29),mid=(a+b)*.5f-Vector3.up*1.15f;
-                        Beam("Power line",transform,a,mid,.018f,Ink); Beam("Power line",transform,mid,b,.018f,Ink);
-                    }
-                }
+                Transform pole=RoadsideProps.PowerPole(transform,new Vector3(-11.5f,0,z));
+                if(previousPole)PowerLineSpan.Connect(transform,previousPole,pole);
+                previousPole=pole;
             }
             for(int i=0;i<6;i++) RoadsideProps.Fence(transform,new Vector3(-56+i*7,0,-47),6);
             Wedge("County approved jump",transform,new Vector3(43,.03f,-41),new Vector3(7,2.5f,10),new Color(.48f,.35f,.23f),true);

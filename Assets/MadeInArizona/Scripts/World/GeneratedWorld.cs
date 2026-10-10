@@ -11,6 +11,8 @@ namespace MadeInArizona
         public Bounds WorldBounds{get;private set;}
         public List<WorldPin> Pins{get;private set;}=new List<WorldPin>();
         public List<Vector3> Towns{get;private set;}=new List<Vector3>();
+        public Vector3 GarageLocation{get;private set;}
+        public bool HasGarage{get;private set;}
         public Texture2D MapTexture{get;private set;}
         public int Seed=>seed;
         // Chunks scale with the map (8x8 at 1.6 km, 16x16 at 4.8 km) so terrain cells stay 4-6 m on every size.
@@ -23,6 +25,9 @@ namespace MadeInArizona
         public static int MaxTowns=>TownPlan.Length;
         WorldGenConfig cfg;System.Random rng;int seed,townCount,poiCount;float size,half,amp,riverWidth;
         readonly List<Route> routes=new List<Route>();readonly List<Transform> details=new List<Transform>();readonly Dictionary<long,SurfaceKind> surfaceCache=new Dictionary<long,SurfaceKind>();
+        readonly List<Vector3> pendingRoadPropane=new List<Vector3>();readonly List<Vector2> propaneSites=new List<Vector2>();
+        struct HazardSite { public Vector3 point; public Quaternion facing; public WorldHazardKind kind; public float clearance; }
+        readonly List<HazardSite> pendingHazards=new List<HazardSite>();readonly List<Vector2> hazardSites=new List<Vector2>();
         float[,] heights;
         Transform terrainRoot,props,roads;Material desert,high,rock,asphalt,water;
         struct Segment { public Vector2 a,b; public float ha,hb; }
@@ -34,7 +39,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,MinSize,MaxSize);Chunks=Mathf.Clamp(Mathf.RoundToInt(4+size/400),8,16);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();BuildEcology();BuildMap();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();PlaceRoadPropaneCaches();PlaceWorldHazards();BuildEcology();BuildMap();
             // The navigation grid is built with the world, not on the first hostile detour (a hitch in the middle of a fight).
             BuildNavigation();gameObject.AddComponent<RoadPatrolDirector>();
         }
@@ -112,13 +117,14 @@ namespace MadeInArizona
             for(int n=0;n<Towns.Count;n++){Vector3 c=Towns[n];c.y=HeightInternal(c.x,c.z);Towns[n]=c;Transform town=Group(n==0?"Starter town • 117 Junction":"Route town "+(n+1),transform,Vector3.zero);
                 // The main street follows a road leaving this town, so storefronts line the road instead of sitting in it.
                 Vector2 street=StreetDirection(XZ(c));Quaternion frame=Quaternion.LookRotation(new Vector3(street.x,0,street.y),Vector3.up);townFrames.Add(frame);
-                var pad=Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true);pad.transform.localRotation=frame;pad.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;TownApron(town,c,frame,pad.GetComponent<Renderer>());int buildings=n==0?7:4+n%3;var lots=new List<Vector4>();townLots.Add(lots);
+                var pad=Box("Compacted town pad",town,c+Vector3.down*.15f,new Vector3(58,.4f,48),new Color(.47f,.37f,.25f),true);pad.transform.localRotation=frame;pad.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;TownApron(town,c,frame,pad.GetComponent<Renderer>());BuildTownJunction(town,c,frame);int buildings=n==0?6:4+n%3;var lots=new List<Vector4>();townLots.Add(lots);
+                if(n==0)PlaceTownGarage(town,c,frame,lots);
                 for(int i=0;i<buildings;i++){float side=i%2==0?-1:1,w=R(7,12),d=R(7,13),offset=18+R(0,5);Quaternion facing=frame*Quaternion.Euler(0,side*90,0);
                     // Other routes cross town at their own angles; step lots back from them, or leave the lot empty.
                     for(int attempt=0;attempt<9;attempt++){float lx=side*(offset+attempt/3*6),lz=(i/2-1)*14+LotShift[attempt%3];
                         if(LotTaken(lots,lx,lz,w,d))continue;
                         Vector3 p=c+frame*new Vector3(lx,0,lz);if(!LotClear(p,facing,w,d,n))continue;lots.Add(new Vector4(lx,d,lz,w));p.y=HeightInternal(p.x,p.z);Building(town,p,facing,w,d,i+n);break;}}
-                for(int k=0;k<10;k++){float px=k%2==0?-30:30,pz=-22+(k/2)*10;Vector3 q=c+frame*new Vector3(px,0,pz);if(RoadDistance(XZ(q))<RoadKeepOut||LotTaken(lots,px,pz,1.5f,1.5f))continue;q.y=HeightAt(q);if(k%3==0)RoadsideProps.Barrel(town,q,Rust,true);else RoadsideProps.Crate(town,q,1.2f);}
+                for(int k=0;k<10;k++){float px=k%2==0?-33:33,pz=-22+(k/2)*10;Vector3 q=c+frame*new Vector3(px,0,pz);if(RoadDistance(XZ(q))<RoadKeepOut+5||CrossStreetDistance(n,q)<9||LotTaken(lots,px,pz,8,6))continue;q.y=HeightAt(q);if(k%3==0){if(((n+k/3)&1)==0)RoadsideProps.PropanePile(town,q);else RoadsideProps.SmallPropanePile(town,q);propaneSites.Add(XZ(q));}else RoadsideProps.Crate(town,q,1.2f);}
                 Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));Vector3 cactus=c+frame*new Vector3(27,0,-18);if(RoadDistance(XZ(cactus))>=RoadKeepOut&&!LotTaken(lots,27,-18,1.5f,1.5f))RoadsideProps.Cactus(town,cactus,1.4f);
             }
             BuildTownDetail();
@@ -158,6 +164,30 @@ namespace MadeInArizona
         }
         /// <summary>Frame-local lot overlap. Lots store (x, depth, z, width): width runs along the street, depth away from it.</summary>
         static bool LotTaken(List<Vector4> lots,float x,float z,float w,float d)=>lots.Exists(l=>Mathf.Abs(l.z-z)<(l.w+w)*.5f+1&&Mathf.Abs(l.x-x)<(l.y+d)*.5f+1);
+        void PlaceTownGarage(Transform town,Vector3 center,Quaternion frame,List<Vector4> lots)
+        {
+            // Search around the radial highway approaches; every seed keeps an actual garage in the starter town.
+            foreach(float radius in new[]{24f,30f,38f,46f})
+            foreach(float along in new[]{-22f,-16f,16f,22f})
+            foreach(int side in new[]{-1,1})
+            {
+                float x=side*radius;
+                Quaternion facing=frame*Quaternion.Euler(0,side*90,0);
+                Vector3 p=center+frame*new Vector3(x,0,along);
+                if(!LotClear(p,facing,14,12,0))continue;
+                lots.Add(new Vector4(x,12,along,14));
+                p.y=HeightAt(p);GarageLocation=p;HasGarage=true;
+                RoadsideProps.Garage(town,p,facing);
+                return;
+            }
+            Debug.LogError("Generated starter town has no clear garage lot.");
+        }
+        float CrossStreetDistance(int town,Vector3 point)
+        {
+            if(town>=townFrames.Count)return float.MaxValue;
+            Vector3 local=Quaternion.Inverse(townFrames[town])*(point-Towns[town]);
+            return Mathf.Abs(local.x)<=32?Mathf.Abs(local.z):float.MaxValue;
+        }
         /// <summary>True when a building footprint, including its front awning, stays off every road and spawn point.</summary>
         bool LotClear(Vector3 at,Quaternion facing,float w,float d,int town)
         {
@@ -165,7 +195,7 @@ namespace MadeInArizona
             {
                 Vector3 local=new Vector3((x-1)*w*.5f,0,Mathf.Lerp(-d*.5f-1.2f,d*.5f,z*.5f));
                 Vector3 p=at+facing*local;
-                if(RoadDistance(XZ(p))<RoadKeepOut)return false;
+                if(RoadDistance(XZ(p))<RoadKeepOut||CrossStreetDistance(town,p)<5.8f)return false;
             }
             if(town==0)foreach(Vector3 keep in new[]{HomeSpawnOffset,HomeExtractionOffset})
             {
@@ -193,6 +223,8 @@ namespace MadeInArizona
         public float SceneryClearance(Vector3 p)
         {
             float c=Mathf.Min(RoadDistance(XZ(p))-9,TownDistance(XZ(p))-38);
+            Vector2 at=XZ(p);
+            foreach(Vector2 site in propaneSites){Vector2 delta=at-site;if(delta.sqrMagnitude<144)c=Mathf.Min(c,delta.magnitude-6);}
             // Grass may brush a trail edge; larger plants (clearance 3) stand a few metres back.
             c=Mathf.Min(c,TrailEdgeDistance(XZ(p))+.3f);
             c=Mathf.Min(c,ObstacleDistance(XZ(p))-.5f);
@@ -201,7 +233,7 @@ namespace MadeInArizona
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
             return c;
         }
-        void BuildPins(){for(int i=0;i<Towns.Count;i++)Pins.Add(new WorldPin{id="town_"+i,label=i==0?"117 Junction":"Route Town "+(i+1),kind="town",position=Towns[i],requiredTier=Mathf.Min(3,i),discovered=true});string[] names={"Abandoned mine","Desert overlook","Lost fuel stop","Petroglyph canyon","Radio tower","Mesa camp","Dry lake wreck","Forest lookout"};for(int i=0;i<poiCount;i++){Vector3 p;int guard=0;do{p=RandomPoint();guard++;}while((!Contains(p)||TownDistance(XZ(p))<65||RoadDistance(XZ(p))<25)&&guard<80);if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);string kind=i%9==0?"hideout":i%7==0?"salvage-tech":i%5==0?"salvage-alloy":i%4==0?"salvage-fuel":"landmark";if(kind=="hideout"&&Vector3.Distance(p,Towns[0])<170)kind="salvage-alloy";var pin=new WorldPin{id="poi_"+i,label=names[i%names.Length],kind=kind,position=p,requiredTier=Mathf.Clamp(Mathf.FloorToInt(Mathf.InverseLerp(-half,half,p.z)*4),0,3)};Pins.Add(pin);POI(p,i,pin.label);}if(cfg.pins!=null)foreach(WorldPin authored in cfg.pins){if(authored==null)continue;Vector3 p=authored.position;if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);POI(p,Pins.Count,authored.label);Pins.Add(new WorldPin{id=authored.id,label=authored.label,kind=authored.kind,position=p,requiredTier=authored.requiredTier,discovered=authored.discovered});}}
+        void BuildPins(){if(HasGarage)Pins.Add(new WorldPin{id="garage",label="117° Auto Care Garage",kind="garage",position=GarageLocation,requiredTier=0,discovered=true});for(int i=0;i<Towns.Count;i++)Pins.Add(new WorldPin{id="town_"+i,label=i==0?"117 Junction":"Route Town "+(i+1),kind="town",position=Towns[i],requiredTier=Mathf.Min(3,i),discovered=true});string[] names={"Abandoned mine","Desert overlook","Lost fuel stop","Petroglyph canyon","Radio tower","Mesa camp","Dry lake wreck","Forest lookout"};for(int i=0;i<poiCount;i++){Vector3 p;int guard=0;do{p=RandomPoint();guard++;}while((!Contains(p)||TownDistance(XZ(p))<65||RoadDistance(XZ(p))<25)&&guard<80);if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);string kind=i%9==0?"hideout":i%7==0?"salvage-tech":i%5==0?"salvage-alloy":i%4==0?"salvage-fuel":"landmark";if(kind=="hideout"&&Vector3.Distance(p,Towns[0])<170)kind="salvage-alloy";var pin=new WorldPin{id="poi_"+i,label=names[i%names.Length],kind=kind,position=p,requiredTier=Mathf.Clamp(Mathf.FloorToInt(Mathf.InverseLerp(-half,half,p.z)*4),0,3)};Pins.Add(pin);POI(p,i,pin.label);}if(cfg.pins!=null)foreach(WorldPin authored in cfg.pins){if(authored==null)continue;Vector3 p=authored.position;if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);POI(p,Pins.Count,authored.label);Pins.Add(new WorldPin{id=authored.id,label=authored.label,kind=authored.kind,position=p,requiredTier=authored.requiredTier,discovered=authored.discovered});}}
         void POI(Vector3 p,int i,string label){Transform g=Group("POI • "+label,transform,p);if(i%3==0){for(int y=0;y<4;y++)Box("Radio mast",g,new Vector3(0,y*3+1.5f,0),new Vector3(.4f,3,.4f),Cream);Lamp("Beacon",g,new Vector3(0,13,0),Orange,4,10);}else if(i%3==1){Box("Mine portal",g,new Vector3(0,2,0),new Vector3(7,4,1),Ink,true);Box("Mine lintel",g,new Vector3(0,4.2f,0),new Vector3(9,.7f,1.2f),Rust);}else{RoadsideProps.JunkCar(g,Vector3.zero,Rust,R(0,360));RoadsideProps.Crate(g,new Vector3(3,0,1),1.3f);}}
         Color BiomeColor(Vector3 p)
         {

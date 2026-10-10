@@ -9,6 +9,8 @@ namespace MadeInArizona
     /// </summary>
     public sealed class VehicleLights : MonoBehaviour
     {
+        // Warm sodium-amber, shared by the lit lens and the road-facing beam.
+        public static readonly Color HeadlightAmber = new Color(1f, .55f, .12f);
         const float Range = 26, VisibleRange = 70;
         VehicleController vehicle;
         Light beam;
@@ -26,7 +28,7 @@ namespace MadeInArizona
             go.transform.localPosition = (count > 0 ? sum / count : new Vector3(0, .75f, 2)) + Vector3.forward * .15f;
             go.transform.localRotation = Quaternion.Euler(6, 0, 0); // dipped beams
             beam = go.AddComponent<Light>();
-            beam.type = LightType.Spot; beam.color = new Color(1f, .9f, .74f); beam.range = Range;
+            beam.type = LightType.Spot; beam.color = HeadlightAmber; beam.range = Range;
             beam.spotAngle = 64; beam.innerSpotAngle = 30; beam.shadows = LightShadows.None; beam.enabled = false;
         }
 

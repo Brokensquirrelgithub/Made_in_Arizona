@@ -12,6 +12,7 @@ namespace MadeInArizona
         {
             var blend=Shader.Find("MadeInArizona/TrailBlend");
             var shoulder=TrailMaterial(blend,new Color(.50f,.41f,.30f),6,0,0,0);
+            int routeIndex=0;
             foreach(Route route in routes)
             {
                 float approximateLength=Vector2.Distance(route.a,route.b)*1.08f;
@@ -63,6 +64,9 @@ namespace MadeInArizona
                 BuildBridges(surface,centers,normals);
                 BuildWornCenterMarkings(centers,normals,distance);
                 BuildRoadFurniture(route,centers,normals,distance);
+                BuildRoadPowerLines(route,centers,normals,distance);
+                BuildRoadPropaneCaches(route,centers,normals,distance);
+                BuildRoadHazardSites(route,centers,normals,distance,routeIndex++);
 
             }
         }
@@ -146,6 +150,177 @@ namespace MadeInArizona
                 Box("Marker post",g,new Vector3(0,.48f,0),new Vector3(.10f,.96f,.10f),new Color(.62f,.58f,.47f));
                 Use(Box("Amber reflector",g,new Vector3(0,.76f,0),new Vector3(.14f,.13f,.035f),new Color(.92f,.56f,.12f)),Reflective(new Color(.92f,.56f,.12f),SunGlint.Sign,.92f,0,.9f));
             }
+        }
+
+        void BuildRoadPowerLines(Route route,Vector3[] center,Vector2[] normal,float[] distance)
+        {
+            float total=distance[distance.Length-1],previousAlong=-100;
+            int side=((Mathf.RoundToInt(route.a.x+route.a.y)+seed)&1)==0?1:-1;
+            Transform previous=null;int poleCount=0;
+            for(float along=36;along<total-36;along+=54)
+            {
+                int i=1;while(i<distance.Length-1&&distance[i]<along)i++;
+                float t=Mathf.InverseLerp(distance[i-1],distance[i],along);
+                Vector3 c=Vector3.Lerp(center[i-1],center[i],t);
+                Vector2 n=Vector2.Lerp(normal[i-1],normal[i],t).normalized;
+                Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+4.4f);
+                if(!Contains(p)||OverRiver(XZ(c))||OverRiver(XZ(p))||TownDistance(XZ(p))<58)continue;
+                p.y=HeightAt(p);
+                Vector3 heading=center[Mathf.Min(i+1,center.Length-1)]-center[Mathf.Max(i-1,0)];heading.y=0;
+                Transform pole=RoadsideProps.PowerPole(roads,p);
+                if(heading.sqrMagnitude>.01f)pole.rotation=Quaternion.LookRotation(heading.normalized,Vector3.up);
+                if(++poleCount==2)
+                {
+                    Vector3 cabinet=p+new Vector3(n.x,0,n.y)*side*3.3f;cabinet.y=HeightAt(cabinet);
+                    pendingHazards.Add(new HazardSite{point=cabinet,facing=pole.rotation,kind=WorldHazardKind.Transformer,clearance=3.5f});
+                }
+                if(previous&&along-previousAlong<70&&!OverRiver(XZ((previous.position+p)*.5f)))
+                    PowerLineSpan.Connect(roads,previous,pole);
+                previous=pole;previousAlong=along;
+            }
+        }
+
+        void BuildRoadPropaneCaches(Route route,Vector3[] center,Vector2[] normal,float[] distance)
+        {
+            float total=distance[distance.Length-1];
+            int side=((Mathf.RoundToInt(route.b.x-route.a.y)+seed)&1)==0?1:-1;
+            for(float along=145;along<total-75;along+=340)
+            {
+                int i=1;while(i<distance.Length-1&&distance[i]<along)i++;
+                float t=Mathf.InverseLerp(distance[i-1],distance[i],along);
+                Vector3 c=Vector3.Lerp(center[i-1],center[i],t);
+                Vector2 n=Vector2.Lerp(normal[i-1],normal[i],t).normalized;
+                Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+17f);
+                if(!Contains(p)||OverRiver(XZ(p))||TownDistance(XZ(p))<70||RoadDistance(XZ(p))<18)continue;
+                p.y=HeightAt(p);
+                pendingRoadPropane.Add(p);
+            }
+        }
+        void PlaceRoadPropaneCaches()
+        {
+            int placed=0;
+            foreach(Vector3 site in pendingRoadPropane)
+            {
+                Vector2 p=XZ(site);
+                if(ObstacleDistance(p)<8||ArchSpanDistance(p)<8)continue;
+                if((placed++&1)==0)RoadsideProps.PropanePile(roads,site);
+                else RoadsideProps.SmallPropanePile(roads,site);
+                propaneSites.Add(p);
+            }
+        }
+
+        void BuildRoadHazardSites(Route route,Vector3[] center,Vector2[] normal,float[] distance,int routeIndex)
+        {
+            float total=distance[distance.Length-1];
+            for(float along=170;along<total-70;along+=470)
+            {
+                int i=1;while(i<distance.Length-1&&distance[i]<along)i++;
+                float t=Mathf.InverseLerp(distance[i-1],distance[i],along);
+                Vector3 c=Vector3.Lerp(center[i-1],center[i],t);
+                Vector2 n=Vector2.Lerp(normal[i-1],normal[i],t).normalized;
+                int side=((routeIndex+seed)&1)==0?1:-1;
+                Vector3 p=c+new Vector3(n.x,0,n.y)*side*(route.width*.5f+19f);
+                if(!Contains(p)||OverRiver(XZ(p))||TownDistance(XZ(p))<80||RoadDistance(XZ(p))<17)continue;
+                p.y=HeightAt(p);
+                Vector3 heading=center[Mathf.Min(i+1,center.Length-1)]-center[Mathf.Max(0,i-1)];heading.y=0;
+                WorldHazardKind kind=routeIndex%3==0?WorldHazardKind.FuelTanker:routeIndex%3==1?WorldHazardKind.BlastingCrates:WorldHazardKind.ChemicalDrum;
+                pendingHazards.Add(new HazardSite{point=p,facing=heading.sqrMagnitude>.01f?Quaternion.LookRotation(heading.normalized):Quaternion.identity,
+                    kind=kind,clearance=kind==WorldHazardKind.FuelTanker?8:4});
+            }
+        }
+
+        void PlaceWorldHazards()
+        {
+            foreach(var site in pendingHazards)
+            {
+                if(!HazardSiteClear(site.point,site.clearance,false,-1))continue;
+                MakeHazard(roads,site);
+                hazardSites.Add(XZ(site.point));
+            }
+            // Towns get one recognisable landmark hazard each; the sparse road sites add discovery between them.
+            for(int town=0;town<Towns.Count;town++)
+            {
+                WorldHazardKind kind=(WorldHazardKind)(town%6);
+                float clearance=kind==WorldHazardKind.FuelTanker?8:kind==WorldHazardKind.GasPump?6:4;
+                bool placed=false;
+                for(int ring=0;ring<4&&!placed;ring++)
+                for(int step=0;step<16&&!placed;step++)
+                {
+                    float angle=(step+town*3)*Mathf.PI/8f;
+                    Vector3 offset=new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*(41+ring*9);
+                    Vector3 p=Towns[town]+townFrames[town]*offset;
+                    if(!HazardSiteClear(p,clearance,true,town))continue;
+                    p.y=HeightAt(p);
+                    MakeHazard(roads,new HazardSite{point=p,facing=townFrames[town],kind=kind,clearance=clearance});
+                    hazardSites.Add(XZ(p));placed=true;
+                }
+                if(!placed)Debug.LogWarning("No clear town site for "+kind+" near town "+town);
+            }
+        }
+
+        bool HazardSiteClear(Vector3 point,float clearance,bool townSite,int townIndex)
+        {
+            Vector2 p=XZ(point);
+            if(!Contains(point)||OverRiver(p)||ObstacleDistance(p)<clearance+2||ArchSpanDistance(p)<clearance+2)return false;
+            if(RoadDistance(p)<clearance+8||TrailEdgeDistance(p)<clearance+2)return false;
+            if(townSite)
+            {
+                Vector3 local=Quaternion.Inverse(townFrames[townIndex])*(point-Towns[townIndex]);
+                if(CrossStreetDistance(townIndex,point)<clearance+4||LotTaken(townLots[townIndex],local.x,local.z,clearance*2,clearance*2))return false;
+            }
+            else if(TownDistance(p)<70)return false;
+            foreach(Vector2 propane in propaneSites)if(Vector2.Distance(p,propane)<clearance+9)return false;
+            foreach(Vector2 hazard in hazardSites)if(Vector2.Distance(p,hazard)<clearance+11)return false;
+            return true;
+        }
+
+        static void MakeHazard(Transform parent,HazardSite site)
+        {
+            switch(site.kind)
+            {
+                case WorldHazardKind.FuelTanker:RoadsideProps.FuelTanker(parent,site.point,site.facing);break;
+                case WorldHazardKind.GasPump:RoadsideProps.GasPumpIsland(parent,site.point,site.facing);break;
+                case WorldHazardKind.BlastingCrates:RoadsideProps.BlastingCrates(parent,site.point,site.facing);break;
+                case WorldHazardKind.Fireworks:RoadsideProps.FireworksStand(parent,site.point,site.facing);break;
+                case WorldHazardKind.ChemicalDrum:RoadsideProps.ChemicalDrumCluster(parent,site.point);break;
+                case WorldHazardKind.Transformer:RoadsideProps.TransformerCabinet(parent,site.point);break;
+            }
+        }
+
+        /// <summary>Four visible town approaches meet over a paved junction instead of fading into the town pad.</summary>
+        void BuildTownJunction(Transform town,Vector3 center,Quaternion frame)
+        {
+            TownStreetSurface("West junction approach",town,center,frame,-32,-9,4.6f,.03f);
+            TownStreetSurface("East junction approach",town,center,frame,9,32,4.6f,.03f);
+            TownStreetSurface("Paved town crossroads",town,center,frame,-10,10,10.5f,.065f);
+            for(int side=-1;side<=1;side+=2)
+            {
+                Vector3 p=center+frame*new Vector3(side*12,0,0);
+                p.y=HeightAt(p)+RoadLift+.105f;
+                var bar=Box("Crossroads stop bar",town,p,new Vector3(.26f,.025f,8.2f),Cream);
+                bar.transform.localRotation=frame;
+            }
+        }
+
+        void TownStreetSurface(string name,Transform parent,Vector3 center,Quaternion frame,float start,float end,float halfWidth,float lift)
+        {
+            int rows=Mathf.CeilToInt((end-start)/2f)+1;
+            const int columns=5;
+            var grid=new Vector3[rows,columns];
+            Vector3 forward=frame*Vector3.right;
+            Vector2 tangent=new Vector2(forward.x,forward.z).normalized;
+            Vector2 normal=new Vector2(-tangent.y,tangent.x);
+            for(int i=0;i<rows;i++)
+            {
+                Vector3 at=center+forward*Mathf.Lerp(start,end,i/(float)(rows-1));
+                for(int j=0;j<columns;j++)
+                {
+                    float across=Mathf.Lerp(halfWidth,-halfWidth,j/(float)(columns-1));
+                    Vector2 p=new Vector2(at.x,at.z)+normal*across;
+                    grid[i,j]=RoadSurfacePoint(p,tangent,normal,halfWidth/(columns-1),.75f)+Vector3.up*lift;
+                }
+            }
+            Surface(name,grid,asphalt,parent,true);
         }
 
     }

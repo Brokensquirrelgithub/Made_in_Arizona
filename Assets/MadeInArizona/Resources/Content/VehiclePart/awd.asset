@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: awd
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
   id: awd
-  displayName: Floorpan surgery AWD kit
+  displayName: Selectable four-wheel transfer case
   category: Drivetrain
-  description: Thimble only. AWD and +12% grip, +145 kg, -5% top speed. The original
-    carpet will never fit again.
+  description: Ronin only. Engages four-wheel traction and +12% grip; +145 kg and
+    -5% top speed.
   contentOrder: 13
   cost: 1350
   unlockMission: 5
@@ -39,4 +39,4 @@ MonoBehaviour:
   drivetrain: 2
   differential: 0
   compatibleVehicles:
-  - thimble
+  - ronin

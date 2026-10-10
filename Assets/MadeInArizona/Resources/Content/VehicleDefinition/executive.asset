@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: executive
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: executive
+  displayName: 1990 Coronado Executive
+  description: Black, enormous and unhurried. Torque and comfort arrive well before
+    cornering enthusiasm.
+  contentOrder: 13
+  cost: 2050
+  unlockMission: 5
+  mass: 1750
+  horsepower: 180
+  torque: 270
+  maxSpeed: 118
+  grip: 0.91
+  turnSpeed: 63
+  maxHealth: 455
+  rideHeight: 0.64
+  wheelbase: 2.89
+  trackWidth: 1.62
+  suspensionTravel: 0.36
+  springStiffness: 55440.004
+  damping: 6142.5
+  finalDrive: 3.58
+  color: {r: 0.055, g: 0.06, b: 0.07, a: 1}
+  drivetrain: 0
+  differential: 0
+  engineLayout: v8-truck

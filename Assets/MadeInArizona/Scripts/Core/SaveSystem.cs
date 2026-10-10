@@ -60,7 +60,7 @@ namespace MadeInArizona
         public string selectedWeapon="riveter";
         public List<string> ownedWeapons=new List<string>{"riveter"};
         public List<int> completedMissions=new List<int>(), bestScores=new List<int>();
-        public List<string> ownedParts=new List<string>(), installedParts=new List<string>(), ownedVehicles=new List<string>{"thimble","juniper"}, collectibles=new List<string>(), achievements=new List<string>();
+        public List<string> ownedParts=new List<string>(), installedParts=new List<string>(), ownedVehicles=new List<string>{"ronin","juniper","shift"}, collectibles=new List<string>(), achievements=new List<string>();
         public float finalDriveTuning=1, rideHeightTuning;
         public GameSettings settings=new GameSettings();
         public void Normalize()
@@ -75,11 +75,16 @@ namespace MadeInArizona
             if(bestScores.Count>ContentCatalog.Missions.Length)bestScores.RemoveRange(ContentCatalog.Missions.Length,bestScores.Count-ContentCatalog.Missions.Length);
             for(int i=0;i<bestScores.Count;i++)bestScores[i]=Mathf.Clamp(bestScores[i],0,100000000);
             ownedParts=Clean(ownedParts); installedParts=Clean(installedParts); ownedVehicles=Clean(ownedVehicles); collectibles=Clean(collectibles); achievements=Clean(achievements);
+            // The original starter Thimble becomes the Ronin; its saved tuning and ownership follow the renamed car.
+            if(ownedVehicles.Remove("thimble")&&!ownedVehicles.Contains("ronin"))ownedVehicles.Add("ronin");
+            if(settings != null && settings.cars != null)
+                foreach(var profile in settings.cars)if(profile != null && profile.id == "thimble")profile.id="ronin";
             ownedWeapons=Clean(ownedWeapons); ownedWeapons.RemoveAll(id=>!WeaponRules.GarageWeapon(id)||WeaponRules.Find(id)==null);
             if(!ownedWeapons.Contains("riveter"))ownedWeapons.Add("riveter");
             if(string.IsNullOrEmpty(selectedWeapon)||!ownedWeapons.Contains(selectedWeapon))selectedWeapon="riveter";
             ownedParts.RemoveAll(id=>!Array.Exists(ContentCatalog.Parts,p=>p.id==id)); installedParts.RemoveAll(id=>!ownedParts.Contains(id));
-            if(!ownedVehicles.Contains("thimble"))ownedVehicles.Add("thimble"); if(!ownedVehicles.Contains("juniper"))ownedVehicles.Add("juniper");
+            if(!ownedVehicles.Contains("ronin"))ownedVehicles.Add("ronin"); if(!ownedVehicles.Contains("juniper"))ownedVehicles.Add("juniper");
+            if(!ownedVehicles.Contains("shift"))ownedVehicles.Add("shift");
             if(!ownedVehicles.Contains(ContentCatalog.Vehicles[selectedVehicle].id))selectedVehicle=0;
             if(float.IsNaN(finalDriveTuning)||float.IsInfinity(finalDriveTuning))finalDriveTuning=1;
             if(float.IsNaN(rideHeightTuning)||float.IsInfinity(rideHeightTuning))rideHeightTuning=0;

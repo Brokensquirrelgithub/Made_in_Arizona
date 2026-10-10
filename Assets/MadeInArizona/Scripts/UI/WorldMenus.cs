@@ -60,11 +60,11 @@ namespace MadeInArizona
             GUI.DrawTexture(area,world.MapTexture,ScaleMode.StretchToFill,true);
             foreach(var pin in world.Pins)
             {
-                bool town=pin.kind=="town";
+                bool town=pin.kind=="town",garage=pin.kind=="garage";
                 if(!town&&!pin.discovered)continue;
                 var p=WorldMapPoint(pin.position,area);
-                Rect(p.x-3,p.y-3,6,6,town?Cream:pin.requiredTier>WorldExploration.CurrentTier?Orange:Blue);
-                if(full)Text(p.x+7,p.y-9,170,22,pin.label,12,town?Cream:Blue,true);
+                Rect(p.x-(garage?5:3),p.y-(garage?5:3),garage?10:6,garage?10:6,garage?WorldArt.Turquoise:town?Cream:pin.requiredTier>WorldExploration.CurrentTier?Orange:Blue);
+                if(full)Text(p.x+7,p.y-9,170,22,pin.label,12,garage?WorldArt.Turquoise:town?Cream:Blue,true);
             }
             foreach(var vehicle in VehicleController.Active)
             {
@@ -99,7 +99,7 @@ namespace MadeInArizona
             Text(x,261,390,36,"VEHICLE CAPABILITY: TIER "+WorldExploration.CurrentTier,19,Lime,true);
             Text(x,309,390,94,"South: Sonoran cactus and flats\nThe Rim: ponderosa forest\nNorth-east: red rock and monuments\nNorth-west: canyon and plateau",16,Cream);
             DrawWorldCrafting(x,420);
-            Text(35,height-42,width-70,28,"Green: you    Orange: mission    Cream: towns    Blue: discoveries / waypoint",14,Muted);
+            Text(35,height-42,width-70,28,"Green: you    Orange: mission    Cream: towns    Turquoise: garage    Blue: discoveries / waypoint",14,Muted);
             if(Event.current.type==EventType.MouseDown&&area.Contains(Event.current.mousePosition))
             {
                 var b=GeneratedWorld.Active.WorldBounds;var m=Event.current.mousePosition;

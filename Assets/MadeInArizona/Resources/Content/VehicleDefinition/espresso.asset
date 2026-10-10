@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: espresso
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: espresso
+  displayName: 1991 Shizuki Espresso
+  description: A tiny front-engine turbo roadster with a punchy exit and controllable
+    rear rotation.
+  contentOrder: 18
+  cost: 1600
+  unlockMission: 6
+  mass: 725
+  horsepower: 64
+  torque: 85
+  maxSpeed: 132
+  grip: 1.12
+  turnSpeed: 122
+  maxHealth: 200
+  rideHeight: 0.52
+  wheelbase: 2.06
+  trackWidth: 1.4
+  suspensionTravel: 0.22
+  springStiffness: 30856
+  damping: 3588.75
+  finalDrive: 5.12
+  color: {r: 0.49, g: 0.1, b: 0.13, a: 1}
+  drivetrain: 1
+  differential: 1
+  engineLayout: inline3

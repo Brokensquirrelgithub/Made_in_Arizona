@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: dustback
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: dustback
+  displayName: 2002 Sixstar Dustback
+  description: Sapphire-and-titanium raised wagon. All-wheel drive finds grip where
+    the sedans run out.
+  contentOrder: 11
+  cost: 1450
+  unlockMission: 3
+  mass: 1510
+  horsepower: 165
+  torque: 225
+  maxSpeed: 125
+  grip: 1.11
+  turnSpeed: 83
+  maxHealth: 375
+  rideHeight: 0.72
+  wheelbase: 2.65
+  trackWidth: 1.55
+  suspensionTravel: 0.39
+  springStiffness: 57380
+  damping: 6795
+  finalDrive: 4.11
+  color: {r: 0.12, g: 0.24, b: 0.43, a: 1}
+  drivetrain: 2
+  differential: 1
+  engineLayout: inline4
