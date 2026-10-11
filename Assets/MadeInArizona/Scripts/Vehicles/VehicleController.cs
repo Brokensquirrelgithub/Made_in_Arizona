@@ -353,9 +353,10 @@ namespace MadeInArizona
             float surfaceGrip = SurfaceGrip(surface);
             float wheelGrip = Mathf.Lerp(.5f, 1f, Damage.Wheels);
             float diffGrip = Stats.differential == Differential.Locked ? 1.13f : Stats.differential == Differential.LimitedSlip ? 1.07f : .92f;
-            float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip;
+            // What the drivetrain makes of this ground: a bonus or a penalty to drive, cornering grip and top speed.
+            var footing = DrivetrainTraits.On(Stats.drivetrain, surface);
+            float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip * footing.cornering;
             if (IsPlayer) grip *= tuning.grip;
-            float drivetrain = Stats.drivetrain == Drivetrain.AWD ? 1.16f : Stats.drivetrain == Drivetrain.FWD ? 1.04f : .98f;
             if (input.sqrMagnitude > .04f)
             {
                 Vector3 desired = new Vector3(input.x, 0, input.y);
@@ -395,9 +396,8 @@ namespace MadeInArizona
                 // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel
                 // responsive and controllable without raising top speed.
                 acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
-                acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * drivetrain;
+                acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * footing.drive;
                 if (IsPlayer) acceleration *= tuning.acceleration;
-                if (surface == SurfaceKind.Sand || surface == SurfaceKind.Mud) acceleration *= Stats.drivetrain == Drivetrain.AWD ? .88f : .62f;
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
                 {
@@ -406,7 +406,7 @@ namespace MadeInArizona
                     BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate);
                 }
                 Boosting = boosting;
-                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
+                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
                 float directionalAcceleration = driveDirection < 0 ? acceleration * .78f : acceleration;

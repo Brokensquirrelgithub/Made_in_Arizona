@@ -168,6 +168,24 @@ Bridge decks: the heightfield holds the carved river bed under a bridge, so rout
 
 The escort suite now pins its own map (seed 173, 1600 m). The world config persists between runs, and a suite run just before it (the mountain suite ends on a 4.8 km map) left legs three times longer than its time limit, which is what made it fail. `-miaEscortSize=3200` (or 4800) drives the same seed on a larger map, with the time limit scaled to match. Its loop check counts a return to the same spot within one leg; a new leg may rightly drive back down the road the last leg came in on. `-miaEscortTrace` also logs the route index and anything local avoidance steered round.
 
+## Drivetrain footing — 11 October 2026
+
+Each drivetrain now has a bonus or a penalty on each kind of ground. `DrivetrainTraits` holds one figure per drivetrain and ground, and `VehicleController.FixedUpdate` applies it through `DrivetrainTraits.On(Stats.drivetrain, surface)`:
+
+| | Road (asphalt, oil) | Dirt (dirt, gravel, rock, debris, water) | Sand (sand, mud) |
+|---|---|---|---|
+| Rear drive | 1.08 | 0.88 | 0.58 |
+| Front drive | 1.00 | 0.97 | 0.66 |
+| All-wheel drive | 0.95 | 1.14 | 1.00 |
+
+The figure multiplies drive (acceleration) in full. Cornering grip moves half as far from even and top speed 35% as far, so rear drive on the road is +8% drive, +4% grip and +2.8% top speed, and in sand -42%, -21% and -15%. A car carried onto ground with a lower top speed is not braked; it loses drive above the new limit and the body's own drag brings it down in about two seconds.
+
+This replaces two older rules: a flat drive multiplier whatever the ground (all-wheel 1.16, front 1.04, rear 0.98) and a sand and mud penalty (0.62 for two driven wheels, 0.88 for four). The net drive figures before were rear 0.98 / 0.98 / 0.61, front 1.04 / 1.04 / 0.64 and all-wheel 1.16 / 1.16 / 1.02 for road / dirt / sand, so all-wheel drive was the best layout everywhere. Cornering grip and top speed did not depend on the drivetrain at all. The rear-drive tail that steps out under full throttle at low speed and the wheelspin effects are unchanged.
+
+The figures apply to every vehicle, hostile and allied, and follow `VehicleStats.drivetrain`, so the Ronin's transfer case changes them. `GeneratedWorld.SurfaceAt` calls the open Sonoran and red-rock desert floor sand, so the sand column governs most off-road driving there; trails, the Rim forest and the plateau are dirt. The garage's dyno sheet prints `DrivetrainTraits.Summary` for the car as fitted. To retune, edit the `Fits` table and the two shares beside it; nothing else carries the numbers.
+
+`-miaSmokeTest -miaHandlingTest` launches the same car with each drivetrain on the road and in sand and compares the distance covered in two seconds, then carries a rear-drive and an all-wheel-drive car into sand at road pace and reads the speed each settles to.
+
 ## Atlas Scarface — 11 October 2026
 
 Vehicle 22 (`scarface`) is modelled on a real car: an economy hatch found without its front end and rebuilt for the desert. It is a roster car like the others (`VehicleVisualRoster.Scarface`), with these differences:

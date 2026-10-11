@@ -2,6 +2,37 @@
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
 
+## Drivetrain footing — 11 October 2026
+
+The Windows x64 player built with zero errors. Native Windows/D3D11 suites, run one after another on that build in a minimized window:
+
+| Suite | Result |
+|---|---|
+| `-miaSmokeTest -miaHandlingTest` | 50 / 50 pass. New: the starter car, launched with each drivetrain in turn, covers in two seconds on the road 31.6 m with rear drive, 29.8 m with front and 29.1 m with all-wheel; in sand 21.0 m, 22.8 m and 30.1 m. Carried into sand at its road top speed with the throttle held, it settles to 85% of that speed with rear drive and holds 100% with all-wheel drive. The garage summary for rear drive reads `ROAD +8%  •  DIRT -12%  •  SAND -42%` |
+| `-miaSmokeTest -miaRosterTest` | 55 / 55 pass |
+| `-miaSmokeTest -miaEffectsRevisionTest` | 5 / 5 pass |
+| `-miaSmokeTest -miaSuzukiTest` | 12 / 12 pass |
+| `-miaSmokeTest -miaCombatTest -miaDevTest` | 47 / 47 pass |
+| `-miaSmokeTest -miaWorldTest` | 49 / 49 pass |
+| `-miaSmokeTest -miaEscortTest` | 3 / 3 pass |
+| `-miaSmokeTest -miaCampaignTest` | 73 / 73 pass |
+
+The escort and campaign suites were added to the usual set because the figures apply to every vehicle the AI drives. The dyno sheet was read from a `-miaUiCapture` screenshot of Parts & Tuning (44). Its drivetrain line was first drawn in the dim text colour of the lines around it and was hard to read; it was redrawn in the bright colour and captured again on a later build. The suites above were not repeated on that build, which differs only in how that line is drawn.
+
+Not checked: cornering. Launch distance and settled speed were measured; no test turns the car on each surface, so the cornering share is covered only by sharing the code path. The dirt column is not exercised by any test, only road and sand. Nothing was driven by hand, so how the figures feel is untested, including whether -42% in sand is too harsh for a rear-drive starter car on the open desert floor. The mountain, reachability, enemy balance and generated-campaign suites and the macOS build were not run.
+
+## Atlas Scarface — 11 October 2026
+
+Tested on the same build as the drivetrain section above; the suite results are in its table. In the roster suite the checks new for the Scarface are: it selects, has a lofted shell, headlamps and its hood muffler; its paint and door logo are textures (the logo cut out by alpha); its front wheels stand clear of the body on off-road tread and the rear pair do not; nitro leaves upward from the stack on the hood and there are no tailpipes; the whip's tip is 4.2 times the roof's height, and the dust mask still takes the roof for the top of the car; the pennant is a small orange triangle, 0.46 m long, 0.30 m tall at the whip and closing to a point; and a whip driven by hand lies back 17 degrees in the wind of an 18 m/s run, swings 13 degrees to the outside of a 25 m turn and 7 degrees back past upright on leaving it, lashes forward to its 38 degree limit at a dead stop, and settles.
+
+The car's model reaches every roster car: the shell now writes texture coordinates, the wheel builder was reworked to take a separate front pair, and the Reflective shader gained an alpha cutout.
+
+Two things were wrong at first and were corrected. The whip flew a full Arizona flag; the car carries a small orange safety pennant. And the whip's spring was stepped in an order that made its lean depend on the frame rate: 8 degrees at 60 frames a second where the design says 16. The test's own printed figure showed it. A simulation at 30, 60 and 144 frames a second confirmed that the corrected order gives the same lean at each, and the test now holds the lean to a band rather than a floor.
+
+The model was judged by eye against the reference photograph, from the review rig and from garage captures (42, and 43 for the whip and pennant). One fault was found that way: the red streaks did not show at all, because the mask used `Mathf.SmoothStep` as a threshold when it blends two values.
+
+Not checked: the car has not been driven by hand. The whip's motion is tested on a bare whip moved by the test, not on the car in play, and the pennant's ripple, nitro flame from the hood stack and the masthead lamp at dusk are untested beyond the code running without error in the suites above. The pennant's exact size, how far the whip leans, and the car's price, unlock and statistics were my choices; the photograph and the request settle none of them.
+
 ## Suzuki's treats — 11 October 2026
 
 The Windows x64 player built with zero errors. `-miaSmokeTest -miaSuzukiTest` passed 12 / 12 and `-miaSmokeTest -miaGarageReview` passed 9 / 9 on that build (the review covers her hose routine, which shares her update loop).

@@ -299,7 +299,10 @@ namespace MadeInArizona
             Rect(x, y, w, 200, Ink);
             Tag(x + 24, y + 20, "DYNO SHEET / INSTALLED CONFIGURATION", Orange);
             Text(x + 24, y + 57, w - 48, 31, Mathf.RoundToInt(s.horsepower) + " HP     " + Mathf.RoundToInt(s.torque) + " NM     " + Mathf.RoundToInt(s.mass) + " KG", 24, Cream, true);
-            Text(x + 24, y + 104, w - 48, 75, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL\n" + s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + Mathf.RoundToInt(s.maxSpeed * .621371f) + " MPH TOP SPEED", 17, Muted);
+            Text(x + 24, y + 95, w - 48, 24, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL", 17, Muted);
+            // What the drivetrain gains or gives up on each kind of ground, picked out from the figures around it.
+            Text(x + 24, y + 115, w - 48, 24, DrivetrainTraits.Summary(s.drivetrain), 17, Cream, true);
+            Text(x + 24, y + 136, w - 48, 52, s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + Mathf.RoundToInt(s.maxSpeed * .621371f) + " MPH TOP SPEED", 17, Muted);
         }
 
         void DrawParts(float top, float panelHeight)

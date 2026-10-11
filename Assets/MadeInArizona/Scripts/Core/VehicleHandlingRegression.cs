@@ -187,6 +187,55 @@ namespace MadeInArizona
             yield return new WaitForSeconds(.4f);
             check("side-tilted car settles flat on four wheels", Mathf.Abs((float)rollField.GetValue(player)) < 5 && player.Grounded);
 
+            // Drivetrains suit different ground. The same car is launched down a long strip with each layout in turn,
+            // on the road and in sand: rear drive pulls away hardest on the road, all-wheel drive in sand.
+            var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            strip.name = "Handling regression drivetrain strip";
+            strip.transform.SetParent(arena.transform);
+            // It runs the length of the compact map, inside the edges that turn a stray car back.
+            Vector3 line = new Vector3(92, origin.y + 102, -95);
+            strip.transform.position = line + new Vector3(0, -1, 115);
+            strip.transform.localScale = new Vector3(14, 1, 240);
+            var fitted = player.Stats.drivetrain;
+            const int front = (int)Drivetrain.FWD, rear = (int)Drivetrain.RWD, all = (int)Drivetrain.AWD, road = 0, sand = 1;
+            var launch = new float[3, 2];
+            for (int layout = 0; layout < 3; layout++)
+                for (int ground = road; ground <= sand; ground++)
+                {
+                    player.Stats.drivetrain = (Drivetrain)layout;
+                    WorldBuilder.SurfaceOverride = ground == road ? SurfaceKind.Asphalt : SurfaceKind.Sand;
+                    yield return Place(player, keyboard, line, Quaternion.identity);
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+                    // Timed in physics steps from the moment it moves off, so a frame's delay in the key press costs nothing.
+                    for (float waited = 0; waited < 1 && player.Body.linearVelocity.z < .5f; waited += Time.fixedDeltaTime) yield return new WaitForFixedUpdate();
+                    float mark = player.Body.position.z;
+                    for (float t = 0; t < 2; t += Time.fixedDeltaTime) yield return new WaitForFixedUpdate();
+                    launch[layout, ground] = player.Body.position.z - mark;
+                }
+            check($"rear drive pulls away hardest on the road (rear {launch[rear, road]:F1} m, front {launch[front, road]:F1} m, all-wheel {launch[all, road]:F1} m)",
+                launch[rear, road] > launch[front, road] * 1.025f && launch[front, road] > launch[all, road] * 1.015f);
+            check($"all-wheel drive pulls away hardest in sand (all-wheel {launch[all, sand]:F1} m, front {launch[front, sand]:F1} m, rear {launch[rear, sand]:F1} m)",
+                launch[all, sand] > launch[front, sand] * 1.2f && launch[front, sand] > launch[rear, sand] * 1.04f);
+            // Carried into sand at road pace, a rear-drive car is held to the pace it can keep there; all-wheel drive is not.
+            float pace = Mathf.Max(50, player.Stats.maxSpeed) / 3.6f;
+            var carried = new float[3];
+            WorldBuilder.SurfaceOverride = SurfaceKind.Sand;
+            foreach (int layout in new[] { rear, all })
+            {
+                player.Stats.drivetrain = (Drivetrain)layout;
+                yield return Place(player, keyboard, line, Quaternion.identity);
+                player.Body.linearVelocity = Vector3.forward * pace;
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+                for (float t = 0; t < 4; t += Time.fixedDeltaTime) yield return new WaitForFixedUpdate();
+                carried[layout] = player.Body.linearVelocity.z / pace;
+            }
+            player.Stats.drivetrain = fitted; WorldBuilder.SurfaceOverride = null;
+            check($"sand holds rear drive below its road pace and leaves all-wheel drive at it (rear {carried[rear]:P0}, all-wheel {carried[all]:P0})",
+                carried[rear] > .78f && carried[rear] < .92f && carried[all] > .96f);
+            check("the garage states each drivetrain's footing (" + DrivetrainTraits.Summary(Drivetrain.RWD) + ")",
+                DrivetrainTraits.Summary(Drivetrain.RWD).StartsWith("ROAD +") && DrivetrainTraits.Summary(Drivetrain.AWD).StartsWith("ROAD -") &&
+                DrivetrainTraits.Summary(Drivetrain.AWD).Contains("DIRT +") && DrivetrainTraits.Summary(Drivetrain.FWD).Contains("SAND -"));
+
             Release(keyboard);
             player.Body.position = originalPosition;
             player.Body.rotation = originalRotation;
