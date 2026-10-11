@@ -20,7 +20,7 @@ namespace MadeInArizona
 
         struct Station { public float z, low, belt, crown, half, edge, drop, floor; public Top over; public Side flank; public bool pillar; }
         struct Arch { public float z, y, radius, cap; }
-        sealed class Part { public string name; public readonly List<Vector3> vertices = new List<Vector3>(); public readonly List<int> triangles = new List<int>(); }
+        sealed class Part { public string name; public readonly List<Vector3> vertices = new List<Vector3>(); public readonly List<Vector2> uvs = new List<Vector2>(); public readonly List<int> triangles = new List<int>(); }
 
         // A cross-section's points on the right-hand side, from the middle of the floor round the outside to the middle
         // of the roof. Between wheels the three well points sit on the sill; in an arch they step in and up round the wheel.
@@ -82,6 +82,21 @@ namespace MadeInArizona
         /// <summary>A quad seen from outside as a, b, c, d clockwise. Its triangles share corners, so a twisted quad shades as one facet.</summary>
         public void Quad(Material material, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
         {
+            Vector3 normal = Vector3.Cross(b - a, c - a) + Vector3.Cross(c - a, d - a);
+            Quad(material, a, b, c, d, Wrap(a, normal), Wrap(b, normal), Wrap(c, normal), Wrap(d, normal));
+        }
+        /// <summary>
+        /// Texture coordinates for a facet with no layout of its own: metres along the body, and across whichever axis
+        /// the facet mostly faces, so a pattern runs the length of the car over its flanks and its top alike.
+        /// </summary>
+        static Vector2 Wrap(Vector3 p, Vector3 normal)
+        {
+            float x = Mathf.Abs(normal.x), y = Mathf.Abs(normal.y), z = Mathf.Abs(normal.z);
+            return x >= y && x >= z ? new Vector2(p.z, p.y) : y >= z ? new Vector2(p.z, p.x) : new Vector2(p.x, p.y);
+        }
+        /// <summary>A quad with texture coordinates of its own (a decal).</summary>
+        public void Quad(Material material, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector2 ta, Vector2 tb, Vector2 tc, Vector2 td)
+        {
             bool first = Vector3.Cross(b - a, c - a).sqrMagnitude > 1e-9f, second = Vector3.Cross(c - a, d - a).sqrMagnitude > 1e-9f;
             if (!first && !second) return;
             var part = PartFor(material);
@@ -89,11 +104,13 @@ namespace MadeInArizona
             if (first && second)
             {
                 part.vertices.Add(a); part.vertices.Add(b); part.vertices.Add(c); part.vertices.Add(d);
+                part.uvs.Add(ta); part.uvs.Add(tb); part.uvs.Add(tc); part.uvs.Add(td);
                 part.triangles.Add(n); part.triangles.Add(n + 1); part.triangles.Add(n + 2); part.triangles.Add(n); part.triangles.Add(n + 2); part.triangles.Add(n + 3);
             }
             else
             {
                 part.vertices.Add(a); part.vertices.Add(first ? b : c); part.vertices.Add(first ? c : d);
+                part.uvs.Add(ta); part.uvs.Add(first ? tb : tc); part.uvs.Add(first ? tc : td);
                 part.triangles.Add(n); part.triangles.Add(n + 1); part.triangles.Add(n + 2);
             }
         }
@@ -355,24 +372,52 @@ namespace MadeInArizona
         /// <summary>A strip of trim along the body side at <paramref name="height"/> (0 sill, 1 beltline) from <paramref name="z0"/> back to <paramref name="z1"/>.</summary>
         public void Strake(Material material, float z0, float z1, float height, float tall = .04f, float proud = .008f)
         {
-            // A point on the skin, or nothing where the strip would cross a wheel opening.
-            Vector3? At(float z, float lift)
-            {
-                Vector3[] ring = RingAt(z);
-                Vector3 sill = ring[Sill], mid = ring[Crease], high = ring[Shoulder];
-                float y = Mathf.Lerp(ring[Floor].y, high.y, height) + lift;
-                if (y < sill.y - .001f) return null;
-                // The side is two facets meeting at the crease: follow whichever the strip lies on.
-                float x = y <= mid.y ? Mathf.Lerp(sill.x, mid.x, Mathf.InverseLerp(sill.y, mid.y, y)) : Mathf.Lerp(mid.x, high.x, Mathf.InverseLerp(mid.y, high.y, y));
-                return new Vector3(x + proud, y, z);
-            }
             int steps = Mathf.Max(1, Mathf.CeilToInt(Mathf.Abs(z0 - z1) / .1f));
             for (int i = 0; i < steps; i++)
             {
                 float a = Mathf.Lerp(z0, z1, i / (float)steps), b = Mathf.Lerp(z0, z1, (i + 1) / (float)steps);
-                Vector3? p = At(a, -tall * .5f), q = At(b, -tall * .5f), r = At(b, tall * .5f), s = At(a, tall * .5f);
+                Vector3? p = OnSide(a, height, -tall * .5f, proud), q = OnSide(b, height, -tall * .5f, proud), r = OnSide(b, height, tall * .5f, proud), s = OnSide(a, height, tall * .5f, proud);
                 if (p.HasValue && q.HasValue && r.HasValue && s.HasValue) Both(material, p.Value, q.Value, r.Value, s.Value);
             }
+        }
+
+        /// <summary>
+        /// A point on the right flank at <paramref name="z"/>, <paramref name="height"/> of the way from the sill line to
+        /// the beltline plus <paramref name="lift"/> metres, standing <paramref name="proud"/> of the skin; nothing where
+        /// that falls in a wheel opening.
+        /// </summary>
+        Vector3? OnSide(float z, float height, float lift, float proud)
+        {
+            Vector3[] ring = RingAt(z);
+            Vector3 sill = ring[Sill], mid = ring[Crease], high = ring[Shoulder];
+            float y = Mathf.Lerp(ring[Floor].y, high.y, height) + lift;
+            if (y < sill.y - .001f) return null;
+            // The side is two facets meeting at the crease: follow whichever the point lies on.
+            float x = y <= mid.y ? Mathf.Lerp(sill.x, mid.x, Mathf.InverseLerp(sill.y, mid.y, y)) : Mathf.Lerp(mid.x, high.x, Mathf.InverseLerp(mid.y, high.y, y));
+            return new Vector3(x + proud, y, z);
+        }
+
+        /// <summary>
+        /// A picture laid on each flank from <paramref name="front"/> back to <paramref name="rear"/>, between two
+        /// heights (0 sill line, 1 beltline). It follows the skin over the crease. Its right-hand edge lies toward the
+        /// nose on both sides, so a figure drawn facing right faces forward on both.
+        /// </summary>
+        public void Decal(Material material, float front, float rear, float low, float high, float proud = .006f)
+        {
+            const int columns = 4, rows = 6;
+            Vector3 At(int column, int row, out Vector2 uv)
+            {
+                float u = column / (float)columns, v = row / (float)rows;
+                uv = new Vector2(1 - u, v);
+                return OnSide(Mathf.Lerp(front, rear, u), Mathf.Lerp(low, high, v), 0, proud) ?? Vector3.zero;
+            }
+            for (int column = 0; column < columns; column++)
+                for (int row = 0; row < rows; row++)
+                {
+                    Vector3 a = At(column, row, out var ta), b = At(column + 1, row, out var tb), c = At(column + 1, row + 1, out var tc), d = At(column, row + 1, out var td);
+                    Quad(material, a, b, c, d, ta, tb, tc, td);
+                    Quad(material, Mirror(a), Mirror(d), Mirror(c), Mirror(b), ta, td, tc, tb);
+                }
         }
 
         /// <summary>Creates one mesh per material under <paramref name="parent"/>.</summary>
@@ -382,7 +427,9 @@ namespace MadeInArizona
             {
                 var part = parts[material];
                 if (part.triangles.Count == 0) continue;
-                Use(MeshObject(label + " • " + part.name, parent, part.vertices.ToArray(), part.triangles.ToArray(), Color.white), material);
+                var body = MeshObject(label + " • " + part.name, parent, part.vertices.ToArray(), part.triangles.ToArray(), Color.white);
+                body.GetComponent<MeshFilter>().sharedMesh.SetUVs(0, part.uvs);
+                Use(body, material);
             }
         }
     }

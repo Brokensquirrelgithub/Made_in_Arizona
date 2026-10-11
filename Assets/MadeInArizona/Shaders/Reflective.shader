@@ -8,6 +8,7 @@ Shader "MadeInArizona/Reflective"
     {
         _BaseColor("Albedo",Color)=(1,1,1,1)
         _BaseMap("Albedo map (upholstery, grilles)",2D)="white"{}
+        _Cutoff("Alpha cutout (decals; 0 draws everything)",Range(0,1))=0
         _Metallic("Metallic",Range(0,1))=1
         _Smoothness("Smoothness",Range(0,1))=.85
         _GlintType("Glint material type (1 chrome, 2 glass, 3 sign, 5 metal, 6 plastic)",Float)=1
@@ -23,7 +24,7 @@ Shader "MadeInArizona/Reflective"
         #include "CloudShadows.hlsl"
         #include "SunGlint.hlsl"
         CBUFFER_START(UnityPerMaterial)
-        half4 _BaseColor;float4 _BaseMap_ST;half _Metallic;half _Smoothness;half _GlintType;half _Wear;half _Micro;
+        half4 _BaseColor;float4 _BaseMap_ST;half _Metallic;half _Smoothness;half _GlintType;half _Wear;half _Micro;half _Cutoff;
         // Per-car dust (VehicleDust.cs sets these on a car's own copy of the material; zero means clean).
         float4 _DustRow0,_DustRow1,_DustRow2,_DustState,_DustAxles,_DustTint;
         CBUFFER_END
@@ -67,7 +68,10 @@ Shader "MadeInArizona/Reflective"
                 float3 micro=TransformObjectToWorldNormal(MicroNormalOffset(i.local,i.objN,_Micro),false);
                 float3 ns=normalize(n+micro);
                 float metal=_Metallic;
-                float3 albedo=_BaseColor.rgb*SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb;
+                half4 map=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv);
+                // A decal is cut out of its square by the map's alpha; with no cutout set nothing is discarded.
+                clip(map.a-_Cutoff);
+                float3 albedo=_BaseColor.rgb*map.rgb;
                 // Oxidation shows as a dull, warm film on metals.
                 albedo=lerp(albedo,albedo*float3(.82,.7,.58)+float3(.05,.03,.015),saturate(wear.a*_Wear*_GlintSurface.y)*metal*.6);
                 // Road dust on car parts (bumpers, tyres, trim): matte and tan, it takes the shine where it sits.
@@ -128,7 +132,7 @@ Shader "MadeInArizona/Reflective"
                 #endif
                 return o;
             }
-            half4 depth(V i):SV_Target{return 0;}
+            half4 depth(V i):SV_Target{clip(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).a-_Cutoff);return 0;}
             ENDHLSL
         }
         Pass
@@ -138,7 +142,7 @@ Shader "MadeInArizona/Reflective"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment depth
-            half4 depth(V i):SV_Target{return 0;}
+            half4 depth(V i):SV_Target{clip(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).a-_Cutoff);return 0;}
             ENDHLSL
         }
         Pass
@@ -148,7 +152,7 @@ Shader "MadeInArizona/Reflective"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment normals
-            half4 normals(V i):SV_Target{return half4(normalize(i.n),0);}
+            half4 normals(V i):SV_Target{clip(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).a-_Cutoff);return half4(normalize(i.n),0);}
             ENDHLSL
         }
     }

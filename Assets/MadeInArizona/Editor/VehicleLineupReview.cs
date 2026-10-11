@@ -53,7 +53,9 @@ namespace MadeInArizona.Editor
                 var holder = new GameObject(definition.id);
                 var visual = VehicleVisual.Build(definition, holder.transform, false);
                 var renderers = holder.GetComponentsInChildren<Renderer>();
-                Bounds bounds = renderers[0].bounds; foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+                // Framed on the bodywork: a whip aerial would shrink the car to a speck. It gets a tile of its own below.
+                Bounds bounds = renderers[0].bounds, all = renderers[0].bounds;
+                foreach (var renderer in renderers) { all.Encapsulate(renderer.bounds); if (!renderer.GetComponentInParent<WhipFlag>()) bounds.Encapsulate(renderer.bounds); }
                 // Stand the car on its tyres.
                 ground.transform.position = new Vector3(0, bounds.min.y, 0);
                 var sheet = new Texture2D(TileWidth * 2, TileHeight * 2, TextureFormat.RGB24, false);
@@ -73,6 +75,17 @@ namespace MadeInArizona.Editor
                     Object.DestroyImmediate(tile);
                 }
                 File.WriteAllBytes(Path.Combine(directory, definition.id + ".png"), sheet.EncodeToPNG());
+                if (all.size.y > bounds.size.y * 1.5f)
+                {
+                    camera.transform.rotation = Quaternion.Euler(6, 140, 0);
+                    camera.transform.position = all.center - camera.transform.forward * all.extents.magnitude * 3.9f;
+                    RenderPipeline.SubmitRenderRequest(camera, new RenderPipeline.StandardRequest { destination = target });
+                    var previous = RenderTexture.active; RenderTexture.active = target;
+                    var tall = new Texture2D(TileWidth, TileHeight, TextureFormat.RGB24, false);
+                    tall.ReadPixels(new Rect(0, 0, TileWidth, TileHeight), 0, 0); tall.Apply(); RenderTexture.active = previous;
+                    File.WriteAllBytes(Path.Combine(directory, definition.id + "-whole.png"), tall.EncodeToPNG());
+                    Object.DestroyImmediate(tall);
+                }
                 Object.DestroyImmediate(sheet);
                 int triangles = 0; foreach (var meshFilter in holder.GetComponentsInChildren<MeshFilter>()) if (meshFilter.sharedMesh) triangles += meshFilter.sharedMesh.triangles.Length / 3;
                 Debug.Log($"MIA_VEHICLE_REVIEW {definition.id}: {renderers.Length} renderers, {triangles} triangles, size {bounds.size.x:0.00} x {bounds.size.y:0.00} x {bounds.size.z:0.00}");

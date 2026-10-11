@@ -88,10 +88,11 @@ namespace MadeInArizona
         /// <summary>
         /// A Reflective material carrying a pattern as its albedo map (seat fabric, grille slats), repeated
         /// <paramref name="tiling"/> times across each face. Car dust settles over it like any other Reflective part.
+        /// With <paramref name="cutout"/> above zero the map's alpha cuts the part out of its square (a decal).
         /// </summary>
-        public static Material Patterned(Texture2D map, Color tint, Vector2 tiling, float smoothness = .3f, float metallic = 0)
+        public static Material Patterned(Texture2D map, Color tint, Vector2 tiling, float smoothness = .3f, float metallic = 0, float cutout = 0)
         {
-            string key = "pattern/" + map.name + "/" + ColorUtility.ToHtmlStringRGBA(tint) + "/" + tiling.x + "/" + tiling.y + "/" + smoothness + "/" + metallic;
+            string key = "pattern/" + map.name + "/" + ColorUtility.ToHtmlStringRGBA(tint) + "/" + tiling.x + "/" + tiling.y + "/" + smoothness + "/" + metallic + "/" + cutout;
             if (Materials.TryGetValue(key, out Material result) && result) return result;
             Shader shader = Shader.Find("MadeInArizona/Reflective");
             if (!shader || !shader.isSupported) shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
@@ -100,6 +101,7 @@ namespace MadeInArizona
             result.SetTexture("_BaseMap", map); result.SetTextureScale("_BaseMap", tiling);
             result.SetFloat("_Smoothness", smoothness); result.SetFloat("_Metallic", metallic);
             if (result.HasProperty("_GlintType")) { result.SetFloat("_GlintType", metallic > .5f ? SunGlint.Chrome : SunGlint.Plastic); result.SetFloat("_Wear", 1); result.SetFloat("_Micro", .6f); }
+            if (result.HasProperty("_Cutoff")) result.SetFloat("_Cutoff", cutout);
             Materials[key] = result;
             return result;
         }

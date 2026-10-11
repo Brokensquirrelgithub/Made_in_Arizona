@@ -15,7 +15,7 @@ MonoBehaviour:
   id: swap
   displayName: 1.8L salvage-yard engine swap
   category: Engine
-  description: 'Shift, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.'
+  description: 'Shift, Scarface, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.'
   contentOrder: 8
   cost: 1700
   unlockMission: 6
@@ -39,5 +39,6 @@ MonoBehaviour:
   differential: 0
   compatibleVehicles:
   - shift
+  - scarface
   - ronin
   - juniper

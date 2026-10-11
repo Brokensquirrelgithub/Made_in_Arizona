@@ -239,7 +239,7 @@ namespace MadeInArizona
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(), "-miaUltraTest")>=0) { game.Save.settings.quality=3;game.ApplySettings();game.ReturnToGarage();yield return new WaitForSecondsRealtime(.5f); }
             Check("garage startup", game && game.Player && game.State == GameState.Garage);
-            Check("catalog: twenty-one vehicles and fifteen missions", ContentCatalog.Vehicles.Length == 21 && ContentCatalog.Missions.Length == 15);
+            Check("catalog: twenty-two vehicles and fifteen missions", ContentCatalog.Vehicles.Length == 22 && ContentCatalog.Missions.Length == 15);
             string[] datedCars={"ronin:1989","shift:1991","monsoon:2007","sonora:2001","dustback:2002","monument:1990","executive:1990","heat:1991","citizen:1993","roam4:2005","ae867:1985","espresso:1991","copperado:1988","contender:1970"};
             bool rosterYears=true;
             foreach(string entry in datedCars)
@@ -2115,11 +2115,11 @@ namespace MadeInArizona
         IEnumerator TestVehicleRoster()
         {
             var game=GameManager.Instance;
-            var ids=new[]{"ronin","shift","monsoon","sonora","dustback","monument","executive","heat","citizen","roam4","ae867","espresso","copperado","contender"};
+            var ids=new[]{"ronin","shift","monsoon","sonora","dustback","monument","executive","heat","citizen","roam4","ae867","espresso","copperado","contender","scarface"};
             var details=new[]{"Ronin rear spare","Shift tail strip","Monsoon shield grille","Sonora satin grille",
                 "Dustback roof rail","Monument tail lamp bar","Executive eggcrate grille","Heat zebra seat fabric",
                 "Citizen hatch spoiler","Roam4 rear spare","AE 867 pop-up lamp","Espresso targa hoop",
-                "Copperado chrome grille","Contender hood scoop"};
+                "Copperado chrome grille","Contender hood scoop","Scarface hood muffler"};
             game.Save.unlockedMission=14;
             for(int i=0;i<ids.Length;i++)
             {
@@ -2144,6 +2144,62 @@ namespace MadeInArizona
                     var map=fabric?fabric.GetComponent<Renderer>().sharedMaterial.GetTexture("_BaseMap"):null;
                     Check("Heat seats wear a zebra-print texture",map&&map.name=="Zebra print"&&!VehicleController.FindChild(game.Player.Visual,"Heat zebra cushion stripe"));
                 }
+                if(car.id=="scarface")
+                {
+                    // What makes it the Scarface: the streaked paint and the dog on its doors, both textures; bare front
+                    // wheels on off-road tread; nitro from the stack on the hood; a whip about four car-heights tall with a
+                    // small orange pennant at its head, which the dust mask does not mistake for the roof.
+                    bool logo=false,streaked=false;
+                    foreach(var renderer in game.Player.Visual.GetComponentsInChildren<Renderer>())
+                    {
+                        var material=renderer.sharedMaterial;
+                        var texture=material&&material.HasProperty("_BaseMap")?material.GetTexture("_BaseMap"):null;
+                        if(!texture)continue;
+                        logo|=texture.name=="Dog profile"&&material.HasProperty("_Cutoff")&&material.GetFloat("_Cutoff")>0;
+                        streaked|=texture.name=="Streaked tan paint";
+                    }
+                    Check("Scarface wears its paint and the dog on its doors as textures",logo&&streaked);
+                    Check("Scarface's front wheels stand clear of the body on off-road tread",frontWheel&&VehicleController.FindChild(frontWheel,"Tread block")&&
+                        Mathf.Abs(frontWheel.localPosition.x)>.6f&&!VehicleController.FindChild(game.Player.Wheel(2),"Tread block"));
+                    var exit=VehicleController.FindChild(game.Player.Visual,NitroExhaust.ExitName);
+                    Check("Scarface's nitro leaves upward from the stack on the hood",exit&&game.Player.Visual.InverseTransformDirection(exit.forward).y>.9f&&
+                        game.Player.Visual.InverseTransformPoint(exit.position).z>.5f&&VehicleController.FindChild(game.Player.Visual,"Tailpipe")==null);
+                    var whip=game.Player.Visual.GetComponentInChildren<WhipFlag>();
+                    float roof=shellMesh?shellMesh.bounds.max.y:1,tip=whip?game.Player.Visual.InverseTransformPoint(whip.Tip).y:0;
+                    var grime=game.Player.GetComponent<VehicleDust>();
+                    Check("Scarface's whip stands about four car-heights tall ("+(tip/roof).ToString("0.0")+"), and is not taken for the roof",
+                        whip&&tip/roof>3.5f&&tip/roof<4.6f&&grime&&grime.BodyTop<roof+.6f);
+                    // The pennant is a small orange triangle: full height at the whip, closing to a point behind it.
+                    var pennant=VehicleController.FindChild(game.Player.Visual,"Whip pennant");
+                    var cloth=pennant?pennant.GetComponent<MeshFilter>().sharedMesh:null;
+                    Color orange=pennant?pennant.GetComponent<Renderer>().sharedMaterial.GetColor("_BaseColor"):Color.black;
+                    // The cloth hangs a little at rest, so the point is judged by how far its own edge spans, not where it sits.
+                    float hoistLow=9,hoistHigh=-9,pointLow=9,pointHigh=-9;
+                    if(cloth)foreach(var v in cloth.vertices)
+                    {
+                        if(v.z>-.01f){hoistLow=Mathf.Min(hoistLow,v.y);hoistHigh=Mathf.Max(hoistHigh,v.y);}
+                        if(v.z<-WhipFlag.PennantLength+.01f){pointLow=Mathf.Min(pointLow,v.y);pointHigh=Mathf.Max(pointHigh,v.y);}
+                    }
+                    Check("Scarface flies a small orange triangle, not a flag ("+(cloth?cloth.bounds.size.z:0).ToString("0.00")+" m long, "+(hoistHigh-hoistLow).ToString("0.00")+" m at the whip, "+(pointHigh-pointLow).ToString("0.00")+" m at the point)",
+                        cloth&&cloth.bounds.size.z<.6f&&cloth.bounds.size.y<.4f&&hoistHigh-hoistLow>.25f&&pointHigh>=pointLow&&pointHigh-pointLow<.02f&&
+                        orange.r>.9f&&orange.g>.25f&&orange.g<.55f&&orange.b<.2f);
+                    // The whip is thin sprung metal. One is driven by hand here, clear of the garage: a straight run, a
+                    // turn to the right, straight again, then a dead stop.
+                    var carrier=new GameObject("Whip carrier").transform;carrier.position=new Vector3(0,400,0);
+                    var rod=WhipFlag.Build(carrier,Vector3.zero,5,new Color(1f,.4f,.04f),new Color(1f,.8f,.46f));rod.enabled=false;
+                    const float tick=1/60f,pace=18;
+                    for(int beat=0;beat<240;beat++){carrier.position+=carrier.forward*pace*tick;rod.Sway(tick);}
+                    Vector2 running=rod.Lean;
+                    for(int beat=0;beat<180;beat++){carrier.Rotate(0,pace/25*Mathf.Rad2Deg*tick,0);carrier.position+=carrier.forward*pace*tick;rod.Sway(tick);}
+                    Vector2 turning=rod.Lean;
+                    float lash=-90,swing=-90;
+                    for(int beat=0;beat<150;beat++){carrier.position+=carrier.forward*pace*tick;rod.Sway(tick);swing=Mathf.Max(swing,rod.Lean.x);}
+                    for(int beat=0;beat<480;beat++){rod.Sway(tick);lash=Mathf.Max(lash,rod.Lean.y);}
+                    Vector2 settled=rod.Lean;
+                    Destroy(carrier.gameObject);
+                    Check("Scarface's whip lies back in the wind ("+running.y.ToString("0")+" deg), swings wide in a turn ("+turning.x.ToString("0")+" deg) and back past upright out of it ("+swing.ToString("0")+"), lashes forward at a stop ("+lash.ToString("0")+") and settles ("+settled.magnitude.ToString("0.0")+")",
+                        running.y<-12&&running.y>-20&&Mathf.Abs(running.x)<1&&turning.x<-8&&turning.y<-10&&lash>3&&swing>2&&settled.magnitude<1.5f);
+                }
                 if(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIA_CAPTURE_DIR")))continue;
                 var camera=Camera.main;var rig=CameraController.Instance;var ui=game.GetComponent<GameUI>();
                 rig.enabled=false;ui.enabled=false;camera.orthographic=false;camera.fieldOfView=48;
@@ -2153,7 +2209,15 @@ namespace MadeInArizona
                 camera.transform.SetPositionAndRotation(side,Quaternion.LookRotation(center-side));
                 yield return new WaitForSecondsRealtime(.1f);
                 SceneLuminance("roster-profile-"+car.id,camera);
-                if(i!=0&&i!=1&&i!=4&&i!=7){rig.enabled=true;ui.enabled=true;continue;}
+                if(car.id=="scarface")
+                {
+                    // The whole of it, whip and all, from the front quarter.
+                    Vector3 far=game.Player.transform.position+game.Player.transform.forward*9f-game.Player.transform.right*6.5f+Vector3.up*4.2f;
+                    camera.transform.SetPositionAndRotation(far,Quaternion.LookRotation(game.Player.transform.position+Vector3.up*2.6f-far));
+                    yield return new WaitForSecondsRealtime(.1f);
+                    SceneLuminance("roster-scarface-whip",camera);
+                }
+                if(i!=0&&i!=1&&i!=4&&i!=7&&i!=14){rig.enabled=true;ui.enabled=true;continue;}
                 // The Heat is seen from ahead and above, down into the cockpit at its seats; the others from behind.
                 Vector3 view=i==7?game.Player.transform.position+game.Player.transform.forward*2.5f+game.Player.transform.right*1.3f+Vector3.up*2.3f:
                     game.Player.transform.position-game.Player.transform.forward*5f+Vector3.up*2.2f;

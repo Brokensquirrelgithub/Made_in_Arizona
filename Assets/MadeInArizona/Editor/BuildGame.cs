@@ -311,7 +311,7 @@ namespace MadeInArizona.Editor
         public static void Validate()
         {
             ContentCatalog.EnsureLoaded();
-            if (ContentCatalog.Missions.Length != 15 || ContentCatalog.Vehicles.Length != 8) throw new Exception("Catalog count mismatch");
+            if (ContentCatalog.Missions.Length != 15 || ContentCatalog.Vehicles.Length != 22) throw new Exception("Catalog count mismatch");
             var ids = new HashSet<string>();
             foreach (var m in ContentCatalog.Missions) {
                 if (!ids.Add(m.id) || string.IsNullOrEmpty(m.opening) || string.IsNullOrEmpty(m.closing) || m.timeLimit <= 0) throw new Exception("Invalid mission: " + m.id);

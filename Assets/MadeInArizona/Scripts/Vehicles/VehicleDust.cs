@@ -27,6 +27,8 @@ namespace MadeInArizona
         Vector4 shape;
 
         public float Amount => amount;
+        /// <summary>Height the dust mask takes for the roof (the top of the bodywork, above the car's origin).</summary>
+        public float BodyTop => shape.z;
         /// <summary>Review captures only: sets the dust level outright.</summary>
         internal void SoilForReview(float value) { amount = Mathf.Clamp01(value); tint = DustColor(SurfaceKind.Sand); }
         /// <summary>Washes some dust off (Suzuki's hose in the garage). The player's dust per car is remembered.</summary>
@@ -48,7 +50,8 @@ namespace MadeInArizona
             foreach (var renderer in body.GetComponentsInChildren<MeshRenderer>(true))
             {
                 var filter = renderer.GetComponent<MeshFilter>();
-                if (filter && filter.sharedMesh) Encapsulate(ref bounds, filter.sharedMesh.bounds, toBody * renderer.transform.localToWorldMatrix);
+                // A whip aerial is not bodywork: counted, its height would pass for the roof's and the dust would climb the whole car.
+                if (filter && filter.sharedMesh && !renderer.GetComponentInParent<WhipFlag>()) Encapsulate(ref bounds, filter.sharedMesh.bounds, toBody * renderer.transform.localToWorldMatrix);
                 var source = Dustable(renderer.sharedMaterial);
                 if (!source) continue;
                 if (!copies.TryGetValue(source, out Material copy))

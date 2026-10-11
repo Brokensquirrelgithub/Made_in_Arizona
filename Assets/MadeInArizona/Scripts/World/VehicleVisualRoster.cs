@@ -4,7 +4,7 @@ using static MadeInArizona.WorldArt;
 namespace MadeInArizona
 {
     /// <summary>
-    /// The fourteen roster cars as low-poly versions of the cars that inspired them. Each is a <see cref="CarShell"/>
+    /// The roster cars as low-poly versions of the cars that inspired them. Each is a <see cref="CarShell"/>
     /// lofted from that car's own proportions (overhangs, hood and deck lengths, roof height, glass rake), with its
     /// lamps, grille, bumpers and trim set on it. Heights are metres above the ground; the car's wheelbase and track
     /// come from its definition, so the model stands where the physics does.
@@ -40,6 +40,7 @@ namespace MadeInArizona
                 case "espresso": return Espresso;
                 case "copperado": return Copperado;
                 case "contender": return Contender;
+                case "scarface": return Scarface;
                 default: return null;
             }
         }
@@ -74,6 +75,7 @@ namespace MadeInArizona
                 case "dustback": return new Vector3(.32f, ground + .74f, -.1f);
                 case "roam4": case "ronin": return new Vector3(.3f, ground + .9f, -.1f);
                 case "copperado": return new Vector3(.4f, ground + 1.02f, .25f);
+                case "scarface": return new Vector3(.3f, ground + .69f, -.1f);
                 default: return new Vector3(.48f, 1.1f, .1f);
             }
         }
@@ -96,7 +98,7 @@ namespace MadeInArizona
             public readonly Material painted, glazed, black, chrome;
             /// <summary>Ground level and the front and rear axle lines in model space.</summary>
             public readonly float ground, front, rear;
-            float wheelX, gunY = float.NaN, gunZ, plateY = .42f, plateProud = .02f, pipeY = .2f;
+            float gunY = float.NaN, gunZ, plateY = .42f, plateProud = .02f, pipeY = .2f;
             int pipes = 1;
 
             public Car(VehicleDefinition definition, Transform root, bool enemy, EnemyFaction faction)
@@ -131,25 +133,41 @@ namespace MadeInArizona
                 float half = -1, float low = -1, float drop = -1, float floor = 0)
                 => shell.At(z, Y(belt), Y(crown), edge, over, flank, pillar, half, low < 0 ? float.NaN : Y(low), drop, Y(floor));
 
+            /// <summary>Half the distance between the front wheels' centres.</summary>
+            public float FrontWheelX { get; private set; }
+
             /// <summary>
             /// Four wheels on the definition's wheelbase, tucked just inside the body sides, and the arches cut for them.
-            /// <paramref name="skirt"/> caps the rear arch at that height (fender skirts).
+            /// <paramref name="skirt"/> caps the rear arch at that height (fender skirts). The front pair may be a
+            /// different size, and <paramref name="openFront"/> stands them clear of the bodywork on off-road tread: no
+            /// arch is cut, for a car with no front fenders.
             /// </summary>
-            public void Wheels(float radius, float width, Material rim, float rimSize = .62f, bool whitewall = false, float skirt = 0, float gap = .065f)
+            public void Wheels(float rearRadius, float rearWidth, Material rim, float rimSize = .62f, bool whitewall = false, float skirt = 0, float gap = .065f,
+                float frontRadius = 0, float frontWidth = 0, bool openFront = false)
             {
-                wheelX = shell.half - width * .5f - .012f;
-                shell.wellDepth = width + .1f;
-                shell.Wheel(front, Y(radius), radius + gap);
-                shell.Wheel(rear, Y(radius), radius + gap, skirt > 0 ? Y(skirt) : float.MaxValue);
+                if (frontRadius <= 0) frontRadius = rearRadius;
+                if (frontWidth <= 0) frontWidth = rearWidth;
+                shell.wellDepth = Mathf.Max(rearWidth, frontWidth) + .1f;
                 for (int axle = 1; axle >= -1; axle -= 2)
                 {
+                    bool nose = axle > 0, open = nose && openFront;
+                    float radius = nose ? frontRadius : rearRadius, width = nose ? frontWidth : rearWidth;
                     // Behind a skirt the wheel sits further in, clear of the panel that covers it.
-                    float z = axle > 0 ? front : rear, x = axle < 0 && skirt > 0 ? wheelX - .07f : wheelX;
+                    float z = nose ? front : rear, x = shell.half - width * .5f - .012f - (!nose && skirt > 0 ? .07f : 0);
+                    if (nose) FrontWheelX = x;
+                    if (!open) shell.Wheel(z, Y(radius), radius + gap, !nose && skirt > 0 ? Y(skirt) : float.MaxValue);
                     Beam("Axle", root, new Vector3(-x, Y(radius), z), new Vector3(x, Y(radius), z), .045f, Trim);
                     for (int side = -1; side <= 1; side += 2)
                     {
-                        Transform wheel = Group(axle > 0 ? (side < 0 ? "Wheel_FL" : "Wheel_FR") : (side < 0 ? "Wheel_RL" : "Wheel_RR"), root, new Vector3(side * x, Y(radius), z));
-                        Turned(Cylinder("Road tire", wheel, Vector3.zero, radius, width, Tyre));
+                        Transform wheel = Group(nose ? (side < 0 ? "Wheel_FL" : "Wheel_FR") : (side < 0 ? "Wheel_RL" : "Wheel_RR"), root, new Vector3(side * x, Y(radius), z));
+                        Turned(Cylinder(open ? "All terrain tire" : "Road tire", wheel, Vector3.zero, radius, width, Tyre));
+                        if (open)
+                            for (int tread = 0; tread < 16; tread++)
+                            {
+                                float around = tread * Mathf.PI / 8;
+                                var block = Box("Tread block", wheel, new Vector3(0, Mathf.Sin(around) * radius, Mathf.Cos(around) * radius), new Vector3(width + .02f, .05f, .08f), Tyre);
+                                block.transform.localRotation = Quaternion.Euler(-around * Mathf.Rad2Deg, 0, 0);
+                            }
                         float face = width * .5f;
                         if (whitewall) Turned(Cylinder("Whitewall", wheel, new Vector3(side * (face + .001f), 0, 0), radius * (rimSize + .16f), .012f, Cream));
                         Turned(Use(Cylinder("Wheel rim", wheel, new Vector3(side * (face + .004f), 0, 0), radius * rimSize, .03f, Silver), rim));
@@ -696,6 +714,115 @@ namespace MadeInArizona
             c.Plate(.68f); c.Exhaust(1, .5f);
         }
 
+        // The Atlas Scarface: an economy hatch found without its front end and rebuilt for the desert. Ahead of the
+        // doors the body is only as wide as the engine bay, and the front wheels stand clear of it on knobbly tyres
+        // behind a tube bumper. The muffler is on the hood, there is a rack on the roof, and a small orange safety
+        // pennant flies four car-heights up on a whip wound with rope light.
+        static void Scarface(Car c)
+        {
+            // Flat tan with red showing through in streaks: a pattern on the paint, laid along the body.
+            Material body = c.enemy ? c.painted : Patterned(CarTextures.Streaks, Color.white, new Vector2(.42f, .6f), .2f);
+            Material steel = Reflective(new Color(.085f, .088f, .095f), SunGlint.Metal, .35f, .6f, 1.4f);
+            Material rusty = Reflective(new Color(.46f, .36f, .28f), SunGlint.Metal, .4f, .85f, 1.7f);
+            Material mesh = Patterned(CarTextures.Eggcrate, new Color(.17f, .17f, .18f), new Vector2(11, 5), .3f);
+            c.Body(.78f, .3f, .5f, .04f);
+            c.shell.paint = c.shell.lower = c.shell.roof = c.shell.frame = body;
+            c.S(c.F(.5f), .64f, .72f, .44f, half: .5f, low: .42f);
+            c.S(c.F(.42f), .72f, .78f, .47f, half: .52f, low: .36f);
+            c.S(c.F(-.36f), .9f, .96f, .5f, half: .54f);
+            // The body steps out to its full width at the doors: the step is the bare hinge pillar the fender used to cover.
+            c.S(c.F(-.4f), .93f, .975f, .65f, Screen, Window);
+            c.S(c.F(-1.02f), .94f, 1.45f, .55f, Rooftop, Window);
+            c.S(-.36f, .94f, 1.465f, .56f, Rooftop, Window, true);
+            c.S(c.R(-.06f), .95f, 1.435f, .55f, Screen, Flank, true);
+            c.S(c.R(-.5f), .91f, .97f, .62f);
+            c.S(c.R(-.6f), .85f, .91f, .56f, half: .7f, low: .4f);
+            c.Wheels(.29f, .18f, steel, .6f, frontRadius: .335f, frontWidth: .23f, openFront: true);
+            float nose = c.NoseZ;
+
+            // With the fenders gone the front suspension shows: a strut and its spring up to the tower, and the lower arm.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float hub = side * (c.FrontWheelX - .13f), tower = side * .5f;
+                Beam("Scarface strut", c.root, new Vector3(hub, c.Y(.34f), c.front), new Vector3(tower, c.Y(.8f), c.front - .03f), .028f, Trim);
+                Use(Beam("Scarface coil spring", c.root, new Vector3(Mathf.Lerp(hub, tower, .4f), c.Y(.52f), c.front - .012f), new Vector3(Mathf.Lerp(hub, tower, .95f), c.Y(.78f), c.front - .028f), .06f, Trim), rusty);
+                Beam("Scarface control arm", c.root, new Vector3(hub, c.Y(.24f), c.front), new Vector3(side * .3f, c.Y(.36f), c.front - .16f), .024f, Trim);
+            }
+
+            // The rebuilt face: lamps and a radiator on the bare core support, behind a tube bumper with a mesh plate.
+            c.Lamps(.36f, .65f, .2f, .2f, true, .035f);
+            c.Pair("Turn signal", .47f, .52f, nose, new Vector3(.12f, .1f, .12f), null, .5f, Amber);
+            c.Grille("Scarface radiator", .6f, .3f, .2f, mesh);
+            float bar = nose + .2f;
+            void Tube(Vector3 a, Vector3 b) => Use(Beam("Scarface tube bumper", c.root, a, b, .028f, Trim), steel);
+            Tube(new Vector3(-.62f, c.Y(.5f), bar), new Vector3(.62f, c.Y(.5f), bar));
+            // The hoop and its mesh stand in the middle; the lamps look out either side of them.
+            Tube(new Vector3(-.22f, c.Y(.8f), bar + .02f), new Vector3(.22f, c.Y(.8f), bar + .02f));
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Tube(new Vector3(side * .62f, c.Y(.5f), bar), new Vector3(side * .5f, c.Y(.47f), nose - .12f));
+                Tube(new Vector3(side * .25f, c.Y(.5f), bar), new Vector3(side * .22f, c.Y(.8f), bar + .02f));
+            }
+            Use(Box("Scarface bumper mesh", c.root, new Vector3(0, c.Y(.65f), bar + .01f), new Vector3(.44f, .3f, .014f), Trim), mesh);
+            Box("Scarface tow hook", c.root, new Vector3(.36f, c.Y(.4f), nose + .12f), new Vector3(.07f, .12f, .18f), Orange);
+            c.OnTopPair("Scarface hood pin", .3f, c.F(.36f), c.F(.3f), .05f, .012f, c.chrome, .002f);
+
+            // The muffler stands on the hood with a rain flap on its stack. Nitro leaves from the top of it.
+            float stackX = .3f, stackZ = c.F(.2f), hood = c.shell.CrownAt(stackZ);
+            Use(Cylinder("Scarface hood muffler", c.root, new Vector3(stackX, hood + .19f, stackZ), .07f, .38f, Trim), rusty);
+            Use(Cylinder("Scarface exhaust stack", c.root, new Vector3(stackX, hood + .49f, stackZ), .034f, .24f, Trim), rusty);
+            Use(Cylinder("Scarface rain flap", c.root, new Vector3(stackX, hood + .64f, stackZ - .02f), .05f, .012f, Trim), rusty).transform.localRotation = Quaternion.Euler(-38, 0, 0);
+            Beam("Scarface muffler stay", c.root, new Vector3(stackX, hood + .3f, stackZ), new Vector3(stackX - .2f, hood + .01f, stackZ - .22f), .008f, Trim);
+            Group(NitroExhaust.ExitName, c.root, new Vector3(stackX, hood + .62f, stackZ)).localRotation = Quaternion.Euler(-90, 0, 0);
+            c.Exhaust(0, 0);
+
+            // The roof rack: a tube basket with a wind deflector under stickers, the spare, two ammo cans and a spot
+            // lamp. The turret stands in the front of it.
+            float deck = 1.52f, rail = 1.66f, rackFront = c.F(-1.06f), rackRear = c.R(-.04f);
+            const float rackHalf = .5f;
+            void Rail(Vector3 a, Vector3 b) => Use(Beam("Scarface roof rack", c.root, a, b, .017f, Trim), steel);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Rail(new Vector3(side * rackHalf, c.Y(deck), rackFront), new Vector3(side * rackHalf, c.Y(deck), rackRear));
+                Rail(new Vector3(side * rackHalf, c.Y(rail), rackFront), new Vector3(side * rackHalf, c.Y(rail), rackRear));
+                for (int post = 0; post < 4; post++)
+                {
+                    float z = Mathf.Lerp(rackFront, rackRear, post / 3f);
+                    Rail(new Vector3(side * rackHalf, c.Y(deck - .09f), z), new Vector3(side * rackHalf, c.Y(rail), z));
+                }
+            }
+            for (int rung = 0; rung < 5; rung++)
+            {
+                float z = Mathf.Lerp(rackFront, rackRear, rung / 4f);
+                Rail(new Vector3(-rackHalf, c.Y(deck), z), new Vector3(rackHalf, c.Y(deck), z));
+                if (rung == 0 || rung == 4) Rail(new Vector3(-rackHalf, c.Y(rail), z), new Vector3(rackHalf, c.Y(rail), z));
+            }
+            Use(Box("Scarface sticker deflector", c.root, new Vector3(0, c.Y(1.6f), rackFront + .06f), new Vector3(1.02f, .2f, .012f), Cream),
+                Patterned(CarTextures.Stickers, Color.white, Vector2.one, .45f)).transform.localRotation = Quaternion.Euler(-32, 0, 0);
+            Cylinder("Scarface rack spare", c.root, new Vector3(0, c.Y(deck + .11f), rackRear + .32f), .28f, .19f, Tyre);
+            Use(Cylinder("Scarface rack spare rim", c.root, new Vector3(0, c.Y(deck + .11f), rackRear + .32f), .17f, .2f, Trim), steel);
+            c.Pair("Scarface ammo can", .385f, deck + .11f, rackRear + .34f, new Vector3(.17f, .19f, .3f), null, 0, new Color(.29f, .32f, .2f));
+            Cylinder("Scarface spot lamp", c.root, new Vector3(-.43f, c.Y(rail + .09f), rackFront + .01f), .06f, .1f, Trim).transform.localRotation = Quaternion.Euler(90, 0, 0);
+            Shape("Rack lamp lens", c.root, PrimitiveType.Cylinder, new Vector3(-.43f, c.Y(rail + .09f), rackFront + .064f), new Vector3(.1f, .006f, .1f), new Color(1, .93f, .78f), false, 0, .8f, 1.6f)
+                .transform.localRotation = Quaternion.Euler(90, 0, 0);
+            c.Gun(deck + .01f, rackFront - .37f);
+
+            // Suzuki in profile on each door, facing forward, and the number on the rear quarters.
+            c.shell.Decal(Patterned(CarTextures.DogProfile, Color.white, Vector2.one, .2f, 0, .5f), .44f, .04f, .34f, .92f);
+            for (int side = -1; side <= 1; side += 2)
+                Text("G10-993", c.root, new Vector3(side * (c.shell.HalfAt(c.R(.36f)) + .004f), c.Y(.86f), c.R(.36f)), .085f, Trim, Quaternion.Euler(0, -side * 90, 0));
+
+            c.Tails(.5f, .72f, .28f, .13f);
+            c.Bumper(false, steel, .44f, .58f, .05f, .2f);
+            c.Doors(c.F(-.42f), -.38f);
+            c.Mirrors(c.F(-.52f), false);
+            c.Handles(.84f, -.2f);
+            c.Plate(.52f);
+
+            // The whip at the back left corner, its pennant four car-heights up: a little orange triangle, there to be seen.
+            WhipFlag.Build(c.root, new Vector3(-.7f, c.Y(.95f), c.R(-.34f)), 4 * 1.465f - .95f, new Color(1f, .4f, .04f), new Color(1f, .8f, .46f));
+        }
+
         // 1970 Dodge Challenger R/T: a long hood, a short deck, wide hips, a black mouth with four round lamps.
         static void Contender(Car c)
         {
@@ -754,10 +881,95 @@ namespace MadeInArizona
         /// <summary>Eggcrate: bright bars round dark cells.</summary>
         public static Texture2D Eggcrate => eggcrate ? eggcrate : eggcrate = Make("Eggcrate", 32, (u, v) => Shade(u < .28f || v < .28f ? 1 : .1f));
 
-        static Color Shade(float value) => new Color(value, value, value, 1);
-        static Texture2D Make(string name, int size, System.Func<float, float, Color> pixel)
+        static Texture2D streaks, stickers, dogProfile;
+
+        /// <summary>
+        /// The Scarface's paint: flat desert tan, with the red of an earlier coat showing through in long streaks and a
+        /// little mottling. Tiles in both directions; the streaks run along u.
+        /// </summary>
+        public static Texture2D Streaks => streaks ? streaks : streaks = Make("Streaked tan paint", 256, (u, v) =>
         {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = name, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 4 };
+            Color tan = new Color(.77f, .67f, .5f), red = new Color(.62f, .27f, .24f);
+            float mottle = Tiled(u * 9, v * 9, 9, 9, 3) - .5f;
+            // Long thin streaks, gathered into a few patches rather than spread evenly.
+            float streak = Edge(.52f, .72f, Tiled(u * 3, v * 16, 3, 16, 11)) * Edge(.3f, .56f, Tiled(u * 2, v * 3, 2, 3, 5));
+            Color paint = Color.Lerp(tan * (1 + mottle * .16f), red, streak * .7f);
+            paint.a = 1;
+            return paint;
+        });
+        /// <summary>A panel plastered with stickers: bright slabs and ovals overlapping on black.</summary>
+        public static Texture2D Stickers => stickers ? stickers : stickers = StickerSheet();
+        /// <summary>Suzuki's head in profile, black, facing right, with everything else cut away (see WorldArt.Patterned's cutout).</summary>
+        public static Texture2D DogProfile => dogProfile ? dogProfile : dogProfile = Make("Dog profile", 128, (u, v) =>
+        {
+            // Neck point, back of the neck and head, two pricked ears, brow, muzzle, jaw and chest.
+            Vector2[] outline = { new Vector2(.36f, .02f), new Vector2(.14f, .36f), new Vector2(.1f, .6f), new Vector2(.16f, .74f), new Vector2(.2f, .99f),
+                new Vector2(.36f, .78f), new Vector2(.46f, .97f), new Vector2(.56f, .74f), new Vector2(.66f, .66f), new Vector2(.74f, .6f), new Vector2(.95f, .5f),
+                new Vector2(.99f, .43f), new Vector2(.94f, .38f), new Vector2(.82f, .33f), new Vector2(.66f, .28f), new Vector2(.56f, .2f), new Vector2(.52f, .08f) };
+            float cover = 0;
+            for (int sy = 0; sy < 3; sy++)
+                for (int sx = 0; sx < 3; sx++)
+                {
+                    Vector2 p = new Vector2(u + (sx - 1) / 384f, v + (sy - 1) / 384f);
+                    // The eye is left open so the paint shows through it.
+                    bool eye = new Vector2((p.x - .63f) / .042f, (p.y - .575f) / .024f).sqrMagnitude < 1;
+                    if (Inside(outline, p) && !eye) cover += 1 / 9f;
+                }
+            return new Color(.03f, .03f, .035f, cover);
+        }, true);
+
+        static Texture2D StickerSheet()
+        {
+            // Laid down in a fixed order from a fixed seed: the same sheet every time.
+            var random = new System.Random(993);
+            Color[] inks = { new Color(.93f, .16f, .2f), new Color(.98f, .8f, .1f), new Color(.1f, .45f, .85f), Color.white, new Color(.1f, .68f, .4f),
+                new Color(1f, .5f, .1f), new Color(.82f, .2f, .62f), new Color(.1f, .1f, .12f), new Color(.5f, .85f, .95f) };
+            const int count = 90;
+            var centre = new Vector2[count]; var size = new Vector2[count]; var ink = new Color[count]; var second = new Color[count]; var oval = new bool[count];
+            for (int i = 0; i < count; i++)
+            {
+                centre[i] = new Vector2((float)random.NextDouble(), (float)random.NextDouble());
+                size[i] = new Vector2(.035f + (float)random.NextDouble() * .06f, .09f + (float)random.NextDouble() * .2f);
+                ink[i] = inks[random.Next(inks.Length)]; second[i] = inks[random.Next(inks.Length)]; oval[i] = random.Next(3) == 0;
+            }
+            return Make("Sticker sheet", 256, (u, v) =>
+            {
+                Color colour = new Color(.05f, .05f, .06f, 1);
+                for (int i = 0; i < count; i++)
+                {
+                    Vector2 d = new Vector2((u - centre[i].x) / size[i].x, (v - centre[i].y) / size[i].y);
+                    if (oval[i] ? d.sqrMagnitude > 1 : Mathf.Abs(d.x) > 1 || Mathf.Abs(d.y) > 1) continue;
+                    // A band of a second colour across each one stands in for its lettering.
+                    colour = Mathf.Abs(d.y) < .3f && Mathf.Abs(d.x) < .78f ? second[i] : ink[i];
+                }
+                return colour;
+            }, true);
+        }
+
+        /// <summary>Whether a point lies inside a closed outline (crossing count).</summary>
+        static bool Inside(Vector2[] outline, Vector2 p)
+        {
+            bool inside = false;
+            for (int i = 0, j = outline.Length - 1; i < outline.Length; j = i++)
+                if (outline[i].y > p.y != outline[j].y > p.y && p.x < (outline[j].x - outline[i].x) * (p.y - outline[i].y) / (outline[j].y - outline[i].y) + outline[i].x) inside = !inside;
+            return inside;
+        }
+        /// <summary>Smooth noise that repeats every <paramref name="periodX"/> by <paramref name="periodY"/> cells, so a texture made of it tiles.</summary>
+        static float Tiled(float x, float y, int periodX, int periodY, int seed)
+        {
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+            int ax = (x0 % periodX + periodX) % periodX, ay = (y0 % periodY + periodY) % periodY, bx = (ax + 1) % periodX, by = (ay + 1) % periodY;
+            return Mathf.Lerp(Mathf.Lerp(SunGlint.Hash(ax, ay, seed), SunGlint.Hash(bx, ay, seed), fx), Mathf.Lerp(SunGlint.Hash(ax, by, seed), SunGlint.Hash(bx, by, seed), fx), fy);
+        }
+
+        /// <summary>0 below <paramref name="from"/>, 1 above <paramref name="to"/>, eased between (Mathf.SmoothStep blends two values instead).</summary>
+        static float Edge(float from, float to, float value) => Mathf.SmoothStep(0, 1, Mathf.InverseLerp(from, to, value));
+        static Color Shade(float value) => new Color(value, value, value, 1);
+        static Texture2D Make(string name, int size, System.Func<float, float, Color> pixel, bool clamp = false)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = name, wrapMode = clamp ? TextureWrapMode.Clamp : TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, anisoLevel = 4 };
             var pixels = new Color[size * size];
             for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) pixels[y * size + x] = pixel((x + .5f) / size, (y + .5f) / size);
             texture.SetPixels(pixels); texture.Apply(true, true);

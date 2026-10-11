@@ -70,7 +70,8 @@ namespace MadeInArizona
                 Car(17,"ae867","1985 Takumi AE 867 Runner","White-over-black lightweight liftback. Low power, lively chassis and easy throttle-adjusted slides.",940,112,132,131,1.01f,119,255,Drivetrain.RWD,Differential.LimitedSlip,new Color(.89f,.87f,.79f),1800,6,.26f,.55f,2.4f,1.46f,4.3f),
                 Car(18,"espresso","1991 Shizuki Espresso","A tiny front-engine turbo roadster with a punchy exit and controllable rear rotation.",725,64,85,132,1.12f,122,200,Drivetrain.RWD,Differential.LimitedSlip,new Color(.49f,.1f,.13f),1600,6,.22f,.52f,2.06f,1.4f,5.12f),
                 Car(19,"copperado","1988 Heartland Copperado","Full-size white pickup. Big low-speed traction, slow steering and a tail that moves under throttle.",2050,210,400,116,.99f,67,570,Drivetrain.AWD,Differential.Locked,new Color(.88f,.87f,.82f),2300,7,.44f,.88f,3.34f,1.81f,3.73f),
-                Car(20,"contender","1970 Dodson Contender","Orange V8 muscle coupe. Huge torque outruns its brakes and classic soft chassis.",1720,390,660,153,.98f,78,460,Drivetrain.RWD,Differential.LimitedSlip,new Color(.91f,.28f,.055f),3000,8,.31f,.62f,2.79f,1.58f,3.91f)
+                Car(20,"contender","1970 Dodson Contender","Orange V8 muscle coupe. Huge torque outruns its brakes and classic soft chassis.",1720,390,660,153,.98f,78,460,Drivetrain.RWD,Differential.LimitedSlip,new Color(.91f,.28f,.055f),3000,8,.31f,.62f,2.79f,1.58f,3.91f),
+                Car(21,"scarface","Atlas Scarface","An economy hatch found without a front end and rebuilt for the desert: lifted, bare-wheeled up front, muffler on the hood. The pennant on its whip gives your position away for miles.",830,62,92,98,1.13f,106,300,Drivetrain.FWD,Differential.Open,new Color(.77f,.67f,.5f),1100,2,.4f,.74f,2.36f,1.39f,4.39f)
             };
             foreach (var car in Vehicles)
             {
@@ -90,12 +91,12 @@ namespace MadeInArizona
                 Part("intake","Sealed desert airbox","Intake","Keeps the filter out of the fan wash. +6% power; +3 kg. A real seal beats a chrome hot-air cone.",180,0,3,1.06f),
                 Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9% at the cost of 3% low-end torque. +5 kg.",240,0,5,1.09f),
                 Part("cam","Mild tow cam","Camshaft","More usable torque, 8% power and 12% torque. Lumpy idle remains a personality flaw. +2 kg.",350,1,2,1.08f),
-                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift only.",760,2,34,1.48f,1,1,-25),
+                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift and Scarface only.",760,2,34,1.48f,1,1,-25),
                 Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and -4% top speed while the belt takes its cut. Larger RWD vehicles only.",950,4,68,1.32f),
                 Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +5% torque, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f),
                 Part("radiator","Three-row aluminum radiator","Cooling","+5% power and +25 structure: the engine stays out of limp mode on a hot day. +12 kg.",260,0,12,1.05f,1,1,25),
                 Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; -15 structure from the aggressive timing.",540,3,4,1.16f,1,1,-15),
-                Part("swap","1.8L salvage-yard engine swap","Engine","Shift, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.",1700,6,96,1.7f),
+                Part("swap","1.8L salvage-yard engine swap","Engine","Shift, Scarface, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.",1700,6,96,1.7f),
                 Part("lsd","Helical limited-slip carrier","Differential","Shares useful torque across the axle. +7% grip, +8 kg. Retains civilized corner exits.",380,0,8,1,1.07f),
                 Part("locker","Selectable trail locker","Differential","AWD rigs: locked axles, +15% grip, -12% turn response and +16 kg. The pavement will notice.",440,1,16,1,1.15f),
                 Part("welded","Welded spare differential","Differential","+10% grip, -18% turn response. Costs $90; the tire bill arrives separately.",90,0,3,1,1.1f),
@@ -128,9 +129,9 @@ namespace MadeInArizona
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             Find("cam").torqueMultiplier = 1.12f;
-            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "shift" }; Find("turbo").turbocharger = true;
+            Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "shift", "scarface" }; Find("turbo").turbocharger = true;
             Find("blower").torqueMultiplier = 1.38f; Find("blower").compatibleVehicles = new[] { "foreclosure", "perennial", "sidehustle", "sunskip" };
-            Find("ecu").torqueMultiplier = 1.12f; Find("swap").torqueMultiplier = 1.55f; Find("swap").compatibleVehicles = new[] { "shift", "ronin", "juniper" };
+            Find("ecu").torqueMultiplier = 1.12f; Find("swap").torqueMultiplier = 1.55f; Find("swap").compatibleVehicles = new[] { "shift", "scarface", "ronin", "juniper" };
             foreach (string id in new[] { "lsd", "locker", "welded" }) Find(id).changesDifferential = true;
             Find("lsd").differential = Differential.LimitedSlip;
             Find("locker").differential = Differential.Locked; Find("locker").turnMultiplier = .88f; Find("locker").compatibleVehicles = new[] { "juniper", "skitter", "vincent" };

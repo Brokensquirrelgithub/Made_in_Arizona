@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb64b86bb8f24d7f87ec86c7f3eeb90, type: 3}
+  m_Name: scarface
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehicleDefinition
+  id: scarface
+  displayName: Atlas Scarface
+  description: 'An economy hatch found without a front end and rebuilt for the desert:
+    lifted, bare-wheeled up front, muffler on the hood. The pennant on its
+    whip gives your position away for miles.'
+  contentOrder: 21
+  cost: 1100
+  unlockMission: 2
+  mass: 830
+  horsepower: 62
+  torque: 92
+  maxSpeed: 98
+  grip: 1.13
+  turnSpeed: 106
+  maxHealth: 300
+  rideHeight: 0.74
+  wheelbase: 2.36
+  trackWidth: 1.39
+  suspensionTravel: 0.4
+  springStiffness: 31540
+  damping: 3735
+  finalDrive: 4.39
+  color: {r: 0.77, g: 0.67, b: 0.5, a: 1}
+  drivetrain: 0
+  differential: 0
+  engineLayout: inline3

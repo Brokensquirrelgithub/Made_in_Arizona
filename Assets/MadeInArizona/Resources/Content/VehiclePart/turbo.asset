@@ -15,7 +15,7 @@ MonoBehaviour:
   id: turbo
   displayName: Wastegated three-pot turbo
   category: Induction
-  description: '+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift only.'
+  description: '+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift and Scarface only.'
   contentOrder: 3
   cost: 760
   unlockMission: 2
@@ -40,3 +40,4 @@ MonoBehaviour:
   differential: 0
   compatibleVehicles:
   - shift
+  - scarface
