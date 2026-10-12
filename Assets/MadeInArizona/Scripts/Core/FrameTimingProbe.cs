@@ -6,6 +6,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.Rendering.Universal;
 using Debug = UnityEngine.Debug;
 
 namespace MadeInArizona
@@ -22,6 +23,20 @@ namespace MadeInArizona
         public static IEnumerator Run(Action<string, bool> check)
         {
             var game = GameManager.Instance;
+            // This probe is the acceptance test for the weakest supported preset. Keep it uncapped so a
+            // 60 Hz display does not hide either headroom or a near-miss behind v-sync pacing.
+            game.Save.settings.quality = 0;
+            game.Save.settings.shadowDetail = 0;
+            game.Save.settings.frameSync = 2;
+            game.Save.settings.width = 1600;
+            game.Save.settings.height = 900;
+            game.Save.settings.fullscreen = false;
+            game.ApplySettings();
+            var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            var cameraData = Camera.main.GetUniversalAdditionalCameraData();
+            check("low preset applies the reduced renderer path", QualitySettings.GetQualityLevel() == 0 &&
+                pipeline && pipeline.renderScale <= .6f && !pipeline.supportsCameraOpaqueTexture &&
+                !Camera.main.allowHDR && !cameraData.renderPostProcessing && QualitySettings.shadows == UnityEngine.ShadowQuality.Disable);
             game.WorldConfig.seed = 173; game.WorldConfig.size = 1600;
             game.StartCampaign(173, 1600);
             yield return new WaitUntil(() => game.State == GameState.Playing);
@@ -69,11 +84,13 @@ namespace MadeInArizona
             InputSystem.RemoveDevice(keyboard);
             var sorted = new List<float>(frames); sorted.Sort();
             float P(float q) => sorted[Mathf.Clamp((int)(q * sorted.Count), 0, sorted.Count - 1)];
-            string summary = $"frames={frames.Count} median={P(.5f):F2}ms p95={P(.95f):F2}ms p99={P(.99f):F2}ms max={sorted[sorted.Count - 1]:F2}ms gcCollections={GC.CollectionCount(0) - gcStart} streamingFrames={streamingFrames} streamingAvg={(streamingFrames > 0 ? streamingTotal / streamingFrames : 0):F2}ms";
+            float averageFps = frames.Count / Mathf.Max(.001f, Time.realtimeSinceStartup - start);
+            string summary = $"frames={frames.Count} average={averageFps:F1}fps median={P(.5f):F2}ms p95={P(.95f):F2}ms p99={P(.99f):F2}ms max={sorted[sorted.Count - 1]:F2}ms gcCollections={GC.CollectionCount(0) - gcStart} streamingFrames={streamingFrames} streamingAvg={(streamingFrames > 0 ? streamingTotal / streamingFrames : 0):F2}ms";
             string output = Path.Combine(Application.temporaryCachePath, "mia-frame-timing.txt");
             File.WriteAllText(output, summary + "\n" + string.Join("\n", lines));
             Debug.Log("MIA_FRAME_TIMING " + summary + "\n" + string.Join("\n", lines) + "\n" + output);
             check("frame timing probe completed", frames.Count > 100);
+            check("low preset averages at least 60 FPS", averageFps >= 60f);
         }
     }
 }

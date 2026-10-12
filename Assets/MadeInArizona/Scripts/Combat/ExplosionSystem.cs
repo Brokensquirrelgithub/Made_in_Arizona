@@ -42,7 +42,7 @@ namespace MadeInArizona
         Texture2D softTexture, scorchTexture;
         MaterialPropertyBlock block;
         int quality;
-        int DebrisLimit => quality == 0 ? 45 : quality == 1 ? 100 : quality == 2 ? 220 : 640;
+        int DebrisLimit => quality == 0 ? 20 : quality == 1 ? 80 : quality == 2 ? 220 : 640;
         public int ActiveDebris => fragments.Count;
         public int QueuedExplosions => queued.Count;
 

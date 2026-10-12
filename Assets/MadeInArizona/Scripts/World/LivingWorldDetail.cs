@@ -17,13 +17,15 @@ namespace MadeInArizona
         /// toward a grove centre and sometimes add a companion, for 90% of the former, evenly spread tree count.
         /// </summary>
         const float GroveCell=18,ClearingShare=.2f,GrovePull=.4f,CompanionChance=.125f;
-        const int Radius=4;
+        int Quality => GameManager.Instance && GameManager.Instance.Save != null ? GameManager.Instance.Save.settings.quality : 2;
+        int Radius => Quality == 0 ? 2 : Quality == 1 ? 3 : 4;
+        int UrgentRadius => Quality == 0 ? 0 : 1;
         readonly Dictionary<Vector2Int,GameObject> tiles=new Dictionary<Vector2Int,GameObject>();
         readonly List<Vector2Int> remove=new List<Vector2Int>();
         Material material;Texture2D needles;PandazoleNatureCatalog nature;
         WorldGenConfig config;
         Vector2Int lastCenter=new Vector2Int(int.MinValue,0);
-        const double BuildBudgetMs=2.5;
+        double BuildBudgetMs => Quality == 0 ? 1.0 : Quality == 1 ? 1.75 : 2.5;
         readonly SceneryMesh tileMesh=new SceneryMesh(),propMesh=new SceneryMesh();
         IEnumerator building;Vector2Int buildingKey;
         public int LoadedTiles=>tiles.Count;
@@ -58,7 +60,7 @@ namespace MadeInArizona
             // 10-18 ms each and previously ran two per frame at every tile crossing, causing a visible hitch.
             // Tiles next to the camera (spawn, teleport, restart) are still completed immediately.
             var clock=System.Diagnostics.Stopwatch.StartNew();
-            bool urgent=NextMissing(center,out _,out int nearest)&&nearest<=1;
+            bool urgent=NextMissing(center,out _,out int nearest)&&nearest<=UrgentRadius;
             while(urgent||clock.Elapsed.TotalMilliseconds<BuildBudgetMs)
             {
                 if(building==null)
@@ -67,7 +69,7 @@ namespace MadeInArizona
                     var root=new GameObject("Living ecology "+buildingKey.x+" / "+buildingKey.y);root.transform.SetParent(transform,false);root.transform.localPosition=new Vector3(buildingKey.x*Tile,0,buildingKey.y*Tile);
                     tiles.Add(buildingKey,root);building=BuildTile(buildingKey,root);FrameTimingProbe.StreamingTiles++;
                 }
-                if(!building.MoveNext()){building=null;urgent=NextMissing(center,out _,out nearest)&&nearest<=1;}
+                if(!building.MoveNext()){building=null;urgent=NextMissing(center,out _,out nearest)&&nearest<=UrgentRadius;}
             }
             FrameTimingProbe.StreamingMs+=FrameTimingProbe.Clock.Elapsed.TotalMilliseconds;
         }
@@ -87,7 +89,10 @@ namespace MadeInArizona
             if(!GeneratedWorld.Contains(origin+new Vector3(16,0,16)))yield break;
             var random=new System.Random(unchecked(config.seed*73856093 ^ key.x*19349663 ^ key.y*83492791));
             var mesh=tileMesh;mesh.Clear();
-            float density=Mathf.Clamp(config.vegetation,0,4),half=config.size*.5f;
+            // Low keeps the nearby silhouettes but streams 25 instead of 81 tiles and builds fewer small plants.
+            // Collision/gameplay objects use the same rules; only decorative density and viewing distance scale.
+            float qualityDensity=Quality==0?.5f:Quality==1?.78f:1f;
+            float density=Mathf.Clamp(config.vegetation,0,4)*qualityDensity,half=config.size*.5f;
             // A coarse clearance field keeps the thousands of tiny clumps away from drivable road/town surfaces.
             float[,] clearance=new float[9,9];
             for(int z=0;z<9;z++)for(int x=0;x<9;x++)clearance[x,z]=GeneratedWorld.Active.SceneryClearance(origin+new Vector3(x*4,0,z*4));
