@@ -123,7 +123,8 @@ namespace MadeInArizona
             transform.position = snap ? desired : Vector3.SmoothDamp(transform.position, desired, ref velocity, garage ? .22f : .13f, Mathf.Infinity, Time.unscaledDeltaTime);
             transform.rotation = rotation;
             SunGlint.UpdateEye(transform);
-            view.farClipPlane = 450 + Mathf.Max(0, extra);
+            int quality = GameManager.Instance.Save != null ? GameManager.Instance.Save.settings.quality : 2;
+            view.farClipPlane = (quality == 0 ? 300 : quality == 1 ? 380 : 450) + Mathf.Max(0, extra);
             if (listener) listener.SetPositionAndRotation(transform.position + forward * extra, rotation);
             ApplyDepthOffset(DepthOffset);
             shake = Mathf.MoveTowards(shake, 0, Time.unscaledDeltaTime * 2.5f);

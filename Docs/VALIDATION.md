@@ -2,6 +2,10 @@
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
 
+## Low-preset performance — 12 October 2026
+
+The native macOS/Metal frame-timing route now forces Low, no shadow override, 1600 × 900 windowed output and uncapped rendering. On the 8-core/8-GPU-core Apple M1 MacBook Pro with 8 GB RAM, a 36-second generated-world drive rendered 5,636 frames: **156.6 FPS average**, 4.41 ms median, 18.71 ms p95 and 26.98 ms p99. Streamed ecology work averaged 1.29 ms across its 106 active frames; individual probe tiles had a 2.47 ms median, 4.52 ms maximum and 1.25 ms longest yielded slice. The smoke result passed. Rare 87–121 ms outliers remain and the 95th percentile is slightly below 60 FPS, so this establishes ample average headroom on this machine, not perfectly locked frame pacing under every workload.
+
 ## Perspective combat trial release — 9 October 2026
 
 The Windows x64 player built with zero errors. The native `-miaSmokeTest -miaCombatTest -miaDevTest` suite passed all 46 checks; its driver defeated both 12-car waves with real projectiles in 15.6 seconds. Both waves spawned within the proving ground walls, and enemy weapons damaged the player. The authored and generated spawn checks passed with all 24 added cars outside the camera view; the nearest generated-world car began 65.5 m away. The `-miaSmokeTest -miaWorldTest` suite passed all 49 checks. These runs used the perspective camera default and an isolated test save.
@@ -169,4 +173,3 @@ The escort suite failed for two reasons. It inherited whatever map the previous 
 | `-miaWorldTest` | 46 / 46 |
 
 The navigation margin change was also checked with `-miaMountainTest` (12 / 12). An intermediate version that simply lowered the van's stuck threshold broke mission 8, and was replaced by the obstacle-aware rule above. These are single runs; route following involves physics and some randomness, so occasional variation between runs is possible.
-

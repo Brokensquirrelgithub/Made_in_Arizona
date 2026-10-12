@@ -178,7 +178,9 @@ namespace MadeInArizona
                 int quality = GameManager.Instance && GameManager.Instance.Save != null ? GameManager.Instance.Save.settings.quality : 2;
                 SetAmbientOcclusionEnum(settings, "BlurQuality", quality >= 2 ? 0 : 1);     // bilateral, else Gaussian
                 SetAmbientOcclusionBool(settings, "Downsample", quality < 2);
-                feature.SetActive(amount > 0f);
+                // SSAO requires a depth/normal prepass and a full-screen blur. It is one of the most expensive
+                // remaining effects after Low has already removed shadows, and is presentation-only.
+                feature.SetActive(quality > 0 && amount > 0f);
             }
         }
     }

@@ -163,7 +163,7 @@ namespace MadeInArizona
             tumble.z = new ParticleSystem.MinMaxCurve(16, slowest, fastest);
             var collision = grit.collision;
             collision.enabled = true; collision.type = ParticleSystemCollisionType.World; collision.mode = ParticleSystemCollisionMode.Collision3D;
-            collision.quality = ParticleSystemCollisionQuality.High; collision.enableDynamicColliders = false;
+            collision.quality = quality == 0 ? ParticleSystemCollisionQuality.Low : ParticleSystemCollisionQuality.High; collision.enableDynamicColliders = false;
             collision.bounce = new ParticleSystem.MinMaxCurve(.18f, .42f); collision.dampen = new ParticleSystem.MinMaxCurve(.35f, .65f);
             collision.lifetimeLoss = 0; collision.radiusScale = .5f;
             var renderer = go.GetComponent<ParticleSystemRenderer>();

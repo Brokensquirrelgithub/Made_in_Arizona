@@ -119,6 +119,12 @@ namespace MadeInArizona
         {
             var s = Save.settings;
             s.quality = Mathf.Clamp(s.quality, 0, 3);
+            // The game exposes four presets while Unity has six project quality levels. Selecting the matching
+            // engine level is important: particle raycast budgets, anisotropic filtering, LOD cross-fades and the
+            // other built-in settings otherwise remained at the project's startup level (Ultra), even on Low.
+            int engineQuality = new[] { 0, 2, 4, 5 }[s.quality];
+            if (QualitySettings.GetQualityLevel() != engineQuality)
+                QualitySettings.SetQualityLevel(engineQuality, true);
             s.frameSync = Mathf.Clamp(s.frameSync, 0, 2);
             QualitySettings.vSyncCount = s.frameSync == 0 ? 1 : 0;
             Application.targetFrameRate = s.frameSync == 1 ? 120 : -1;
@@ -138,9 +144,20 @@ namespace MadeInArizona
                 if (sunData) sunData.softShadowQuality = s.shadowDetail == 2 ? SoftShadowQuality.High : SoftShadowQuality.Medium;
             }
             QualitySettings.lodBias = new[] { .65f, 1f, 1.5f, 2f }[s.quality];
+            var camera = Camera.main;
+            if (camera)
+            {
+                camera.allowHDR = s.quality > 0;
+                var cameraData = camera.GetUniversalAdditionalCameraData();
+                cameraData.renderPostProcessing = s.quality > 0;
+            }
             var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             if (pipeline) {
-                pipeline.renderScale = new[] { .75f, .9f, 1f, 1f }[s.quality];
+                // Low targets integrated GPUs: 58% linear resolution is 40% of the native pixel work. The UI is
+                // composited at output resolution, so gauges and text remain sharp.
+                pipeline.renderScale = new[] { .58f, .82f, 1f, 1f }[s.quality];
+                // Heat haze is disabled by the Low effects path, so do not pay for an opaque scene copy there.
+                pipeline.supportsCameraOpaqueTexture = s.quality > 0;
                 pipeline.shadowDistance = QualitySettings.shadowDistance;
                 CameraController.RefreshDepthEffects(); // re-adds the camera's backed-off distance
                 pipeline.msaaSampleCount = s.quality < 2 ? 1 : 4;

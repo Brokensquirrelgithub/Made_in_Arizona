@@ -628,7 +628,7 @@ namespace MadeInArizona
             if (settingsPage == 1) {
                 SettingLabel(x, y + 191, "GRAPHICS PRESET", 0);
                 if (Button(x + 465, y + 188, 426, 38, presets[s.quality])) { s.quality = (s.quality + 1) % 4; game.ApplySettings(); }
-                Text(x + 35, y + 232, 850, 40, s.quality == 3 ? "Long-lived debris, dense explosion layers, 4K shadows, more lights. Hardware performance varies; profiling required." : "Shared URP renderer. Metal on Mac, Direct3D on Windows. All presets preserve combat readability.", 14, Muted);
+                Text(x + 35, y + 232, 850, 40, s.quality == 0 ? "For integrated GPUs: reduced scene resolution and foliage range, no shadows, HDR, post-processing, ambient occlusion or heat refraction. HUD remains full resolution." : s.quality == 3 ? "Long-lived debris, dense explosion layers, 4K shadows, more lights. Hardware performance varies; profiling required." : "Shared URP renderer. Metal on Mac, Direct3D on Windows. All presets preserve combat readability.", 14, Muted);
                 SettingLabel(x, y + 291, "SHADOW DETAIL", 1);
                 if (Button(x + 465, y + 286, 426, 38, ShadowDetailLabels[s.shadowDetail])) { s.shadowDetail = (s.shadowDetail + 1) % 3; game.ApplySettings(); }
                 Text(x + 35, y + 330, 850, 40, ShadowDetailNotes[s.shadowDetail], 14, Muted);
