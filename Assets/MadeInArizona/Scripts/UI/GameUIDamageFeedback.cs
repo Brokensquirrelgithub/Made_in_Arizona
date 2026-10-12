@@ -5,7 +5,6 @@ namespace MadeInArizona
     /// <summary>Player hurt and critical-damage tells: edge vignette, hit direction, trailing health and warnings.</summary>
     public sealed partial class GameUI
     {
-        const float CriticalHealth = .3f;
         Texture2D edgeVignette;
         float ghostHealth = 1, ghostHoldUntil, seenDamageTime = float.NegativeInfinity, hurtStrength;
         Vector2 hurtDirection;
@@ -36,13 +35,12 @@ namespace MadeInArizona
             if (Event.current.type != EventType.Repaint) return;
             TrackPlayerDamage(player);
             var damage = player.Damage;
-            float health = damage.Health / Mathf.Max(1, damage.MaxHealth);
             float since = Time.time - damage.LastDamageTime;
 
             // Persistent low-health pulse, faster and stronger as the hull gets closer to failing.
-            if (health < CriticalHealth && !damage.IsDead)
+            if (damage.EngineReached && !damage.IsDead)
             {
-                float danger = Mathf.InverseLerp(CriticalHealth, .05f, health);
+                float danger = 1-Mathf.Clamp01(damage.Health/Mathf.Max(1,damage.SegmentMax(HealthCategory.Engine)));
                 float rate = Mathf.Lerp(1.1f, 2.1f, danger);
                 float beat = Mathf.Pow(.5f + .5f * Mathf.Sin(Time.time * rate * Mathf.PI * 2), 3);
                 DrawEdgeVignette(new Color(.75f, .02f, .0f, Mathf.Lerp(.28f, .5f, danger) + beat * Mathf.Lerp(.18f, .32f, danger)));
@@ -125,16 +123,32 @@ namespace MadeInArizona
             var damage = player.Damage;
             float health = Mathf.Clamp01(damage.Health / Mathf.Max(1, damage.MaxHealth));
             float since = Time.time - damage.LastDamageTime;
-            bool critical = health < CriticalHealth;
+            bool critical = damage.EngineReached;
             float pulse = critical ? .5f + .5f * Mathf.Sin(Time.time * 9) : 0;
             if (critical) Rect(x - 3, y - 3, w + 6, h + 6, new Color(1, .15f, .05f, .35f + .45f * pulse));
             Rect(x, y, w, h, new Color(.2f, .26f, .27f));
             if (ghostHealth > health) Rect(x + w * health, y, w * (Mathf.Clamp01(ghostHealth) - health), h, new Color(1, .82f, .55f));
-            Color fill = critical ? Color.Lerp(Orange, new Color(1, .1f, .05f), pulse) : health > .55f ? Lime : Color.Lerp(Orange, Lime, (health - CriticalHealth) / (.55f - CriticalHealth));
-            if (since < .12f) fill = Color.white;
             float healed = Time.time - damage.LastRepairTime;
-            if (healed < .6f) { float glow = 1 - healed / .6f; Rect(x - 2, y - 2, w + 4, h + 4, new Color(.3f, 1, .5f, .3f * glow)); fill = Color.Lerp(fill, new Color(.75f, 1, .8f), glow * .5f); }
-            Rect(x, y, w * health, h, fill);
+            if (healed < .6f) { float glow = 1 - healed / .6f; Rect(x - 2, y - 2, w + 4, h + 4, new Color(.3f, 1, .5f, .3f * glow)); }
+            float cursor=x;
+            for(int index=5;index>=0;index--)
+            {
+                var category=(HealthCategory)index;
+                float maximum=damage.SegmentMax(category);
+                if(maximum<=.001f)continue;
+                float segmentWidth=w*maximum/damage.MaxHealth;
+                float fraction=damage.SegmentHealth(category)/maximum;
+                Color fill=index==5?new Color(1,.19f,.09f):fraction>.5f?Lime:fraction>.25f?Orange:new Color(1,.24f,.11f);
+                if(index==5&&critical)fill=Color.Lerp(fill,Orange,pulse*.35f);
+                if(since<.12f)fill=Color.white;
+                if(healed<.6f)fill=Color.Lerp(fill,new Color(.75f,1,.8f),(1-healed/.6f)*.5f);
+                Rect(cursor,y,segmentWidth*fraction,h,fill);
+                if(cursor>x)Rect(cursor,y,1,h,new Color(.06f,.09f,.1f));
+                if(segmentWidth>=30)
+                    Text(cursor,y+h+2,segmentWidth,13,HealthRules.Labels[index],9,
+                        index<=damage.FailedDepth&&index>0?Muted:Cream,true,TextAnchor.MiddleCenter);
+                cursor+=segmentWidth;
+            }
         }
 
         void OnDisable() { if (edgeVignette) { Destroy(edgeVignette); edgeVignette = null; } }

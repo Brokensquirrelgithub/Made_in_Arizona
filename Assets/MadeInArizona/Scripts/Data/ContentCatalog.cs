@@ -7,6 +7,7 @@ namespace MadeInArizona
     {
         public static VehicleDefinition[] Vehicles { get; private set; }
         public static VehiclePart[] Parts { get; private set; }
+        public static bool PartHealthAssetsAgree { get; private set; }
         public static WeaponDefinition[] Weapons { get; private set; }
         public static MissionDefinition[] Missions { get; private set; }
         public static DriverDefinition[] Drivers { get; private set; }
@@ -14,7 +15,14 @@ namespace MadeInArizona
         {
             if (Vehicles != null) return;
             BuildVehicles(); BuildParts(); BuildDrivers(); BuildWeapons(); BuildCampaign();
+            var healthCategories=new HealthCategory[Parts.Length]; var durabilities=new float[Parts.Length];
+            for(int i=0;i<Parts.Length;i++) { healthCategories[i]=Parts[i].healthCategory; durabilities[i]=Parts[i].partDurability; }
             OverrideResources(Vehicles, v => v.id); OverrideResources(Parts, v => v.id);
+            PartHealthAssetsAgree=true;
+            for(int i=0;i<Parts.Length;i++)
+                if(Parts[i].healthCategory!=healthCategories[i] || !Mathf.Approximately(Parts[i].partDurability,durabilities[i]))
+                    PartHealthAssetsAgree=false;
+            if(!PartHealthAssetsAgree)Debug.LogError("Part health category or durability differs between code and Resources assets.");
             OverrideResources(Weapons, v => v.id); OverrideResources(Missions, v => v.id); OverrideResources(Drivers, v => v.id);
             BorrowWeaponSounds();
         }
@@ -79,10 +87,10 @@ namespace MadeInArizona
                 if (car.id == "heat" || car.id == "citizen" || car.id == "ae867" || car.id == "espresso") { car.springStiffness *= 1.12f; car.damping *= 1.1f; }
             }
         }
-        static VehiclePart Part(string id, string name, string category, string desc, int cost, int unlock, float mass = 0, float hp = 1, float grip = 1, float cooling = 1, float health = 0)
+        static VehiclePart Part(string id, string name, string category, string desc, int cost, int unlock, float mass = 0, float hp = 1, float grip = 1, float cooling = 1)
         {
             var p = Create<VehiclePart>(id); p.id = id; p.displayName = name; p.category = category; p.description = desc; p.cost = cost;
-            p.unlockMission = unlock; p.mass = mass; p.hpMultiplier = hp; p.gripMultiplier = grip; p.coolingMultiplier = cooling; p.healthBonus = health;
+            p.unlockMission = unlock; p.mass = mass; p.hpMultiplier = hp; p.gripMultiplier = grip; p.coolingMultiplier = cooling;
             return p;
         }
         static void BuildParts()
@@ -91,11 +99,11 @@ namespace MadeInArizona
                 Part("intake","Sealed desert airbox","Intake","Keeps the filter out of the fan wash. +6% power; +3 kg. A real seal beats a chrome hot-air cone.",180,0,3,1.06f),
                 Part("headers","Equal-length headers","Exhaust","Scavenging improves power 9% at the cost of 3% low-end torque. +5 kg.",240,0,5,1.09f),
                 Part("cam","Mild tow cam","Camshaft","More usable torque, 8% power and 12% torque. Lumpy idle remains a personality flaw. +2 kg.",350,1,2,1.08f),
-                Part("turbo","Wastegated three-pot turbo","Induction","+48% power and 32% torque; -25 structure from the hot side of the plumbing, +34 kg. Shift and Scarface only.",760,2,34,1.48f,1,1,-25),
+                Part("turbo","Wastegated three-pot turbo","Induction","Adds 48% power and 32% torque, with 34 kg of hot plumbing. Shift and Scarface only.",760,2,34,1.48f,1,1),
                 Part("blower","Roots blower with honest belt","Induction","+32% power, +38% torque; +68 kg and -4% top speed while the belt takes its cut. Larger RWD vehicles only.",950,4,68,1.32f),
                 Part("intercooler","Front-mount intercooler","Charge cooling","+7% power, +5% torque, +18 kg. Useful even when the marketing sticker is missing.",460,2,18,1.07f),
-                Part("radiator","Three-row aluminum radiator","Cooling","+5% power and +25 structure: the engine stays out of limp mode on a hot day. +12 kg.",260,0,12,1.05f,1,1,25),
-                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. +4 kg; -15 structure from the aggressive timing.",540,3,4,1.16f,1,1,-15),
+                Part("radiator","Three-row aluminum radiator","Cooling","Adds 5% power and 12 kg. A three-row aluminum core keeps the engine cool.",260,0,12,1.05f,1,1),
+                Part("ecu","Wideband ECU and fuel pump","Fuel & ECU","A calibrated map adds 16% power and 12% torque. Adds 4 kg; fails with equipment.",540,3,4,1.16f,1,1),
                 Part("swap","1.8L salvage-yard engine swap","Engine","Shift, Scarface, Ronin or Juniper: +70% power, +55% torque; +96 kg and -6% turn response from the heavier nose.",1700,6,96,1.7f),
                 Part("lsd","Helical limited-slip carrier","Differential","Shares useful torque across the axle. +7% grip, +8 kg. Retains civilized corner exits.",380,0,8,1,1.07f),
                 Part("locker","Selectable trail locker","Differential","AWD rigs: locked axles, +15% grip, -12% turn response and +16 kg. The pavement will notice.",440,1,16,1,1.15f),
@@ -108,10 +116,10 @@ namespace MadeInArizona
                 Part("allterrain","All-terrain reinforced tires","Tires","+11% grip, +8% suspension compliance, +25 kg. Less dramatic than a tire named after a crime.",310,0,25,1,1.11f),
                 Part("mud","Mud-terrain beadlock set","Tires","+18% grip and +12% travel; -9% speed, +51 kg. Heavy rubber is still rotating mass.",500,2,51,1,1.18f),
                 Part("used","Four almost matching used tires","Tires","Only $35. -12% grip and -7% damping, -8 kg. Customer states the wobble is seasonal.",35,0,-8,1,.88f),
-                Part("cage","Triangulated cage and skid plates","Armor","+160 chassis health, +95 kg. Protects occupants and underbody; slows every acceleration.",560,1,95,1,1,1,160),
-                Part("bumpers","Salvaged steel bumpers","Armor","+95 chassis health for +72 kg. Includes an extremely confident tow rating.",220,0,72,1,1,1,95),
-                Part("boards","Recovery boards and tool roll","Utility","+45 health, +3% grip, +24 kg. Tools are less cinematic than fire.",290,0,24,1,1.03f,1,45),
-                Part("nitrous","Purge-first nitrous kit","Induction","+25% power, +12% torque, -20 structure, +20 kg. Replaces other forced induction.",690,4,20,1.25f,1,1,-20),
+                Part("cage","Triangulated cage and skid plates","Armor","A triangulated cage and skid plates add 95 kg of protection to the Armor pool.",560,1,95,1,1,1),
+                Part("bumpers","Salvaged steel bumpers","Armor","Steel bumpers add 72 kg of protection to the shared Armor pool.",220,0,72,1,1,1),
+                Part("boards","Recovery boards and tool roll","Utility","Recovery boards and a tool roll add 3% grip and 24 kg to the Equipment pool.",290,0,24,1,1.03f,1),
+                Part("nitrous","Purge-first nitrous kit","Induction","Adds 25% power and 12% torque for 20 kg. Replaces other forced induction.",690,4,20,1.25f,1,1),
                 // Deferred maintenance: each "upgrade" just brings one part of the car up to what it should have been.
                 // Every one has its own category, so they stack; the gains are small because the bar is the floor.
                 Part("wheels","Four round wheels","Wheels","+5% grip, +3% top speed. The previous set was listed on the invoice as \"round-adjacent.\"",150,0,0,1,1.05f),
@@ -119,15 +127,33 @@ namespace MadeInArizona
                 Part("plugs","Spark plugs that match","Ignition","+5% power, +3% torque. One of the old plugs was a bolt with a wire taped to it.",60,0,0,1.05f),
                 Part("alignment","Wheels pointed the same way","Alignment","+10% turn response, +3% grip. The car no longer has a favorite ditch.",110,0,0,1,1.03f),
                 Part("brakes","Brake pads that contain pad","Brakes","+6% turn response, +4 kg. The old ones were backing plate and optimism, applied firmly.",140,0,4),
-                Part("radcap","A radiator cap that is a radiator cap","Radiator cap","+3% power, +15 chassis health. The engine now runs at a temperature instead of a weather event. Replaces a soda can and a hose clamp, both of which were doing their best.",45,0,0,1.03f,1,1,15),
-                Part("mounts","Engine mounts made of rubber","Engine mounts","+3% power actually reaches the wheels, +25 chassis health, +6 kg. The old mounts were rope; the engine went for walks.",190,1,6,1.03f,1,1,25),
+                Part("radcap","A radiator cap that is a radiator cap","Radiator cap","Adds 3% power. The new cap has no extra mass or structural HP.",45,0,0,1.03f,1,1),
+                Part("mounts","Engine mounts made of rubber","Engine mounts","Adds 3% power and 6 kg of engine structure. The old mounts were rope.",190,1,6,1.03f,1,1),
                 Part("shocks","Shocks with fluid in them","Dampers","+18% damping, +5% grip, +2 kg. The originals were springs wearing shock absorber costumes.",230,1,2,1,1.05f),
                 Part("muffler","Muffler attached at both ends","Muffler","+3% power, +2% top speed, -3 kg. The last one was bolted on at the front and dragging at the back, which counted as a brake.",95,0,-3,1.03f),
                 Part("timing","Timing belt with all its teeth","Timing","+3% power, +6% torque, +1 kg. Valve timing is now a schedule instead of a suggestion.",210,2,1,1.03f),
-                Part("lugs","The full set of lug nuts","Hardware","+30 chassis health, +3% grip, +1 kg. Each wheel was held on by two nuts and a rumor.",40,0,1,1,1.03f,1,30),
-                Part("seat","Driver's seat bolted down","Interior","+5% turn response, +10 chassis health, +3 kg. Steering is easier when you are not also sliding toward the passenger door.",70,0,3,1,1,1,10)
+                Part("lugs","The full set of lug nuts","Hardware","Adds 3% grip and 1 kg of suspension structure. A full set of lug nuts.",40,0,1,1,1.03f,1),
+                Part("seat","Driver's seat bolted down","Interior","Adds 5% turn response and 3 kg to the Equipment pool.",70,0,3,1,1,1)
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
+            SetDurability(HealthCategory.Engine, 20, "intake");
+            SetDurability(HealthCategory.Engine, 60, "headers");
+            SetDurability(HealthCategory.Engine, 50, "cam", "swap", "pistons", "plugs", "radcap");
+            SetDurability(HealthCategory.Engine, 25, "turbo", "blower");
+            SetDurability(HealthCategory.Engine, 30, "intercooler", "timing");
+            SetDurability(HealthCategory.Engine, 40, "radiator", "muffler");
+            SetDurability(HealthCategory.Engine, 15, "nitrous");
+            SetDurability(HealthCategory.Engine, 75, "mounts");
+            SetDurability(HealthCategory.Equipment, 10, "ecu");
+            SetDurability(HealthCategory.Equipment, 50, "boards", "seat");
+            SetDurability(HealthCategory.Armor, 125, "cage");
+            SetDurability(HealthCategory.Armor, 110, "bumpers");
+            SetDurability(HealthCategory.Drivetrain, 65, "lsd", "locker", "welded", "crawler");
+            SetDurability(HealthCategory.Drivetrain, 50, "awd");
+            SetDurability(HealthCategory.Suspension, 85, "rally", "longtravel", "shocks");
+            SetDurability(HealthCategory.Suspension, 50, "street", "allterrain", "mud", "used", "brakes");
+            SetDurability(HealthCategory.Suspension, 100, "wheels", "lugs");
+            SetDurability(HealthCategory.Suspension, 0, "alignment");
             Find("cam").torqueMultiplier = 1.12f;
             Find("turbo").torqueMultiplier = 1.32f; Find("turbo").compatibleVehicles = new[] { "shift", "scarface" }; Find("turbo").turbocharger = true;
             Find("blower").torqueMultiplier = 1.38f; Find("blower").compatibleVehicles = new[] { "foreclosure", "perennial", "sidehustle", "sunskip" };
@@ -150,6 +176,10 @@ namespace MadeInArizona
             Find("shocks").dampingMultiplier = 1.18f; Find("muffler").maxSpeedMultiplier = 1.02f; Find("timing").torqueMultiplier = 1.06f;
         }
         static VehiclePart Find(string id) { return Array.Find(Parts, p => p.id == id); }
+        static void SetDurability(HealthCategory category,float durability,params string[] ids)
+        {
+            foreach(var id in ids) { var part=Find(id); part.healthCategory=category; part.partDurability=durability; }
+        }
         static void BuildDrivers()
         {
             Drivers = new[] {

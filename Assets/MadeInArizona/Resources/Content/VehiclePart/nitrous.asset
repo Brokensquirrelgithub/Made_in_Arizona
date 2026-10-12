@@ -15,17 +15,18 @@ MonoBehaviour:
   id: nitrous
   displayName: Purge-first nitrous kit
   category: Induction
-  description: '+25% power, +12% torque, -20 structure, +20 kg. Replaces other forced induction.'
+  description: Adds 25% power and 12% torque for 20 kg. Replaces other forced induction.
   contentOrder: 23
   cost: 690
   unlockMission: 4
   salvageCost: 0
   mass: 20
+  healthCategory: 5
+  partDurability: 15
   hpMultiplier: 1.25
   torqueMultiplier: 1.12
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: -20
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

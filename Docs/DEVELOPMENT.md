@@ -75,7 +75,7 @@ SaveSystem uses Unity's platform path, a checksummed envelope, atomic replacemen
 ## Next production integration points
 
 - Replace `VehicleVisual` and `RoadsideProps` output with authored LOD prefabs; keep named turret/wheel anchors and forward +Z.
-- Implement advanced wheel/axle articulation behind `VehicleController`, preserving `VehicleStats` and component damage APIs.
+- Implement advanced wheel/axle articulation behind `VehicleController`, preserving `VehicleStats` and segmented health profile switching.
 - Replace individual mission layouts behind `WorldBuilder.BuildMission(index)`, preserving objective/spawn/extraction coordinates.
 - Extend `AudioManager` with recorded multichannel vehicle layers while retaining category gain/ducking and original `MusicManager` transitions.
 - Extend `ExplosionSystem` with GPU effects and hardware profiles; maintain its bounded budgets and damage queue.

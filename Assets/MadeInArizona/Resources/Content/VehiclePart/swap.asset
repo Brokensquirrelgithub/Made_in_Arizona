@@ -21,11 +21,12 @@ MonoBehaviour:
   unlockMission: 6
   salvageCost: 0
   mass: 96
+  healthCategory: 5
+  partDurability: 50
   hpMultiplier: 1.7
   torqueMultiplier: 1.55
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: 0
   maxSpeedMultiplier: 1
   turnMultiplier: 0.94
   rideHeightBonus: 0

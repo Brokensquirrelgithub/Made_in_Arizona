@@ -9,11 +9,18 @@ namespace MadeInArizona
         public bool IsDead { get; private set; }
         /// <summary>Some defeated hostiles keep moving briefly and can collide with live cars.</summary>
         public bool IsSpinningWreck { get; private set; }
-        public float Engine { get; private set; } = 1;
-        public float Radiator { get; private set; } = 1;
-        public float Transmission { get; private set; } = 1;
-        public float Wheels { get; private set; } = 1;
-        public float Suspension { get; private set; } = 1;
+        public int FailedDepth { get; private set; }
+        readonly float[] shares = { .5f, 0, 0, .15f, .15f, .2f };
+        public float SegmentMax(HealthCategory category) => MaxHealth * shares[(int)category];
+        public float SegmentHealth(HealthCategory category)
+        {
+            int index = (int)category;
+            float inside = 0;
+            for (int i = index + 1; i < HealthRules.SegmentCount; i++) inside += SegmentMax((HealthCategory)i);
+            return Mathf.Clamp(Health - inside, 0, SegmentMax(category));
+        }
+        public bool EngineReached => Health < SegmentMax(HealthCategory.Engine);
+        public bool ExteriorGone => SegmentHealth(HealthCategory.Exterior) <= .00001f;
         VehicleController vehicle;
         float smokeAt, baseHealth, durabilityMultiplier = 1;
         public float LastDamageTime { get; private set; } = float.NegativeInfinity;
@@ -25,16 +32,37 @@ namespace MadeInArizona
         /// <summary>Share of maximum health removed by the most recent hit, for player hurt feedback.</summary>
         public float LastDamageFraction { get; private set; }
 
-        public void Initialize(VehicleController owner, float health)
+        public void Initialize(VehicleController owner, float health, float[] healthShares = null)
         {
             vehicle = owner; baseHealth=health; durabilityMultiplier=1; MaxHealth = Health = Mathf.Max(1,health*HealthMultiplier); IsDead = false; IsSpinningWreck = false;
-            Engine = Radiator = Transmission = Wheels = Suspension = 1;
+            FailedDepth=0;
+            var source=healthShares!=null&&healthShares.Length==HealthRules.SegmentCount?healthShares:owner.Stats.healthShares;
+            for(int i=0;i<shares.Length;i++)shares[i]=source[i];
         }
-        public void SetNetworkHealth(float health, float maximum)
+        public void SetNetworkHealth(float health, float maximum, int failedDepth = -1)
         {
             MaxHealth = Mathf.Max(1, maximum);
             Health = Mathf.Clamp(health, 0, MaxHealth);
             IsDead = Health <= 0;
+            if(failedDepth>=0)SetFailedDepth(Mathf.Clamp(failedDepth,0,4));
+            else UpdateFailures();
+        }
+        void SetFailedDepth(int depth)
+        {
+            if(depth==FailedDepth)return;
+            int previous=FailedDepth;
+            FailedDepth=depth;
+            vehicle?.ApplyDamageProfile(depth,previous);
+        }
+        void UpdateFailures()
+        {
+            int depth=FailedDepth;
+            for(int i=1;i<=4;i++)
+                if(SegmentMax((HealthCategory)i)>.00001f && SegmentHealth((HealthCategory)i)<=.00001f)
+                    depth=Mathf.Max(depth,i);
+            while(depth>0 && (SegmentMax((HealthCategory)depth)<=.00001f ||
+                SegmentHealth((HealthCategory)depth)>=SegmentMax((HealthCategory)depth)*HealthRules.ReactivationFraction-.00001f))depth--;
+            SetFailedDepth(depth);
         }
         public void SetDurabilityMultiplier(float multiplier)
         {
@@ -47,6 +75,33 @@ namespace MadeInArizona
             float fraction=Health/Mathf.Max(1,MaxHealth);
             MaxHealth=Mathf.Max(1,baseHealth*HealthMultiplier*durabilityMultiplier);
             Health=MaxHealth*fraction;
+            UpdateFailures();
+        }
+        /// <summary>Keep the reached layer and its fill when installed-part durability changes.</summary>
+        public void Reconfigure(float health,float[] healthShares)
+        {
+            if(IsDead || healthShares==null || healthShares.Length!=HealthRules.SegmentCount)return;
+            int front=5;
+            float fill=1;
+            if(Health<MaxHealth-.001f)
+                for(int i=0;i<HealthRules.SegmentCount;i++)
+                {
+                    float maximum=SegmentMax((HealthCategory)i);
+                    if(maximum<=.001f || SegmentHealth((HealthCategory)i)<=.001f)continue;
+                    front=i;fill=SegmentHealth((HealthCategory)i)/maximum;break;
+                }
+            bool full=Health>=MaxHealth-.001f;
+            baseHealth=health;
+            MaxHealth=Mathf.Max(1,baseHealth*HealthMultiplier*durabilityMultiplier);
+            for(int i=0;i<shares.Length;i++)shares[i]=healthShares[i];
+            if(full)Health=MaxHealth;
+            else
+            {
+                Health=0;
+                for(int i=front+1;i<HealthRules.SegmentCount;i++)Health+=SegmentMax((HealthCategory)i);
+                Health+=SegmentMax((HealthCategory)front)*fill;
+            }
+            UpdateFailures();
         }
         float HealthMultiplier
         {
@@ -80,23 +135,7 @@ namespace MadeInArizona
             float previousHealth=Health;
             LastDamageTime=Time.time;LastDamagePoint=hitPoint;LastDamageSource=source;
             Health = Mathf.Max(0, Health - amount);
-            Vector3 hit = transform.InverseTransformPoint(hitPoint);
-            float componentDamage = amount / MaxHealth * 1.5f;
-            if (hit.z > .7f)
-            {
-                Radiator = Mathf.Max(0, Radiator - componentDamage * 1.1f);
-                Engine = Mathf.Max(0, Engine - componentDamage * .55f);
-            }
-            else if (Mathf.Abs(hit.x) > .55f)
-            {
-                Wheels = Mathf.Max(0, Wheels - componentDamage);
-                Suspension = Mathf.Max(0, Suspension - componentDamage * .85f);
-            }
-            else
-            {
-                Transmission = Mathf.Max(0, Transmission - componentDamage * .9f);
-                Engine = Mathf.Max(0, Engine - componentDamage * .4f);
-            }
+            UpdateFailures();
             LastDamageFraction=(previousHealth-Health)/Mathf.Max(1,MaxHealth);
             if (vehicle.IsPlayer)
             {
@@ -138,36 +177,21 @@ namespace MadeInArizona
                     foreach (var mine in colliders) Physics.IgnoreCollision(mine, wreck, true);
             }
         }
-        public void DamageComponent(string component, float amount)
-        {
-            amount = Mathf.Clamp01(amount);
-            switch (component)
-            {
-                case "Engine": Engine = Mathf.Max(0, Engine - amount); break;
-                case "Radiator": Radiator = Mathf.Max(0, Radiator - amount); break;
-                case "Transmission": Transmission = Mathf.Max(0, Transmission - amount); break;
-                case "Wheels": Wheels = Mathf.Max(0, Wheels - amount); break;
-                case "Suspension": Suspension = Mathf.Max(0, Suspension - amount); break;
-            }
-        }
         public void Repair(float amount)
         {
             if (IsDead || amount <= 0) return;
             float before = Health;
             Health = Mathf.Min(MaxHealth, Health + amount);
             if (Health - before > .5f) { LastRepairTime = Time.time; LastRepairAmount = Health - before; }
-            float restore = amount / MaxHealth * 1.8f;
-            Engine = Mathf.Min(1, Engine + restore); Radiator = Mathf.Min(1, Radiator + restore);
-            Transmission = Mathf.Min(1, Transmission + restore); Wheels = Mathf.Min(1, Wheels + restore);
-            Suspension = Mathf.Min(1, Suspension + restore);
+            UpdateFailures();
         }
         void Update()
         {
             if (IsDead || vehicle == null || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
-            if (Health / MaxHealth < .52f && Time.time > smokeAt)
+            if (ExteriorGone && Time.time > smokeAt)
             {
                 smokeAt = Time.time + .15f;
-                bool burning = Health / MaxHealth < .23f;
+                bool burning = EngineReached;
                 ExplosionSystem.Burst(transform.position + transform.forward * .8f + Vector3.up * 1.5f,
                     burning ? new Color(.95f, .27f, .07f, .8f) : new Color(.2f, .22f, .23f, .5f), burning ? 5 : 3, 1.6f);
             }

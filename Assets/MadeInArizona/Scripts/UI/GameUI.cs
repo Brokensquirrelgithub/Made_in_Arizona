@@ -302,7 +302,21 @@ namespace MadeInArizona
             Text(x + 24, y + 95, w - 48, 24, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL", 17, Muted);
             // What the drivetrain gains or gives up on each kind of ground, picked out from the figures around it.
             Text(x + 24, y + 115, w - 48, 24, DrivetrainTraits.Summary(s.drivetrain), 17, Cream, true);
-            Text(x + 24, y + 136, w - 48, 52, s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " STRUCTURE\n" + s.finalDrive.ToString("0.00") + ":1 FINAL DRIVE  •  " + Mathf.RoundToInt(s.maxSpeed * .621371f) + " MPH TOP SPEED", 17, Muted);
+            Text(x + 24, y + 136, w - 48, 62,
+                s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " HP  •  " + s.finalDrive.ToString("0.00") + ":1  •  " + Mathf.RoundToInt(s.maxSpeed*.621371f) + " MPH\n" +
+                SegmentSummary(s,0,3) + "\n" + SegmentSummary(s,3,6), 14, Muted);
+        }
+        static string SegmentSummary(VehicleStats stats,int first,int end)
+        {
+            string result="";
+            for(int i=first;i<end;i++)
+            {
+                int hp=Mathf.RoundToInt(stats.maxHealth*stats.healthShares[i]);
+                if(hp<=0)continue;
+                if(result.Length>0)result+="  •  ";
+                result+=HealthRules.Labels[i]+" "+hp;
+            }
+            return result;
         }
 
         void DrawParts(float top, float panelHeight)
@@ -323,7 +337,7 @@ namespace MadeInArizona
             Tag(x + 24, top + 20, part.category.ToUpperInvariant() + " / SHOP NOTES", Orange);
             Text(x + 24, top + 51, 455, 78, part.displayName.ToUpperInvariant(), 32, Cream, true);
             Text(x + 24, top + 142, 455, 102, part.description, 18, Cream);
-            Text(x + 24, top + 251, 455, 42, "+" + part.mass + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nTORQUE ×" + part.torqueMultiplier.ToString("0.00") + "   •   STRUCTURE " + (part.healthBonus < 0 ? "" : "+") + part.healthBonus, 14, Muted);
+            Text(x + 24, top + 251, 455, 42, part.mass.ToString("+0;-0;0") + " KG   •   POWER ×" + part.hpMultiplier.ToString("0.00") + "   •   GRIP ×" + part.gripMultiplier.ToString("0.00") + "\nTORQUE ×" + part.torqueMultiplier.ToString("0.00") + "   •   " + part.healthCategory.ToString().ToUpperInvariant() + " " + part.partDurability.ToString("0") + "% / +" + HealthRules.PartHealth(part).ToString("0.#") + " HP", 14, Muted);
             bool ownedPart = game.Save.ownedParts.Contains(part.id), isInstalled = game.Save.installedParts.Contains(part.id);
             bool compatible = GarageManager.Compatible(part, ContentCatalog.Vehicles[game.Save.selectedVehicle]);
             bool available = part.unlockMission <= game.Save.unlockedMission && compatible;
@@ -417,7 +431,7 @@ namespace MadeInArizona
             Rect(28, height - 194, 365, 166, Ink);
             Text(48, height - 177, 330, 26, game.CurrentVehicle.displayName.ToUpperInvariant(), 16, Cream, true);
             DrawHealthBar(p, 48, height - 136, 240, 14);
-            bool critical = p.Damage.Health / Mathf.Max(1, p.Damage.MaxHealth) < CriticalHealth;
+            bool critical = p.Damage.EngineReached;
             Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);

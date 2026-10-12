@@ -27,7 +27,7 @@ namespace MadeInArizona
             if (Health > 0) return;
             Disabled = true;
             if (ComponentName == "Weapon") owner.GetComponent<EnemyAI>()?.DisableWeapon();
-            else owner.Damage.DamageComponent(ComponentName, .85f);
+            else owner.DisableBossComponent(ComponentName);
             if (shell != null)
             {
                 block.SetColor("_BaseColor", new Color(.1f, .08f, .07f));

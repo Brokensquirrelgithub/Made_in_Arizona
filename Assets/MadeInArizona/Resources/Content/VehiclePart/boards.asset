@@ -15,17 +15,18 @@ MonoBehaviour:
   id: boards
   displayName: Recovery boards and tool roll
   category: Utility
-  description: '+45 health, +3% grip, +24 kg. Tools are less cinematic than fire.'
+  description: Recovery boards and a tool roll add 3% grip and 24 kg to the Equipment pool.
   contentOrder: 22
   cost: 290
   unlockMission: 0
   salvageCost: 0
   mass: 24
+  healthCategory: 2
+  partDurability: 50
   hpMultiplier: 1
   torqueMultiplier: 1
   gripMultiplier: 1.03
   coolingMultiplier: 1
-  healthBonus: 45
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

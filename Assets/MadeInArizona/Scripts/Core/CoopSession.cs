@@ -42,7 +42,7 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 3;
+        const int Protocol = 4;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -93,7 +93,7 @@ namespace MadeInArizona
         [Serializable] sealed class InputPacket { public CoopControls controls; }
         [Serializable] sealed class VehiclePacket
         {
-            public int id, owner, archetype, faction;
+            public int id, owner, archetype, faction, failedDepth;
             public string definition, weapon, fieldWeapon;
             public bool player, friendly;
             public Vector3 position;
@@ -283,7 +283,8 @@ namespace MadeInArizona
             carObject.transform.SetParent(game.World.transform);
             carObject.transform.position = game.World.PlayerSpawn + new Vector3(4f * (guestCars.Count + 1), 0, 3f);
             var car = carObject.AddComponent<VehicleController>();
-            car.Initialize(definition, loadout?.stats ?? VehicleStats.From(definition), true);
+            car.Initialize(definition, loadout?.stats ?? VehicleStats.From(definition), true,
+                EnemyFaction.Sunsprawl, loadout?.profiles);
             if (loadout != null) car.Weapons.ConfigurePlayerPrimary(loadout.weaponId);
             car.SetRemoteControls(default);
             guestCars[clientId] = car;
@@ -393,7 +394,9 @@ namespace MadeInArizona
                 car = obj.AddComponent<VehicleController>();
                 var stats = packet.player && packet.owner == (int)network.LocalClientId
                     ? GarageManager.StatsFor(definition, GameManager.Instance.Save) : VehicleStats.From(definition);
-                car.Initialize(definition, stats, packet.player, (EnemyFaction)packet.faction);
+                var profiles=packet.player && packet.owner == (int)network.LocalClientId
+                    ? GarageManager.DamageProfiles(definition,GameManager.Instance.Save):null;
+                car.Initialize(definition, stats, packet.player, (EnemyFaction)packet.faction,profiles);
                 if (!packet.player)
                 {
                     var ai = obj.AddComponent<EnemyAI>();
@@ -406,7 +409,7 @@ namespace MadeInArizona
                 proxies[packet.id] = car;
             }
             car.ApplyNetworkMotion(packet.position, packet.rotation, packet.velocity, packet.health,
-                packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting);
+                packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting,packet.failedDepth);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
             car.Weapons.SetNetworkBeam(packet.beam, packet.beamEnd, packet.beamHeat);
@@ -660,7 +663,7 @@ namespace MadeInArizona
                         rpm = car.RPM, throttle = car.Throttle,
                         yawRate = car.Body ? car.Body.angularVelocity.y : 0, boosting = car.Boosting,
                         health = car.Damage.Health,
-                        maximum = car.Damage.MaxHealth, boost = car.BoostCharge,
+                        maximum = car.Damage.MaxHealth, boost = car.BoostCharge, failedDepth=car.Damage.FailedDepth,
                         weapon = car.Weapons && car.Weapons.GarageWeapon ? car.Weapons.GarageWeapon.id : "",
                         fieldWeapon = car.Weapons && car.Weapons.FieldWeapon ? car.Weapons.FieldWeapon.id : "",
                         fieldAmmo = car.Weapons ? car.Weapons.FieldAmmo : 0,

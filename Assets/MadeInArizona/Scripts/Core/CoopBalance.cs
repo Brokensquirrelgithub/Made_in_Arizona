@@ -14,6 +14,7 @@ namespace MadeInArizona
             public int protocol;
             public string carId, weaponId;
             public VehicleStats stats;
+            public VehicleStats[] profiles;
             public CarTuning car;
             public WeaponTuning slot1, slot2;
         }
@@ -64,6 +65,7 @@ namespace MadeInArizona
                 ? player.Weapons.FieldWeapon.id : null;
             return new LoadoutPacket { protocol = Protocol, carId = carId, weaponId = weaponId,
                 stats = GarageManager.StatsFor(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
+                profiles = GarageManager.DamageProfiles(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
                 car = BalanceTuning.LocalCar(carId), slot1 = BalanceTuning.LocalWeapon(weaponId),
                 slot2 = string.IsNullOrEmpty(fieldId) ? null : BalanceTuning.LocalWeapon(fieldId) };
         }
@@ -94,6 +96,7 @@ namespace MadeInArizona
             if (packet.car == null || packet.car.id != packet.carId)
                 packet.car = CarTuning.FromLegacy(packet.carId, new DevTuning());
             packet.stats = SafeStats(packet.stats, car);
+            packet.profiles = SafeProfiles(packet.profiles,packet.stats,car);
             packet.car.Clamp();
             if (packet.slot1 == null || packet.slot1.id != packet.weaponId)
                 packet.slot1 = WeaponTuning.FromDefinition(weapon);
@@ -107,6 +110,7 @@ namespace MadeInArizona
             guestLoadouts[sender] = packet;
             guestLoadoutJson[sender] = normalized;
             if (!existing && (GameManager.Instance.IsPlaying || GameManager.Instance.State == GameState.Paused)) SpawnGuest(sender);
+            else if(existing && changed)existing.SetDamageProfiles(packet.profiles);
             if (changed) lastBalanceJson = null;
         }
 
@@ -133,7 +137,48 @@ namespace MadeInArizona
                 ? 1 : received.cooling, .25f, 3f);
             if (!Enum.IsDefined(typeof(Drivetrain), received.drivetrain)) received.drivetrain = basis.drivetrain;
             if (!Enum.IsDefined(typeof(Differential), received.differential)) received.differential = basis.differential;
+            if(received.healthShares==null || received.healthShares.Length!=HealthRules.SegmentCount)
+                received.healthShares=basis.healthShares;
+            else
+            {
+                float total=0;
+                for(int i=0;i<HealthRules.SegmentCount;i++)
+                {
+                    float share=received.healthShares[i];
+                    received.healthShares[i]=float.IsNaN(share)||float.IsInfinity(share)?0:Mathf.Clamp01(share);
+                    total+=received.healthShares[i];
+                }
+                if(total<.01f)received.healthShares=basis.healthShares;
+                else
+                {
+                    received.healthShares[0]=Mathf.Max(received.healthShares[0],.05f);
+                    received.healthShares[5]=Mathf.Max(received.healthShares[5],.05f);
+                    total=0;foreach(float share in received.healthShares)total+=share;
+                    for(int i=0;i<HealthRules.SegmentCount;i++)received.healthShares[i]/=total;
+                }
+            }
             return received;
+        }
+        static VehicleStats[] SafeProfiles(VehicleStats[] received,VehicleStats whole,VehicleDefinition car)
+        {
+            var safe=new VehicleStats[5];
+            safe[0]=whole;
+            for(int depth=1;depth<safe.Length;depth++)
+            {
+                var profile=SafeStats(received!=null&&received.Length==5?received[depth]:null,car);
+                profile.maxHealth=whole.maxHealth;
+                profile.mass=whole.mass;
+                profile.healthShares=whole.healthShares;
+                profile.horsepower=Mathf.Max(profile.horsepower,Mathf.Min(car.horsepower,whole.horsepower));
+                profile.torque=Mathf.Max(profile.torque,Mathf.Min(car.torque,whole.torque));
+                profile.grip=Mathf.Max(profile.grip,Mathf.Min(car.grip,whole.grip));
+                profile.turnSpeed=Mathf.Max(profile.turnSpeed,Mathf.Min(car.turnSpeed,whole.turnSpeed));
+                profile.maxSpeed=Mathf.Max(profile.maxSpeed,Mathf.Min(car.maxSpeed,whole.maxSpeed));
+                profile.suspensionTravel=Mathf.Max(profile.suspensionTravel,Mathf.Min(car.suspensionTravel,whole.suspensionTravel));
+                profile.damping=Mathf.Max(profile.damping,Mathf.Min(car.damping,whole.damping));
+                safe[depth]=profile;
+            }
+            return safe;
         }
         static float Bound(float value, float basis, float low, float high) =>
             Mathf.Clamp(float.IsNaN(value) || float.IsInfinity(value) ? basis : value, basis * low, basis * high);

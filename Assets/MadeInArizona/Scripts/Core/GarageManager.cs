@@ -7,15 +7,19 @@ namespace MadeInArizona
         public static string LastMessage { get; private set; }
         public static bool Compatible(VehiclePart part,VehicleDefinition vehicle)
         { return part.compatibleVehicles==null||part.compatibleVehicles.Length==0||Array.IndexOf(part.compatibleVehicles,vehicle.id)>=0; }
-        public static VehicleStats StatsFor(VehicleDefinition definition,SaveData save)
+        public static VehicleStats StatsFor(VehicleDefinition definition,SaveData save,int failedDepth=0)
         {
             ContentCatalog.EnsureLoaded(); var stats=VehicleStats.From(definition);
             if(save==null)return stats;
+            var segments=HealthRules.StockSegments(definition.maxHealth);
             foreach(var p in ContentCatalog.Parts)
             {
                 if(!save.installedParts.Contains(p.id)||!save.ownedParts.Contains(p.id)||!Compatible(p,definition))continue;
-                stats.mass+=p.mass; stats.horsepower*=p.hpMultiplier; stats.torque*=p.torqueMultiplier; stats.grip*=p.gripMultiplier;
-                stats.cooling*=p.coolingMultiplier; stats.maxHealth+=p.healthBonus; stats.maxSpeed*=p.maxSpeedMultiplier; stats.turnSpeed*=p.turnMultiplier;
+                segments[(int)p.healthCategory]+=HealthRules.PartHealth(p);
+                stats.mass+=p.mass;
+                if(p.healthCategory!=HealthCategory.Engine && (int)p.healthCategory<=failedDepth)continue;
+                stats.horsepower*=p.hpMultiplier; stats.torque*=p.torqueMultiplier; stats.grip*=p.gripMultiplier;
+                stats.cooling*=p.coolingMultiplier; stats.maxSpeed*=p.maxSpeedMultiplier; stats.turnSpeed*=p.turnMultiplier;
                 stats.rideHeight+=p.rideHeightBonus; stats.suspensionTravel*=p.suspensionMultiplier; stats.springStiffness*=p.springMultiplier;
                 stats.damping*=p.dampingMultiplier; stats.finalDrive*=p.finalDriveMultiplier;
                 if(p.changesDrivetrain)stats.drivetrain=p.drivetrain; if(p.changesDifferential)stats.differential=p.differential;
@@ -25,7 +29,28 @@ namespace MadeInArizona
             stats.horsepower*=driver.powerMultiplier; stats.torque*=driver.powerMultiplier; stats.grip*=driver.gripMultiplier;
             stats.finalDrive*=save.finalDriveTuning; stats.maxSpeed/=save.finalDriveTuning; stats.rideHeight+=save.rideHeightTuning;
             stats.mass=Mathf.Max(400,stats.mass); stats.cooling=Mathf.Clamp(stats.cooling,.25f,3); stats.grip=Mathf.Clamp(stats.grip,.4f,2.2f);
+            stats.maxHealth=0;
+            foreach(float amount in segments)stats.maxHealth+=amount;
+            stats.healthShares=HealthRules.Shares(segments);
+            if(failedDepth>0)
+            {
+                var whole=StatsFor(definition,save);
+                var stock=VehicleStats.From(definition);
+                stats.horsepower=Mathf.Max(stats.horsepower,Mathf.Min(stock.horsepower,whole.horsepower));
+                stats.torque=Mathf.Max(stats.torque,Mathf.Min(stock.torque,whole.torque));
+                stats.grip=Mathf.Max(stats.grip,Mathf.Min(stock.grip,whole.grip));
+                stats.turnSpeed=Mathf.Max(stats.turnSpeed,Mathf.Min(stock.turnSpeed,whole.turnSpeed));
+                stats.maxSpeed=Mathf.Max(stats.maxSpeed,Mathf.Min(stock.maxSpeed,whole.maxSpeed));
+                stats.suspensionTravel=Mathf.Max(stats.suspensionTravel,Mathf.Min(stock.suspensionTravel,whole.suspensionTravel));
+                stats.damping=Mathf.Max(stats.damping,Mathf.Min(stock.damping,whole.damping));
+            }
             return stats;
+        }
+        public static VehicleStats[] DamageProfiles(VehicleDefinition definition,SaveData save)
+        {
+            var profiles=new VehicleStats[5];
+            for(int depth=0;depth<profiles.Length;depth++)profiles[depth]=StatsFor(definition,save,depth);
+            return profiles;
         }
         public static bool BuyPart(VehiclePart part,SaveData save)
         {
@@ -53,7 +78,9 @@ namespace MadeInArizona
             if(save.installedParts.Contains(part.id)){save.installedParts.Remove(part.id);LastMessage="Removed "+part.displayName;SaveSystem.Save(save);return;}
             if(!save.ownedParts.Contains(part.id)){LastMessage="Purchase this part first.";return;}
             if(!Compatible(part,ContentCatalog.Vehicles[save.selectedVehicle])){LastMessage="This part does not fit the selected vehicle.";return;}
-            foreach(var p in ContentCatalog.Parts)if(p.category==part.category)save.installedParts.Remove(p.id);
+            // Armor kits have different fitting points but feed one shared Armor health layer.
+            if(part.healthCategory!=HealthCategory.Armor)
+                foreach(var p in ContentCatalog.Parts)if(p.category==part.category)save.installedParts.Remove(p.id);
             save.installedParts.Add(part.id); LastMessage="Installed "+part.displayName; SaveSystem.Save(save);
         }
         public static bool SelectVehicle(int index,SaveData save)

@@ -12,6 +12,49 @@ namespace MadeInArizona
         public Rigidbody Body { get; private set; }
         public Transform Visual { get; private set; }
         public VehicleStats Stats { get; private set; }
+        VehicleStats[] damageProfiles;
+        public void ApplyDamageProfile(int depth,int previous)
+        {
+            if(damageProfiles==null || depth<0 || depth>=damageProfiles.Length)return;
+            Stats=damageProfiles[depth];
+            if(!IsPlayer || IsNetworkProxy || depth==previous || Damage==null)return;
+            if(depth>previous)
+            {
+                for(int i=previous+1;i<=depth;i++)
+                    if(i>=2&&Damage.SegmentMax((HealthCategory)i)>.001f)
+                        GameManager.Instance?.Notify(HealthRules.Labels[i]+" OFFLINE");
+            }
+            else
+            {
+                for(int i=previous;i>depth;i--)
+                    if(i>=2&&Damage.SegmentMax((HealthCategory)i)>.001f)
+                        GameManager.Instance?.Notify(HealthRules.Labels[i]+" BACK ONLINE");
+            }
+        }
+        public void SetDamageProfiles(VehicleStats[] profiles)
+        {
+            if(profiles==null || profiles.Length!=5 || Damage==null)return;
+            damageProfiles=profiles;
+            Damage.Reconfigure(Mathf.Max(60,profiles[0].maxHealth),profiles[0].healthShares);
+            Stats=damageProfiles[Damage.FailedDepth];
+        }
+        public void RefreshLocalDamageProfiles()
+        {
+            var game=GameManager.Instance;
+            if(!IsPlayer || game==null || game.Player!=this || game.Save==null || !Definition)return;
+            SetDamageProfiles(GarageManager.DamageProfiles(Definition,game.Save));
+        }
+        /// <summary>Command rig weak points are boss-specific and do not use ordinary component wear.</summary>
+        public void DisableBossComponent(string component)
+        {
+            if(Stats==null)return;
+            switch(component)
+            {
+                case "Radiator": Stats.horsepower*=.55f; Stats.torque*=.55f; break;
+                case "Wheels": Stats.grip*=.5f; Stats.turnSpeed*=.72f; break;
+                case "Transmission": Stats.maxSpeed*=.55f; Stats.finalDrive*=.75f; break;
+            }
+        }
         /// <summary>The vehicle this controller was built from (engine layout, display data).</summary>
         public VehicleDefinition Definition { get; private set; }
         /// <summary>Burn, stall and stuck-charge state, created the first time a weapon applies one.</summary>
@@ -42,13 +85,13 @@ namespace MadeInArizona
             networkRotation = transform.rotation;
         }
         public void ApplyNetworkMotion(Vector3 position, Quaternion rotation, Vector3 velocity,
-            float health, float maximumHealth, float boost, float rpm, float throttle, float yawRate, bool boosting)
+            float health, float maximumHealth, float boost, float rpm, float throttle, float yawRate, bool boosting, int failedDepth=-1)
         {
             networkPosition = position;
             networkRotation = rotation;
             networkVelocity = velocity;
             networkYawRate = yawRate;
-            Damage?.SetNetworkHealth(health, maximumHealth);
+            Damage?.SetNetworkHealth(health, maximumHealth, failedDepth);
             BoostCharge = Mathf.Clamp01(boost);
             RPM = rpm;
             Throttle = throttle;
@@ -155,9 +198,9 @@ namespace MadeInArizona
 
         void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
         void OnDisable() { Active.Remove(this); }
-        public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer, EnemyFaction faction = EnemyFaction.Sunsprawl)
+        public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer, EnemyFaction faction = EnemyFaction.Sunsprawl, VehicleStats[] profiles=null)
         {
-            Stats = stats; IsPlayer = isPlayer; Definition = definition;
+            Stats = stats; damageProfiles=profiles; IsPlayer = isPlayer; Definition = definition;
             Body = GetComponent<Rigidbody>();
             Body.mass = Mathf.Max(300, stats.mass);
             Body.linearDamping = .08f; Body.angularDamping = 3f;
@@ -203,7 +246,7 @@ namespace MadeInArizona
             }
             Damage = GetComponent<VehicleDamage>();
             if (Damage == null) Damage = gameObject.AddComponent<VehicleDamage>();
-            Damage.Initialize(this, Mathf.Max(60, stats.maxHealth));
+            Damage.Initialize(this, Mathf.Max(60, stats.maxHealth), stats.healthShares);
             Weapons = GetComponent<WeaponSystem>();
             if (Weapons == null) Weapons = gameObject.AddComponent<WeaponSystem>();
             Weapons.Initialize(this);
@@ -351,7 +394,7 @@ namespace MadeInArizona
             Surface = surface;
             float spin = 0;
             float surfaceGrip = SurfaceGrip(surface);
-            float wheelGrip = Mathf.Lerp(.5f, 1f, Damage.Wheels);
+            float wheelGrip = 1f;
             float diffGrip = Stats.differential == Differential.Locked ? 1.13f : Stats.differential == Differential.LimitedSlip ? 1.07f : .92f;
             // What the drivetrain makes of this ground: a bonus or a penalty to drive, cornering grip and top speed.
             var footing = DrivetrainTraits.On(Stats.drivetrain, surface);
@@ -368,7 +411,7 @@ namespace MadeInArizona
                 Vector3 driveForward = transform.forward * driveDirection;
                 float angle = Vector3.SignedAngle(driveForward, desired, Vector3.up);
                 float steering = Mathf.Clamp(angle / 42, -1, 1);
-                float handling = Mathf.Lerp(.5f, 1, Damage.Suspension) * Mathf.Lerp(.72f, 1, Damage.Wheels);
+                float handling = 1f;
                 float lockPenalty = Stats.differential == Differential.Locked ? .84f : 1;
                 float turnRate = Mathf.Clamp(Stats.turnSpeed, 35, 240) * LowSpeedTurnMultiplier(speed) * handling * lockPenalty;
                 if (IsPlayer) turnRate *= tuning.steering;
@@ -396,7 +439,7 @@ namespace MadeInArizona
                 // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel
                 // responsive and controllable without raising top speed.
                 acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
-                acceleration *= Mathf.Lerp(.32f, 1, Damage.Engine) * footing.drive;
+                acceleration *= footing.drive;
                 if (IsPlayer) acceleration *= tuning.acceleration;
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
@@ -406,7 +449,7 @@ namespace MadeInArizona
                     BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate);
                 }
                 Boosting = boosting;
-                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed * Mathf.Lerp(.55f, 1, Damage.Transmission) * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
+                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
                 float directionalAcceleration = driveDirection < 0 ? acceleration * .78f : acceleration;
@@ -417,7 +460,6 @@ namespace MadeInArizona
                 if (traction && driveDirection > 0) spin = Mathf.Clamp01((directionalAcceleration * targetThrottle / gripLimit - 1.5f) * .5f) * launchSpin;
                 if (traction && speedInDriveDirection < directionalMaxSpeed)
                     Body.AddForce(driveForward * directionalAcceleration * targetThrottle * (Grounded ? 1 : BeachedTraction), ForceMode.Acceleration);
-                if (Damage.Wheels < .45f && Grounded) Body.AddTorque(Vector3.up * Mathf.Sin(Time.time * 6) * 1.4f * (1 - Damage.Wheels) * speed / 12, ForceMode.Acceleration);
             }
             else
             {
@@ -501,7 +543,7 @@ namespace MadeInArizona
                 if (nearest == float.MaxValue || nearest > reach) continue;
                 contacts++;
                 wheelOnGround[i] = true; wheelGroundPoint[i] = point; wheelGroundNormal[i] = normal;
-                float spring = Mathf.Clamp(Stats.springStiffness / Body.mass, 20, 100) * Mathf.Lerp(.45f, 1, Damage.Suspension);
+                float spring = Mathf.Clamp(Stats.springStiffness / Body.mass, 20, 100);
                 float damp = Mathf.Clamp(Stats.damping / Body.mass, 2, 16);
                 float compression = restLength - nearest;
                 // Damp the wheel's motion relative to the ground it rolls over. Damping absolute vertical speed (the
@@ -596,7 +638,7 @@ namespace MadeInArizona
             // look like the car tipping over; it settles back twice as fast as it leans in.
             float yawRate = IsNetworkProxy ? networkYawRate : Body.angularVelocity.y;
             float targetRoll = -yawRate * localVelocity.z * .1f * (1 + narrow * .5f) - localVelocity.x * .25f * (1 + narrow);
-            targetRoll = Mathf.Clamp(targetRoll, -MaxCorneringLean, MaxCorneringLean) + (1 - Damage.Suspension) * 4;
+            targetRoll = Mathf.Clamp(targetRoll, -MaxCorneringLean, MaxCorneringLean);
             visualRoll = Mathf.Lerp(visualRoll, targetRoll, Time.deltaTime * (Mathf.Abs(targetRoll) < Mathf.Abs(visualRoll) ? 12 : 6));
             // The body sits on the slope, then squats under power and dives under braking. The old pitch dipped the
             // nose under acceleration, which read as the car tipping forward into every hill it tried to climb.

@@ -15,18 +15,18 @@ MonoBehaviour:
   id: cage
   displayName: Triangulated cage and skid plates
   category: Armor
-  description: +160 chassis health, +95 kg. Protects occupants and underbody; slows
-    every acceleration.
+  description: A triangulated cage and skid plates add 95 kg of protection to the Armor pool.
   contentOrder: 20
   cost: 560
   unlockMission: 1
   salvageCost: 0
   mass: 95
+  healthCategory: 1
+  partDurability: 125
   hpMultiplier: 1
   torqueMultiplier: 1
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: 160
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

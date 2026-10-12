@@ -178,7 +178,7 @@ namespace MadeInArizona
             // In the garage the car sits backed onto the lift, nose out toward the open bay and the camera.
             if (garage) { obj.transform.rotation = Quaternion.Euler(0, 180, 0); obj.transform.position += Vector3.up * VehicleVisual.TyreDrop(def); }
             Player = obj.AddComponent<VehicleController>();
-            Player.Initialize(def, GarageManager.StatsFor(def, Save), true);
+            Player.Initialize(def, GarageManager.StatsFor(def, Save), true, EnemyFaction.Sunsprawl, GarageManager.DamageProfiles(def, Save));
             if (!garage) {
                 var dog = SuzukiDog.Create(Player.Visual, VehicleVisual.PassengerSeat(def), Save.dogCosmetic, true);
                 dog.transform.localScale = Vector3.one * .55f;

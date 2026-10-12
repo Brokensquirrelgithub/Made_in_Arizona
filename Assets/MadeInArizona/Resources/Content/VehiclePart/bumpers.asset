@@ -15,18 +15,18 @@ MonoBehaviour:
   id: bumpers
   displayName: Salvaged steel bumpers
   category: Armor
-  description: +95 chassis health for +72 kg. Includes an extremely confident tow
-    rating.
+  description: Steel bumpers add 72 kg of protection to the shared Armor pool.
   contentOrder: 21
   cost: 220
   unlockMission: 0
   salvageCost: 0
   mass: 72
+  healthCategory: 1
+  partDurability: 110
   hpMultiplier: 1
   torqueMultiplier: 1
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: 95
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

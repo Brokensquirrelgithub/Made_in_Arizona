@@ -9,6 +9,8 @@ namespace MadeInArizona
         public float mass, horsepower, torque, maxSpeed, grip, turnSpeed, maxHealth;
         public float rideHeight, wheelbase, trackWidth, suspensionTravel, springStiffness, damping, finalDrive;
         public float cooling = 1f;
+        /// <summary>Exterior to engine; totals one. Capacity changes scale all six layers equally.</summary>
+        public float[] healthShares = { .5f, 0, 0, .15f, .15f, .2f };
         /// <summary>A turbocharger part is installed (physical engine voice: boost, turbine damping, whistle).</summary>
         public bool turbocharged;
         public Drivetrain drivetrain;

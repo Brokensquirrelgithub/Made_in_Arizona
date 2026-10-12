@@ -8,6 +8,7 @@ namespace MadeInArizona
     {
         public float steering=1.6f, acceleration=1.2f, grip=1f, propDamage=2f, nitro=1f;
         public float playerHealth=1f, enemyHealth=1f, playerDamage=1f, incomingDamage=1f;
+        public float partHpPerKg=1.5f;
         // Multipliers on each explosion kind's own visual and physical baseline.
         public float explosionFire=1f, explosionDust=1f, explosionForce=1f;
         public int explosionVersion=1;
@@ -148,6 +149,7 @@ namespace MadeInArizona
             }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;
+            if (partHpPerKg<=0) partHpPerKg=defaults.partHpPerKg;
             foreach(var control in DevControl.All)
             {
                 float value=(float)control.field.GetValue(this);
@@ -168,7 +170,11 @@ namespace MadeInArizona
             }
             else coopComposite=null;
             carCache.Clear();
-            foreach(var vehicle in VehicleController.Active) if(vehicle&&vehicle.Damage) vehicle.Damage.ApplyHealthTuning();
+            foreach(var vehicle in VehicleController.Active) if(vehicle&&vehicle.Damage)
+            {
+                vehicle.RefreshLocalDamageProfiles();
+                vehicle.Damage.ApplyHealthTuning();
+            }
             DevVisuals.Apply();
         }
     }
@@ -191,6 +197,7 @@ namespace MadeInArizona
             new DevControl("DRIVING","propDamage","Impact damage to props",.5f,5),
             new DevControl("COMBAT","playerHealth","Player health capacity",.25f,10),
             new DevControl("COMBAT","enemyHealth","Enemy health capacity",.25f,5),
+            new DevControl("COMBAT","partHpPerKg","Part HP per kg",.5f,3),
             new DevControl("COMBAT","playerDamage","Player weapon damage",.1f,5),
             new DevControl("COMBAT","incomingDamage","Damage received by player",0,3),
             new DevControl("COMBAT","enemyCatchUp","Off-screen enemy catch-up pace (1 = normal)",1,4),

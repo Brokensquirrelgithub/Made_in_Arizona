@@ -15,19 +15,18 @@ MonoBehaviour:
   id: radcap
   displayName: A radiator cap that is a radiator cap
   category: Radiator cap
-  description: +3% power, +15 chassis health. The engine now runs at a temperature
-    instead of a weather event. Replaces a soda can and a hose clamp, both of which
-    were doing their best.
+  description: Adds 3% power. The new cap has no extra mass or structural HP.
   contentOrder: 29
   cost: 45
   unlockMission: 0
   salvageCost: 0
   mass: 0
+  healthCategory: 5
+  partDurability: 50
   hpMultiplier: 1.03
   torqueMultiplier: 1
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: 15
   maxSpeedMultiplier: 1
   turnMultiplier: 1
   rideHeightBonus: 0

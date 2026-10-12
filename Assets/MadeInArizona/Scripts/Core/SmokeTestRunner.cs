@@ -33,6 +33,8 @@ namespace MadeInArizona
             Application.logMessageReceived += OnLog;
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHealthTest")>=0)
+            { TestSegmentedHealth(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
             { yield return TestSoundtrack(true); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicExistingTest")>=0)
@@ -408,6 +410,93 @@ namespace MadeInArizona
             if (failures.Count > 0 && fixtureTrace.Count > 0) Debug.Log("MIA_SMOKE_TRACE\n" + string.Join("\n", fixtureTrace));
             Debug.Log("MIA_SMOKE_RESULTS\n" + result + "\n" + output);
             Application.Quit(failures.Count == 0 ? 0 : 1);
+        }
+        void TestSegmentedHealth()
+        {
+            ContentCatalog.EnsureLoaded();
+            Check("part asset durability matches catalog defaults",ContentCatalog.PartHealthAssetsAgree);
+            Check("all 36 parts use mass times durability for HP",ContentCatalog.Parts.Length==36 &&
+                Array.TrueForAll(ContentCatalog.Parts,p=>Mathf.Abs(HealthRules.PartHealth(p)-Mathf.Max(0,p.mass)*DevTuning.Current.partHpPerKg*p.partDurability*.01f)<.001f));
+            Check("negative mass parts add no HP",Array.TrueForAll(ContentCatalog.Parts,p=>p.mass>=0||HealthRules.PartHealth(p)==0));
+            bool stockTotals=true,profileFloors=true,profileMass=true,profileHealth=true;
+            foreach(var car in ContentCatalog.Vehicles)
+            {
+                var stock=GarageManager.StatsFor(car,new SaveData());
+                stockTotals&=Mathf.Approximately(stock.maxHealth,car.maxHealth)&&Mathf.Approximately(stock.healthShares[0],.5f);
+                var loadout=new SaveData();
+                foreach(var part in ContentCatalog.Parts)
+                {
+                    if(!GarageManager.Compatible(part,car))continue;
+                    if(part.category!="Armor")loadout.installedParts.RemoveAll(id=>Array.Exists(ContentCatalog.Parts,p=>p.id==id&&p.category==part.category));
+                    loadout.ownedParts.Add(part.id);loadout.installedParts.Add(part.id);
+                }
+                var profiles=GarageManager.DamageProfiles(car,loadout);
+                for(int depth=1;depth<profiles.Length;depth++)
+                {
+                    var s=profiles[depth];var whole=profiles[0];
+                    profileMass&=Mathf.Approximately(s.mass,whole.mass);
+                    profileHealth&=Mathf.Approximately(s.maxHealth,whole.maxHealth);
+                    profileFloors&=s.horsepower+.001f>=Mathf.Min(car.horsepower,whole.horsepower) &&
+                        s.torque+.001f>=Mathf.Min(car.torque,whole.torque) && s.grip+.001f>=Mathf.Min(car.grip,whole.grip) &&
+                        s.turnSpeed+.001f>=Mathf.Min(car.turnSpeed,whole.turnSpeed) && s.maxSpeed+.001f>=Mathf.Min(car.maxSpeed,whole.maxSpeed) &&
+                        s.suspensionTravel+.001f>=Mathf.Min(car.suspensionTravel,whole.suspensionTravel) &&
+                        s.damping+.001f>=Mathf.Min(car.damping,whole.damping);
+                }
+            }
+            Check("stock vehicle HP and exterior remain unchanged",stockTotals);
+            Check("every damaged profile stays above its stock floor",profileFloors);
+            Check("mass and HP are fixed across damage profiles",profileMass&&profileHealth);
+            var shift=Array.Find(ContentCatalog.Vehicles,v=>v.id=="shift");
+            var turbo=Array.Find(ContentCatalog.Parts,p=>p.id=="turbo");
+            var engineOnly=new SaveData();engineOnly.ownedParts.Add(turbo.id);engineOnly.installedParts.Add(turbo.id);
+            var engineProfiles=GarageManager.DamageProfiles(shift,engineOnly);
+            Check("engine part power survives every layer failure",Array.TrueForAll(engineProfiles,p=>Mathf.Approximately(p.horsepower,engineProfiles[0].horsepower)));
+            var armor=Array.Find(ContentCatalog.Parts,p=>p.id=="cage");
+            var bumpers=Array.Find(ContentCatalog.Parts,p=>p.id=="bumpers");
+            var ronin=Array.Find(ContentCatalog.Vehicles,v=>v.id=="ronin");
+            var armored=new SaveData();
+            armored.ownedParts.Add(armor.id);armored.ownedParts.Add(bumpers.id);
+            armored.installedParts.Add(armor.id);armored.installedParts.Add(bumpers.id);
+            var armoredStats=GarageManager.StatsFor(ronin,armored);
+            Check("cage and bumpers share the Armor HP pool",Mathf.Abs(armoredStats.maxHealth*armoredStats.healthShares[1]-HealthRules.PartHealth(armor)-HealthRules.PartHealth(bumpers))<.01f);
+            var armorSlots=new SaveData();
+            armorSlots.ownedParts.Add(armor.id);armorSlots.ownedParts.Add(bumpers.id);
+            GarageManager.TogglePart(armor,armorSlots);GarageManager.TogglePart(bumpers,armorSlots);
+            Check("garage permits both Armor parts together",armorSlots.installedParts.Contains(armor.id)&&armorSlots.installedParts.Contains(bumpers.id));
+
+            var obj=new GameObject("Segment health test probe");
+            var owner=obj.AddComponent<VehicleController>();
+            var damage=obj.AddComponent<VehicleDamage>();
+            damage.Initialize(owner,100,new[]{.3f,.1f,.1f,.2f,.1f,.2f});
+            damage.SetNetworkHealth(60.5f,100);
+            Check("never failed Armor stays active below 25%",damage.FailedDepth==0);
+            damage.SetNetworkHealth(60,100);
+            Check("Armor fails at exactly zero",damage.FailedDepth==1);
+            damage.Repair(2.4f);
+            Check("Armor stays failed below the recovery threshold",damage.FailedDepth==1);
+            damage.Repair(.1f);
+            Check("Armor recovers at 25%",damage.FailedDepth==0);
+            bool stable=true;
+            for(int cycle=0;cycle<10;cycle++)
+            {
+                damage.SetNetworkHealth(60,100);
+                stable&=damage.FailedDepth==1;
+                damage.Repair(2.5f);
+                stable&=damage.FailedDepth==0;
+            }
+            Check("ten fail and repair cycles do not stack damage",stable);
+            damage.SetDurabilityMultiplier(5);
+            damage.SetNetworkHealth(60,100);
+            damage.Reconfigure(200,new[]{.4f,.1f,.1f,.1f,.1f,.2f});
+            Check("layout changes keep the reached layer",Mathf.Approximately(damage.MaxHealth,200)&&Mathf.Approximately(damage.Health,100)&&damage.FailedDepth==1);
+            damage.SetDurabilityMultiplier(10);
+            Check("uniform capacity scaling keeps segment fill",Mathf.Approximately(damage.MaxHealth,400)&&Mathf.Approximately(damage.Health,200)&&damage.FailedDepth==1);
+            damage.SetNetworkHealth(19,100);
+            Check("damage crosses all layers and reaches engine",damage.FailedDepth==4&&damage.EngineReached);
+            damage.SetNetworkHealth(0,100);
+            damage.Repair(20);
+            Check("dead vehicles do not revive from repair",damage.IsDead&&damage.Health==0);
+            Destroy(obj);
         }
         IEnumerator TestMountainWorld()
         {

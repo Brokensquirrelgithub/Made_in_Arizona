@@ -15,18 +15,18 @@ MonoBehaviour:
   id: seat
   displayName: Driver's seat bolted down
   category: Interior
-  description: +5% turn response, +10 chassis health, +3 kg. Steering is easier when
-    you are not also sliding toward the passenger door.
+  description: Adds 5% turn response and 3 kg to the Equipment pool.
   contentOrder: 35
   cost: 70
   unlockMission: 0
   salvageCost: 0
   mass: 3
+  healthCategory: 2
+  partDurability: 50
   hpMultiplier: 1
   torqueMultiplier: 1
   gripMultiplier: 1
   coolingMultiplier: 1
-  healthBonus: 10
   maxSpeedMultiplier: 1
   turnMultiplier: 1.05
   rideHeightBonus: 0
