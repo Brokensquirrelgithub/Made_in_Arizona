@@ -11,6 +11,8 @@ namespace MadeInArizona
         public Transform Target;
         Camera view;
         Transform listener;
+        GameUI garageUi;
+        SuzukiDog garageSuzuki;
         Vector3 velocity;
         float appliedShadowOffset = -1, appliedDofOffset = -1;
         /// <summary>The point the camera frames (the car in play). Streaming and culling centre on this, not the lens.</summary>
@@ -51,6 +53,7 @@ namespace MadeInArizona
         void Awake() { Instance = this; view = GetComponent<Camera>(); }
         void Start()
         {
+            garageUi = FindFirstObjectByType<GameUI>();
             // The lens now backs away from the car, so hearing moves to a separate listener at the original framing distance.
             foreach (var existing in GetComponents<AudioListener>()) DestroyImmediate(existing);
             listener = new GameObject("Gameplay audio listener", typeof(AudioListener)).transform;
@@ -69,14 +72,18 @@ namespace MadeInArizona
         {
             if (!Target || !view || !GameManager.Instance) return;
             bool garage = GameManager.Instance.State == GameState.Garage || GameManager.Instance.State == GameState.MainMenu;
+            int station = garage && GameManager.Instance.State == GameState.Garage && garageUi ? garageUi.GarageStation : 0;
+            bool motorPool = station == 1, dogView = station == 4;
+            if (dogView && !garageSuzuki) garageSuzuki = FindFirstObjectByType<SuzukiDog>();
             if (garage && !snap) OrbitGarage();
-            // In the garage the whole composition (camera offset and the framing shift that keeps the car to the right of
-            // the mission board) turns around the car, so it stays framed the same way from every side.
+            // The orbit and framing track the selected garage subject. The motor pool centers and enlarges the car;
+            // Suzuki's station follows her roaming path instead of leaving the camera aimed at the lift.
             Quaternion orbit = garage ? Quaternion.Euler(0, garageYaw, 0) : Quaternion.identity;
-            var offset = garage ? orbit * new Vector3(10, 9, -13) : new Vector3(0, 29, -28);
+            var offset = garage ? orbit * (dogView ? new Vector3(4, 3.6f, -5.5f) : new Vector3(10, 9, -13)) : new Vector3(0, 29, -28);
             if (!garage) offset = Sway(snap) * offset;
-            // Offset the garage composition so the car sits to the right of the mission board.
-            var focus = Target.position + (garage ? orbit * new Vector3(-3.8f, .4f, -2.6f) : Vector3.zero);
+            Transform subject = dogView && garageSuzuki ? garageSuzuki.transform : Target;
+            var composition = dogView ? new Vector3(-.4f, .7f, -.2f) : motorPool ? new Vector3(.45f, .4f, -.3f) : new Vector3(-1.5f, .4f, -1f);
+            var focus = subject.position + (garage ? orbit * composition : Vector3.zero);
             FocusPoint = focus; HasFocus = true;
             if (!garage) focus += Lead(snap);
             var desired = focus + offset;
@@ -90,6 +97,8 @@ namespace MadeInArizona
             view.nearClipPlane = perspective ? 1f : .2f;
             float zoom = Mathf.Clamp(DevTuning.Current.cameraZoom, 8f, 40f);
             float size = garage ? 10f * zoom / 21f : zoom;
+            if (motorPool) size *= .78f;
+            if (dogView) size *= .38f;
             // Preserve vertical play space at ultrawide and playable horizontal space at narrow aspects.
             size *= Mathf.Max(1, 1.55f / view.aspect);
             UpdateDynamicZoom(garage, perspective, snap, focus, rotation, size);

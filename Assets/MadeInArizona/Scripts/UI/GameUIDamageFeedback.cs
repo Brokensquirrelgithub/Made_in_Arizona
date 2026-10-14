@@ -144,10 +144,21 @@ namespace MadeInArizona
                 if(healed<.6f)fill=Color.Lerp(fill,new Color(.75f,1,.8f),(1-healed/.6f)*.5f);
                 Rect(cursor,y,segmentWidth*fraction,h,fill);
                 if(cursor>x)Rect(cursor,y,1,h,new Color(.06f,.09f,.1f));
-                if(segmentWidth>=30)
-                    Text(cursor,y+h+2,segmentWidth,13,HealthRules.Labels[index],9,
-                        index<=damage.FailedDepth&&index>0?Muted:Cream,true,TextAnchor.MiddleCenter);
                 cursor+=segmentWidth;
+            }
+            // A small segment cannot fit its own label. Give every present category an equal legend cell
+            // below the proportional bar, preserving the inside-out order without clipped names.
+            int count=0;
+            for(int index=5;index>=0;index--)
+                if(damage.SegmentMax((HealthCategory)index)>.001f)count++;
+            int cell=0;
+            for(int index=5;index>=0;index--)
+            {
+                if(damage.SegmentMax((HealthCategory)index)<=.001f)continue;
+                float cellWidth=w/Mathf.Max(1,count);
+                Text(x+cell*cellWidth,y+h+2,cellWidth,17,HealthRules.Labels[index],10,
+                    index<=damage.FailedDepth&&index>0?Muted:Cream,true,TextAnchor.MiddleCenter);
+                cell++;
             }
         }
 

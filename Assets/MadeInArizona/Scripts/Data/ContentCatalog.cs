@@ -192,10 +192,10 @@ namespace MadeInArizona
         {
             // Every weapon is bolted together from whatever was in the shed. Each has one job it does best and a
             // clear way to lose with it, in the spirit of Halo's sandbox. Garage weapons (scrap) have unlimited
-            // ammunition; field weapons come off wrecks with limited rounds. The ten oddballs splice two firing
+            // ammunition; field weapons come off wrecks with limited rounds. Oddballs splice two firing
             // modes together (see WeaponRules.Oddball).
             Weapons = new[] {
-                // ---- Garage arsenal ----
+                // ---- Core roles across garage and field ----
                 Weapon(0,"riveter","Chain-Fed Nail Gun","A framing nailer welded to a bicycle chain that feeds nails as fast as the pedals turn. Garage weapon; unlimited ammunition.",12,11,90,0,new Color(1,.79f,.2f),
                     "ALL-ROUNDER AUTOMATIC","Steady damage at any sensible range and it never runs dry.","Low damage per nail; the chain spreads its aim at long range."),
                 Weapon(1,"invoice","Tailpipe Bazooka","A muffler, a road flare and far too much black powder. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f),
@@ -222,7 +222,7 @@ namespace MadeInArizona
                     "PIERCING FAN","Blades pass through the first car and keep cutting.","Short reach and light damage per blade."),
                 Weapon(12,"pothole","Tennis-Ball Mortar","A welded stack of beer cans lobbing charges that bounce once before they go off.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f),
                     "INDIRECT FIRE","Arcs over cover and bounces into hiding spots.","Small blast and slow shells; hopeless against fast movers."),
-                Weapon(13,"needler","Cactus-Spine Needler","A saguaro rib packed into a leaf-spring launcher. Spines curve after cars; seven stuck spines rupture together.",6,8,58,0,new Color(.95f,.36f,.78f),
+                Weapon(13,"needler","Cactus-Spine Needler","A saguaro rib packed into a leaf-spring launcher. Spines curve after cars; seven stuck spines rupture together.",6,8,58,0,new Color(.28f,1f,.12f),
                     "TRACKING / SUPERCOMBINE","Spines chase moving cars; seven hits set off a big rupture.","Slow spines, weak until they stack, and cover eats them."),
                 Weapon(14,"zapper","Jumper-Cable Zapper","Two car batteries and a pair of jumper cables. Each bolt stalls an engine and arcs to two more cars.",9,3,110,0,new Color(.45f,.85f,1),
                     "ENGINE KILLER","Stalls engines and guns; arcs through a pack.","Barely scratches the paint on its own."),

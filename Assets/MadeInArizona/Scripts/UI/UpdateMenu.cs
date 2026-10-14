@@ -8,6 +8,7 @@ namespace MadeInArizona
         bool updatesMenu;
         int updateSelection = -1;
         Vector2 updateScroll;
+        Vector2 updateDetailsScroll;
 
         public void OpenUpdates()
         {
@@ -60,7 +61,8 @@ namespace MadeInArizona
                 var build = builds[i];
                 string marker = updater.IsCurrent(build) ? "   •   INSTALLED" : i == 0 ? "   •   NEWEST" : "";
                 string label = build.ShortCommit + "   " + GameUpdater.ShortDate(build.published) + marker + "\n" + Clip(FirstLine(build.message.Length > 0 ? build.message : build.title), 62);
-                if (Button(0, i * 78, listW - 44, 68, label, updateSelection == i)) updateSelection = i;
+                if (Button(0, i * 78, listW - 44, 68, label, updateSelection == i))
+                { updateSelection = i; updateDetailsScroll = Vector2.zero; }
             }
             GUI.EndScrollView();
 
@@ -75,9 +77,15 @@ namespace MadeInArizona
             var selected = builds[updateSelection];
             Text(dx, listY, dw, 34, "BUILD " + selected.ShortCommit, 26, Cream, true);
             Text(dx, listY + 38, dw, 22, "Published " + GameUpdater.ShortDate(selected.published) + (selected.size > 0 ? "   •   " + GameUpdater.Megabytes(selected.size) : ""), 14, Muted);
-            Text(dx, listY + 70, dw, 200, selected.message.Length > 0 ? selected.message : selected.title, 15, Cream);
-
             float by = listY + listH - 160;
+            string notes = selected.message.Length > 0 ? selected.message : selected.title;
+            float notesY = listY + 70, notesHeight = Mathf.Max(44, by - notesY - 12);
+            float notesWidth = dw - 26;
+            float contentHeight = Mathf.Max(notesHeight, Style(15, Cream).CalcHeight(new GUIContent(notes), notesWidth) + 12);
+            updateDetailsScroll = GUI.BeginScrollView(new Rect(dx, notesY, dw, notesHeight),
+                updateDetailsScroll, new Rect(0, 0, dw - 16, contentHeight));
+            Text(0, 0, notesWidth, contentHeight, notes, 15, Cream);
+            GUI.EndScrollView();
             string blocker = updater.InstallBlocker;
             if (updater.IsCurrent(selected)) { Text(dx, by + 40, dw, 40, "This is the build you are running.", 16, Lime, true); return; }
             if (updater.State == GameUpdater.Phase.Downloading && updater.Target == selected)

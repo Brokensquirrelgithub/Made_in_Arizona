@@ -13,6 +13,11 @@ namespace MadeInArizona
         static readonly float[] FiveManual = { 3.42f, 2.05f, 1.45f, 1.08f, .81f };
         static readonly float[] SixRace = { 3.10f, 2.13f, 1.62f, 1.31f, 1.07f, .86f };
         static readonly float[] SixDiesel = { 3.80f, 2.55f, 1.78f, 1.32f, 1f, .76f };
+        // Keep the pre-transmission-update wheel-force curve. Vehicle-specific ratios shape the tachometer
+        // and shift sound; changing their gear count must not quietly reduce stock acceleration.
+        static readonly float[] DriveRatios = { 3.5f, 2.25f, 1.55f, 1.12f, .86f, .68f };
+
+        public static float DriveRatio(int gear) => DriveRatios[Mathf.Clamp(gear - 1, 0, DriveRatios.Length - 1)];
 
         public static float[] ForVehicle(string id)
         {

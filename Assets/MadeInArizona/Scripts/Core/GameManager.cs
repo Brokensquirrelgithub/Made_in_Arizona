@@ -227,10 +227,6 @@ namespace MadeInArizona
         {
             int index = Mathf.Clamp(Save.selectedVehicle, 0, ContentCatalog.Vehicles.Length - 1);
             var def = ContentCatalog.Vehicles[index];
-            if (!garage && !IsCombatTrial) {
-                string forced = ContentCatalog.Missions[SelectedMission].forcedVehicle;
-                if (!string.IsNullOrEmpty(forced)) def = Array.Find(ContentCatalog.Vehicles, v => v.id == forced) ?? def;
-            }
             CurrentVehicle = def;
             var obj = new GameObject(def.displayName + " • Player");
             obj.transform.SetParent(World.transform);

@@ -36,6 +36,8 @@ namespace MadeInArizona
             var game = GameManager.Instance;
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDisplayReticleTest")>=0)
             { yield return TestDisplayAndReticle(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponDropTest")>=0)
+            { TestWeaponDropsAndBazookaCone(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTransmissionProgressTest")>=0)
             { yield return TestTransmissionAndProgressReset(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaShadowFilterTest")>=0)
@@ -2327,6 +2329,14 @@ namespace MadeInArizona
                 for(int gear=1;gear<ratios.Length;gear++)valid&=ratios[gear]<ratios[gear-1];
             }
             Check("all twenty-two vehicles have ordered, period-appropriate forward gears",valid);
+            Check("gear profiles leave the original mechanical acceleration curve intact",
+                Mathf.Approximately(TransmissionProfiles.DriveRatio(1),3.5f) &&
+                Mathf.Approximately(TransmissionProfiles.DriveRatio(4),1.12f) &&
+                Mathf.Approximately(TransmissionProfiles.DriveRatio(6),.68f));
+            Check("upshift sound lifts throttle, holds overrun, then restores it",
+                Mathf.Approximately(VehicleController.ShiftSoundEnvelope(0),1f) &&
+                VehicleController.ShiftSoundEnvelope(VehicleController.UpshiftDuration-.10f)<.1f &&
+                VehicleController.ShiftSoundEnvelope(.05f)>.5f);
             var shift=Array.Find(vehicles,v=>v.id=="shift");
             var stock=VehicleStats.From(shift);
             Check("stock power and road-speed boost reaches the unmodified Shift",
@@ -2385,6 +2395,13 @@ namespace MadeInArizona
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());InputSystem.RemoveDevice(keyboard);
             WorldBuilder.SurfaceOverride=null;
             Destroy(deck);
+
+            game.ReturnToGarage();
+            game.Save.unlockedMission=5;
+            game.Save.selectedVehicle=Array.FindIndex(vehicles,v=>v.id=="scarface");
+            game.StartMission(5);
+            Check("mountain mission keeps the selected Scarface instead of substituting Shift",
+                game.Player && game.Player.Definition.id=="scarface" && game.CurrentVehicle.id=="scarface");
 
             game.ShowMainMenu();
             game.Save.money=4210;game.Save.salvage=325;game.Save.unlockedMission=3;
@@ -2680,6 +2697,51 @@ namespace MadeInArizona
             Destroy(texture);return total/Mathf.Max(1,count);
         }
         void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); if (!passed) fixtureTrace.Add("MIA_SMOKE_FAIL_AT " + name); }
+        void TestWeaponDropsAndBazookaCone()
+        {
+            string[] moved = { "scattermortar", "crossbow", "deathray", "harpoon", "aircannon", "torch", "boomerang" };
+            var available = new HashSet<string>();
+            bool validDrops = true;
+            for (int faction = 0; faction < FactionRules.Count; faction++)
+                for (int archetype = 0; archetype <= 7; archetype++)
+                    for (int roll = 0; roll < 100; roll++)
+                    {
+                        string id = WeaponRules.EnemyDropForRoll((EnemyFaction)faction, archetype, roll / 100f);
+                        available.Add(id);
+                        validDrops &= WeaponRules.Find(id) && !WeaponRules.GarageWeapon(id) &&
+                            WeaponRules.PickupAmmo(id) > 0 && WeaponRules.MaxAmmo(id) >= WeaponRules.PickupAmmo(id);
+                    }
+            Check("all enemy drops have a field weapon and usable ammo", validDrops);
+            Check("all seven moved weapons are reachable faction drops", moved.All(available.Contains));
+            Check("moved weapons are absent from the garage", moved.All(id => !WeaponRules.GarageWeapon(id) && WeaponRules.ScrapCost(id) == 0));
+            var legacySave = new SaveData { salvage = 9, selectedWeapon = "deathray" };
+            legacySave.ownedWeapons.Add("deathray"); legacySave.ownedWeapons.Add("crossbow");
+            legacySave.Normalize();
+            Check("owned weapons moved to drops refund scrap and unequip safely",
+                legacySave.salvage == 649 && legacySave.selectedWeapon == "riveter" &&
+                !legacySave.ownedWeapons.Contains("deathray") && !legacySave.ownedWeapons.Contains("crossbow"));
+            legacySave.Normalize();
+            Check("field weapon refund is applied only once", legacySave.salvage == 649);
+            Check("special drops follow faction roles",
+                WeaponRules.EnemyDropForRoll(EnemyFaction.Sunsprawl, 3, 0) == "crossbow" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.CourtesyCompliance, 3, 0) == "scattermortar" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.RoadScavengers, 1, 0) == "torch" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.RoadScavengers, 3, 0) == "boomerang" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.OpenHouseRealty, 3, 0) == "harpoon" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.SnowbirdConvoy, 3, 0) == "aircannon" &&
+                WeaponRules.EnemyDropForRoll(EnemyFaction.CarOtaku, 3, 0) == "deathray");
+            float oldWidth = 20f * Mathf.Sin(45f * Mathf.Deg2Rad);
+            float newWidth = 2f * ExplosionSystem.BazookaConeLength(10f) * Mathf.Sin(ExplosionSystem.BazookaConeHalfAngle * Mathf.Deg2Rad);
+            Check("bazooka cone has triple reach and half the old tip width",
+                Mathf.Approximately(ExplosionSystem.BazookaConeLength(10f), 30f) && Mathf.Abs(newWidth - oldWidth * .5f) < .001f);
+            Check("bazooka cone includes distant center hits and rejects wide or overlong hits",
+                ExplosionSystem.WithinBazookaCone(new Vector3(3, 0, 29), Vector3.forward, 10) &&
+                !ExplosionSystem.WithinBazookaCone(new Vector3(5, 0, 29), Vector3.forward, 10) &&
+                !ExplosionSystem.WithinBazookaCone(new Vector3(0, 0, 31), Vector3.forward, 10));
+            var needler=WeaponRules.Find("needler");
+            Check("needler projectiles use the green light tint",needler &&
+                needler.projectileColor.g>.9f && needler.projectileColor.r<.4f && needler.projectileColor.b<.3f);
+        }
         /// <summary>Samples the mission fixture every 0.25 s; printed with the results only when a check fails.</summary>
         IEnumerator TraceFixture()
         {

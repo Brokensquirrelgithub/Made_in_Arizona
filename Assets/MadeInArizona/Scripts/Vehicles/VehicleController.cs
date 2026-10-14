@@ -101,9 +101,9 @@ namespace MadeInArizona
             : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
-        /// <summary>Engine load dips briefly as the automatic changes gear.</summary>
-        public float EngineLoad => Throttle * ShiftDrive;
-        /// <summary>The throttle actually used for wheel drive, including steering alignment, drift and shift cuts.</summary>
+        /// <summary>Audible throttle lift while the automatic disengages and reconnects its clutch.</summary>
+        public float EngineLoad => Throttle * ShiftSoundLoad;
+        /// <summary>Engine load used by the physical sound voice, including steering alignment and clutch lift.</summary>
         public float AppliedEngineLoad { get; private set; }
         /// <summary>At least one wheel or the belly can transmit drive to the ground.</summary>
         public bool HasDriveContact => Grounded || Beached || wheelContacts > 0;
@@ -208,8 +208,21 @@ namespace MadeInArizona
         public const float SoftTopSpeedExtension = .2f;
         float upshiftRemaining;
         float gearHoldRemaining;
-        float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.35f, 1f,
-            Mathf.SmoothStep(0f, 1f, 1f - upshiftRemaining / UpshiftDuration)) : 1f;
+        // Same integrated drive loss as the original 0.18 s / 0.62-to-1 shift, spread across the
+        // more audible 0.34 s change. Acceleration remains close to the pre-gear-profile handling.
+        float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.8f, 1f,
+            Mathf.Clamp01(1f - upshiftRemaining / UpshiftDuration)) : 1f;
+        // Sound alone performs a real lift / clutch / throttle return. Hold overrun long enough to hear
+        // the new, lower gear RPM before the intake and exhaust return to their on-load character.
+        public static float ShiftSoundEnvelope(float remaining)
+        {
+            if (remaining <= 0) return 1f;
+            float elapsed = Mathf.Clamp01(1f - remaining / UpshiftDuration) * UpshiftDuration;
+            if (elapsed < .045f) return Mathf.Lerp(1f, .04f, elapsed / .045f);
+            if (elapsed < .20f) return .04f;
+            return Mathf.Lerp(.04f, 1f, (elapsed - .20f) / (UpshiftDuration - .20f));
+        }
+        float ShiftSoundLoad => ShiftSoundEnvelope(upshiftRemaining);
         bool initialized;
         const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
 
@@ -470,9 +483,10 @@ namespace MadeInArizona
                     driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                 }
                 RPM = Mathf.Clamp(RPM, 850, 7200);
-                AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftDrive);
+                AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftSoundLoad);
                 float torqueCurve = .62f + .38f * Mathf.Sin(Mathf.Clamp01((RPM - 800) / 7000) * Mathf.PI);
-                float wheelForce = Stats.torque * torqueCurve * driveRatio / .34f;
+                float wheelForce = Stats.torque * torqueCurve *
+                    (TransmissionProfiles.DriveRatio(Gear) * Mathf.Max(2.5f, Stats.finalDrive)) / .34f;
                 float powerForce = Mathf.Max(40, Stats.horsepower) * 745.7f / Mathf.Max(7, speed);
                 float acceleration = Mathf.Clamp(Mathf.Min(wheelForce, powerForce) / Body.mass * 2.65f, 3.2f, 27);
                 // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel

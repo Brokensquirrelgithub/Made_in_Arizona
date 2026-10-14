@@ -45,6 +45,19 @@ namespace MadeInArizona
         int DebrisLimit => quality == 0 ? 20 : quality == 1 ? 80 : quality == 2 ? 220 : 640;
         public int ActiveDebris => fragments.Count;
         public int QueuedExplosions => queued.Count;
+        internal const float BazookaConeLengthScale = 3f;
+        // The old 90-degree sector had a tip width of 2 * radius * sin(45°).
+        // Keep half that world-space width while extending the radial reach threefold.
+        internal static readonly float BazookaConeHalfAngle = Mathf.Asin(Mathf.Sin(45f * Mathf.Deg2Rad) / (2f * BazookaConeLengthScale)) * Mathf.Rad2Deg;
+        internal static float BazookaConeLength(float radius) => radius * BazookaConeLengthScale;
+        internal static bool WithinBazookaCone(Vector3 delta, Vector3 direction, float radius)
+        {
+            float length = BazookaConeLength(radius);
+            if (delta.sqrMagnitude > length * length) return false;
+            delta.y = 0;
+            return delta.sqrMagnitude <= .04f ||
+                Vector3.Dot(delta.normalized, direction) >= Mathf.Cos(BazookaConeHalfAngle * Mathf.Deg2Rad);
+        }
 
         public static void IgnoreVehicleCollisions(VehicleController vehicle)
         {
@@ -180,7 +193,7 @@ namespace MadeInArizona
             var system = Get();
             if (system.queued.Count < 256) system.queued.Enqueue(new Blast { point = position, radius = Mathf.Clamp(radius, 1, 36), damage = damage, source = source, kind = kind, environmental = environmental, falloffPower = falloffPower });
         }
-        /// <summary>Forward 90-degree bazooka blast. Radius is measured from the impact to the cone tip.</summary>
+        /// <summary>Forward bazooka blast, three times the old reach and half the old width at its tip.</summary>
         public static void DetonateCone(Vector3 position, Vector3 direction, float radius, float damage, GameObject source)
         {
             var system = Get();
@@ -367,6 +380,7 @@ namespace MadeInArizona
         void Perform(Blast blast)
         {
             float radius = blast.radius;
+            float reach = blast.cone ? BazookaConeLength(radius) : radius;
             float visualRadius = blast.cone ? radius * .55f : radius;
             Color flame = new Color(1.6f, .56f, .08f, .9f);
             Color dust = new Color(.35f, .27f, .2f, .58f);
@@ -437,14 +451,14 @@ namespace MadeInArizona
                 // Trace both edges and the centre so the damaging footprint reads from the overhead camera.
                 for (int row = 1; row <= 5; row++) for (int lane = -2; lane <= 2; lane++)
                 {
-                    float reach = radius * row / 5f;
-                    Vector3 ray = Quaternion.AngleAxis(lane * 22.5f, Vector3.up) * blast.direction;
-                    Vector3 at = blast.point + ray * reach + Vector3.up * .35f;
+                    float rowReach = reach * row / 5f;
+                    Vector3 ray = Quaternion.AngleAxis(lane * BazookaConeHalfAngle * .5f, Vector3.up) * blast.direction;
+                    Vector3 at = blast.point + ray * rowReach + Vector3.up * .35f;
                     Burst(at, lane == 0 ? new Color(1, .38f, .08f, .8f) : new Color(.65f, .43f, .22f, .7f), Mathf.RoundToInt(3*dustAmount), 1.4f + row * .4f);
                 }
             }
             MakeScorch(blast.point, radius * (blast.cone ? .18f : .5f));
-            if (blast.cone) MakeScorch(blast.point + blast.direction * radius * .48f, radius * .16f);
+            if (blast.cone) MakeScorch(blast.point + blast.direction * reach * .48f, radius * .16f);
             else if (quality > 0 && radius >= 7f)
             {
                 for (int mark = 0; mark < Mathf.Min(3, 1 + quality); mark++)
@@ -468,7 +482,7 @@ namespace MadeInArizona
                     fragment.body.AddExplosionForce(radius * 22 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
             if (CoopSession.IsRemoteClient) return; // network explosions are visual; the host applies all damage and forces
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
-            int count = Physics.OverlapSphereNonAlloc(blast.point, radius, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            int count = Physics.OverlapSphereNonAlloc(blast.point, reach, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
             {
                 var collider = overlaps[i]; if (collider == null) continue;
@@ -476,12 +490,8 @@ namespace MadeInArizona
                 // Their overlap is already confirmed; use bounds for the distance estimate.
                 Vector3 point = collider is MeshCollider meshCollider&&!meshCollider.convex
                     ? collider.bounds.ClosestPoint(blast.point) : collider.ClosestPoint(blast.point);
-                if (blast.cone)
-                {
-                    Vector3 toward = point - blast.point; toward.y = 0;
-                    if (toward.sqrMagnitude > .04f && Vector3.Dot(toward.normalized, blast.direction) < .7071068f) continue;
-                }
-                float remaining = 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / radius);
+                if (blast.cone && !WithinBazookaCone(point - blast.point, blast.direction, radius)) continue;
+                float remaining = 1 - Mathf.Clamp01(Vector3.Distance(point, blast.point) / reach);
                 float falloff = blast.falloffPower > 0 ? Mathf.Pow(remaining, blast.falloffPower) : Mathf.Lerp(.15f, 1, remaining);
                 var weakpoint = collider.GetComponentInParent<BossWeakPoint>();
                 if (weakpoint != null && damagedPoints.Add(weakpoint)) weakpoint.ApplyDamage(blast.damage * falloff * .6f, point, blast.source, true);
@@ -494,7 +504,7 @@ namespace MadeInArizona
                 var prop = collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && damagedProps.Add(prop)) prop.ApplyDamage(blast.damage * falloff, point, blast.source, BlastPush(prop, blast.point, falloff)*forceAmount);
                 var body = collider.attachedRigidbody;
-                if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
+                if (body != null && !body.isKinematic && pushed.Add(body)) body.AddExplosionForce(radius * 390 * forceAmount, blast.point, reach, radius * .18f * forceAmount, ForceMode.Impulse);
             }
         }
         void StartGroundFire(Vector3 point, float radius, bool fuel, float fireAmount)
@@ -692,17 +702,18 @@ namespace MadeInArizona
                 cones.Add(cone);
             }
             if (cone == null) return;
+            float reach = BazookaConeLength(radius);
             Vector3 origin = GroundPoint(point, radius, out _) + Vector3.up * .23f;
             cone.outline.SetPosition(0, origin);
             for (int i = 0; i <= 13; i++)
             {
-                Vector3 radial = Quaternion.AngleAxis(-45f + 90f * i / 13f, Vector3.up) * direction;
-                cone.outline.SetPosition(i + 1, GroundPoint(point + radial * radius, radius, out _) + Vector3.up * .23f);
+                Vector3 radial = Quaternion.AngleAxis(-BazookaConeHalfAngle + 2f * BazookaConeHalfAngle * i / 13f, Vector3.up) * direction;
+                cone.outline.SetPosition(i + 1, GroundPoint(point + radial * reach, reach, out _) + Vector3.up * .23f);
             }
             cone.outline.SetPosition(15, origin);
             cone.innerLeft.SetPosition(0, origin); cone.innerRight.SetPosition(0, origin);
-            cone.innerLeft.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(-20, Vector3.up) * direction * radius * .9f, radius, out _) + Vector3.up * .24f);
-            cone.innerRight.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(20, Vector3.up) * direction * radius * .9f, radius, out _) + Vector3.up * .24f);
+            cone.innerLeft.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(-BazookaConeHalfAngle * .45f, Vector3.up) * direction * reach * .9f, reach, out _) + Vector3.up * .24f);
+            cone.innerRight.SetPosition(1, GroundPoint(point + Quaternion.AngleAxis(BazookaConeHalfAngle * .45f, Vector3.up) * direction * reach * .9f, reach, out _) + Vector3.up * .24f);
             cone.color = new Color(2.4f, .85f, .2f, .85f);
             cone.start = Time.time; cone.until = Time.time + .72f;
             cone.outline.enabled = cone.innerLeft.enabled = cone.innerRight.enabled = true;

@@ -24,7 +24,7 @@ MonoBehaviour:
   fireRate: 8
   speed: 58
   blastRadius: 0
-  projectileColor: {r: 0.95, g: 0.36, b: 0.78, a: 1}
+  projectileColor: {r: 0.28, g: 1, b: 0.12, a: 1}
   fireSounds:
   - {fileID: 8300000, guid: 74fd11f66ca8110418be57a810d2fad8, type: 3}
   - {fileID: 8300000, guid: 76cfb7f0b7f354545b18c07b7d0bff61, type: 3}

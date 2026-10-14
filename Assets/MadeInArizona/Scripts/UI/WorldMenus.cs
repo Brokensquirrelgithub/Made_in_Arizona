@@ -6,6 +6,7 @@ namespace MadeInArizona
     {
         bool worldMap;
         bool resetProgressPending;
+        Vector2 mainMenuScroll;
         string resetProgressError;
         string worldSeed;
         float worldSize;
@@ -26,7 +27,10 @@ namespace MadeInArizona
         void DrawMainMenu()
         {
             Rect(0,0,width,height,new Color(.025f,.04f,.045f,.85f));
-            float x=width*.08f,y=height*.13f;
+            float contentHeight=Mathf.Max(900,height);
+            mainMenuScroll=GUI.BeginScrollView(new Rect(0,0,width,height),mainMenuScroll,
+                new Rect(0,0,width,contentHeight),false,contentHeight>height);
+            float x=width*.08f,y=contentHeight*.13f;
             Text(x,y,800,75,"MADE IN ARIZONA",54,Cream,true);
             Text(x,y+83,690,70,"A repair shop. A new field mechanic. An entire state of bad decisions.",24,Muted);
             float panelW=Mathf.Min(740,width-x-40);
@@ -50,8 +54,9 @@ namespace MadeInArizona
             { resetProgressPending=true; resetProgressError=null; }
             Text(x+260,y+573,panelW-285,35,"Erase campaign progress. Keeps normal settings and controls.",13,Muted);
             DrawUpdateEntry(x,y+640,panelW);
-            Text(x,height-65,width-x-40,40,"JSON world editing: "+WorldConfigStore.Path,12,Muted);
-            if(WorldConfigStore.LastError!=null)Text(x,height-105,width-x-40,35,WorldConfigStore.LastError,14,Orange);
+            Text(x,contentHeight-65,width-x-40,40,"JSON world editing: "+WorldConfigStore.Path,12,Muted);
+            if(WorldConfigStore.LastError!=null)Text(x,contentHeight-105,width-x-40,35,WorldConfigStore.LastError,14,Orange);
+            GUI.EndScrollView();
         }
         void DrawResetProgressConfirmation()
         {

@@ -191,7 +191,8 @@ namespace MadeInArizona
             if(firing<=rates[0])position=0;
             else if(firing>=rates[rates.Length-1])position=rates.Length-1;
             else for(int i=0;i<rates.Length-1;i++)if(firing<rates[i+1]){position=i+Mathf.InverseLerp(Mathf.Log(rates[i],2),Mathf.Log(rates[i+1],2),octave);break;}
-            loadMix=Mathf.MoveTowards(loadMix,Mathf.Clamp01(load*1.4f),Time.unscaledDeltaTime*(load>loadMix?6f:3.5f));
+            // The clutch lift is brief: follow falling load promptly so the overrun bank can actually be heard.
+            loadMix=Mathf.MoveTowards(loadMix,Mathf.Clamp01(load*1.4f),Time.unscaledDeltaTime*(load>loadMix?9f:14f));
             float onGain=Mathf.Sin(loadMix*Mathf.PI*.5f),offGain=Mathf.Cos(loadMix*Mathf.PI*.5f);
             // Louder and meatier under load; the overrun layer keeps a lighter burble between shifts.
             float level=presence*gain*(.13f+.21f*loadMix+.08f*rpm);
@@ -240,7 +241,7 @@ namespace MadeInArizona
             {charge=legacyLoad;freeRev=0;soundRpm=rpm;soundLoad=legacyLoad;return;}
             // The game's applied throttle is a charge proxy. A short intake filling lag rounds out pedal changes
             // before the audio thread's own click-prevention smoothing, without adding per-sample DSP work.
-            charge+= (Mathf.Clamp01(appliedLoad)-charge)*(1-Mathf.Exp(-Mathf.Max(0,dt)*12f));
+            charge+= (Mathf.Clamp01(appliedLoad)-charge)*(1-Mathf.Exp(-Mathf.Max(0,dt)*(shifting?26f:12f)));
             // Wheelspin and loss of drive contact let the engine rev above wheel-derived RPM. They alter pitch,
             // while cylinder charge remains governed by throttle; low vehicle acceleration is not low engine load.
             float loose=shifting?0:Mathf.Max(Mathf.Clamp01(wheelSpin)*.7f,hasContact?0:.65f)*Mathf.Clamp01(charge);

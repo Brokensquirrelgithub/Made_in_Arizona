@@ -37,6 +37,8 @@ namespace MadeInArizona
             public Transform transform;
             public Renderer renderer;
             public TrailRenderer trail;
+            public Light spineLight;
+            public bool litSpine;
             public Transform hubcap;
             public Renderer hubcapRenderer;
             public Renderer[] hubcapSpokes;
@@ -72,6 +74,8 @@ namespace MadeInArizona
             remove { CombatFeedback.KillConfirmed -= value; }
         }
         const int Maximum = 320;
+        const int MaximumSpineLights = 8;
+        int activeSpineLights;
 
         static ProjectileSystem Get()
         {
@@ -126,6 +130,22 @@ namespace MadeInArizona
             round.speed = speed; round.damage = damage; round.radius = radius; round.source = source;
             round.color = color; round.kind = kind; round.remaining = lifetime; round.trailAt = 0; round.born = Time.time;
             round.fx = fx; round.returning = false; round.returnAt = 0; round.struck.Clear();
+            // The co-op projectile packet carries color but not ShotFx; recognise the needler tint on guests too.
+            bool spine = fx != null && fx.effect == ShotEffect.Spine ||
+                kind == ExplosionKind.Ammunition && color.g > .9f && color.r < .4f && color.b < .3f;
+            round.litSpine = spine && activeSpineLights < MaximumSpineLights;
+            if (round.litSpine)
+            {
+                if (!round.spineLight) round.spineLight = round.view.AddComponent<Light>();
+                round.spineLight.type = LightType.Point;
+                round.spineLight.color = new Color(.28f, 1f, .12f);
+                round.spineLight.range = 4.5f;
+                round.spineLight.intensity = 2.6f;
+                round.spineLight.shadows = LightShadows.None;
+                round.spineLight.enabled = true;
+                activeSpineLights++;
+            }
+            else if (round.spineLight) round.spineLight.enabled = false;
             var vehicle = source != null ? source.GetComponentInParent<VehicleController>() : null;
             var ai = vehicle != null ? vehicle.GetComponent<EnemyAI>() : null;
             round.friendly = vehicle != null && (vehicle.IsPlayer || (ai != null && ai.IsFriendly));
@@ -471,7 +491,10 @@ namespace MadeInArizona
 
         void Retire(int index)
         {
-            var round = active[index]; round.trail.Clear(); round.view.SetActive(false); round.source = null; round.fx = null; round.struck.Clear();
+            var round = active[index];
+            if (round.litSpine) { activeSpineLights--; round.litSpine = false; }
+            if (round.spineLight) round.spineLight.enabled = false;
+            round.trail.Clear(); round.view.SetActive(false); round.source = null; round.fx = null; round.struck.Clear();
             pool.Push(round); active.RemoveAt(index);
         }
         void OnDestroy() { if (instance == this) instance = null; if (material != null) Destroy(material); }

@@ -35,11 +35,11 @@ namespace MadeInArizona
                     "Bea: The fob opens the cooling-grid control network. Suzuki has also opened someone's lunch. Both are time-sensitive.",
                     "Johnny: We know their plan now. They will meter shade, cooling and road access as one subscription. Suzuki has requested a biscuit.",
                     "Recover 2 roadside salvage caches",OptionalKind.Salvage,2),
-                Mission(5,"climb","6. Wrong Car, Right Mountain","Juniper Switchbacks",MissionMode.Race,1500,6,4,220,
-                    "Drive the tiny Shift through four mountain checkpoints before the financing beacon expires. Your selected compatible upgrades carry over.",
-                    "Ellis: The narrow gate only admits the hatchback.|Johnny: Of course the road to the radio tower was designed by someone with a golf cart.",
+                Mission(5,"climb","6. Wrong Road, Right Mountain","Juniper Switchbacks",MissionMode.Race,1500,6,4,220,
+                    "Drive your selected car through four mountain checkpoints before the financing beacon expires. Your compatible upgrades carry over.",
+                    "Ellis: The mountain road is narrow. Choose your line carefully.|Johnny: Of course the road to the radio tower was designed by someone with a golf cart.",
                     "Bea: Second gear, steady throttle. You do not need boost here. Please record that I said this voluntarily.",
-                    "Ellis: We reached the tower. The hatchback has earned a mountain certification. The paperwork is a dent shaped like a rock.",
+                    "Ellis: We reached the tower. The fleet has earned a mountain certification. The paperwork is a dent shaped like a rock.",
                     "Finish in under 160 seconds",OptionalKind.Time,160),
                 Mission(6,"wash","7. Customer States: Slight Flood","Tin Cup Wash",MissionMode.Escape,1650,7,4,190,
                     "A flash flood is entering the wash. Follow four marked high-ground checkpoints and extract before the channel fills. Corporate patrols are still attempting a traffic stop.",
@@ -96,7 +96,6 @@ namespace MadeInArizona
                     "Johnny: Grid returned. Debts voided. Original invoice paid. Suzuki gets the employee parking space.|Stallion: And the one hundred seventy-three dollars?|Johnny: Shop supplies.",
                     "Finish with at least 50% chassis health",OptionalKind.Health,.5f)
             };
-            Missions[5].forcedVehicle = "shift";
             Missions[7].objectiveDuration = 54; Missions[13].objectiveDuration = 66;
         }
         static MissionDefinition Mission(int i,string id,string title,string region,MissionMode mode,int reward,int enemies,int targets,float time,string brief,string opening,string midpoint,string closing,string optional,OptionalKind kind,float threshold)

@@ -7,8 +7,8 @@ namespace MadeInArizona
     {
         /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
-            "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "torch", "railgun", "aircannon",
-            "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
+            "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "railgun",
+            "sprinkler", "pinata", "shopvac", "bowling", "firecracker", "sentry" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
         static readonly string[] Oddballs = { "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
@@ -23,22 +23,28 @@ namespace MadeInArizona
                 case "shredder": return 140;
                 case "pothole": return 180;
                 case "carbine": return 200;
-                case "aircannon": return 200;
                 case "zapper": return 220;
                 case "needler": return 240;
-                case "boomerang": return 240;
-                case "torch": return 260;
                 case "bowling": return 260;
-                case "harpoon": return 260;
-                case "crossbow": return 280;
                 case "sprinkler": return 300;
                 case "firecracker": return 300;
                 case "railgun": return 320;
                 case "pinata": return 340;
-                case "deathray": return 360;
                 case "shopvac": return 380;
                 case "sentry": return 400;
-                case "scattermortar": return 360;
+                default: return 0;
+            }
+        }
+        /// <summary>One-time save migration refund for weapons that moved from the scrap garage to field drops.</summary>
+        internal static int RetiredGarageRefund(string id)
+        {
+            switch (id)
+            {
+                case "scattermortar": case "deathray": return 360;
+                case "crossbow": return 280;
+                case "harpoon": case "torch": return 260;
+                case "aircannon": return 200;
+                case "boomerang": return 240;
                 default: return 0;
             }
         }
@@ -80,6 +86,12 @@ namespace MadeInArizona
                 case "mortar": return new Vector2Int(3, 6);
                 case "cluster": return new Vector2Int(3, 6);
                 case "scattermortar": return new Vector2Int(4, 8);
+                case "crossbow": return new Vector2Int(5, 10);
+                case "deathray": return new Vector2Int(60, 120); // 12 damage ticks/s: five seconds per drop
+                case "harpoon": return new Vector2Int(4, 8);
+                case "aircannon": return new Vector2Int(10, 20);
+                case "torch": return new Vector2Int(70, 140); // 14 flame shots/s: five seconds per drop
+                case "boomerang": return new Vector2Int(8, 16);
                 default: return new Vector2Int(0, 0);
             }
         }
@@ -89,38 +101,41 @@ namespace MadeInArizona
             foreach (var weapon in ContentCatalog.Weapons) if (weapon && weapon.id == id) return weapon;
             return null;
         }
-        public static string EnemyDrop(EnemyFaction faction, int archetype)
+        public static string EnemyDrop(EnemyFaction faction, int archetype) => EnemyDropForRoll(faction, archetype, Random.value);
+        /// <summary>One roll per wreck makes every branch testable and preserves faction-specific drop odds.</summary>
+        internal static string EnemyDropForRoll(EnemyFaction faction, int archetype, float roll)
         {
             if (faction == EnemyFaction.CourtesyCompliance)
             {
-                if (archetype == 3 || archetype == 7) return Random.value < .18f ? "scattermortar" : Random.value < .28f ? "mortar" : "grenade";
-                return archetype == 1 || archetype == 4 ? (Random.value < .6f ? "grenade" : "gokart") : "gokart";
+                if (archetype == 3 || archetype == 7) return roll < .22f ? "scattermortar" : roll < .44f ? "mortar" : "grenade";
+                return archetype == 1 || archetype == 4 ? (roll < .6f ? "grenade" : "gokart") : "gokart";
             }
             if (faction == EnemyFaction.RoadScavengers)
             {
                 if (archetype == 0 || archetype == 3 || archetype == 6 || archetype == 7)
-                    return Random.value < .68f ? "minigun" : "boomstick";
-                return archetype == 4 ? "grenade" : "boomstick";
+                    return roll < .18f ? "boomerang" : roll < .68f ? "minigun" : "boomstick";
+                if (archetype == 4) return roll < .28f ? "torch" : roll < .48f ? "grenade" : "boomstick";
+                return roll < .28f ? "torch" : "boomstick";
             }
             if (faction == EnemyFaction.OpenHouseRealty)
             {
                 if (archetype == 3 || archetype == 4 || archetype == 7)
-                    return Random.value < .22f ? "cluster" : "invoice";
-                return Random.value < .55f ? "gokart" : "grenade";
+                    return roll < .2f ? "harpoon" : roll < .38f ? "cluster" : "invoice";
+                return roll < .55f ? "gokart" : "grenade";
             }
             if (faction == EnemyFaction.SnowbirdConvoy)
             {
-                if (archetype == 3 || archetype == 7) return Random.value < .22f ? "minigun" : "gokart";
-                return Random.value < .72f ? "gokart" : "boomstick";
+                if (archetype == 3 || archetype == 7) return roll < .28f ? "aircannon" : roll < .46f ? "minigun" : "gokart";
+                return roll < .2f ? "aircannon" : roll < .72f ? "gokart" : "boomstick";
             }
             if (faction == EnemyFaction.CarOtaku)
             {
-                if (archetype == 3) return Random.value < .28f ? "sniper" : "minigun";
-                if (archetype == 4 || archetype == 7) return Random.value < .24f ? "cluster" : "minigun";
-                return Random.value < .7f ? "minigun" : "boomstick";
+                if (archetype == 3) return roll < .18f ? "deathray" : roll < .4f ? "sniper" : "minigun";
+                if (archetype == 4 || archetype == 7) return roll < .18f ? "deathray" : roll < .38f ? "cluster" : "minigun";
+                return roll < .7f ? "minigun" : "boomstick";
             }
-            if (archetype == 3) return Random.value < .3f ? "sniper" : "invoice";
-            if (archetype == 4 || archetype == 7) return Random.value < .3f ? "cluster" : "invoice";
+            if (archetype == 3) return roll < .24f ? "crossbow" : roll < .48f ? "sniper" : "invoice";
+            if (archetype == 4 || archetype == 7) return roll < .2f ? "crossbow" : roll < .4f ? "cluster" : "invoice";
             return "invoice";
         }
     }

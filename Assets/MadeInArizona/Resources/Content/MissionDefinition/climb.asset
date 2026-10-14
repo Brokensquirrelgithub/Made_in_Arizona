@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: climb
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.MissionDefinition
   id: climb
-  title: 6. Wrong Car, Right Mountain
+  title: 6. Wrong Road, Right Mountain
   region: Juniper Switchbacks
-  briefing: Drive the tiny Shift through four mountain checkpoints before the financing
-    beacon expires. Your selected compatible upgrades carry over.
-  opening: 'Ellis: The narrow gate only admits the hatchback.|Johnny: Of course the
-    road to the radio tower was designed by someone with a golf cart.'
+  briefing: Drive your selected car through four mountain checkpoints before the financing
+    beacon expires. Your compatible upgrades carry over.
+  opening: 'Ellis: The mountain road is narrow. Choose your line carefully.|Johnny: Of course
+    the road to the radio tower was designed by someone with a golf cart.'
   midpoint: 'Bea: Second gear, steady throttle. You do not need boost here. Please
     record that I said this voluntarily.'
-  closing: 'Ellis: We reached the tower. The hatchback has earned a mountain certification.
+  closing: 'Ellis: We reached the tower. The fleet has earned a mountain certification.
     The paperwork is a dent shaped like a rock.'
   optionalObjective: Finish in under 160 seconds
   contentOrder: 5
@@ -33,4 +33,4 @@ MonoBehaviour:
   mode: 4
   optionalKind: 2
   optionalThreshold: 160
-  forcedVehicle: shift
+  forcedVehicle:

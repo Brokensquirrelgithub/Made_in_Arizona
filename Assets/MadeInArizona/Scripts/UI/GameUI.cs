@@ -53,6 +53,7 @@ namespace MadeInArizona
             }
         }
         int station, selectedPart, selectedWeapon, settingsPage, menuFocus;
+        public int GarageStation => station;
         bool settings;
         float width, height, smoothedFps = 60;
         Vector2 listScroll, detailScroll;
@@ -305,9 +306,10 @@ namespace MadeInArizona
             Text(x + 24, y + 95, w - 48, 24, s.drivetrain + "  /  " + s.differential + " DIFFERENTIAL", 17, Muted);
             // What the drivetrain gains or gives up on each kind of ground, picked out from the figures around it.
             Text(x + 24, y + 115, w - 48, 24, DrivetrainTraits.Summary(s.drivetrain), 17, Cream, true);
-            Text(x + 24, y + 136, w - 48, 62,
-                s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " HP  •  " + s.finalDrive.ToString("0.00") + ":1  •  " + Mathf.RoundToInt(s.maxSpeed*.621371f) + " MPH\n" +
-                SegmentSummary(s,0,3) + "\n" + SegmentSummary(s,3,6), 14, Muted);
+            Text(x + 24, y + 136, w - 48, 20,
+                s.grip.ToString("0.00") + " GRIP  •  " + Mathf.RoundToInt(s.maxHealth) + " HP  •  " + s.finalDrive.ToString("0.00") + ":1  •  " + Mathf.RoundToInt(s.maxSpeed*.621371f) + " MPH", 13, Muted);
+            Text(x + 24, y + 157, w - 48, 19, SegmentSummary(s,0,3), 13, Muted);
+            Text(x + 24, y + 177, w - 48, 19, SegmentSummary(s,3,6), 13, Muted);
         }
         static string SegmentSummary(VehicleStats stats,int first,int end)
         {
@@ -433,9 +435,9 @@ namespace MadeInArizona
             Bar(objX + 20, 149, 416, 4, game.Mission.Progress, Lime);
             Rect(28, height - 194, 365, 166, Ink);
             Text(48, height - 177, 330, 26, game.CurrentVehicle.displayName.ToUpperInvariant(), 16, Cream, true);
-            DrawHealthBar(p, 48, height - 136, 240, 14);
+            DrawHealthBar(p, 48, height - 136, 320, 14);
             bool critical = p.Damage.EngineReached;
-            Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
+            Text(300, height - 177, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
             Text(48, height - 78, 235, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH  " + p.RPM.ToString("0") + " RPM", 17, Cream, true);

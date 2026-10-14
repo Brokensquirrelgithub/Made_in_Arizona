@@ -4,6 +4,8 @@ Every weapon is bolted together from whatever was lying around the shed. Names d
 
 Garage weapons are bought with **scrap** and have unlimited ammunition (right trigger / left mouse). Prices are ten times the original prices; the nail gun is free. Field weapons come off wrecked hostiles with limited rounds (left trigger / right mouse).
 
+Seven former garage weapons now come from faction drops. Existing saves refund the scrap spent on any of those weapons and select the Nail Gun if one was fitted.
+
 ## Scrap weapons: core roles
 
 | Weapon | Scrap | Halo analogue | Strength | Weakness |
@@ -15,9 +17,7 @@ Garage weapons are bought with **scrap** and have unlimited ammunition (right tr
 | **Tennis-Ball Mortar** | 180 | Brute Shot / Cindershot (bouncing lob) | Arcs over cover and bounces into hiding spots. | Small blast and slow shells; hopeless against fast movers. |
 | **Cactus-Spine Needler** | 240 | Needler (homing, supercombine) | Spines chase moving cars; seven hits set off a big rupture. | Slow spines, weak until they stack, and cover eats them. |
 | **Jumper-Cable Zapper** | 220 | Plasma Pistol overcharge / Shock Rifle (vehicle EMP, arcs) | Stalls engines and guns; arcs through a pack. | Barely scratches the paint on its own. |
-| **Weed-Burner Torch** | 260 | Flamethrower / Ravager (burn) | Burning damage keeps ticking after contact. | Fourteen metres of reach and nothing more. |
 | **Arc-Welder Railgun** | 320 | Spartan Laser / Skewer (heavy one-shot) | Instant hit at long range that passes through whole convoys. | Two seconds to recharge; a miss hurts. |
-| **Leaf-Blower Air Cannon** | 200 | Concussion Rifle / Gravity Hammer (knockback) | Five times the original blast force shoves cars into hazards and off ledges. | Low damage; it moves problems rather than ending them. |
 
 ## Scrap weapons: oddballs
 
@@ -28,12 +28,7 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 | **Lawn-Sprinkler Firebomb** | 300 | Grenade + Flamethrower | Radial fire jets ignite cars they hit. | Weak blast and a slow lob; the burn does the work. |
 | **Piñata Bottle Rocket** | 340 | Rocket + Cluster bomb | One hit carpets a wide area with bomblets. | Bomblets scatter randomly; poor against a single fast car. |
 | **Shop-Vac Black Hole** | 380 | Grenade + Gravity well | Pulls a whole pack together for one big blast. | Long recharge and a short delay before it pays off. |
-| **Satellite-Dish Death Ray** | 360 | Beam rifle + Focus ramp | One continuous, humming beam for as long as the trigger is held; it burns a car after half a second of contact. | Weak until it warms up; switching targets resets it. |
-| **Dynamite Crossbow** | 280 | Precision rifle + Sticky bomb | Triple the original blast radius, with damage falling off toward the edge. | A second's fuse, and misses stick to the ground instead. |
 | **Bowling-Ball Cannon** | 260 | Shell + Ram | A 20% wider sweep hurls cars aside (34 m/s shove), and the ball hops off each car to the crash of a rack of pins. | Only goes where the ground goes; hills and walls deflect it. |
-| **Hubcap Boomerang** | 240 | Sawblade + Return trip | Triple damage on both passes; grows to double size on return. | Useless beyond its turn-around point. |
-| **Scatter Mortar** | 360 | Shotgun + Mortar | Nine bomblets spread near and far while inheriting the car's velocity. | No target assist; each charge needs to land near its target. |
-| **Tow-Hook Harpoon** | 260 | Sniper + Winch | Holds a car on the cable for 5.5 s: swing round to whip it into a rock, wall or another car and wreck it. | Single target and pulls danger toward you. |
 | **Firecracker Blunderbuss** | 300 | Shotgun + Explosive rounds | Splash on every pellet rewards near misses. | Short range, and the pops hurt you up close. |
 | **Lawn-Chair Sentry** | 400 | Mine + Auto-turret | Keeps shooting while you drive elsewhere; two at a time. | Stationary; slow to redeploy; light damage per nail. |
 
@@ -49,6 +44,26 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 | **Bottle-Rocket Rack** | Area saturation | Three rockets cover a wide spread. | Few volleys; each rocket alone is modest. |
 | **Drainpipe Double-Barrel** | Point-blank shotgun | Two-shot kills on anything touching your bumper. | Slow reload and almost no reach. |
 | **Dynamite Go-Kart** | Seeking bomb | Chases targets around cover and corners. | Slow; can be outrun or blocked by walls; three a drop. |
+| **Scatter Mortar** | Arcing shotgun | Nine bomblets blanket near and far ground. | No target assist; moving targets can slip between bursts. |
+| **Dynamite Crossbow** | Sticky delayed blast | A wide blast hits hardest near the dynamite. | A second's fuse; misses stick to the ground. |
+| **Satellite-Dish Death Ray** | Sustained focus beam | A continuous beam burns a car after half a second of contact. | Weak until it warms up; switching targets resets it. |
+| **Tow-Hook Harpoon** | Pull / whip | Holds a car on the cable for 5.5 seconds, ready to swing into scenery. | Single target; pulls danger toward you. |
+| **Leaf-Blower Air Cannon** | Knockback | Shoves cars into hazards and off ledges. | Low direct damage. |
+| **Weed-Burner Torch** | Flamethrower / burn | Burning damage continues after contact. | Short reach. |
+| **Hubcap Boomerang** | Double-pass piercer | Cuts on the outbound and return passes. | Limited reach beyond its turn-around point. |
+
+The new field drops follow each crew's combat style:
+
+| Crew | Added drops | Rounds per drop / maximum |
+|---|---|---|
+| Sunsprawl Security | Dynamite Crossbow | 5 / 10 |
+| Courtesy Compliance | Scatter Mortar | 4 / 8 |
+| Road Scavengers | Weed-Burner Torch; Hubcap Boomerang | 70 / 140; 8 / 16 |
+| Open House Realty | Tow-Hook Harpoon | 4 / 8 |
+| Snowbird Convoy | Leaf-Blower Air Cannon | 10 / 20 |
+| Car Otaku Club | Satellite-Dish Death Ray | 60 / 120 damage ticks |
+
+The Death Ray uses ammunition at 12 ticks per second, so one drop lasts about five seconds of continuous fire. The Torch similarly provides about five seconds per drop. The Tailpipe Bazooka now has a cone with three times its former reach and half its former width at the tip.
 
 The **Dynamite Go-Kart** replaces the old Lien Mines as a field weapon: it drives off ahead of the car, hunts the nearest hostile around cover and detonates on contact. Hostile crews still lay telegraphed **Tripwire Pipe Bombs** on the road as a special attack; those are enemy-only.
 

@@ -81,7 +81,9 @@ namespace MadeInArizona
             if(ownedVehicles.Remove("thimble")&&!ownedVehicles.Contains("ronin"))ownedVehicles.Add("ronin");
             if(settings != null && settings.cars != null)
                 foreach(var profile in settings.cars)if(profile != null && profile.id == "thimble")profile.id="ronin";
-            ownedWeapons=Clean(ownedWeapons); ownedWeapons.RemoveAll(id=>!WeaponRules.GarageWeapon(id)||WeaponRules.Find(id)==null);
+            ownedWeapons=Clean(ownedWeapons);
+            foreach(string id in ownedWeapons)salvage=Mathf.Min(1000000,salvage+WeaponRules.RetiredGarageRefund(id));
+            ownedWeapons.RemoveAll(id=>!WeaponRules.GarageWeapon(id)||WeaponRules.Find(id)==null);
             if(!ownedWeapons.Contains("riveter"))ownedWeapons.Add("riveter");
             if(string.IsNullOrEmpty(selectedWeapon)||!ownedWeapons.Contains(selectedWeapon))selectedWeapon="riveter";
             ownedParts.RemoveAll(id=>!Array.Exists(ContentCatalog.Parts,p=>p.id==id)); installedParts.RemoveAll(id=>!ownedParts.Contains(id));
