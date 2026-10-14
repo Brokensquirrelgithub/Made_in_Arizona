@@ -119,6 +119,8 @@ namespace MadeInArizona
         public SurfaceKind Surface { get; private set; } = SurfaceKind.Dirt;
         public bool Grounded { get; private set; }
         public int Gear { get; private set; } = 1;
+        public int GearCount => gears.Length;
+        public bool IsShifting => upshiftRemaining > 0;
         /// <summary>0–1 blend of the player's drift handling; eases out over the tuned recovery time.</summary>
         public float DriftBlend { get; private set; }
         /// <summary>
@@ -198,10 +200,16 @@ namespace MadeInArizona
         /// <summary>Per wheel (FL, FR, RL, RR): ground under the suspension in the last physics step, for tyre effects.</summary>
         readonly bool[] wheelOnGround = new bool[4];
         readonly Vector3[] wheelGroundPoint = new Vector3[4], wheelGroundNormal = new Vector3[4];
-        float[] gears = { 3.5f, 2.25f, 1.55f, 1.12f, .86f, .68f };
-        const float UpshiftDuration = .18f;
+        float[] gears = TransmissionProfiles.ForVehicle(null);
+        float tachGearScale;
+        public const float FullThrottleUpshiftRpm = 6900f;
+        public const float UpshiftDuration = .34f;
+        public const float RamDamageScale = .5f;
+        public const float SoftTopSpeedExtension = .2f;
         float upshiftRemaining;
-        float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.62f, 1f, 1f - upshiftRemaining / UpshiftDuration) : 1f;
+        float gearHoldRemaining;
+        float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.35f, 1f,
+            Mathf.SmoothStep(0f, 1f, 1f - upshiftRemaining / UpshiftDuration)) : 1f;
         bool initialized;
         const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
 
@@ -210,6 +218,9 @@ namespace MadeInArizona
         public void Initialize(VehicleDefinition definition, VehicleStats stats, bool isPlayer, EnemyFaction faction = EnemyFaction.Sunsprawl, VehicleStats[] profiles=null)
         {
             Stats = stats; damageProfiles=profiles; IsPlayer = isPlayer; Definition = definition;
+            gears = TransmissionProfiles.ForVehicle(definition.id);
+            tachGearScale = TransmissionProfiles.TachScale(definition, gears);
+            Gear = 1; upshiftRemaining = gearHoldRemaining = 0;
             Body = GetComponent<Rigidbody>();
             Body.mass = Mathf.Max(300, stats.mass);
             Body.linearDamping = .08f; Body.angularDamping = 3f;
@@ -410,6 +421,7 @@ namespace MadeInArizona
             float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip * footing.cornering;
             if (IsPlayer) grip *= tuning.grip;
             upshiftRemaining = Mathf.Max(0, upshiftRemaining - Time.fixedDeltaTime);
+            gearHoldRemaining = Mathf.Max(0, gearHoldRemaining - Time.fixedDeltaTime);
             if (input.sqrMagnitude > .04f)
             {
                 Vector3 desired = new Vector3(input.x, 0, input.y);
@@ -435,27 +447,32 @@ namespace MadeInArizona
                 float alignment = Mathf.Clamp01((180 - Mathf.Abs(angle)) / 110);
                 float targetThrottle = Throttle * Mathf.Lerp(.2f, 1, alignment) * Mathf.Lerp(1, tuning.driftThrottle, DriftBlend);
                 float wheelRPM = Mathf.Abs(forwardSpeed) / (2 * Mathf.PI * .34f) * 60;
-                if (driveDirection < 0) { Gear = 1; upshiftRemaining = 0; }
-                float ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
-                float desiredRPM = Mathf.Max(900 + targetThrottle * 900, wheelRPM * ratio);
-                RPM = Mathf.Lerp(RPM, desiredRPM, Time.fixedDeltaTime * 8);
+                if (driveDirection < 0) { Gear = 1; upshiftRemaining = gearHoldRemaining = 0; }
+                float driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                // Road speeds are compressed for the map. Scale the tach gearing so all ratios are heard, while
+                // mechanical wheel force still uses the transmission and final-drive ratios themselves.
+                float desiredRPM = Mathf.Max(900 + targetThrottle * 900, wheelRPM * driveRatio * tachGearScale);
+                RPM = Mathf.Lerp(RPM, desiredRPM, Time.fixedDeltaTime * (upshiftRemaining > 0 ? 12f : 8f));
                 // A gentle cruise shifts earlier; a committed pull uses nearly all of each engine's own rev range.
-                float upshiftRPM = Mathf.Lerp(5000f, 6900f, Mathf.Clamp01(targetThrottle));
-                if (driveDirection > 0 && upshiftRemaining <= 0 && RPM > upshiftRPM && Gear < gears.Length)
+                float upshiftRPM = Mathf.Lerp(5000f, FullThrottleUpshiftRpm, Mathf.Clamp01(targetThrottle));
+                if (driveDirection > 0 && gearHoldRemaining <= 0 && RPM > upshiftRPM && Gear < gears.Length)
                 {
                     Gear++;
                     upshiftRemaining = UpshiftDuration;
-                    ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                    gearHoldRemaining = UpshiftDuration + .16f;
+                    driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                    RPM = Mathf.Lerp(RPM, Mathf.Max(900 + targetThrottle * 900, wheelRPM * driveRatio * tachGearScale), .28f);
                 }
-                if (upshiftRemaining <= 0 && RPM < 1900 && Gear > 1)
+                if (gearHoldRemaining <= 0 && RPM < Mathf.Lerp(2400f, 3200f, targetThrottle) && Gear > 1)
                 {
                     Gear--;
-                    ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                    gearHoldRemaining = .24f;
+                    driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                 }
                 RPM = Mathf.Clamp(RPM, 850, 7200);
                 AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftDrive);
                 float torqueCurve = .62f + .38f * Mathf.Sin(Mathf.Clamp01((RPM - 800) / 7000) * Mathf.PI);
-                float wheelForce = Stats.torque * torqueCurve * ratio / .34f;
+                float wheelForce = Stats.torque * torqueCurve * driveRatio / .34f;
                 float powerForce = Mathf.Max(40, Stats.horsepower) * 745.7f / Mathf.Max(7, speed);
                 float acceleration = Mathf.Clamp(Mathf.Min(wheelForce, powerForce) / Body.mass * 2.65f, 3.2f, 27);
                 // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel
@@ -481,8 +498,22 @@ namespace MadeInArizona
                 float gripLimit = 9.81f * surfaceGrip * (Stats.drivetrain == Drivetrain.AWD ? 1.45f : 1f);
                 float launchSpin = 1 - Mathf.Clamp01(speed / (boosting ? 17f : 11f));
                 if (traction && driveDirection > 0) spin = Mathf.Clamp01((directionalAcceleration * targetThrottle / gripLimit - 1.5f) * .5f) * launchSpin;
-                if (traction && speedInDriveDirection < directionalMaxSpeed)
-                    Body.AddForce(driveForward * directionalAcceleration * targetThrottle * (Grounded ? 1 : BeachedTraction), ForceMode.Acceleration);
+                if (traction)
+                {
+                    float driveAcceleration = directionalAcceleration * targetThrottle * (Grounded ? 1 : BeachedTraction);
+                    if (driveDirection < 0)
+                    {
+                        if (speedInDriveDirection < directionalMaxSpeed)
+                            Body.AddForce(driveForward * driveAcceleration, ForceMode.Acceleration);
+                    }
+                    else
+                    {
+                        // At the listed speed, taper only the acceleration left after rigidbody damping. A car can
+                        // keep pulling gradually toward 120% of that speed instead of losing all drive at once.
+                        float softDrive = SoftCappedDrive(driveAcceleration, speedInDriveDirection, maxSpeed, Body.linearDamping);
+                        if (softDrive > 0) Body.AddForce(driveForward * softDrive, ForceMode.Acceleration);
+                    }
+                }
             }
             else
             {
@@ -690,6 +721,17 @@ namespace MadeInArizona
                 default: return 1;
             }
         }
+        static float SoftCappedDrive(float driveAcceleration, float forwardSpeed, float listedSpeed, float damping)
+        {
+            if (forwardSpeed <= listedSpeed) return driveAcceleration;
+            float drag = forwardSpeed * damping;
+            // A lift or a weak engine must still coast down normally; only spare power stretches the cap.
+            if (driveAcceleration <= drag) return driveAcceleration;
+            float ceiling = listedSpeed * (1f + SoftTopSpeedExtension);
+            if (forwardSpeed >= ceiling) return Mathf.Max(0, drag - (forwardSpeed - ceiling) * 2f);
+            float remaining = (ceiling - forwardSpeed) / (ceiling - listedSpeed);
+            return drag + (driveAcceleration - drag) * remaining * remaining;
+        }
         public static int SelectDriveDirection(float forwardAlignment, float forwardSpeed, int currentDirection)
         {
             // Hysteresis keeps diagonal input from flickering between first and reverse.
@@ -775,12 +817,12 @@ namespace MadeInArizona
             if(force<6 || Time.time<collisionCooldown)return;
             collisionCooldown=Time.time+.25f;
             // VehicleDamage refuses non-explosive damage between vehicles on the same side, so crews never ram-kill each other.
-            if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3), point, gameObject);
+            if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3) * RamDamageScale, point, gameObject);
             // Landing on, scraping or bottoming out against the ground never hurts and throws no sparks.
             if (ground) return;
             // A defeated car in its spinout is wreckage, not an allied attacker: it can hurt any combatant it hits.
             bool spinningWreck = other != null && other.IsSpinningWreck;
-            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f, point,
+            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f * RamDamageScale, point,
                 spinningWreck ? null : collision.gameObject, environmental: spinningWreck);
             if (impact < 4 && other == null) return;
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);

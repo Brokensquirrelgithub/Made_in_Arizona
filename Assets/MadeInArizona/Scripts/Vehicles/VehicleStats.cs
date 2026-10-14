@@ -6,6 +6,9 @@ namespace MadeInArizona
     [Serializable]
     public sealed class VehicleStats
     {
+        // Gameplay baseline. Authored vehicle assets retain their inspiration-sheet figures; parts and drivers stack on top.
+        public const float StockPowerMultiplier = 1.18f;
+        public const float StockSpeedMultiplier = 1.15f;
         public float mass, horsepower, torque, maxSpeed, grip, turnSpeed, maxHealth;
         public float rideHeight, wheelbase, trackWidth, suspensionTravel, springStiffness, damping, finalDrive;
         public float cooling = 1f;
@@ -22,7 +25,8 @@ namespace MadeInArizona
         {
             return new VehicleStats
             {
-                mass = v.mass, horsepower = v.horsepower, torque = v.torque, maxSpeed = v.maxSpeed,
+                mass = v.mass, horsepower = v.horsepower * StockPowerMultiplier,
+                torque = v.torque * StockPowerMultiplier, maxSpeed = v.maxSpeed * StockSpeedMultiplier,
                 grip = v.grip, turnSpeed = v.turnSpeed, maxHealth = v.maxHealth, rideHeight = v.rideHeight,
                 wheelbase = v.wheelbase, trackWidth = v.trackWidth, suspensionTravel = v.suspensionTravel,
                 springStiffness = v.springStiffness, damping = v.damping, finalDrive = v.finalDrive,

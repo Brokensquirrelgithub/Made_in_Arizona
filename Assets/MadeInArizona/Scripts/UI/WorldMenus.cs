@@ -5,12 +5,21 @@ namespace MadeInArizona
     public sealed partial class GameUI
     {
         bool worldMap;
+        bool resetProgressPending;
+        string resetProgressError;
         string worldSeed;
         float worldSize;
         Vector3? mapWaypoint;
         public void OpenWorldMap(){if(!GeneratedWorld.Active)return;if(game.IsPlaying)game.Pause();worldMap=true;settings=false;devMenu=false;}
         void WorldMenuInput()
         {
+            if(resetProgressPending)
+            {
+                if((Keyboard.current!=null&&Keyboard.current.escapeKey.wasPressedThisFrame)||
+                    (Gamepad.current!=null&&Gamepad.current.buttonEast.wasPressedThisFrame))
+                    resetProgressPending=false;
+                return;
+            }
             if(Keyboard.current!=null&&Keyboard.current.mKey.wasPressedThisFrame&&GeneratedWorld.Active)
             {if(worldMap){worldMap=false;game.Resume();}else if(game.IsPlaying||game.State==GameState.Paused)OpenWorldMap();}
         }
@@ -37,10 +46,27 @@ namespace MadeInArizona
             if(Button(x+25,y+512,220,48,"GARAGE / SAVED",false,!CoopSession.IsRemoteClient))game.ReturnToGarage();
             if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
-            Text(x+25,y+575,panelW-50,38,"Starting a world preserves garage upgrades and completed jobs.",13,Muted);
+            if(Button(x+25,y+568,220,38,"RESET PROGRESS",false,!CoopSession.IsRemoteClient))
+            { resetProgressPending=true; resetProgressError=null; }
+            Text(x+260,y+573,panelW-285,35,"Erase campaign progress. Keeps normal settings and controls.",13,Muted);
             DrawUpdateEntry(x,y+640,panelW);
             Text(x,height-65,width-x-40,40,"JSON world editing: "+WorldConfigStore.Path,12,Muted);
             if(WorldConfigStore.LastError!=null)Text(x,height-105,width-x-40,35,WorldConfigStore.LastError,14,Orange);
+        }
+        void DrawResetProgressConfirmation()
+        {
+            Rect(0,0,width,height,new Color(.025f,.04f,.045f,1));
+            float w=Mathf.Min(650,width-70),x=(width-w)*.5f,y=(height-310)*.5f;
+            Rect(x,y,w,310,Ink);
+            Text(x+28,y+26,w-56,46,"RESET CAMPAIGN PROGRESS?",30,Orange,true);
+            Text(x+28,y+91,w-56,107,
+                "This erases completed jobs, money, scrap, purchased cars and parts, unlocks, achievements and custom tuning. Display, audio and control settings stay as they are.",18,Cream);
+            if(!string.IsNullOrEmpty(resetProgressError))Text(x+28,y+207,w-56,42,resetProgressError,14,Orange);
+            if(Button(x+28,y+246,(w-76)*.5f,45,"CANCEL"))resetProgressPending=false;
+            if(Button(x+48+(w-76)*.5f,y+246,(w-76)*.5f,45,"ERASE PROGRESS",true))
+            {
+                if(!game.ResetProgress())resetProgressError=SaveSystem.LastError??"Leave co-op before resetting progress.";
+            }
         }
         void DrawGeneration()
         {

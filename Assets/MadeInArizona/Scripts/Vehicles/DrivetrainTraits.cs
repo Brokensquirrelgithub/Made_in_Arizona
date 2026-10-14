@@ -22,10 +22,11 @@ namespace MadeInArizona
         }
 
         // Rows follow the Drivetrain enum (front, rear, all-wheel); columns follow Ground (road, dirt, sand).
+        // Dirt and sand penalties are 80% of their former distance below 1; bonuses stay as they were.
         static readonly float[,] Fits =
         {
-            { 1.00f, .97f, .66f },
-            { 1.08f, .88f, .58f },
+            { 1.00f, .976f, .728f },
+            { 1.08f, .904f, .664f },
             { .95f, 1.14f, 1.00f },
         };
         // Drive takes the whole figure; cornering grip and top speed take these shares of its distance from even.

@@ -226,14 +226,15 @@ namespace MadeInArizona
             {physicalResponseVehicle=player;physicalCharge=player?player.EngineLoad:0;physicalFreeRev=0;}
             ShapePhysicalDrive(player?player.RPM:850,player?player.EngineLoad:0,player?player.AppliedEngineLoad:0,
                 player?player.WheelSpin:0,player&&player.HasDriveContact,player?tuning.engineDriveResponse:0,
-                Time.unscaledDeltaTime,ref physicalCharge,ref physicalFreeRev,out float soundRpm,out float soundLoad);
+                Time.unscaledDeltaTime,ref physicalCharge,ref physicalFreeRev,out float soundRpm,out float soundLoad,
+                player&&player.IsShifting);
             float revs=player?Mathf.Clamp01((soundRpm-850)/(7200-850)):0;
             float rpm=Mathf.Lerp(engine.idleRpm,engine.redlineRpm,revs)*tuning.enginePitch;
             physicalEngine.Drive(rpm,soundLoad,presence*gain*physicalBlend*PhysicalMixLevel,tuning);
         }
         /// <summary>Audio-only response. A zero blend passes through the previous RPM/load inputs exactly.</summary>
         internal static void ShapePhysicalDrive(float rpm,float legacyLoad,float appliedLoad,float wheelSpin,bool hasContact,
-            float blend,float dt,ref float charge,ref float freeRev,out float soundRpm,out float soundLoad)
+            float blend,float dt,ref float charge,ref float freeRev,out float soundRpm,out float soundLoad,bool shifting=false)
         {
             if(blend<=0)
             {charge=legacyLoad;freeRev=0;soundRpm=rpm;soundLoad=legacyLoad;return;}
@@ -242,8 +243,8 @@ namespace MadeInArizona
             charge+= (Mathf.Clamp01(appliedLoad)-charge)*(1-Mathf.Exp(-Mathf.Max(0,dt)*12f));
             // Wheelspin and loss of drive contact let the engine rev above wheel-derived RPM. They alter pitch,
             // while cylinder charge remains governed by throttle; low vehicle acceleration is not low engine load.
-            float loose=Mathf.Max(Mathf.Clamp01(wheelSpin)*.7f,hasContact?0:.65f)*Mathf.Clamp01(charge);
-            freeRev=Mathf.MoveTowards(freeRev,loose,Mathf.Max(0,dt)*(loose>freeRev?5f:8f));
+            float loose=shifting?0:Mathf.Max(Mathf.Clamp01(wheelSpin)*.7f,hasContact?0:.65f)*Mathf.Clamp01(charge);
+            freeRev=shifting?0:Mathf.MoveTowards(freeRev,loose,Mathf.Max(0,dt)*(loose>freeRev?5f:8f));
             float freeRpm=Mathf.Lerp(1800f,6900f,Mathf.Clamp01(charge));
             soundRpm=Mathf.Lerp(rpm,Mathf.Max(rpm,freeRpm),freeRev*Mathf.Clamp01(blend));
             soundLoad=Mathf.Lerp(legacyLoad,charge,Mathf.Clamp01(blend));

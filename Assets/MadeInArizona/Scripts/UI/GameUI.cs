@@ -67,6 +67,7 @@ namespace MadeInArizona
         void ResetFocus()
         {
             worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;
+            resetProgressPending=false; resetProgressError=null;
             if (game != null && game.Save != null)
             {
                 selectedWeapon=Array.FindIndex(garageWeapons,i=>ContentCatalog.Weapons[i].id==game.Save.selectedWeapon);
@@ -175,7 +176,8 @@ namespace MadeInArizona
             { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
             if(game.State==GameState.MainMenu)
             {
-                if(updatesMenu)DrawUpdates();
+                if(resetProgressPending)DrawResetProgressConfirmation();
+                else if(updatesMenu)DrawUpdates();
                 else if (coopPage) { Rect(0, 0, width, height, Ink); DrawCoopPanel(); }
                 else { DrawMainMenu(); if (width >= 1250) DrawCoopPanel(); }
                 GUI.matrix=Matrix4x4.identity;return;
@@ -280,7 +282,7 @@ namespace MadeInArizona
             listScroll = GUI.BeginScrollView(new Rect(48, top + 57, 418, panelHeight - 75), listScroll, new Rect(0, 0, 390, ContentCatalog.Vehicles.Length * 82));
             for (int i = 0; i < ContentCatalog.Vehicles.Length; i++) {
                 var v = ContentCatalog.Vehicles[i]; bool unlocked = v.unlockMission <= game.Save.unlockedMission;
-                if (Button(0, i * 82, 385, 67, v.displayName.ToUpperInvariant() + "\n" + (unlocked ? v.drivetrain + "  •  " + v.horsepower + " HP  •  " + v.mass + " KG" : "UNLOCK: WORK ORDER " + (v.unlockMission + 1)), game.Save.selectedVehicle == i, unlocked)) {
+                if (Button(0, i * 82, 385, 67, v.displayName.ToUpperInvariant() + "\n" + (unlocked ? v.drivetrain + "  •  " + Mathf.RoundToInt(v.horsepower * VehicleStats.StockPowerMultiplier) + " HP  •  " + v.mass + " KG" : "UNLOCK: WORK ORDER " + (v.unlockMission + 1)), game.Save.selectedVehicle == i, unlocked)) {
                     if (GarageManager.SelectVehicle(i, game.Save)) game.RefreshGarageVehicle(); else game.Notify("The fleet fund cannot cover that vehicle yet.");
                 }
             }
@@ -436,7 +438,8 @@ namespace MadeInArizona
             Text(300, height - 144, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
             Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
-            Text(48, height - 78, 320, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH     " + p.RPM.ToString("0") + " RPM", 19, Cream, true);
+            Text(48, height - 78, 235, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH  " + p.RPM.ToString("0") + " RPM", 17, Cream, true);
+            Text(291, height - 78, 85, 30, "G" + p.Gear + "/" + p.GearCount, 19, Orange, true);
             float weaponsX = 410;
             bool padControls = InputManager.Instance.UsingGamepad;
             Rect(weaponsX, height - 104, 210, 76, Ink);

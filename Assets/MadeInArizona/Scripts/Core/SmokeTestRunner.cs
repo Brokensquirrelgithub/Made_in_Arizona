@@ -36,6 +36,8 @@ namespace MadeInArizona
             var game = GameManager.Instance;
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDisplayReticleTest")>=0)
             { yield return TestDisplayAndReticle(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTransmissionProgressTest")>=0)
+            { yield return TestTransmissionAndProgressReset(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaShadowFilterTest")>=0)
             { yield return TestShadowFilters(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHealthTest")>=0)
@@ -2308,6 +2310,102 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1.6f);Capture("suzuki-bowl-full");yield return new WaitForSecondsRealtime(.4f);
             InputSystem.RemoveDevice(mouse);rig.enabled=true;
         }
+        IEnumerator TestTransmissionAndProgressReset()
+        {
+            var game=GameManager.Instance;
+            var vehicles=ContentCatalog.Vehicles;
+            string[] ids={"ronin","juniper","sunskip","foreclosure","sidehustle","perennial","skitter","vincent",
+                "shift","monsoon","sonora","dustback","monument","executive","heat","citizen","roam4",
+                "ae867","espresso","copperado","contender","scarface"};
+            int[] expected={5,5,6,6,4,4,6,6,5,5,4,5,4,4,5,5,4,5,5,4,4,5};
+            bool valid=vehicles.Length==ids.Length;
+            for(int i=0;i<ids.Length;i++)
+            {
+                var vehicle=Array.Find(vehicles,v=>v.id==ids[i]);
+                var ratios=TransmissionProfiles.ForVehicle(ids[i]);
+                valid&=vehicle&&ratios.Length==expected[i]&&TransmissionProfiles.TachScale(vehicle,ratios)>0;
+                for(int gear=1;gear<ratios.Length;gear++)valid&=ratios[gear]<ratios[gear-1];
+            }
+            Check("all twenty-two vehicles have ordered, period-appropriate forward gears",valid);
+            var shift=Array.Find(vehicles,v=>v.id=="shift");
+            var stock=VehicleStats.From(shift);
+            Check("stock power and road-speed boost reaches the unmodified Shift",
+                stock.horsepower>shift.horsepower*1.17f&&stock.torque>shift.torque*1.17f&&stock.maxSpeed>shift.maxSpeed*1.14f);
+
+            game.Save.selectedVehicle=Array.FindIndex(vehicles,v=>v.id=="shift");
+            game.Save.settings.dev=new DevTuning();DevTuning.Apply();
+            game.StartCampaign(173,1600);yield return new WaitUntil(()=>game.State==GameState.Playing);
+            yield return new WaitForSecondsRealtime(.5f);
+            QuietMissionHostiles();
+            var player=game.Player;
+            if(!player){Check("stock Shift spawns for the driving probe",false);yield break;}
+            var deck=GameObject.CreatePrimitive(PrimitiveType.Cube);
+            deck.name="Transmission test road";
+            deck.transform.position=new Vector3(0,300,-100);
+            deck.transform.localScale=new Vector3(30,1,900);
+            Vector3 start=new Vector3(0,301.3f,-395);
+            player.Body.position=start;player.Body.rotation=Quaternion.identity;
+            player.transform.SetPositionAndRotation(start,Quaternion.identity);
+            player.Body.linearVelocity=Vector3.zero;player.Body.angularVelocity=Vector3.zero;
+            WorldBuilder.SurfaceOverride=SurfaceKind.Asphalt;
+            Physics.SyncTransforms();
+            var keyboard=InputSystem.AddDevice<Keyboard>();
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.W));
+            float elapsed=0,shiftStarted=-1,previousRpm=player.RPM,peakSpeed=0;
+            int previousGear=player.Gear,upshifts=0;
+            bool rpmFalls=false,longShift=false;
+            while(elapsed<18f)
+            {
+                yield return new WaitForFixedUpdate();elapsed+=Time.fixedDeltaTime;
+                if(player.Gear>previousGear)
+                {
+                    upshifts++;
+                    rpmFalls|=previousRpm-player.RPM>450f;
+                    previousGear=player.Gear;
+                }
+                if(player.IsShifting&&shiftStarted<0)shiftStarted=elapsed;
+                if(!player.IsShifting&&shiftStarted>=0)
+                {longShift|=elapsed-shiftStarted>=.30f;shiftStarted=-1;}
+                peakSpeed=Mathf.Max(peakSpeed,player.SpeedKph);
+                previousRpm=player.RPM;
+            }
+            Debug.Log("MIA_TRANSMISSION: Shift reached "+peakSpeed.ToString("0.0")+" km/h (listed "+stock.maxSpeed.ToString("0.0")+"), gear "+player.Gear+"/"+player.GearCount+
+                ", upshifts "+upshifts+", rev drop "+rpmFalls+", long shift "+longShift);
+            Check("stock Shift drives through all five gears instead of stopping after second",player.GearCount==5&&upshifts>=4&&player.Gear==5);
+            Check("upshifts last long enough to hear and visibly drop RPM",rpmFalls&&longShift);
+            Check("stock Shift exceeds its former 102 km/h ceiling without nitro",peakSpeed>108f);
+            Check("stock Shift pulls gradually past its listed speed without exceeding the 20 percent extension",
+                peakSpeed>stock.maxSpeed*1.06f&&peakSpeed<stock.maxSpeed*1.21f);
+            float beforeNitro=player.SpeedKph,nitroPeak=beforeNitro;
+            bool nitroActive=false;
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.W,Key.LeftShift));
+            for(float t=0;t<2.5f;t+=Time.fixedDeltaTime)
+            {yield return new WaitForFixedUpdate();nitroActive|=player.Boosting;nitroPeak=Mathf.Max(nitroPeak,player.SpeedKph);}
+            Check("nitro continues accelerating above the listed speed",nitroActive&&nitroPeak>beforeNitro+6f);
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());InputSystem.RemoveDevice(keyboard);
+            WorldBuilder.SurfaceOverride=null;
+            Destroy(deck);
+
+            game.ShowMainMenu();
+            game.Save.money=4210;game.Save.salvage=325;game.Save.unlockedMission=3;
+            game.Save.completedMissions.Add(0);game.Save.ownedParts.Add("cam");game.Save.installedParts.Add("cam");
+            game.Save.settings.master=.37f;game.Save.settings.quality=1;game.Save.settings.dev.acceleration=2f;
+            game.Save.settings.cars.Add(new CarTuning{id="shift"});
+            SaveSystem.Save(game.Save);
+            bool reset=game.ResetProgress();
+            Check("main-menu reset restores starter campaign, garage and selected car",reset&&game.State==GameState.MainMenu&&
+                game.SelectedMission==0&&game.Save.money==1100&&game.Save.salvage==0&&game.Save.unlockedMission==0&&
+                game.Save.completedMissions.Count==0&&game.Save.ownedParts.Count==0&&game.Save.installedParts.Count==0&&
+                game.Save.selectedVehicle==0&&game.Player&&game.Player.Definition.id=="ronin");
+            Check("progress reset keeps ordinary preferences but clears custom driving tuning",
+                Mathf.Abs(game.Save.settings.master-.37f)<.001f&&game.Save.settings.quality==1&&
+                Mathf.Abs(game.Save.settings.dev.acceleration-1.2f)<.001f&&game.Save.settings.cars.Count==0);
+            var disk=SaveSystem.Load();
+            Check("reset persists and its backup cannot restore old progress",disk.money==1100&&
+                disk.completedMissions.Count==0&&File.Exists(SaveSystem.Path+".bak")&&
+                File.ReadAllText(SaveSystem.Path)==File.ReadAllText(SaveSystem.Path+".bak"));
+        }
+
         IEnumerator TestShadowFilters()
         {
             var game=GameManager.Instance;

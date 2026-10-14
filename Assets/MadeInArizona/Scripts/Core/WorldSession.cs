@@ -8,13 +8,25 @@ namespace MadeInArizona
         WorldGenConfig worldConfig;
         float configPoll;
         public WorldGenConfig WorldConfig => worldConfig ?? (worldConfig=WorldConfigStore.Load());
-        public bool UseGeneratedWorld => !SmokeTestRunner.Active || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMountainTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaAssetBehaviourTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMinimapCapture")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPlaytestRevision")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEnemyBalanceTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFrameTimingTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReachabilityTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltWorld")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnGenerated")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPowerLineTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTownRevisionTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHazardTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaUiCapture")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDriveProbe")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGarageReview")>=0;
+        public bool UseGeneratedWorld => !SmokeTestRunner.Active || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWorldTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMountainTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaAssetBehaviourTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEscortTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMinimapCapture")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedCampaignTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPlaytestRevision")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEnemyBalanceTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFrameTimingTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTrailReview")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReachabilityTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTiltWorld")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSpawnGenerated")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPowerLineTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTownRevisionTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHazardTest")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaUiCapture")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDriveProbe")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGarageReview")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTransmissionProgressTest")>=0;
         public string GenerationStatus {get;private set;}="Preparing terrain…";
         public void ShowMainMenu()
         {
             if(State!=GameState.Garage)ReturnToGarage();
             State=GameState.MainMenu;Time.timeScale=1;StateChanged?.Invoke();
             var config=WorldConfig;
+        }
+        public bool ResetProgress()
+        {
+            if (State != GameState.MainMenu || (CoopSession.Instance && (CoopSession.Instance.IsHost || CoopSession.Instance.IsClient)))
+                return false;
+            if (!SaveSystem.ResetProgress(Save.settings, out var fresh)) return false;
+            Save = fresh;
+            SelectedMission = 0;
+            DevTuning.Apply();
+            ReturnToGarage();
+            ShowMainMenu();
+            return true;
         }
         public void StartCampaign(int seed,float size)
         {

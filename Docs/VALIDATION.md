@@ -2,6 +2,14 @@
 
 Unity 6000.5.5f1 / URP 17.5.0 / Input System 1.19.0. Native runtime verification uses the Apple M1 host, Metal and Arizona Summer graphics. Recent native captures are 2880 × 1800. This is a playable prototype with automated integration coverage, not a completed production QA cycle.
 
+## Soft top speed — 14 October 2026
+
+The Windows x64 player built with zero errors. `-miaSmokeTest -miaTransmissionProgressTest` passed, including a stock Shift on a flat test road: it reached 131.2 km/h after 18 seconds of full throttle, above its listed 117.3 km/h and below the 20% extended ceiling. Nitro remained active and raised speed further. The test also passed the transmission and progress-reset checks. `-miaSmokeTest -miaHandlingTest` passed 50 / 50 checks on the same speed model: after four seconds in sand at road-entry pace, rear drive held 99% of road pace and all-wheel drive reached 109%. The earlier 88% and 100% figures below are from the hard-cap build. Neither suite included a human driving review.
+
+## Softer dirt and sand drivetrain penalties — 14 October 2026
+
+The Windows x64 player built with zero errors. `-miaSmokeTest -miaHandlingTest` passed 50 / 50 checks. With the revised footing, the starter car's two-second sand launches covered 25.7 m in all-wheel drive, 19.6 m in front drive and 19.4 m in rear drive. Rear drive carried into sand held 88% of its road pace; all-wheel drive held 100%. Dirt and sand penalties are 20% smaller than the earlier figures below; road values and off-road bonuses are unchanged. Dirt cornering and the subjective feel still need a driving review.
+
 ## Drivetrain footing — 11 October 2026
 
 The Windows x64 player built with zero errors. Native Windows/D3D11 suites, run one after another on that build in a minimized window:

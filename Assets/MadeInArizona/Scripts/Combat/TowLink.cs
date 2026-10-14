@@ -88,8 +88,8 @@ namespace MadeInArizona
         }
 
         /// <summary>
-        /// A towed car hit something solid. <paramref name="impact"/> is the closing speed into it; past about 16 m/s
-        /// (58 km/h) the towed car is wrecked, and a car it is slammed into takes most of the same hit.
+        /// A towed car hit something solid. <paramref name="impact"/> is the closing speed into it; the car it is
+        /// slammed into takes most of the same hit.
         /// </summary>
         public static void WhipImpact(VehicleController car, VehicleDamage other, float impact, Vector3 point)
         {
@@ -99,7 +99,7 @@ namespace MadeInArizona
             if (other && other.gameObject == link.owner.gameObject) return;
             link.lastWhipAt = Time.time;
             float share = Mathf.InverseLerp(WhipMinImpact, WhipLethalImpact, impact);
-            float damage = car.Damage.MaxHealth * Mathf.Lerp(.3f, 1.25f, share);
+            float damage = car.Damage.MaxHealth * Mathf.Lerp(.3f, 1.25f, share) * VehicleController.RamDamageScale;
             // Bosses and command vehicles shrug off most of it; a whip still hurts.
             var ai = car.GetComponent<EnemyAI>();
             if (ai && ai.Archetype == 7) damage *= .35f;

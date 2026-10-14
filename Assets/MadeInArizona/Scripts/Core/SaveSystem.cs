@@ -152,6 +152,29 @@ namespace MadeInArizona
             }
             catch(Exception e) { LastError="Could not save progress: "+e.Message; Debug.LogWarning(LastError); }
         }
+        /// <summary>Start a new campaign while keeping ordinary preferences and input bindings.</summary>
+        public static bool ResetProgress(GameSettings preferences, out SaveData fresh)
+        {
+            var kept = preferences == null ? new GameSettings() :
+                JsonUtility.FromJson<GameSettings>(JsonUtility.ToJson(preferences));
+            // Custom car, weapon and world balance tuning belongs to the old playthrough.
+            kept.dev = new DevTuning();
+            kept.cars = new List<CarTuning>();
+            kept.weaponsBalance = new List<WeaponTuning>();
+            fresh = new SaveData { settings = kept };
+            fresh.Normalize();
+            Save(fresh);
+            if (LastError != null) return false;
+            try
+            {
+                // File.Replace keeps the old save in .bak. Refresh it too, or a later recovery could resurrect
+                // the progress the player explicitly erased.
+                File.Copy(Path, Path + ".bak", true);
+                if (File.Exists(Path + ".tmp")) File.Delete(Path + ".tmp");
+            }
+            catch (Exception e) { Debug.LogWarning("Progress reset saved, but its backup could not be refreshed: " + e.Message); }
+            return true;
+        }
         static void BackupMove(string temp) { File.Copy(Path,Path+".bak",true); File.Delete(Path); File.Move(temp,Path); }
         static string Hash(string value)
         { using(var sha=SHA256.Create()) { return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value))); } }

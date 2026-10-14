@@ -54,7 +54,7 @@ The [2007 Jetta specifications](https://files.directechs.com/directwirebrochures
 
 ## Automatic shifts
 
-The automatic now shifts at 6900 game tach RPM under full throttle (about 95% of the selected layout's idle–redline span), easing toward 5000 at light load. A change takes 0.18 seconds: the RPM follows the next gear's actual ratio, engine load dips, and wheel drive eases back in. The shared game tach range remains an abstraction of each engine's real RPM.
+The automatic shifts at 6900 game tach RPM under full throttle (about 95% of the selected layout's idle–redline span), easing toward 5000 at light load. Cars use representative four-, five- or six-speed ratios chosen for their inspirations. The tach ratio is calibrated to each car's game speed range so upper gears are reachable on the compressed roads; wheel force still uses the mechanical ratio. An upshift takes 0.34 seconds, with a short gear hold: the tach drops toward the next ratio immediately, engine load dips, and wheel drive eases back in. The physical audio response suppresses free-rev during that shift so wheelspin cannot hide the drop. The HUD shows the current gear and total. The shared game tach range remains an abstraction of each engine's real RPM.
 
 ## Turbo
 
