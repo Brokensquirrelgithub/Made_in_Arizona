@@ -41,7 +41,7 @@ namespace MadeInArizona
         /// (seconds), capped. The first version (0.32 s, 8.5 m, 0.55 s smoothing) swung so far and so slowly through
         /// turns that the car appeared to slide across the screen and understeer.
         /// </summary>
-        const float MaxLead = 4f, LeadSmoothing = .22f;
+        const float MaxLead = 6f, LeadSmoothing = .22f;
         Vector3 lead, leadVelocity; Rigidbody targetBody; Transform leadTarget;
         /// <summary>
         /// Terrain sway (Settings > Graphics &amp; Camera): the camera arm tips a few degrees as the car climbs, dips and
@@ -149,7 +149,7 @@ namespace MadeInArizona
             if (targetBody && !GameManager.Instance.Dying)
             {
                 Vector3 planar = targetBody.linearVelocity; planar.y = 0;
-                wanted = Vector3.ClampMagnitude(planar * Mathf.Clamp(DevTuning.Current.cameraLead, 0, .4f), MaxLead);
+                wanted = Vector3.ClampMagnitude(planar * Mathf.Clamp(DevTuning.Current.cameraLead, 0, .4f) * 1.35f, MaxLead);
             }
             if (snap) { lead = wanted; leadVelocity = Vector3.zero; }
             else lead = Vector3.SmoothDamp(lead, wanted, ref leadVelocity, LeadSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);

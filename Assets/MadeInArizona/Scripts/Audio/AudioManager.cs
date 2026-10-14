@@ -9,7 +9,7 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
         AudioClip[] pinStrikes, debrisBreaks;
         /// <summary>Death ray beam: the sustained hum loop and the ignition zap (played by each car's DeathRayBeam).</summary>
@@ -71,6 +71,7 @@ namespace MadeInArizona
             if(pinStrikes.Length==0){pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));}
             debrisBreaks=new[]{Keep(AudioSynthesis.DebrisBreak(true)),Keep(AudioSynthesis.DebrisBreak(false))};
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
+            firecrackerPop=Keep(AudioSynthesis.FirecrackerPop());
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));repair=Keep(AudioSynthesis.Repair());objective=Keep(AudioSynthesis.ObjectiveChime());
@@ -176,7 +177,7 @@ namespace MadeInArizona
             squeal.volume=Mathf.MoveTowards(squeal.volume,Settings.environment*(paved?slip:0)*.2f*duck,rate);
             scrub.volume=Mathf.MoveTowards(scrub.volume,Settings.environment*(!paved&&!wet?slip:0)*.25f*duck,rate);
             squeal.pitch=.9f+slip*.12f+speed*.08f;
-            scrub.pitch=.82f+speed*.3f+slip*.05f;
+            scrub.pitch=.67f+speed*.24f+slip*.04f;
         }
         /// <summary>
         /// Equal-power crossfade between the neighbouring RPM layers (in log-frequency, as pitch is heard) and
@@ -327,6 +328,11 @@ namespace MadeInArizona
         {
             if(Settings==null||pinStrikes==null||pinStrikes.Length==0)return;
             PlayAt(pinStrikes[Random.Range(0,pinStrikes.Length)],position,Settings.weapons*.9f*duck,Random.Range(.96f,1.04f),40);
+        }
+        public void PlayFirecrackerPop(Vector3 position)
+        {
+            if (Settings == null || !firecrackerPop) return;
+            PlayAt(firecrackerPop, position, Settings.weapons * .55f * duck, Random.Range(.92f, 1.08f), 48);
         }
         public void PlayDebrisBreak(Vector3 position, float size, bool wood)
         {

@@ -9,6 +9,42 @@ namespace MadeInArizona
         int updateSelection = -1;
         Vector2 updateScroll;
         Vector2 updateDetailsScroll;
+        bool StartupUpdateOfferVisible => !updatesMenu && GameUpdater.Instance && GameUpdater.Instance.StartupOffer != null &&
+            game != null && (game.State == GameState.MainMenu || game.State == GameState.Garage);
+
+        void AcceptStartupUpdateOffer()
+        {
+            var updater = GameUpdater.Instance;
+            if (!updater || updater.StartupOffer == null) return;
+            var latest = updater.StartupOffer;
+            updater.DismissStartupOffer();
+            OpenUpdates(); updateSelection = 0; updateDetailsScroll = Vector2.zero;
+            if (updater.InstallBlocker == null) updater.Download(latest);
+        }
+
+        void DrawStartupUpdateOffer()
+        {
+            var updater = GameUpdater.Instance;
+            var latest = updater.StartupOffer;
+            Rect(0, 0, width, height, new Color(.025f, .04f, .045f, .98f));
+            float w = Mathf.Min(650, width - 40), h = Mathf.Min(350, height - 40);
+            float x = (width - w) * .5f, y = (height - h) * .5f;
+            Rect(x, y, w, h, Ink);
+            Rect(x, y, 5, h, Lime);
+            Tag(x + 28, y + 24, "VERSION UPDATE", Lime);
+            Text(x + 28, y + 55, w - 56, 47, "A newer build is available", 29, Cream, true);
+            Text(x + 28, y + 108, w - 56, 30, updater.CurrentLabel + "  →  BUILD " + latest.ShortCommit, 15, Muted);
+            string summary = FirstLine(latest.message);
+            if (string.IsNullOrEmpty(summary)) summary = latest.title;
+            Text(x + 28, y + 151, w - 56, 63, Clip(summary, 130), 17, Cream);
+            string blocker = updater.InstallBlocker;
+            if (blocker != null) Text(x + 28, y + h - 111, w - 56, 35, blocker, 13, Orange);
+            float buttonWidth = (w - 68) * .5f;
+            if (Button(x + 28, y + h - 66, buttonWidth, 44, blocker == null ? "UPDATE TO LATEST  /  A" : "VIEW UPDATE", true, true, 15))
+                AcceptStartupUpdateOffer();
+            if (Button(x + 40 + buttonWidth, y + h - 66, buttonWidth, 44, "KEEP PLAYING  /  B", false, true, 15))
+                updater.DismissStartupOffer();
+        }
 
         public void OpenUpdates()
         {

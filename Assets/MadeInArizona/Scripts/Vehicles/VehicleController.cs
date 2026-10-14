@@ -225,6 +225,7 @@ namespace MadeInArizona
         float ShiftSoundLoad => ShiftSoundEnvelope(upshiftRemaining);
         bool initialized;
         const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
+        const float LowSpeedAccelerationBoost = 1.2f, LowSpeedBoostUntil = 11.2f;
 
         void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
         void OnDisable() { Active.Remove(this); }
@@ -466,8 +467,9 @@ namespace MadeInArizona
                 // mechanical wheel force still uses the transmission and final-drive ratios themselves.
                 float desiredRPM = Mathf.Max(900 + targetThrottle * 900, wheelRPM * driveRatio * tachGearScale);
                 RPM = Mathf.Lerp(RPM, desiredRPM, Time.fixedDeltaTime * (upshiftRemaining > 0 ? 12f : 8f));
-                // A gentle cruise shifts earlier; a committed pull uses nearly all of each engine's own rev range.
-                float upshiftRPM = Mathf.Lerp(5000f, FullThrottleUpshiftRpm, Mathf.Clamp01(targetThrottle));
+                // Shift from the driver's throttle intent. Cornering reduces available drive below, but should
+                // not make an accelerating car grab the next gear early and bog down on the exit.
+                float upshiftRPM = Mathf.Lerp(5000f, FullThrottleUpshiftRpm, Mathf.Clamp01(Throttle));
                 if (driveDirection > 0 && gearHoldRemaining <= 0 && RPM > upshiftRPM && Gear < gears.Length)
                 {
                     Gear++;
@@ -476,7 +478,7 @@ namespace MadeInArizona
                     driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                     RPM = Mathf.Lerp(RPM, Mathf.Max(900 + targetThrottle * 900, wheelRPM * driveRatio * tachGearScale), .28f);
                 }
-                if (gearHoldRemaining <= 0 && RPM < Mathf.Lerp(2400f, 3200f, targetThrottle) && Gear > 1)
+                if (gearHoldRemaining <= 0 && RPM < Mathf.Lerp(2400f, 3200f, Throttle) && Gear > 1)
                 {
                     Gear--;
                     gearHoldRemaining = .24f;
@@ -492,6 +494,11 @@ namespace MadeInArizona
                 // Launch assist: an extra shove from a standstill that fades out by ~58 km/h, so starts feel
                 // responsive and controllable without raising top speed.
                 acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
+                // Give every car 20% more forward pull through 25 mph, then blend back to the
+                // existing acceleration by 36 mph. Reverse and high-speed balance stay as tuned.
+                if (driveDirection > 0)
+                    acceleration *= Mathf.Lerp(LowSpeedAccelerationBoost, 1f,
+                        Mathf.Clamp01((speed - LowSpeedBoostUntil) / (LaunchFadeSpeed - LowSpeedBoostUntil)));
                 acceleration *= footing.drive;
                 acceleration *= ShiftDrive;
                 if (IsPlayer) acceleration *= tuning.acceleration;
@@ -807,7 +814,14 @@ namespace MadeInArizona
         void OnCollisionEnter(Collision collision)
         {
             if (IsPlayer && ProbeCounting) LastHitName = collision.collider.name + " @" + collision.relativeVelocity.magnitude.ToString("F0");
-            if (!initialized || Damage.IsDead || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
+            if (!initialized || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
+            if (Damage.IsDead)
+            {
+                if (Damage.IsSpinningWreck && !IsGroundContact(collision, collision.collider.GetComponentInParent<VehicleDamage>(),
+                        collision.collider.GetComponentInParent<DestructionSystem>()) && ImpactSpeed(collision) >= 4f)
+                    Damage.DetonateSpinningWreck(collision.contactCount > 0 ? collision.GetContact(0).point : transform.position);
+                return;
+            }
             float force = collision.relativeVelocity.magnitude;
             if(force<2)return;
             Vector3 point = collision.contactCount > 0 ? collision.GetContact(0).point : transform.position;

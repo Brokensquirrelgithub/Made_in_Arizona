@@ -115,6 +115,10 @@ namespace MadeInArizona
                         if (nx < 0 || nz < 0 || nx >= navSize || nz >= navSize) continue;
                         int next = nz * navSize + nx;
                         if (navCost[next] <= 0) continue;
+                        // A diagonal must not squeeze between two blocked cells. At a ridge this would send the
+                        // car across the cliff corner even though both sampled endpoints are driveable.
+                        if (dx != 0 && dz != 0 &&
+                            (navCost[cz * navSize + nx] <= 0 || navCost[nz * navSize + cx] <= 0)) continue;
                         Touch(next);
                         if (navClosed[next]) continue;
                         float run = navStep * (dx != 0 && dz != 0 ? 1.41421f : 1);
@@ -124,6 +128,15 @@ namespace MadeInArizona
                         if (navDeck[current] != navDeck[next] && rise > 1.2f) continue;
                         // Elevation blockage: cliff walls and anything steeper than a car can climb.
                         if (rise > MaxDriveGrade * run) continue;
+                        // The 8 m navigation lattice can straddle a narrow, steep lip. Sample halfway along
+                        // each candidate link so the A* route agrees with the finer direct-drive check.
+                        if (!navDeck[current] && !navDeck[next])
+                        {
+                            Vector3 mid = (NavPoint(current) + NavPoint(next)) * .5f;
+                            float middleHeight = SampleHeight(mid);
+                            if (Mathf.Abs(middleHeight - navHeight[current]) > MaxDriveGrade * run * .5f ||
+                                Mathf.Abs(navHeight[next] - middleHeight) > MaxDriveGrade * run * .5f) continue;
+                        }
                         float grade = rise / run;
                         float step = (navCost[current] + navCost[next]) * .5f;
                         if (navCost[current] < WaterCost && navCost[next] < WaterCost) step = RoadCost + (step - RoadCost) * offRoad; // never cheapen fording
@@ -143,8 +156,14 @@ namespace MadeInArizona
             {
                 Vector3 p = NavPoint(navNodes[i]);
                 // Centre waypoints on the carriageway so vehicles drive the road instead of its shoulder.
-                if (roadIndex.Nearest(XZ(p), out _, out Vector2 centre) < 11) { p.x = centre.x; p.z = centre.y; }
-                if (Vector2.Distance(XZ(p), XZ(last)) < 10) continue;
+                if (roadIndex.Nearest(XZ(p), out _, out Vector2 centre) < 11)
+                {
+                    Vector3 centred = new Vector3(centre.x, HeightAt(new Vector3(centre.x, 0, centre.y)), centre.y);
+                    if (DirectDrivable(last, centred)) p = centred;
+                }
+                // Keep a close waypoint when skipping it would cut across a sharp ridge or a blocked bend.
+                if (Vector2.Distance(XZ(p), XZ(last)) < 10 &&
+                    DirectDrivable(last, NavPoint(navNodes[i + 1]))) continue;
                 p.y = HeightAt(p);
                 path.Add(p); last = p;
             }

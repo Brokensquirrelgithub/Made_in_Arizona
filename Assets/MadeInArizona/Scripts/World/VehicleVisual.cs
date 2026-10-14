@@ -145,7 +145,7 @@ namespace MadeInArizona
                 Box("Otaku rear wing",root,new Vector3(0,roofY+.08f,wingZ),new Vector3(width*1.08f,.08f,.31f),FactionRules.Accent(faction),false,1.7f);
                 for(int side=-1;side<=1;side+=2) Box("Otaku wing mount",root,new Vector3(side*width*.32f,roofY-.1f,wingZ),new Vector3(.07f,.4f,.08f),Ink);
             }
-            Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,plate,.115f,Cream);
+            Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,plate,.115f,Cream,Quaternion.Euler(0,180,0));
             Transform turret=BuildTurret(root,turretAt,enemy);
             if(enemy) Box("Faction turret beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.1f,.08f,.12f),FactionRules.Accent(faction),false,2);
             if(!enemy) Box("Turquoise friend beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.10f,.08f,.12f),Turquoise,false,3);

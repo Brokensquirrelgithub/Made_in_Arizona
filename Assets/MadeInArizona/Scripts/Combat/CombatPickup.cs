@@ -24,13 +24,14 @@ namespace MadeInArizona
             transform.position = position;
         }
         const float MagnetRadius = 18.2f, MagnetCollect = 2.86f;
+        const float SwapRadius = 9f;
         float availableAt, magnetSpeed;
         Vector3 basePosition;
         const float SupplyMagnetRadius = 12f;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
             if (!player) return null;
-            CombatPickup closest = null; float nearest = 27.04f;
+            CombatPickup closest = null; float nearest = SwapRadius * SwapRadius;
             foreach (var pickup in active)
             {
                 if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.SameAsHeld(player)) continue;
@@ -165,7 +166,7 @@ namespace MadeInArizona
                 transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
                 delta = transform.position - player.transform.position; delta.y = 0;
             }
-            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? 21.97f : 13f) || Mathf.Abs(transform.position.y - player.transform.position.y) > 4) return;
+            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? SwapRadius * SwapRadius : 13f) || Mathf.Abs(transform.position.y - player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)
             {
                 if (NearbyWeapon(player) != this) return;

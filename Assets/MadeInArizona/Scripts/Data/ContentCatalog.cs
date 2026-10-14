@@ -218,16 +218,16 @@ namespace MadeInArizona
                     "AREA SATURATION","Three rockets cover a wide spread.","Few volleys; each rocket alone is modest."),
                 Weapon(10,"boomstick","Drainpipe Double-Barrel","Two drainpipes and a nail for a firing pin. Twelve heavy pellets; devastating at bumper distance.",15,.95f,98,0,new Color(.75f,.42f,1),
                     "POINT-BLANK SHOTGUN","Two-shot kills on anything touching your bumper.","Slow reload and almost no reach."),
-                Weapon(11,"shredder","Sawblade Slingshot","Surgical tubing launching three table-saw blades. Each blade cuts through one car into the next.",6,5,88,0,new Color(.95f,.84f,.48f),
-                    "PIERCING FAN","Blades pass through the first car and keep cutting.","Short reach and light damage per blade."),
-                Weapon(12,"pothole","Tennis-Ball Mortar","A welded stack of beer cans lobbing charges that bounce once before they go off.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f),
-                    "INDIRECT FIRE","Arcs over cover and bounces into hiding spots.","Small blast and slow shells; hopeless against fast movers."),
+                Weapon(11,"shredder","Sawblade Slingshot","Surgical tubing launching three table-saw blades. Each blade stops at its first hit.",6,5,88,0,new Color(.95f,.84f,.48f),
+                    "SAWBLADE FAN","Three blades spread across the lane.","Short reach and light damage per blade."),
+                Weapon(12,"pothole","Molotov Tennis Ball","A flaming tennis ball lobbed from welded beer cans. Shots cycle through one, two and three balls in a line spread.",32,.85f,38,2.4f,new Color(.98f,.52f,.22f),
+                    "BOUNCING FIRE","Enemy contact bursts on impact; missed balls bounce before bursting.","No target assist and a small blast."),
                 Weapon(13,"needler","Cactus-Spine Needler","A saguaro rib packed into a leaf-spring launcher. Spines curve after cars; seven stuck spines rupture together.",6,8,58,0,new Color(.28f,1f,.12f),
                     "TRACKING / SUPERCOMBINE","Spines chase moving cars; seven hits set off a big rupture.","Slow spines, weak until they stack, and cover eats them."),
                 Weapon(14,"zapper","Jumper-Cable Zapper","Two car batteries and a pair of jumper cables. Each bolt stalls an engine and arcs to two more cars.",9,3,110,0,new Color(.45f,.85f,1),
                     "ENGINE KILLER","Stalls engines and guns; arcs through a pack.","Barely scratches the paint on its own."),
                 Weapon(15,"torch","Weed-Burner Torch","A propane weed burner with the regulator removed. Sets cars alight; the fire keeps working after they flee.",5,14,34,0,new Color(1,.45f,.12f),
-                    "FLAMETHROWER / BURN","Burning damage keeps ticking after contact.","Fourteen metres of reach and nothing more."),
+                    "FLAMETHROWER / BURN","Twin flames can leave hostile-only fire patches.","Short reach; burning damage keeps ticking after contact."),
                 Weapon(16,"railgun","Arc-Welder Railgun","Two arc welders and a length of copper busbar. An instant bolt that punches through every car in line.",150,.45f,0,0,new Color(.55f,.9f,1),
                     "PIERCING HEAVY SHOT","Instant hit at long range that passes through whole convoys.","Two seconds to recharge; a miss hurts."),
                 Weapon(17,"aircannon","Leaf-Blower Air Cannon","Six leaf blowers and a trash-can barrel. A pressure slug that shoves cars off roads and over cliffs.",20,1.4f,70,0,new Color(.85f,.95f,1),
@@ -257,7 +257,9 @@ namespace MadeInArizona
                 Weapon(28,"gokart","Dynamite Go-Kart","A toy go-kart with a car-alarm brain and a bundle of dynamite. It hunts down the nearest hostile and hugs it.",140,.8f,24,7,new Color(1,.62f,.1f),
                     "SEEKING BOMB","Chases targets around cover and corners.","Slow; can be outrun or blocked by walls; three a drop."),
                 Weapon(29,"scattermortar","Scatter Mortar","Nine mini charges arc out in a shotgun fan. The near shells burst first, then the far shells rain down.",24,.65f,36,2.6f,new Color(1,.57f,.18f),
-                    "ARCING SHOTGUN","A directed shower of explosives blankets near and far ground.","No tracking; moving targets can slip between the bursts.")
+                    "ARCING SHOTGUN","A directed shower of explosives blankets near and far ground.","No tracking; moving targets can slip between the bursts."),
+                Weapon(30,"fireworks","Firework Cannon","A show mortar mounted at the nose fires aerial shells. Each shell blooms into a real firework over the road.",72,.7f,35,7,new Color(1f,.64f,.25f),
+                    "AERIAL BURST","A bright skyburst catches vehicles below it.","The fuse and high arc make close targets hard to hit.")
             };
         }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color,string role,string strength,string weakness)

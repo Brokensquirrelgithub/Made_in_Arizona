@@ -15,7 +15,7 @@ namespace MadeInArizona
         const float BowlingShove = 34, BowlingLift = 8;
         /// <summary>The ball hops off each car it strikes before rolling on.</summary>
         const float BowlingBounce = 7.5f;
-        enum Mode { Shell, Mine, Bomblet, Fuse, Roller, Crawler, Sentry, Vortex }
+        enum Mode { Shell, Mine, Bomblet, Fuse, Roller, Crawler, Sentry, Vortex, FirePatch }
         enum Payload { None, FireRing, Vortex }
         readonly RaycastHit[] hits = new RaycastHit[16];
         static readonly List<FieldOrdnance> sentries = new List<FieldOrdnance>();
@@ -27,19 +27,57 @@ namespace MadeInArizona
         Vector3 assistedLanding, velocity;
         float damage, radius, armedAt, expiresAt, proximityRadius, nextShot, retargetAt, cruise, blinkAt;
         int bounces;
+        bool molotov, firework;
         Mode mode; Payload payload;
         Color color;
         Transform head, beaconBeam;
         Material ownMaterial, beaconMaterial;
         static readonly Color BeaconRed = new Color(1, .06f, .03f);
+        static GameObject fireworkPrefab;
+        static bool fireworkPrefabLoaded;
+        static readonly RaycastHit[] firePatchHits = new RaycastHit[12];
         readonly HashSet<VehicleController> struck = new HashSet<VehicleController>();
+
+        public static void PlaceFirePatch(VehicleController owner, Vector3 position)
+        {
+            if (!owner) return;
+            int count = Physics.RaycastNonAlloc(position + Vector3.up * 2f, Vector3.down, firePatchHits, 6f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue; Vector3 groundPoint = Vector3.zero;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = firePatchHits[i];
+                if (!hit.collider || hit.normal.y < .55f || hit.collider.GetComponentInParent<VehicleController>()) continue;
+                if (hit.distance < nearest) { nearest = hit.distance; groundPoint = hit.point; }
+            }
+            if (nearest == float.MaxValue) return;
+            var patch = Create("Torch fire patch", groundPoint + Vector3.up * .04f,
+                new Color(1f, .27f, .035f), owner, null);
+            patch.mode = Mode.FirePatch; patch.expiresAt = Time.time + 4f;
+            patch.nextShot = Time.time;
+            var firePrefab = Resources.Load<GameObject>("VFX/ExplosionGroundFire");
+            if (firePrefab)
+            {
+                var flames = Instantiate(firePrefab, patch.transform);
+                flames.transform.localPosition = Vector3.up * .5f;
+                flames.transform.localScale = Vector3.one * .55f;
+                foreach (var audio in flames.GetComponentsInChildren<AudioSource>(true)) { audio.Stop(); audio.enabled = false; }
+                foreach (var child in flames.GetComponentsInChildren<Transform>(true))
+                    if (child.name == "Distortion" || child.name == "Light") child.gameObject.SetActive(false);
+            }
+        }
 
         public static void LaunchShell(VehicleController owner, Vector3 origin, Vector3 aim, WeaponDefinition weapon, float damage, float horizontalSpeed = 0, VehicleController assistedTarget = null)
         {
-            var shell = Create("Arc shell • " + weapon.displayName, origin, weapon.projectileColor, owner, PrimitiveType.Cylinder);
+            bool tennisBall = weapon.id == "pothole";
+            var shell = Create("Arc shell • " + weapon.displayName, origin, weapon.projectileColor, owner,
+                tennisBall ? PrimitiveType.Sphere : PrimitiveType.Cylinder);
             shell.mode = Mode.Shell; shell.damage = damage; shell.radius = weapon.blastRadius;
+            shell.molotov = tennisBall;
+            shell.firework = weapon.id == "fireworks";
             shell.payload = weapon.id == "sprinkler" ? Payload.FireRing : weapon.id == "shopvac" ? Payload.Vortex : Payload.None;
-            shell.bounces = weapon.id == "pothole" ? 1 : 0;
+            shell.bounces = tennisBall ? Random.Range(1, 3) : 0;
+            if (tennisBall) { shell.transform.localScale = Vector3.one * .26f; shell.ownMaterial.SetColor("_EmissionColor", new Color(2.2f, .85f, .08f)); }
             if (weapon.id == "shopvac") shell.transform.localScale = new Vector3(.7f, .55f, .7f);
             shell.assistedTarget = assistedTarget;
             if (assistedTarget)
@@ -56,11 +94,11 @@ namespace MadeInArizona
             else
             {
                 Vector3 horizontal = new Vector3(aim.x, 0, aim.z).normalized;
-                shell.velocity = horizontal * (horizontalSpeed > 0 ? horizontalSpeed : weapon.speed) + Vector3.up * (weapon.id == "mortar" ? 31 : 17);
-                shell.expiresAt = Time.time + (weapon.id == "mortar" ? 5 : 3);
+                shell.velocity = horizontal * (horizontalSpeed > 0 ? horizontalSpeed : weapon.speed * (weapon.id == "sprinkler" ? .75f : 1f)) + Vector3.up * (weapon.id == "mortar" ? 31 : shell.firework ? 23 : 17);
+                shell.expiresAt = Time.time + (weapon.id == "mortar" ? 5 : shell.firework ? 1.2f : 3);
             }
-            if (shell.bounces > 0) shell.expiresAt += 1.2f;
-            shell.armedAt = Time.time + .12f;
+            if (shell.bounces > 0) shell.expiresAt += 1.2f * shell.bounces;
+            shell.armedAt = Time.time + (tennisBall ? 0f : .12f);
             // Only large, slow hostile shells get a ground warning. Fast rockets and small
             // bomblets keep their own readable projectile trails without covering the map.
             if (owner && !owner.FriendlyToPlayer && weapon.blastRadius >= 8f &&
@@ -315,6 +353,7 @@ namespace MadeInArizona
                 case Mode.Roller: UpdateRoller(); break;
                 case Mode.Crawler: UpdateCrawler(); break;
                 case Mode.Sentry: UpdateSentry(); break;
+                case Mode.FirePatch: UpdateFirePatch(); break;
             }
         }
         void UpdateMine()
@@ -326,6 +365,16 @@ namespace MadeInArizona
                     if (Hostile(vehicle) && (vehicle.transform.position - transform.position).sqrMagnitude < 12.25f) { Detonate(); return; }
             if (Time.time > expiresAt) Destroy(gameObject);
         }
+        void UpdateFirePatch()
+        {
+            if (Time.time >= expiresAt) { Destroy(gameObject); return; }
+            if (Time.time < nextShot || CoopSession.IsRemoteClient) return;
+            nextShot = Time.time + .28f;
+            ExplosionSystem.Burst(transform.position + Vector3.up * .3f, new Color(1f, .37f, .05f), 4, 1.6f);
+            foreach (var vehicle in VehicleController.Active)
+                if (Hostile(vehicle) && Vector3.ProjectOnPlane(vehicle.transform.position - transform.position, Vector3.up).sqrMagnitude < 2.2f * 2.2f)
+                    vehicle.Damage.ApplyDamage(2f, vehicle.transform.position, source);
+        }
         void UpdateFlight()
         {
             Vector3 step = velocity * Time.deltaTime;
@@ -333,25 +382,29 @@ namespace MadeInArizona
             float nearest = float.MaxValue; RaycastHit first = default;
             for (int i = 0; i < count; i++)
             {
-                if (owner && hits[i].collider.GetComponentInParent<VehicleController>() == owner) continue;
+                var touched = hits[i].collider.GetComponentInParent<VehicleController>();
+                if (owner && touched == owner || molotov && touched && !Hostile(touched)) continue;
                 if (hits[i].distance < nearest) { nearest = hits[i].distance; first = hits[i]; }
             }
             if (nearest < float.MaxValue && Time.time > armedAt)
             {
                 // Tennis-ball charges and bomblets skip off the ground once before they go off.
-                bool ground = !first.collider.GetComponentInParent<VehicleController>();
+                var target = first.collider.GetComponentInParent<VehicleController>();
+                bool ground = !target;
                 if (ground && bounces > 0 && first.distance > 0)
                 {
                     bounces--; transform.position += step.normalized * nearest + first.normal * .25f;
                     velocity = Vector3.Reflect(velocity, first.normal) * .55f;
-                    ExplosionSystem.Burst(first.point, new Color(.6f, .46f, .3f, .5f), 4, 1.5f);
+                    ExplosionSystem.Burst(first.point, molotov ? new Color(1f, .38f, .06f) : new Color(.6f, .46f, .3f, .5f), 4, 1.5f);
                     return;
                 }
+                if (molotov && target && Hostile(target)) VehicleAfflictions.For(target).Ignite(8f, 2.5f, source);
                 transform.position += step.normalized * nearest; Land(); return;
             }
             transform.position += step;
             velocity += Vector3.down * 32 * Time.deltaTime;
             transform.Rotate(Vector3.right, 420 * Time.deltaTime);
+            if ((molotov || firework) && Time.time >= blinkAt) { blinkAt = Time.time + .08f; ExplosionSystem.Burst(transform.position, firework ? new Color(1f, .8f, .42f) : new Color(1f, .35f, .04f), 2, .8f); }
             if (Time.time > armedAt && velocity.y <= 1 && assistedTarget && assistedTarget.Damage != null && !assistedTarget.Damage.IsDead)
             {
                 Vector3 targetDelta = assistedTarget.transform.position + Vector3.up * .7f - transform.position;
@@ -412,8 +465,9 @@ namespace MadeInArizona
                     Vector3 delta = vehicle.transform.position - transform.position;
                     if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > BowlingHitRadius * BowlingHitRadius || Mathf.Abs(delta.y) > 3f) continue;
                     struck.Add(vehicle);
-                    vehicle.Damage.ApplyDamage(damage, transform.position, source);
-                    if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * BowlingShove + Vector3.up * BowlingLift, ForceMode.VelocityChange);
+                    vehicle.Damage.ApplyDamage(damage, transform.position, source, forceSpinoutOnKill: true);
+                    float shove = owner && owner.Weapons ? owner.Weapons.BowlingHitMultiplier() : 1f;
+                    if (vehicle.Body && !vehicle.Body.isKinematic) vehicle.Body.AddForce(direction * BowlingShove * shove + Vector3.up * BowlingLift, ForceMode.VelocityChange);
                     // The ball keeps most of its pace and hops up off the car, ready for the next one in the lane.
                     velocity = Vector3.ProjectOnPlane(velocity, Vector3.up) * .82f + Vector3.up * BowlingBounce;
                     transform.position += Vector3.up * .15f;
@@ -424,7 +478,10 @@ namespace MadeInArizona
             GroundFollow(.54f, true);
             velocity *= 1 - .12f * dt;
             transform.Rotate(Vector3.Cross(Vector3.up, direction), speed * dt / .54f * Mathf.Rad2Deg, Space.World);
-            if (Time.time >= expiresAt || speed < 2) { ExplosionSystem.Burst(transform.position, new Color(.5f, .45f, .4f, .6f), 8, 2); Destroy(gameObject); }
+            if (Time.time >= expiresAt || speed < 2) {
+                if (!replica && struck.Count == 0 && owner && owner.Weapons) owner.Weapons.BowlingMiss();
+                ExplosionSystem.Burst(transform.position, new Color(.5f, .45f, .4f, .6f), 8, 2); Destroy(gameObject);
+            }
         }
         void UpdateCrawler()
         {
@@ -518,7 +575,31 @@ namespace MadeInArizona
         void Detonate()
         {
             Vector3 at = transform.position;
-            var kind = mode == Mode.Mine ? ExplosionKind.Ammunition : mode == Mode.Crawler ? ExplosionKind.Gasoline : mode == Mode.Vortex ? ExplosionKind.Massive : ExplosionKind.Grenade;
+            if (firework)
+            {
+                if (!fireworkPrefabLoaded) { fireworkPrefab = Resources.Load<GameObject>("VFX/Firework_WarmSunset"); fireworkPrefabLoaded = true; }
+                if (fireworkPrefab)
+                {
+                    var burst = Instantiate(fireworkPrefab, at, Quaternion.identity);
+                    var vfx = burst.GetComponent<UnityEngine.VFX.VisualEffect>();
+                    if (vfx) { vfx.SetFloat("Initial Rocket Lifetime", .05f); vfx.Play(); }
+                    Destroy(burst, 6f);
+                }
+                else
+                {
+                    // The licensed Asset Store effect is kept out of the public source checkout. Give source
+                    // builds a complete, visible firework even when that optional local prefab is absent.
+                    Vector3 centre = at + Vector3.up * 1.5f;
+                    ExplosionSystem.Burst(centre, new Color(1.8f, .65f, .18f), 64, 8f);
+                    for (int i = 0; i < 8; i++)
+                    {
+                        float angle = i * Mathf.PI * .25f;
+                        Vector3 spoke = new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle)) * 2.4f;
+                        ExplosionSystem.Burst(centre + spoke, i % 2 == 0 ? new Color(1.6f, .9f, .3f) : new Color(.4f, .9f, 1.6f), 3, 2.5f);
+                    }
+                }
+            }
+            var kind = firework ? ExplosionKind.Rocket : mode == Mode.Mine ? ExplosionKind.Ammunition : mode == Mode.Crawler ? ExplosionKind.Gasoline : mode == Mode.Vortex ? ExplosionKind.Massive : ExplosionKind.Grenade;
             ExplosionSystem.Detonate(at, radius, damage, source, kind, falloffPower: mode == Mode.Fuse ? 2f : 0f);
             if (payload == Payload.FireRing && source)
             {
@@ -534,9 +615,9 @@ namespace MadeInArizona
                     if (!hit.collider || hit.normal.y < .5f || hit.collider.GetComponentInParent<VehicleController>()) continue;
                     if (hit.distance < groundDistance) { groundDistance = hit.distance; fireOrigin = hit.point + Vector3.up * 1.05f; }
                 }
-                for (int i = 0; i < 16; i++)
+                for (int i = 0; i < 32; i++)
                 {
-                    float angle = (i + Random.value * .4f) / 16f * Mathf.PI * 2;
+                    float angle = (i + Random.value * .4f) / 32f * Mathf.PI * 2;
                     var burn = new ShotFx { effect = ShotEffect.Burn, power = 12, duration = 3.5f, detached = true, flame = true, castRadius = .5f };
                     ProjectileSystem.Fire(fireOrigin, new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)), 22, 5, 0, source, new Color(1, .5f, .1f), ExplosionKind.Ammunition, .75f, burn);
                 }

@@ -302,7 +302,7 @@ namespace MadeInArizona
                 Use(Box("Turret plate", root, new Vector3(0, Y(top + .03f), z - .04f), new Vector3(.5f, .03f, .46f), Trim), black);
                 Gun(top + .045f, z - .04f);
             }
-            public void Plate(float height) => plateY = height;
+            public void Plate(float height, float proud = 0) { plateY = height; plateProud = Mathf.Max(plateProud, proud); }
             public void Exhaust(int count, float height) { pipes = count; pipeY = height; }
 
             public void Finish()
@@ -817,7 +817,10 @@ namespace MadeInArizona
             c.Doors(c.F(-.42f), -.38f);
             c.Mirrors(c.F(-.52f), false);
             c.Handles(.84f, -.2f);
-            c.Plate(.52f);
+            // Keep the plate off the reflective bumper and give the rear-facing lettering a matte backing.
+            c.Plate(.52f, .16f);
+            Use(Box("Scarface rear plate backing", c.root, new Vector3(0, c.Y(.52f), c.TailZ - .148f),
+                new Vector3(.44f, .17f, .014f), Trim), Material(new Color(.055f, .06f, .055f), 0, .08f));
 
             // The whip at the back left corner, its pennant four car-heights up: a little orange triangle, there to be seen.
             WhipFlag.Build(c.root, new Vector3(-.7f, c.Y(.95f), c.R(-.34f)), 4 * 1.465f - .95f, new Color(1f, .4f, .04f), new Color(1f, .8f, .46f));

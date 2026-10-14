@@ -277,7 +277,7 @@ namespace MadeInArizona
         {
             if(Stage==0)
             {
-                bool inside=Near(Point(1),25);if(inside)heldSeconds+=dt;
+                bool inside=Near(Point(1),55);if(inside)heldSeconds+=dt;
                 Objective=(inside?"UPLINK TRANSMITTING":"RETURN TO GOLD PERIMETER")+" • "+Mathf.FloorToInt(heldSeconds)+" / "+Mathf.CeilToInt(definition.objectiveDuration)+" sec";
                 Progress=heldSeconds/definition.objectiveDuration*.8f;
                 if(heldSeconds>definition.objectiveDuration*(wave+1)/3f&&wave<2)

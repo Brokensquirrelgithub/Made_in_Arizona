@@ -130,6 +130,22 @@ namespace MadeInArizona
             }
             return Clip("Original • overrun pop",samples);
         }
+        /// <summary>A dry firecracker snap with a brief papery tail.</summary>
+        public static AudioClip FirecrackerPop()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .14f)];
+            uint seed = 41357; float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, .14f);
+                float snap = (noise - low) * Mathf.Exp(-t * 165f) * 1.5f;
+                float paper = low * Mathf.Exp(-t * 36f) * .45f;
+                float body = Wave(230f * t) * Mathf.Exp(-t * 55f) * .28f;
+                samples[i] = SoftLimit(snap + paper + body) * Mathf.Min(1, t * 3000f);
+            }
+            return Clip("Original • firecracker pop", samples);
+        }
         /// <summary>The player's hull taking a hit: body thump, a low clang of struck sheet steel and a crunch of bending metal.</summary>
         public static AudioClip Hurt(int variant)
         {

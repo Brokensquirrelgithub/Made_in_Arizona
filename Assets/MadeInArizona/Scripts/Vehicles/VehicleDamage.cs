@@ -116,7 +116,7 @@ namespace MadeInArizona
         /// Friendly fire: rounds, rams and burns never hurt a vehicle on the attacker's own side. Explosions can hurt
         /// allies except the escort, which only takes direct hostile attacks. Environmental blasts carry their own flag.
         /// </summary>
-        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false, bool environmental = false)
+        public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source, bool explosive = false, bool environmental = false, bool forceSpinoutOnKill = false)
         {
             if (CoopSession.IsRemoteClient) return;
             if (IsDead || amount <= 0 || vehicle == null) return;
@@ -142,7 +142,7 @@ namespace MadeInArizona
                 AudioManager.Instance?.PlayHurt(LastDamageFraction);
                 CameraController.Instance?.Shake(Mathf.Clamp(.06f+LastDamageFraction*3f,.06f,.6f));
             }
-            if (Health <= 0) Die(source);
+            if (Health <= 0) Die(source, forceSpinoutOnKill);
             CombatFeedback.ReportHit(vehicle,previousHealth-Health,hitPoint,source,IsDead);
         }
         /// <summary>
@@ -196,14 +196,23 @@ namespace MadeInArizona
                     burning ? new Color(.95f, .27f, .07f, .8f) : new Color(.2f, .22f, .23f, .5f), burning ? 5 : 3, 1.6f);
             }
         }
-        void Die(GameObject source)
+        public void DetonateSpinningWreck(Vector3 impact)
+        {
+            if (!IsSpinningWreck || CoopSession.IsRemoteClient) return;
+            IsSpinningWreck = false;
+            ExplosionSystem.Detonate(impact, 8f, 90f, LastDamageSource ? LastDamageSource : gameObject,
+                ExplosionKind.Vehicle, environmental: true);
+            Destroy(gameObject);
+        }
+
+        void Die(GameObject source, bool forceSpinoutOnKill)
         {
             IsDead = true;
             var ai = GetComponent<EnemyAI>();
             if (ai != null) ai.enabled = false;
             var sourceVehicle = source != null ? source.GetComponentInParent<VehicleController>() : null;
             var friendly = ai != null && ai.IsFriendly;
-            IsSpinningWreck = !vehicle.IsPlayer && !friendly && Random.value < .25f;
+            IsSpinningWreck = !vehicle.IsPlayer && !friendly && (forceSpinoutOnKill || Random.value < .25f);
             vehicle.Body.linearDamping = IsSpinningWreck ? .35f : 2;
             vehicle.Body.angularDamping = IsSpinningWreck ? .22f : 3;
             if (!vehicle.IsPlayer && !friendly)

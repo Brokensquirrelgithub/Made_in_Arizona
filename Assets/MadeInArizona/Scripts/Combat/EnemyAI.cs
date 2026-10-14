@@ -188,14 +188,18 @@ namespace MadeInArizona
             var world = GeneratedWorld.Active;
             if (!world) return null;
             Vector3 here = transform.position;
-            if (FlatDelta(goal, here).magnitude < 18) { detouring = false; return null; }
+            if (FlatDelta(goal, here).magnitude < 18 && world.DirectDrivable(here, goal))
+            { detouring = false; detour.Clear(); return null; }
             if (Time.time >= detourCheckAt)
             {
                 detourCheckAt = Time.time + DetourCheckInterval * Random.Range(.8f, 1.2f);
                 if (world.DirectDrivable(here, goal)) { detouring = false; detour.Clear(); }
                 else
                 {
-                    bool stale = !detouring || detour.Count == 0 || FlatDelta(goal, detourGoal).magnitude > DetourReplanMove || Time.time - detourPlannedAt > DetourMaxAge;
+                    bool stale = float.IsNegativeInfinity(detourPlannedAt) ||
+                        FlatDelta(goal, detourGoal).magnitude > DetourReplanMove ||
+                        Time.time - detourPlannedAt > DetourMaxAge ||
+                        detouring && (detour.Count == 0 || !world.DirectDrivable(here, detour[detourIndex]));
                     if (stale && detourPlanFrame != Time.frameCount)
                     {
                         detourPlanFrame = Time.frameCount;
@@ -207,13 +211,14 @@ namespace MadeInArizona
                     else if (stale) detourCheckAt = Time.time; // another hostile planned this frame: try the next one
                 }
             }
-            if (!detouring || detour.Count == 0) return null;
-            // Never turn back for a waypoint already passed; look ahead further at speed.
-            float nearest = float.MaxValue; int ahead = detourIndex;
-            for (int i = detourIndex; i < Mathf.Min(detour.Count, detourIndex + 10); i++) { float d = FlatDelta(detour[i], here).sqrMagnitude; if (d < nearest) { nearest = d; ahead = i; } }
-            detourIndex = ahead;
+            // An unreachable goal must not turn a failed A* search into a straight drive up the cliff.
+            // Pause at the safe approach and retry when the target moves or the route ages out.
+            if (!detouring || detour.Count == 0) return Vector3.zero;
             float lookAhead = 8 + vehicle.Body.linearVelocity.magnitude * .5f;
-            while (detourIndex < detour.Count - 1 && FlatDelta(detour[detourIndex], here).magnitude < lookAhead) detourIndex++;
+            // Only advance across a bend when the car can actually drive to the next waypoint. Choosing the
+            // nearest node by distance skipped ridge passes when the road folded back near itself.
+            while (detourIndex < detour.Count - 1 && FlatDelta(detour[detourIndex], here).magnitude < lookAhead &&
+                world.DirectDrivable(here, detour[detourIndex + 1]) && ClearRun(here, detour[detourIndex + 1])) detourIndex++;
             Vector3 heading = FlatDelta(detour[detourIndex], here);
             return heading.sqrMagnitude > .01f ? heading.normalized : (Vector3?)null;
         }

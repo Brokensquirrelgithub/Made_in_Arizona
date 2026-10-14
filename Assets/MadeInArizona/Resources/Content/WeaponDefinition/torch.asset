@@ -17,8 +17,8 @@ MonoBehaviour:
   description: A propane weed burner with the regulator removed. Sets cars alight;
     the fire keeps working after they flee.
   role: FLAMETHROWER / BURN
-  strength: Burning damage keeps ticking after contact.
-  weakness: Fourteen metres of reach and nothing more.
+  strength: Twin flames can leave hostile-only fire patches.
+  weakness: Short reach; burning damage keeps ticking after contact.
   contentOrder: 15
   damage: 5
   fireRate: 14

@@ -37,6 +37,8 @@ namespace MadeInArizona
         readonly string[] presets = { "SIMPLE", "LOW", "MEDIUM", "HIGH" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause" };
         int[] garageWeaponIndices;
+        readonly List<int> visibleParts = new List<int>();
+        int partsVehicle = -1;
         /// <summary>Catalog indices of every scrap weapon, core roles first and then the oddballs.</summary>
         int[] garageWeapons
         {
@@ -80,6 +82,16 @@ namespace MadeInArizona
         void Update()
         {
             if (introActive) { TickOpening(); return; }
+            if (StartupUpdateOfferVisible)
+            {
+                var keys = Keyboard.current; var controller = Gamepad.current;
+                if (controller != null && controller.buttonSouth.wasPressedThisFrame)
+                    AcceptStartupUpdateOffer();
+                else if ((keys != null && keys.escapeKey.wasPressedThisFrame) ||
+                    (controller != null && controller.buttonEast.wasPressedThisFrame))
+                    GameUpdater.Instance.DismissStartupOffer();
+                return;
+            }
             TickDevSave();UpdatesInput();if(updatesMenu)return;WorldMenuInput();
             if(game.State==GameState.MainMenu||game.State==GameState.Generating||worldMap)return;
             smoothedFps = Mathf.Lerp(smoothedFps, 1f / Mathf.Max(.001f, Time.unscaledDeltaTime), .05f);
@@ -111,7 +123,13 @@ namespace MadeInArizona
                 if (change != 0) {
                     if (station == 0) game.SelectedMission = Mathf.Clamp(game.SelectedMission + change, 0, game.Save.unlockedMission);
                     if (station == 1) { int v = Mathf.Clamp(game.Save.selectedVehicle + change, 0, ContentCatalog.Vehicles.Length - 1); if (GarageManager.SelectVehicle(v, game.Save)) game.RefreshGarageVehicle(); }
-                    if (station == 2) { selectedPart = Mathf.Clamp(selectedPart + change, 0, ContentCatalog.Parts.Length - 1); listScroll.y = Mathf.Max(0, (selectedPart - 3) * 81); }
+                    if (station == 2) {
+                        EnsureVisibleParts();
+                        int row = visibleParts.IndexOf(selectedPart);
+                        row = Mathf.Clamp(row + change, 0, visibleParts.Count - 1);
+                        if (row >= 0) selectedPart = visibleParts[row];
+                        listScroll.y = Mathf.Max(0, (row - 3) * 81);
+                    }
                     if (station == 3) { selectedWeapon = Mathf.Clamp(selectedWeapon + change, 0, garageWeapons.Length - 1); listScroll.y = Mathf.Max(0, (selectedWeapon - 2) * 91); }
                     if (station == 4) { game.Save.dogCosmetic = Mathf.Clamp(game.Save.dogCosmetic + change, 0, 3); game.ReturnToGarage(); station = 4; }
                 }
@@ -124,7 +142,7 @@ namespace MadeInArizona
         void ConfirmSelection()
         {
             if (station == 0) game.StartMission(game.SelectedMission);
-            if (station == 2) BuyOrInstall(ContentCatalog.Parts[selectedPart]);
+            if (station == 2) { EnsureVisibleParts(); if (visibleParts.Count > 0) BuyOrInstall(ContentCatalog.Parts[selectedPart]); }
             if (station == 3) SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
         }
 
@@ -175,6 +193,7 @@ namespace MadeInArizona
             if (introActive) { DrawOpening(); GUI.matrix = Matrix4x4.identity; return; }
             if (CoopSession.Instance && (CoopSession.Instance.EndChoicePending || CoopSession.Instance.EndingSession))
             { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
+            if (StartupUpdateOfferVisible) { DrawStartupUpdateOffer(); GUI.matrix = Matrix4x4.identity; return; }
             if(game.State==GameState.MainMenu)
             {
                 if(resetProgressPending)DrawResetProgressConfirmation();
@@ -324,16 +343,36 @@ namespace MadeInArizona
             return result;
         }
 
+        void EnsureVisibleParts()
+        {
+            int vehicleIndex = game.Save.selectedVehicle;
+            if (partsVehicle == vehicleIndex && visibleParts.Count > 0) return;
+            partsVehicle = vehicleIndex;
+            visibleParts.Clear();
+            var vehicle = ContentCatalog.Vehicles[vehicleIndex];
+            for (int i = 0; i < ContentCatalog.Parts.Length; i++)
+                if (GarageManager.Compatible(ContentCatalog.Parts[i], vehicle)) visibleParts.Add(i);
+            if (visibleParts.Count > 0 && !visibleParts.Contains(selectedPart)) { selectedPart = visibleParts[0]; listScroll = Vector2.zero; }
+        }
+
         void DrawParts(float top, float panelHeight)
         {
+            EnsureVisibleParts();
             Rect(32, top, 500, panelHeight, Ink);
             Tag(56, top + 20, "REAL PARTS. QUESTIONABLE COMBINATIONS.", Orange);
-            listScroll = GUI.BeginScrollView(new Rect(48, top + 57, 465, panelHeight - 78), listScroll, new Rect(0, 0, 433, ContentCatalog.Parts.Length * 81));
-            for (int i = 0; i < ContentCatalog.Parts.Length; i++) {
+            listScroll = GUI.BeginScrollView(new Rect(48, top + 57, 465, panelHeight - 78), listScroll, new Rect(0, 0, 433, visibleParts.Count * 81));
+            for (int row = 0; row < visibleParts.Count; row++) {
+                int i = visibleParts[row];
                 var p = ContentCatalog.Parts[i];
                 bool installed = game.Save.installedParts.Contains(p.id), owned = game.Save.ownedParts.Contains(p.id);
                 string status = installed ? "INSTALLED" : owned ? "IN STOCK" : "$" + p.cost;
-                if (Button(0, i * 81, 430, 68, p.displayName + "\n" + p.category.ToUpperInvariant() + "  /  " + status, selectedPart == i)) { selectedPart = i; }
+                if (Button(0, row * 81, 430, 68, p.displayName + "\n" + p.category.ToUpperInvariant() + "  /  " + status, selectedPart == i)) { selectedPart = i; }
+                if (p.compatibleVehicles != null && p.compatibleVehicles.Length == 1 && p.compatibleVehicles[0] == ContentCatalog.Vehicles[game.Save.selectedVehicle].id)
+                {
+                    Color gold = new Color(1f, .77f, .24f);
+                    Rect(0, row * 81, 430, 3, gold); Rect(0, row * 81 + 65, 430, 3, gold);
+                    Rect(0, row * 81, 3, 68, gold); Rect(427, row * 81, 3, 68, gold);
+                }
             }
             GUI.EndScrollView();
             float x = width - 535;

@@ -25,3 +25,8 @@ mono_crash.*
 
 # Build identity for the in-game updater (written only while a player builds)
 /Assets/StreamingAssets/build.json*
+
+# Licensed Asset Store firework source stays local; published players embed it.
+/Packages/com.occasoftware.fireworks/
+/Assets/MadeInArizona/Resources/VFX/Firework_WarmSunset.prefab
+/Assets/MadeInArizona/Resources/VFX/Firework_WarmSunset.prefab.meta

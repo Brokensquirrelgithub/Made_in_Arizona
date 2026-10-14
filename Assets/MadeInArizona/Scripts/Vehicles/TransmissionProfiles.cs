@@ -35,15 +35,16 @@ namespace MadeInArizona
         }
 
         /// <summary>
-        /// At the stock speed cap, top gear sits at about 90% of the full-throttle shift point. This makes every
-        /// forward gear usable on the game's compressed roads without multiplying mechanical wheel torque.
+        /// At the stock speed cap, top gear sits at about 75% of the full-throttle shift point. This leaves
+        /// the lower gears working longer before the soft speed cap and avoids a rapid series of low-speed shifts.
+        /// Mechanical wheel torque is calibrated separately by DriveRatio.
         /// </summary>
         public static float TachScale(VehicleDefinition vehicle, float[] ratios)
         {
             const float wheelRadius = .34f;
             float stockSpeed = Mathf.Max(50f, vehicle.maxSpeed * VehicleStats.StockSpeedMultiplier) / 3.6f;
             float wheelRpm = stockSpeed / (2f * Mathf.PI * wheelRadius) * 60f;
-            return VehicleController.FullThrottleUpshiftRpm * .9f /
+            return VehicleController.FullThrottleUpshiftRpm * .75f /
                 (wheelRpm * Mathf.Max(2.5f, vehicle.finalDrive) * ratios[ratios.Length - 1]);
         }
     }

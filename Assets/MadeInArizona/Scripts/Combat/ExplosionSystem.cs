@@ -227,7 +227,7 @@ namespace MadeInArizona
                 var prop = collider.GetComponentInParent<DestructionSystem>();
                 if (prop != null && system.damagedProps.Add(prop)) prop.ApplyDamage(damage * falloff, position, source, BlastPush(prop, position, falloff)*tuning.explosionForce);
             }
-            if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .06f; AudioManager.Instance?.PlayExplosion(position, 1.5f, ExplosionKind.Ammunition); }
+            if (Time.time >= system.popSoundAt) { system.popSoundAt = Time.time + .045f; AudioManager.Instance?.PlayFirecrackerPop(position); }
         }
         float popSoundAt;
         /// <summary>

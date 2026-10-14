@@ -2362,6 +2362,8 @@ namespace MadeInArizona
             var keyboard=InputSystem.AddDevice<Keyboard>();
             InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.W));
             float elapsed=0,shiftStarted=-1,previousRpm=player.RPM,peakSpeed=0;
+            float zeroToThirty=-1,zeroToSixty=-1,lastUpshiftSpeed=0;
+            var shiftSpeeds=new System.Collections.Generic.List<string>();
             int previousGear=player.Gear,upshifts=0;
             bool rpmFalls=false,longShift=false;
             while(elapsed<18f)
@@ -2371,17 +2373,23 @@ namespace MadeInArizona
                 {
                     upshifts++;
                     rpmFalls|=previousRpm-player.RPM>450f;
+                    shiftSpeeds.Add(previousGear+"→"+player.Gear+" at "+player.SpeedKph.ToString("0.0")+" km/h ("+elapsed.ToString("0.0")+" s)");
+                    lastUpshiftSpeed=player.SpeedKph;
                     previousGear=player.Gear;
                 }
                 if(player.IsShifting&&shiftStarted<0)shiftStarted=elapsed;
                 if(!player.IsShifting&&shiftStarted>=0)
                 {longShift|=elapsed-shiftStarted>=.30f;shiftStarted=-1;}
                 peakSpeed=Mathf.Max(peakSpeed,player.SpeedKph);
+                if(zeroToThirty<0&&player.SpeedKph>=48.28f)zeroToThirty=elapsed;
+                if(zeroToSixty<0&&player.SpeedKph>=96.56f)zeroToSixty=elapsed;
                 previousRpm=player.RPM;
             }
             Debug.Log("MIA_TRANSMISSION: Shift reached "+peakSpeed.ToString("0.0")+" km/h (listed "+stock.maxSpeed.ToString("0.0")+"), gear "+player.Gear+"/"+player.GearCount+
-                ", upshifts "+upshifts+", rev drop "+rpmFalls+", long shift "+longShift);
+                ", upshifts "+upshifts+", rev drop "+rpmFalls+", long shift "+longShift+
+                ", 0-30 mph "+zeroToThirty.ToString("0.00")+" s, 0-60 mph "+zeroToSixty.ToString("0.00")+" s; "+string.Join(", ",shiftSpeeds));
             Check("stock Shift drives through all five gears instead of stopping after second",player.GearCount==5&&upshifts>=4&&player.Gear==5);
+            Check("stock Shift keeps pulling in lower gears before fifth",lastUpshiftSpeed>stock.maxSpeed*.9f);
             Check("upshifts last long enough to hear and visibly drop RPM",rpmFalls&&longShift);
             Check("stock Shift exceeds its former 102 km/h ceiling without nitro",peakSpeed>108f);
             Check("stock Shift pulls gradually past its listed speed without exceeding the 20 percent extension",
@@ -2699,7 +2707,7 @@ namespace MadeInArizona
         void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); if (!passed) fixtureTrace.Add("MIA_SMOKE_FAIL_AT " + name); }
         void TestWeaponDropsAndBazookaCone()
         {
-            string[] moved = { "scattermortar", "crossbow", "deathray", "harpoon", "aircannon", "torch", "boomerang" };
+            string[] moved = { "scattermortar", "crossbow", "deathray", "harpoon", "aircannon", "torch", "boomerang", "sentry" };
             var available = new HashSet<string>();
             bool validDrops = true;
             for (int faction = 0; faction < FactionRules.Count; faction++)
@@ -2712,7 +2720,11 @@ namespace MadeInArizona
                             WeaponRules.PickupAmmo(id) > 0 && WeaponRules.MaxAmmo(id) >= WeaponRules.PickupAmmo(id);
                     }
             Check("all enemy drops have a field weapon and usable ammo", validDrops);
-            Check("all seven moved weapons are reachable faction drops", moved.All(available.Contains));
+            Check("all eight moved weapons are reachable faction drops", moved.All(available.Contains));
+            var fireworkPrefab = Resources.Load<GameObject>("VFX/Firework_WarmSunset");
+            var fireworkEffect = fireworkPrefab ? fireworkPrefab.GetComponent<UnityEngine.VFX.VisualEffect>() : null;
+            Check("firework cannon is a usable drop with its VFX graph",
+                available.Contains("fireworks") && fireworkEffect && fireworkEffect.visualEffectAsset);
             Check("moved weapons are absent from the garage", moved.All(id => !WeaponRules.GarageWeapon(id) && WeaponRules.ScrapCost(id) == 0));
             var legacySave = new SaveData { salvage = 9, selectedWeapon = "deathray" };
             legacySave.ownedWeapons.Add("deathray"); legacySave.ownedWeapons.Add("crossbow");

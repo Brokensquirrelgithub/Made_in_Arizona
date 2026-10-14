@@ -362,7 +362,14 @@ namespace MadeInArizona
                 else hit.collider.GetComponentInParent<DestructionSystem>()?.ApplyProjectileHit(round.damage, hit.point, round.source, round.direction);
             }
             if (fx != null && fx.effect != ShotEffect.None) Afflict(round, vehicle, hit.point);
+            TryTorchPatch(round, hit.point);
             ExplosionSystem.Burst(hit.point, round.color, 4, 2);
+        }
+        static void TryTorchPatch(Round round, Vector3 point)
+        {
+            if (round.fx == null || !round.fx.flame || UnityEngine.Random.value >= .055f) return;
+            var owner = round.source ? round.source.GetComponentInParent<VehicleController>() : null;
+            if (owner) FieldOrdnance.PlaceFirePatch(owner, point);
         }
         void Afflict(Round round, VehicleController vehicle, Vector3 point)
         {
@@ -426,6 +433,7 @@ namespace MadeInArizona
         }
         void Expire(Round round)
         {
+            TryTorchPatch(round, round.position);
             if (round.radius > .1f)
             {
                 if (round.fx != null && round.fx.coneBlast) ExplosionSystem.DetonateCone(round.position, round.direction, round.radius, round.damage, round.source);

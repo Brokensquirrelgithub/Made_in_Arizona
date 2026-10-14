@@ -59,6 +59,8 @@ namespace MadeInArizona
         public string Notice { get; private set; }
         public float Progress { get; private set; }
         public Build Target { get; private set; }
+        /// <summary>Latest build found by the automatic launch check, until the player responds.</summary>
+        public Build StartupOffer { get; private set; }
         public DateTime LastChecked { get; private set; }
         string downloadedZip;
         UnityWebRequest activeRequest;
@@ -86,7 +88,7 @@ namespace MadeInArizona
         void Start()
         {
             // Automated test runs stay offline.
-            if (!SmokeTestRunner.Active) Check();
+            if (!SmokeTestRunner.Active) StartCoroutine(CheckRoutine(true));
         }
         void OnDestroy() { if (Instance == this) Instance = null; activeRequest?.Abort(); }
 
@@ -175,9 +177,10 @@ namespace MadeInArizona
         public void Check()
         {
             if (Busy) return;
-            StartCoroutine(CheckRoutine());
+            StartCoroutine(CheckRoutine(false));
         }
-        IEnumerator CheckRoutine()
+        public void DismissStartupOffer() { StartupOffer = null; }
+        IEnumerator CheckRoutine(bool startup)
         {
             State = Phase.Checking; Status = "Checking GitHub for published builds…";
             using (var request = UnityWebRequest.Get(ApiUrl))
@@ -207,6 +210,7 @@ namespace MadeInArizona
             Status = Builds.Count == 0 ? "No published builds with version switching yet." :
                 UpdateAvailable ? "A newer build is available." :
                 CurrentIndex == 0 ? "You are on the newest build." : Builds.Count + " published builds.";
+            if (startup && UpdateAvailable) StartupOffer = Builds[0];
         }
 
         [Serializable] sealed class ReleaseList { public Release[] items; }

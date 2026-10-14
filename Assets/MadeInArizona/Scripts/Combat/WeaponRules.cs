@@ -8,7 +8,7 @@ namespace MadeInArizona
         /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
             "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "railgun",
-            "sprinkler", "pinata", "shopvac", "bowling", "firecracker", "sentry" };
+            "sprinkler", "pinata", "shopvac", "bowling", "firecracker" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
         static readonly string[] Oddballs = { "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
@@ -31,7 +31,6 @@ namespace MadeInArizona
                 case "railgun": return 320;
                 case "pinata": return 340;
                 case "shopvac": return 380;
-                case "sentry": return 400;
                 default: return 0;
             }
         }
@@ -45,6 +44,7 @@ namespace MadeInArizona
                 case "harpoon": case "torch": return 260;
                 case "aircannon": return 200;
                 case "boomerang": return 240;
+                case "sentry": return 400;
                 default: return 0;
             }
         }
@@ -59,7 +59,7 @@ namespace MadeInArizona
                 case "railgun": case "crossbow": case "harpoon": return "sniper";
                 case "aircannon": case "firecracker": return "boomstick";
                 case "sprinkler": return "grenade";
-                case "shopvac": case "bowling": case "scattermortar": return "mortar";
+                case "shopvac": case "bowling": case "scattermortar": case "fireworks": return "mortar";
                 case "pinata": return "invoice";
                 case "boomerang": return "shredder";
                 case "gokart": return "mines";
@@ -92,6 +92,8 @@ namespace MadeInArizona
                 case "aircannon": return new Vector2Int(10, 20);
                 case "torch": return new Vector2Int(70, 140); // 14 flame shots/s: five seconds per drop
                 case "boomerang": return new Vector2Int(8, 16);
+                case "sentry": return new Vector2Int(2, 4);
+                case "fireworks": return new Vector2Int(4, 8);
                 default: return new Vector2Int(0, 0);
             }
         }
@@ -107,26 +109,26 @@ namespace MadeInArizona
         {
             if (faction == EnemyFaction.CourtesyCompliance)
             {
-                if (archetype == 3 || archetype == 7) return roll < .22f ? "scattermortar" : roll < .44f ? "mortar" : "grenade";
-                return archetype == 1 || archetype == 4 ? (roll < .6f ? "grenade" : "gokart") : "gokart";
+                if (archetype == 3 || archetype == 7) return roll < .2f ? "scattermortar" : roll < .38f ? "mortar" : roll < .55f ? "sentry" : "grenade";
+                return archetype == 1 || archetype == 4 ? (roll < .22f ? "sentry" : roll < .62f ? "grenade" : "gokart") : roll < .18f ? "sentry" : "gokart";
             }
             if (faction == EnemyFaction.RoadScavengers)
             {
                 if (archetype == 0 || archetype == 3 || archetype == 6 || archetype == 7)
-                    return roll < .18f ? "boomerang" : roll < .68f ? "minigun" : "boomstick";
-                if (archetype == 4) return roll < .28f ? "torch" : roll < .48f ? "grenade" : "boomstick";
-                return roll < .28f ? "torch" : "boomstick";
+                    return roll < .16f ? "boomerang" : roll < .29f ? "torch" : roll < .68f ? "minigun" : "boomstick";
+                if (archetype == 4) return roll < .28f ? "torch" : roll < .48f ? "grenade" : roll < .60f ? "boomerang" : "boomstick";
+                return roll < .25f ? "torch" : roll < .37f ? "boomerang" : "boomstick";
             }
             if (faction == EnemyFaction.OpenHouseRealty)
             {
                 if (archetype == 3 || archetype == 4 || archetype == 7)
-                    return roll < .2f ? "harpoon" : roll < .38f ? "cluster" : "invoice";
-                return roll < .55f ? "gokart" : "grenade";
+                    return roll < .18f ? "harpoon" : roll < .34f ? "cluster" : roll < .46f ? "sentry" : "invoice";
+                return roll < .18f ? "sentry" : roll < .58f ? "gokart" : "grenade";
             }
             if (faction == EnemyFaction.SnowbirdConvoy)
             {
-                if (archetype == 3 || archetype == 7) return roll < .28f ? "aircannon" : roll < .46f ? "minigun" : "gokart";
-                return roll < .2f ? "aircannon" : roll < .72f ? "gokart" : "boomstick";
+                if (archetype == 3 || archetype == 7) return roll < .22f ? "aircannon" : roll < .37f ? "minigun" : roll < .51f ? "sentry" : roll < .65f ? "fireworks" : "gokart";
+                return roll < .18f ? "aircannon" : roll < .28f ? "sentry" : roll < .72f ? "gokart" : "boomstick";
             }
             if (faction == EnemyFaction.CarOtaku)
             {

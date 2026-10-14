@@ -20,6 +20,21 @@ namespace MadeInArizona
         Vector3 turretRestPosition;
         Vector3 aimDirection = Vector3.forward;
         float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity, lobTargetUntil;
+        int molotovShots;
+        float bowlingPushBonus;
+        int bowlingMisses;
+        public float BowlingHitMultiplier()
+        {
+            float multiplier = 1f + bowlingPushBonus;
+            bowlingPushBonus += .3f;
+            bowlingMisses = 0;
+            return multiplier;
+        }
+        public void BowlingMiss()
+        {
+            if (bowlingPushBonus <= 0) return;
+            bowlingPushBonus = ++bowlingMisses == 1 ? bowlingPushBonus * .5f : 0;
+        }
 
         public VehicleController AssistedTarget => lobTarget;
         public VehicleController Owner => owner;
@@ -61,6 +76,7 @@ namespace MadeInArizona
             GarageWeapon = WeaponRules.Find(vehicle.IsPlayer ? GameManager.Instance?.Save?.selectedWeapon : "riveter") ?? WeaponRules.Find("riveter");
             if (!WeaponRules.GarageWeapon(GarageWeapon.id)) GarageWeapon = WeaponRules.Find("riveter");
             FieldWeapon = null; FieldAmmo = 0; garageAt = fieldAt = 0;
+            molotovShots = 0; bowlingPushBonus = 0; bowlingMisses = 0;
             turret = VehicleController.FindChild(vehicle.Visual, "Turret");
             muzzleTransform = VehicleController.FindChild(vehicle.Visual, "Muzzle");
             if (turret != null) turretRestPosition = turret.localPosition;
@@ -179,8 +195,18 @@ namespace MadeInArizona
             switch (weapon.id)
             {
                 case "mines": FieldOrdnance.PlaceMine(owner, weapon, damage); break;
-                case "grenade": case "mortar": case "pothole": case "sprinkler": case "shopvac":
+                case "grenade": case "mortar": case "sprinkler": case "shopvac":
                     FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage, 0, owner.IsPlayer ? AcquireLobTarget(aimDirection, weapon) : null);
+                    break;
+                case "pothole":
+                    // Molotov tennis balls follow the player's aim without target assistance.
+                    int molotovCount = 1 + molotovShots++ % 3;
+                    for (int i = 0; i < molotovCount; i++)
+                    {
+                        float angle = (i - (molotovCount - 1) * .5f) * 7f;
+                        FieldOrdnance.LaunchShell(owner, muzzle, Quaternion.AngleAxis(angle, Vector3.up) * aimDirection,
+                            weapon, damage, 0, null);
+                    }
                     break;
                 case "sweeper": case "boomstick":
                     Pellets(weapon, muzzle, damage, weapon.id == "boomstick" ? 12 : 8, weapon.id == "boomstick" ? 3.2f : 3.7f, weapon.id == "boomstick" ? .33f : .42f, false);
@@ -189,7 +215,7 @@ namespace MadeInArizona
                 case "shredder":
                     for (int i = -1; i <= 1; i++)
                         ProjectileSystem.Fire(muzzle, Quaternion.AngleAxis(i * 9 + Random.Range(-1f, 1f), Vector3.up) * aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.15f,
-                            new ShotFx { pierce = 1 });
+                            null);
                     break;
                 case "cluster":
                     for (int i = -1; i <= 1; i++)
@@ -226,11 +252,14 @@ namespace MadeInArizona
                         new ShotFx { effect = ShotEffect.Stall, duration = 1.1f, chain = 2, castRadius = .3f });
                     break;
                 case "torch":
-                    // Burning fuel keeps the car's momentum after it leaves the nozzle, including sideways drift.
-                    Vector3 flameVelocity = (Quaternion.AngleAxis(Random.Range(-7f, 7f), Vector3.up) * aimDirection) * weapon.speed +
-                        (owner.Body ? owner.Body.linearVelocity : Vector3.zero);
-                    ProjectileSystem.Fire(muzzle, flameVelocity.normalized, flameVelocity.magnitude, damage, 0, source, color, ExplosionKind.Ammunition, .42f,
-                        new ShotFx { effect = ShotEffect.Burn, power = 28, duration = 3, flame = true, castRadius = .35f });
+                    for (int i = 0; i < 2; i++)
+                    {
+                        // Burning fuel keeps the car's momentum after it leaves the nozzle, including sideways drift.
+                        Vector3 flameVelocity = (Quaternion.AngleAxis(Random.Range(-7f, 7f), Vector3.up) * aimDirection) * weapon.speed +
+                            (owner.Body ? owner.Body.linearVelocity : Vector3.zero);
+                        ProjectileSystem.Fire(muzzle, flameVelocity.normalized, flameVelocity.magnitude, damage * .5f, 0, source, color, ExplosionKind.Ammunition, .462f,
+                            new ShotFx { effect = ShotEffect.Burn, power = 14, duration = 3, flame = true, castRadius = .35f });
+                    }
                     break;
                 case "railgun": Railgun(weapon, muzzle, damage); break;
                 case "deathray": DeathRay(weapon, muzzle, damage); break;
@@ -240,14 +269,18 @@ namespace MadeInArizona
                     ExplosionSystem.Burst(muzzle + aimDirection, new Color(.85f, .85f, .8f, .55f), 8, 6);
                     break;
                 case "pinata":
-                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, weapon.blastRadius, source, color, ExplosionKind.Rocket, 2.2f,
-                        new ShotFx { bomblets = 7, bombletDamage = 28, bombletRadius = 3.2f });
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage * .8f, weapon.blastRadius, source, color, ExplosionKind.Rocket, 2.2f,
+                        new ShotFx { bomblets = 7, bombletDamage = 33.6f, bombletRadius = 6.4f });
                     break;
                 case "crossbow":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.1f,
                         new ShotFx { effect = ShotEffect.Sticky, duration = 1.1f, power = 130, effectRadius = weapon.blastRadius });
                     break;
                 case "bowling": FieldOrdnance.Roll(owner, muzzle, aimDirection, weapon, damage); break;
+                case "fireworks":
+                    FieldOrdnance.LaunchShell(owner, owner.transform.position + owner.transform.forward * (owner.BodyLength * .5f + .45f) + Vector3.up,
+                        aimDirection, weapon, damage);
+                    break;
                 case "boomerang":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.7f,
                         new ShotFx { boomerang = true, returnAfter = .55f, castRadius = .45f });
@@ -329,7 +362,7 @@ namespace MadeInArizona
             if (muzzleTransform != null) return new Vector3(muzzleTransform.position.x, transform.position.y + .85f, muzzleTransform.position.z);
             return transform.position + Vector3.up * .85f + direction * 2.4f;
         }
-        static bool Lobbed(WeaponDefinition weapon) => weapon && (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "pothole" || weapon.id == "sprinkler" || weapon.id == "shopvac");
+        static bool Lobbed(WeaponDefinition weapon) => weapon && (weapon.id == "grenade" || weapon.id == "mortar" || weapon.id == "sprinkler" || weapon.id == "shopvac");
         static bool LobbedGarage(WeaponDefinition weapon) => Lobbed(weapon) && WeaponRules.GarageWeapon(weapon.id);
         /// <summary>Nearest hostile inside the aim cone, for homing spines.</summary>
         VehicleController AcquireTarget(Vector3 direction, float range, float cone)
@@ -354,7 +387,7 @@ namespace MadeInArizona
             Vector3 flatAim = Vector3.ProjectOnPlane(direction, Vector3.up);
             if (flatAim.sqrMagnitude < .01f) flatAim = Vector3.ProjectOnPlane(owner.transform.forward, Vector3.up);
             flatAim.Normalize();
-            float range = weapon.id == "mortar" ? 125 : weapon.id == "grenade" || weapon.id == "sprinkler" || weapon.id == "shopvac" ? 72 : 58;
+            float range = weapon.id == "mortar" ? 125 : weapon.id == "sprinkler" ? 54 : weapon.id == "grenade" || weapon.id == "shopvac" ? 72 : 58;
             float cone = weapon.id == "mortar" ? 42 : 34;
             if (ValidLobTarget(lobTarget, flatAim, range * 1.15f, cone + 14) && Time.time <= lobTargetUntil) return lobTarget;
             VehicleController best = null; float bestScore = float.MaxValue;

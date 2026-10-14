@@ -57,7 +57,7 @@ namespace MadeInArizona
                     new Vector3(radius * 2, length * .5f, radius * 2), new Color(.12f, .10f, .09f));
                 var winding = Group("Rope light winding", joint, Vector3.zero).gameObject.AddComponent<LineRenderer>();
                 winding.useWorldSpace = false;
-                winding.widthMultiplier = .022f;
+                winding.widthMultiplier = .028f;
                 winding.numCapVertices = 2;
                 winding.numCornerVertices = 2;
                 winding.shadowCastingMode = ShadowCastingMode.Off;
@@ -98,7 +98,7 @@ namespace MadeInArizona
             banner.GetComponent<MeshFilter>().sharedMesh = whip.cloth;
             banner.GetComponent<MeshRenderer>().sharedMaterial = Cloth(pennant);
             if (Application.isPlaying) banner.AddComponent<GeneratedMeshOwner>().Mesh = whip.cloth;
-            whip.lamp = Lamp("Pennant lamp", joint, new Vector3(.2f, length - PennantHeight * .5f, -PennantLength * .5f), glow, 0, 4);
+            whip.lamp = Lamp("Pennant lamp", joint, new Vector3(.2f, length - PennantHeight * .5f, -PennantLength * .5f), glow, 0, 6);
             whip.lamp.enabled = false;
             whip.UpdateRopeGlow(0);
             return whip;
@@ -106,7 +106,7 @@ namespace MadeInArizona
 
         void UpdateRopeGlow(float dusk)
         {
-            float intensity = Mathf.Lerp(.15f, 6f, dusk);
+            float intensity = Mathf.Lerp(.15f, 12f, dusk);
             if (Mathf.Abs(intensity - ropeIntensity) < .015f) return;
             ropeIntensity = intensity;
             ropeBlock ??= new MaterialPropertyBlock();
@@ -178,7 +178,7 @@ namespace MadeInArizona
                 float dusk = Mathf.InverseLerp(.35f, .85f, TimeOfDay.Blend);
                 UpdateRopeGlow(dusk);
                 if (lamp.enabled != dusk > 0) lamp.enabled = dusk > 0;
-                if (dusk > 0) lamp.intensity = 3 * dusk;
+                if (dusk > 0) lamp.intensity = 5 * dusk;
             }
         }
     }

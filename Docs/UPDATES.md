@@ -10,8 +10,8 @@ Testers install the game once. After that, **Versions & Updates** (main menu, or
    mia-updater: 1
    commit: <full sha>
    ```
-3. **The game reads the public Releases API** (`GameUpdater`), no account or token needed. It checks once at start-up and whenever the menu opens. The main menu and garage show a banner when a newer build exists.
-4. **Switching:** the tester picks a build, and the game downloads its zip and checks the size and GitHub's SHA-256 checksum. After **Restart & switch**, a small script waits for the game to quit, swaps the files and reopens the game on the new build.
+3. **The game reads the public Releases API** (`GameUpdater`), no account or token needed. It checks once at start-up and whenever the menu opens. When the start-up check finds a newer build, a prompt offers **Update to latest** or **Keep playing**. The prompt waits for the main menu or garage if the player is in a mission. The main menu and garage also show a banner while a newer build exists.
+4. **Switching:** accepting the start-up offer opens **Versions & Updates** and starts the download. The tester can also pick any published build from that menu. The game checks the zip's size and GitHub's SHA-256 checksum. After **Restart & switch**, a small script waits for the game to quit, swaps the files and reopens the game on the new build.
    - **Windows** (PowerShell): the game's `_Data` folder is mirrored, and the rest of the build is copied over. Nothing else in the folder is deleted.
    - **macOS** (bash): the new bundle is unpacked with `ditto`, cleared of quarantine and ad-hoc signed. It then replaces the old `.app`, which is restored if anything fails.
    If a switch fails, the game reopens on the old build and says so. The log is in the game's persistent data folder under `Updates/update.log`.
