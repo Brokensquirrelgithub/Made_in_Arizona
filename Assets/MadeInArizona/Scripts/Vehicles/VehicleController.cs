@@ -101,6 +101,12 @@ namespace MadeInArizona
             : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
+        /// <summary>Engine load dips briefly as the automatic changes gear.</summary>
+        public float EngineLoad => Throttle * ShiftDrive;
+        /// <summary>The throttle actually used for wheel drive, including steering alignment, drift and shift cuts.</summary>
+        public float AppliedEngineLoad { get; private set; }
+        /// <summary>At least one wheel or the belly can transmit drive to the ground.</summary>
+        public bool HasDriveContact => Grounded || Beached || wheelContacts > 0;
         public float BoostCharge { get; private set; } = 1;
         /// <summary>True on physics steps where nitro is actually firing (held, charged, driving forward).</summary>
         public bool Boosting { get; private set; }
@@ -193,6 +199,9 @@ namespace MadeInArizona
         readonly bool[] wheelOnGround = new bool[4];
         readonly Vector3[] wheelGroundPoint = new Vector3[4], wheelGroundNormal = new Vector3[4];
         float[] gears = { 3.5f, 2.25f, 1.55f, 1.12f, .86f, .68f };
+        const float UpshiftDuration = .18f;
+        float upshiftRemaining;
+        float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.62f, 1f, 1f - upshiftRemaining / UpshiftDuration) : 1f;
         bool initialized;
         const float LaunchBoost = 1.45f, LaunchFadeSpeed = 16f;
 
@@ -400,6 +409,7 @@ namespace MadeInArizona
             var footing = DrivetrainTraits.On(Stats.drivetrain, surface);
             float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip * footing.cornering;
             if (IsPlayer) grip *= tuning.grip;
+            upshiftRemaining = Mathf.Max(0, upshiftRemaining - Time.fixedDeltaTime);
             if (input.sqrMagnitude > .04f)
             {
                 Vector3 desired = new Vector3(input.x, 0, input.y);
@@ -425,13 +435,25 @@ namespace MadeInArizona
                 float alignment = Mathf.Clamp01((180 - Mathf.Abs(angle)) / 110);
                 float targetThrottle = Throttle * Mathf.Lerp(.2f, 1, alignment) * Mathf.Lerp(1, tuning.driftThrottle, DriftBlend);
                 float wheelRPM = Mathf.Abs(forwardSpeed) / (2 * Mathf.PI * .34f) * 60;
-                if (driveDirection < 0) Gear = 1;
+                if (driveDirection < 0) { Gear = 1; upshiftRemaining = 0; }
                 float ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                 float desiredRPM = Mathf.Max(900 + targetThrottle * 900, wheelRPM * ratio);
                 RPM = Mathf.Lerp(RPM, desiredRPM, Time.fixedDeltaTime * 8);
-                if (driveDirection > 0 && RPM > 6100 && Gear < gears.Length) { Gear++; RPM *= .72f; }
-                if (RPM < 1900 && Gear > 1) Gear--;
+                // A gentle cruise shifts earlier; a committed pull uses nearly all of each engine's own rev range.
+                float upshiftRPM = Mathf.Lerp(5000f, 6900f, Mathf.Clamp01(targetThrottle));
+                if (driveDirection > 0 && upshiftRemaining <= 0 && RPM > upshiftRPM && Gear < gears.Length)
+                {
+                    Gear++;
+                    upshiftRemaining = UpshiftDuration;
+                    ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                }
+                if (upshiftRemaining <= 0 && RPM < 1900 && Gear > 1)
+                {
+                    Gear--;
+                    ratio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
+                }
                 RPM = Mathf.Clamp(RPM, 850, 7200);
+                AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftDrive);
                 float torqueCurve = .62f + .38f * Mathf.Sin(Mathf.Clamp01((RPM - 800) / 7000) * Mathf.PI);
                 float wheelForce = Stats.torque * torqueCurve * ratio / .34f;
                 float powerForce = Mathf.Max(40, Stats.horsepower) * 745.7f / Mathf.Max(7, speed);
@@ -440,6 +462,7 @@ namespace MadeInArizona
                 // responsive and controllable without raising top speed.
                 acceleration *= Mathf.Lerp(LaunchBoost, 1, Mathf.Clamp01(speed / LaunchFadeSpeed));
                 acceleration *= footing.drive;
+                acceleration *= ShiftDrive;
                 if (IsPlayer) acceleration *= tuning.acceleration;
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
@@ -464,6 +487,7 @@ namespace MadeInArizona
             else
             {
                 driveDirection = 1;
+                AppliedEngineLoad = 0;
                 RPM = Mathf.Lerp(RPM, 900, Time.fixedDeltaTime * 3);
                 if (Grounded && !TowedBy) Body.AddForce(-planar * 1.8f, ForceMode.Acceleration);
             }

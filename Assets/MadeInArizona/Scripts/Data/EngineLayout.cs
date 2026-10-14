@@ -85,16 +85,46 @@ namespace MadeInArizona
                 mufflerHz = new float[] { 170, 520, 1500 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .3f, .35f, .25f },
                 mufflerCutoff = 3000, turbulence = .25f, edge = .6f
             });
-            // 1.0 L motorcycle four, 1-2-4-3, 4-2-1 headers and a short, barely muffled can.
+            // AE86-inspired 1.6 L DOHC four: it revs freely, but it is a car engine rather than a superbike.
             Add(new EngineLayout
             {
-                id = "inline4-bike", displayName = "1.0 high-revving four", displacement = 1f, compression = 12.5f,
-                idleRpm = 1200, redlineRpm = 11500,
-                firingAngle = new float[] { 0, 180, 540, 360 }, headerLength = new[] { .62f, .6f, .6f, .62f },
-                collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { .8f }, pan = new[] { .1f },
-                exhaustOpen = 125, exhaustDuration = 250, exhaustFlow = 1.15f, pipeReflection = .6f, pipeDamping = .25f,
-                mufflerHz = new float[] { 210, 760, 2300 }, mufflerQ = new float[] { 1.8f, 2.5f, 3 }, mufflerGain = new[] { .4f, .45f, .35f },
-                mufflerCutoff = 5500, combustionVariation = .05f, turbulence = .1f, burble = .08f, edge = .7f
+                id = "inline4-sport", displayName = "1.6 high-revving inline four", displacement = 1.6f, compression = 9.4f,
+                idleRpm = 900, redlineRpm = 7500,
+                firingAngle = new float[] { 0, 540, 180, 360 }, headerLength = new[] { .55f, .52f, .52f, .55f },
+                collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { 1.8f }, pan = new[] { .05f },
+                exhaustOpen = 125, exhaustDuration = 245, exhaustFlow = 1.1f, pipeReflection = .48f, pipeDamping = .32f,
+                mufflerHz = new float[] { 165, 580, 1750 }, mufflerQ = new float[] { 2, 2.8f, 3 }, mufflerGain = new[] { .4f, .4f, .25f },
+                mufflerCutoff = 4300, combustionVariation = .04f, turbulence = .15f, burble = .05f, edge = .65f
+            });
+            // Garage 1.8 L swap: a conventional salvage-yard four with a freer exhaust than the stock economy engine.
+            Add(new EngineLayout
+            {
+                id = "inline4-swap", displayName = "1.8 salvage-yard inline four", displacement = 1.8f, compression = 9.5f,
+                idleRpm = 850, redlineRpm = 6500,
+                firingAngle = new float[] { 0, 540, 180, 360 }, headerLength = new[] { .48f, .44f, .44f, .48f },
+                collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { 2.2f }, pan = new[] { 0f },
+                mufflerHz = new float[] { 150, 500, 1500 }, mufflerQ = new float[] { 2, 2.7f, 3 }, mufflerGain = new[] { .45f, .4f, .2f },
+                mufflerCutoff = 3800, combustionVariation = .05f, turbulence = .21f, edge = .6f
+            });
+            // Jetta-inspired 2.5 L five, firing 1-2-4-5-3 at 144-degree intervals.
+            Add(new EngineLayout
+            {
+                id = "inline5", displayName = "2.5 inline five", displacement = 2.5f, compression = 9.5f,
+                idleRpm = 750, redlineRpm = 6200,
+                firingAngle = new float[] { 0, 144, 576, 288, 432 }, headerLength = new[] { .41f, .38f, .43f, .36f, .4f },
+                collector = new[] { 0, 0, 0, 0, 0 }, pipeLength = new[] { 3f }, pan = new[] { 0f },
+                mufflerHz = new float[] { 115, 420, 1250 }, mufflerQ = new float[] { 2, 2.7f, 3 }, mufflerGain = new[] { .45f, .35f, .2f },
+                mufflerCutoff = 3200, combustionVariation = .045f, turbulence = .22f, edge = .55f
+            });
+            // Outback-inspired 2.5 L boxer four; unequal runner lengths give its low off-beat character.
+            Add(new EngineLayout
+            {
+                id = "boxer4", displayName = "2.5 boxer four", displacement = 2.5f, compression = 10f,
+                idleRpm = 750, redlineRpm = 6200,
+                firingAngle = new float[] { 0, 360, 180, 540 }, headerLength = new[] { .42f, .93f, .38f, 1.02f },
+                collector = new[] { 0, 0, 0, 0 }, pipeLength = new[] { 2.7f }, pan = new[] { 0f },
+                mufflerHz = new float[] { 105, 360, 1080 }, mufflerQ = new float[] { 2, 2.5f, 3 }, mufflerGain = new[] { .5f, .35f, .2f },
+                mufflerCutoff = 3000, combustionVariation = .05f, turbulence = .2f, edge = .5f
             });
             // Skitter: a 1.0 L four-stroke V3, two cylinders in the front bank and one at the back. The shared crank gives
             // uneven firing (255°, 210°, 255°) and an off-beat lope; a short 3-into-1 (the rear runner longer) into a
@@ -144,6 +174,18 @@ namespace MadeInArizona
                 mufflerHz = new float[] { 70, 250, 760 }, mufflerQ = new float[] { 2, 3, 3 }, mufflerGain = new[] { .55f, .35f, .2f },
                 mufflerCutoff = 2600, combustionVariation = .08f, turbulence = .25f, burble = .08f
             });
+            // The DeVille-inspired sedan has a quiet 4.5 L cross-plane V8, not the truck's 5.0 L voice.
+            Add(new EngineLayout
+            {
+                id = "v8-luxury", displayName = "4.5 luxury cross-plane V8", displacement = 4.5f, compression = 9.5f,
+                idleRpm = 700, redlineRpm = 5200,
+                firingAngle = new float[] { 0, 630, 270, 180, 450, 360, 540, 90 },
+                headerLength = new[] { .45f, .48f, .46f, .5f, .47f, .45f, .49f, .46f },
+                collector = new[] { 0, 0, 0, 0, 0, 0, 0, 0 }, pipeLength = new[] { 4.1f }, pan = new[] { 0f },
+                pipeReflection = .4f, pipeDamping = .55f,
+                mufflerHz = new float[] { 68, 230, 700 }, mufflerQ = new float[] { 2, 2.5f, 3 }, mufflerGain = new[] { .55f, .35f, .15f },
+                mufflerCutoff = 2200, combustionVariation = .04f, turbulence = .14f, burble = .03f, edge = .35f
+            });
             // Flat-plane V8, 1-5-3-7-4-8-2-6: each bank is an even-firing four, one collector per bank. Raw and high.
             Add(new EngineLayout
             {
@@ -177,10 +219,13 @@ namespace MadeInArizona
             switch (vehicleId)
             {
                 case "shift": case "scarface": case "heat": case "espresso": return "inline3";
-                case "ronin": case "monsoon": case "dustback": case "citizen": case "roam4": return "inline4";
-                case "ae867": return "inline4-bike";
+                case "ronin": case "citizen": case "roam4": return "inline4";
+                case "monsoon": return "inline5";
+                case "dustback": return "boxer4";
+                case "ae867": return "inline4-sport";
                 case "sonora": case "monument": return "v6";
-                case "executive": case "copperado": return "v8-truck";
+                case "executive": return "v8-luxury";
+                case "copperado": return "v8-truck";
                 case "contender": return Default;
                 case "juniper": return "inline4";
                 case "skitter": return "v3-bike";

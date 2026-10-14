@@ -9,8 +9,8 @@ namespace MadeInArizona
     /// A whip aerial several car-heights tall, wound with rope light, with a small safety pennant at its head: the
     /// triangle of bright cloth that lets others see a low car over a rise. The whip is thin sprung metal: the wind of
     /// the car's passage lays it back, it lashes when the car brakes or pulls away, swings to the outside of a turn and
-    /// wobbles for a few beats afterwards; the pennant ripples, harder the faster the car goes. The rope light always
-    /// glows, and at dusk a lamp at the masthead picks the pennant out.
+    /// wobbles for a few beats afterwards; the pennant ripples, harder the faster the car goes. A rope light winds
+    /// around the mast and brightens at dusk, when a lamp at the masthead also picks the pennant out.
     /// </summary>
     public sealed class WhipFlag : MonoBehaviour
     {
@@ -25,6 +25,10 @@ namespace MadeInArizona
         const float MaxLean = 38, Reach = 1.6f, Placed = 5;
         static readonly Dictionary<Color, Material> Cloths = new Dictionary<Color, Material>();
         readonly Transform[] sections = new Transform[Sections];
+        readonly LineRenderer[] rope = new LineRenderer[Sections];
+        MaterialPropertyBlock ropeBlock;
+        Color ropeColour;
+        float ropeIntensity = -1;
         Mesh cloth; Vector3[] rest, waved; Light lamp;
         Vector3 lastFoot, drift, tip, tipVelocity; bool standing; float clock;
 
@@ -40,16 +44,34 @@ namespace MadeInArizona
         {
             var whip = Group("Whip flag", parent, foot).gameObject.AddComponent<WhipFlag>();
             whip.Height = height;
+            whip.ropeColour = glow;
             float length = height / Sections;
             Cylinder("Whip spring base", whip.transform, Vector3.up * .05f, .035f, .1f, Ink);
             Transform joint = whip.transform;
             for (int i = 0; i < Sections; i++)
             {
                 joint = whip.sections[i] = Group("Whip section", joint, i == 0 ? Vector3.zero : Vector3.up * length);
-                // It tapers to the tip. The rope light glows whatever the hour.
+                // The dark sprung rod tapers to the tip. A separate luminous strand winds around it.
                 float radius = Mathf.Lerp(.02f, .011f, i / (Sections - 1f));
-                var rope = Shape("Rope light", joint, PrimitiveType.Cylinder, Vector3.up * length * .5f, new Vector3(radius * 2, length * .5f, radius * 2), glow, false, 0, .4f, 2.4f);
-                rope.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+                Shape("Whip core", joint, PrimitiveType.Cylinder, Vector3.up * length * .5f,
+                    new Vector3(radius * 2, length * .5f, radius * 2), new Color(.12f, .10f, .09f));
+                var winding = Group("Rope light winding", joint, Vector3.zero).gameObject.AddComponent<LineRenderer>();
+                winding.useWorldSpace = false;
+                winding.widthMultiplier = .022f;
+                winding.numCapVertices = 2;
+                winding.numCornerVertices = 2;
+                winding.shadowCastingMode = ShadowCastingMode.Off;
+                winding.receiveShadows = false;
+                winding.sharedMaterial = Material(glow, 0, .45f, 1);
+                int points = Mathf.CeilToInt(length / .11f) * 8;
+                winding.positionCount = points + 1;
+                for (int p = 0; p <= points; p++)
+                {
+                    float t = p / (float)points, turn = (i * length + t * length) / .11f * Mathf.PI * 2;
+                    winding.SetPosition(p, new Vector3(Mathf.Cos(turn) * (radius + .007f), t * length,
+                        Mathf.Sin(turn) * (radius + .007f)));
+                }
+                whip.rope[i] = winding;
             }
             // The pennant flies from the last section, its tall edge against the whip and its point trailing behind the car.
             var banner = new GameObject("Whip pennant", typeof(MeshFilter), typeof(MeshRenderer));
@@ -78,7 +100,18 @@ namespace MadeInArizona
             if (Application.isPlaying) banner.AddComponent<GeneratedMeshOwner>().Mesh = whip.cloth;
             whip.lamp = Lamp("Pennant lamp", joint, new Vector3(.2f, length - PennantHeight * .5f, -PennantLength * .5f), glow, 0, 4);
             whip.lamp.enabled = false;
+            whip.UpdateRopeGlow(0);
             return whip;
+        }
+
+        void UpdateRopeGlow(float dusk)
+        {
+            float intensity = Mathf.Lerp(.15f, 6f, dusk);
+            if (Mathf.Abs(intensity - ropeIntensity) < .015f) return;
+            ropeIntensity = intensity;
+            ropeBlock ??= new MaterialPropertyBlock();
+            ropeBlock.SetColor("_EmissionColor", ropeColour * intensity);
+            for (int i = 0; i < rope.Length; i++) if (rope[i]) rope[i].SetPropertyBlock(ropeBlock);
         }
 
         /// <summary>Pennant cloth: seen from both sides, and faintly lit from within so it still reads at dusk.</summary>
@@ -143,6 +176,7 @@ namespace MadeInArizona
             if (lamp)
             {
                 float dusk = Mathf.InverseLerp(.35f, .85f, TimeOfDay.Blend);
+                UpdateRopeGlow(dusk);
                 if (lamp.enabled != dusk > 0) lamp.enabled = dusk > 0;
                 if (dusk > 0) lamp.intensity = 3 * dusk;
             }

@@ -34,7 +34,7 @@ namespace MadeInArizona
             return true;
         }
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
-        readonly string[] presets = { "SHADE TREE", "DESERT DAILY", "HIGH OCTANE", "ARIZONA SUMMER" };
+        readonly string[] presets = { "SIMPLE", "LOW", "MEDIUM", "HIGH" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause" };
         int[] garageWeaponIndices;
         /// <summary>Catalog indices of every scrap weapon, core roles first and then the oddballs.</summary>
@@ -61,8 +61,9 @@ namespace MadeInArizona
         void Start()
         {
             game.StateChanged += ResetFocus;
+            if (!Application.isBatchMode) StartCoroutine(SampleReticleContrast());
         }
-        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; }
+        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; DisposeReticleContrast(); }
         void ResetFocus()
         {
             worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;
@@ -467,7 +468,7 @@ namespace MadeInArizona
             if (game.State == GameState.Playing && InputManager.Instance.UsingGamepad == false && Mouse.current != null) {
                 var m = Mouse.current.position.ReadValue(); float s = Screen.height / height;
                 float x = m.x / s, y = (Screen.height - m.y) / s;
-                Rect(x - 11, y - 1, 7, 2, Cream); Rect(x + 4, y - 1, 7, 2, Cream); Rect(x - 1, y - 11, 2, 7, Cream); Rect(x - 1, y + 4, 2, 7, Cream);
+                Rect(x - 11, y - 1, 7, 2, ReticleInk); Rect(x + 4, y - 1, 7, 2, ReticleInk); Rect(x - 1, y - 11, 2, 7, ReticleInk); Rect(x - 1, y + 4, 2, 7, ReticleInk);
             }
         }
 
@@ -541,7 +542,7 @@ namespace MadeInArizona
             if(InputManager.Instance.UsingGamepad) {
                 Vector2 aim=InputManager.Instance.Aim;
                 Vector2 point=ScreenPoint(game.Player.transform.position+new Vector3(aim.x,0,aim.y)*14+Vector3.up*.8f);
-                CombatLine(point+Vector2.left*8,point+Vector2.right*8,2,Cream);CombatLine(point+Vector2.up*8,point+Vector2.down*8,2,Cream);
+                CombatLine(point+Vector2.left*8,point+Vector2.right*8,2,ReticleInk);CombatLine(point+Vector2.up*8,point+Vector2.down*8,2,ReticleInk);
             }
         }
 
@@ -654,9 +655,9 @@ namespace MadeInArizona
             var s = game.Save.settings;
             if (settingsPage == 0) {
                 SettingLabel(x, y + 196, "WINDOW MODE", 0);
-                if (Button(x + 465, y + 191, 426, 38, Screen.fullScreenMode.ToString())) CycleWindow();
-                SettingLabel(x, y + 249, "RESOLUTION", 1);
-                if (Button(x + 465, y + 244, 426, 38, Screen.width + " × " + Screen.height)) CycleResolution();
+                if (Button(x + 465, y + 191, 426, 38, s.fullscreen ? "MAXIMIZED • TASKBAR SAFE" : "WINDOWED")) CycleWindow();
+                SettingLabel(x, y + 249, "WINDOW SIZE", 1);
+                if (Button(x + 465, y + 244, 426, 38, s.fullscreen ? "USES AVAILABLE DESKTOP AREA" : Screen.width + " × " + Screen.height, false, !s.fullscreen)) CycleResolution();
                 SettingLabel(x, y + 302, "DIFFICULTY", 2);
                 if (Button(x + 465, y + 297, 426, 38, new[] { "SUNDAY DRIVER", "SHOP STANDARD", "LIABILITY WAIVER" }[Mathf.Clamp(s.difficulty, 0, 2)])) s.difficulty = (s.difficulty + 1) % 3;
                 SettingLabel(x, y + 355, "CAMERA SHAKE", 3); s.shake = Slider(x + 465, y + 355, 426, s.shake, 0, 1);
@@ -666,7 +667,7 @@ namespace MadeInArizona
             if (settingsPage == 1) {
                 SettingLabel(x, y + 191, "GRAPHICS PRESET", 0);
                 if (Button(x + 465, y + 188, 426, 38, presets[s.quality])) { s.quality = (s.quality + 1) % 4; game.ApplySettings(); }
-                Text(x + 35, y + 232, 850, 40, s.quality == 0 ? "For integrated GPUs: reduced scene resolution and foliage range, no shadows, HDR, post-processing, ambient occlusion or heat refraction. HUD remains full resolution." : s.quality == 3 ? "Long-lived debris, dense explosion layers, 4K shadows, more lights. Hardware performance varies; profiling required." : "Shared URP renderer. Metal on Mac, Direct3D on Windows. All presets preserve combat readability.", 14, Muted);
+                Text(x + 35, y + 232, 850, 40, s.quality == 0 ? "Reduced scene resolution and foliage range; no shadows or post-processing. HUD remains full resolution." : s.quality == 1 ? "Reduced scene resolution with softly filtered sun shadows." : s.quality == 2 ? "Full scene resolution, softened shadows and more lighting detail." : "4K sun shadows, denser effects and more lights. Best for capable GPUs.", 14, Muted);
                 SettingLabel(x, y + 291, "SHADOW DETAIL", 1);
                 if (Button(x + 465, y + 286, 426, 38, ShadowDetailLabels[s.shadowDetail])) { s.shadowDetail = (s.shadowDetail + 1) % 3; game.ApplySettings(); }
                 Text(x + 35, y + 330, 850, 40, ShadowDetailNotes[s.shadowDetail], 14, Muted);
@@ -714,11 +715,11 @@ namespace MadeInArizona
         static readonly string[] SettingsTabs = { "DISPLAY & ACCESS", "GRAPHICS & CAMERA", "AUDIO", "CONTROLS" };
         /// <summary>Gamepad rows on each settings page (the controls page adds one per rebindable action).</summary>
         int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 7 : page == 2 ? 6 : 4 + actions.Length;
-        static readonly string[] ShadowDetailLabels = { "MATCH GRAPHICS PRESET", "HIGH • 4K, SOFT EDGES", "ULTRA • 8K, SOFT EDGES" };
+        static readonly string[] ShadowDetailLabels = { "AUTO • MATCH PRESET", "4K • SOFT", "8K • SOFT" };
         static readonly string[] ShadowDetailNotes = {
-            "Shadow map size and range follow the preset.",
-            "A 4096 sun shadow map spent on the play area, with filtered edges. For capable GPUs.",
-            "An 8192 sun shadow map with the softest filtering. For high-end GPUs; uses about 128 MB of video memory." };
+            "Simple has no shadows. Low and Medium use softened edges; High uses a 4K sun map.",
+            "A 4096 sun shadow map over the play area, with filtered edges.",
+            "An 8192 sun shadow map with the widest filter. Uses about 128 MB of video memory." };
         static readonly string[] FrameSyncLabels = { "ON • MATCH DISPLAY REFRESH", "OFF • 120 FPS CAP", "OFF • UNCAPPED" };
         static string TimeOfDayLabel(bool sunset) => sunset ? "SUNSET • LOW SUN, LONG SHADOWS" : "MIDDAY • FULL DESERT SUN";
         void SettingLabel(float x, float y, string label, int index)
@@ -730,16 +731,22 @@ namespace MadeInArizona
         }
         void CycleWindow()
         {
-            Screen.fullScreenMode = Screen.fullScreenMode == FullScreenMode.Windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-            game.Save.settings.fullscreen = Screen.fullScreenMode != FullScreenMode.Windowed;
+            game.ChooseWindowMode(!game.Save.settings.fullscreen);
         }
         void CycleResolution()
         {
-            int[] widths = { 1280, 1600, 1920, 2560, 3440 };
-            int index = Array.FindIndex(widths, w => w > Screen.width); if (index < 0) index = 0;
-            int h = widths[index] == 3440 ? 1440 : widths[index] * 9 / 16;
-            game.Save.settings.width = widths[index]; game.Save.settings.height = h;
-            Screen.SetResolution(widths[index], h, Screen.fullScreenMode);
+            if (game.Save.settings.fullscreen) return;
+            int[] widths = { 960, 1024, 1152, 1280, 1440, 1600, 1920, 2560, 3440 };
+            int current = Screen.width;
+            int first = Array.FindIndex(widths, w => w > current);
+            if (first < 0) first = 0;
+            for (int step = 0; step < widths.Length; step++)
+            {
+                int index = (first + step) % widths.Length;
+                int w = widths[index], h = w == 3440 ? 1440 : w * 9 / 16;
+                var fitted = GameManager.FitWindowToWorkArea(w, h, Screen.mainWindowDisplayInfo.workArea);
+                if (fitted.x == w && fitted.y == h) { game.ChooseWindowResolution(w, h); return; }
+            }
         }
         void AdjustSetting(int direction)
         {

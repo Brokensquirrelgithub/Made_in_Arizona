@@ -134,6 +134,10 @@ namespace MadeInArizona
                     control.scope==DevScope.Car&&carEditable;
                 bool previous=GUI.enabled;GUI.enabled=previous&&editable;
                 float changed=GUI.HorizontalSlider(new Rect(4,yy+31,635,24),value,control.min,control.max);
+                // One-click bypass and restore for optional physical-voice layers and drive-aware inputs.
+                if(control.field.Name=="engineIntakeLevel"||control.field.Name=="engineAccessoryLevel"||control.field.Name=="engineDriveResponse")
+                    if(Button(658,yy+24,108,32,value>0?"ON • DISABLE":"OFF • ENABLE",value>0,size:11))
+                        changed=value>0?0:1;
                 GUI.enabled=previous;
                 if(editable&&!Mathf.Approximately(value,changed))
                 {

@@ -36,4 +36,4 @@ MonoBehaviour:
   color: {r: 0.055, g: 0.06, b: 0.07, a: 1}
   drivetrain: 0
   differential: 0
-  engineLayout: v8-truck
+  engineLayout: v8-luxury

@@ -12,12 +12,14 @@ namespace MadeInArizona
         public float driftGrip, driftYaw, driftKick, driftSpeedLoss, driftThrottle, driftRecovery;
         public float enginePitch, engineLoadLevel, engineOverrunLevel, turboWhineLevel, nitroRoarLevel;
         public float exhaustPopLevel, shiftLevel, enginePulseVariation, engineBody, engineRasp, engineSaturation;
-        public float enginePulsePressure, enginePulseAttack, enginePulseDecay, engineBrightness, engineResonance;
+        public float enginePulsePressure, enginePulseAttack, enginePulseDecay, engineBrightness, engineResonance, engineHeaderBalance;
+        public float engineIntakeLevel, engineAccessoryLevel, engineDriveResponse;
+        public int engineAudioVersion;
         public bool enginePreserveEdges, enginePhysical;
 
         public static CarTuning FromLegacy(string carId, DevTuning source)
         {
-            var result = new CarTuning { id = carId };
+            var result = new CarTuning { id = carId, engineAudioVersion = 3 };
             foreach (var control in DevControl.All)
                 if (control.scope == DevScope.Car)
                     typeof(CarTuning).GetField(control.field.Name).SetValue(result, control.field.GetValue(source));
@@ -37,6 +39,19 @@ namespace MadeInArizona
 
         public void Clamp()
         {
+            // Profiles saved before the header control have a zero-valued missing field; keep their authored mix.
+            if (engineAudioVersion < 1) { engineHeaderBalance = new DevTuning().engineHeaderBalance; engineAudioVersion = 1; }
+            if (engineAudioVersion < 2)
+            {
+                var defaults = new DevTuning();
+                engineIntakeLevel = defaults.engineIntakeLevel; engineAccessoryLevel = defaults.engineAccessoryLevel;
+                engineAudioVersion = 2;
+            }
+            if (engineAudioVersion < 3)
+            {
+                engineDriveResponse = new DevTuning().engineDriveResponse;
+                engineAudioVersion = 3;
+            }
             foreach (var control in DevControl.All)
             {
                 if (control.scope != DevScope.Car) continue;

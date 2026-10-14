@@ -73,7 +73,7 @@ namespace MadeInArizona
             sunObj.transform.SetParent(transform, false);
             Sun = sunObj.AddComponent<Light>();
             Sun.type = LightType.Directional;
-            Sun.shadows = LightShadows.Hard; // ApplySettings makes it soft at high shadow detail
+            Sun.shadows = LightShadows.Soft; // ApplySettings chooses filtering and disables shadows on Simple.
             sunObj.transform.rotation = Quaternion.Euler(68, -35, 0);
             CreatePostProcessing();
             gameObject.AddComponent<GameUpdater>();
@@ -82,6 +82,7 @@ namespace MadeInArizona
             gameObject.AddComponent<SmokeTestRunner>();
             if (TelemetryRecorder.Enabled) gameObject.AddComponent<TelemetryRecorder>();
             ApplySettings();
+            ApplyDisplaySettings();
         }
 
         void Start() { ReturnToGarage(); DevTuning.Apply(); if(!SmokeTestRunner.Active)ShowMainMenu(); }
@@ -106,8 +107,7 @@ namespace MadeInArizona
         }
 
         /// <summary>
-        /// Soft (filtered) shadow edges, from Settings > Shadow detail. The render pipeline supports them, but every light
-        /// casts hard shadows unless the player asks for more detail, which keeps the presets looking as they always have.
+        /// Whether shadow-casting effect lights use URP's filtered edges. The sun is filtered whenever shadows are enabled.
         /// </summary>
         public static bool SoftShadows { get; private set; }
         /// <summary>Shadow map size for the sun: the preset's own, or 4096 / 8192 at high / ultra shadow detail.</summary>
@@ -131,17 +131,21 @@ namespace MadeInArizona
             QualitySettings.globalTextureMipmapLimit = s.quality==0?2:s.quality==1?1:0;
             s.shadowDetail = Mathf.Clamp(s.shadowDetail, 0, 2);
             bool detailedShadows = s.shadowDetail > 0;
-            SoftShadows = detailedShadows;
-            QualitySettings.shadows = s.quality == 0 && !detailedShadows ? UnityEngine.ShadowQuality.Disable : UnityEngine.ShadowQuality.All;
+            bool castShadows = s.quality > 0 || detailedShadows;
+            SoftShadows = castShadows && (s.quality >= 2 || detailedShadows);
+            QualitySettings.shadows = castShadows ? UnityEngine.ShadowQuality.All : UnityEngine.ShadowQuality.Disable;
             // Detailed shadows spend the bigger map on the play area only: 110 m past the framing distance covers the
             // view at full dynamic zoom (the Arizona Summer preset's 160 m spread its map over hills nobody sees).
             QualitySettings.shadowDistance = detailedShadows ? 110f : new[] { 0f, 65f, 110f, 160f }[s.quality];
             QualitySettings.shadowResolution = s.quality >= 2 || detailedShadows ? UnityEngine.ShadowResolution.VeryHigh : UnityEngine.ShadowResolution.Medium;
             if (Sun)
             {
-                Sun.shadows = detailedShadows ? LightShadows.Soft : LightShadows.Hard;
+                Sun.shadows = castShadows ? LightShadows.Soft : LightShadows.None;
                 var sunData = Sun.GetUniversalAdditionalLightData();
-                if (sunData) sunData.softShadowQuality = s.shadowDetail == 2 ? SoftShadowQuality.High : SoftShadowQuality.Medium;
+                // Low uses a small PCF filter; Medium and High use a wider tent filter. The 8K override keeps
+                // the highest filter quality. Filtering hides hard texel steps without allocating a blur texture.
+                if (sunData) sunData.softShadowQuality = s.shadowDetail == 2 ? SoftShadowQuality.High :
+                    s.quality == 1 && !detailedShadows ? SoftShadowQuality.Low : SoftShadowQuality.Medium;
             }
             QualitySettings.lodBias = new[] { .65f, 1f, 1.5f, 2f }[s.quality];
             var camera = Camera.main;
@@ -153,7 +157,7 @@ namespace MadeInArizona
             }
             var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             if (pipeline) {
-                // Low targets integrated GPUs: 58% linear resolution is 40% of the native pixel work. The UI is
+                // Simple targets integrated GPUs: 58% linear resolution is 40% of the native pixel work. The UI is
                 // composited at output resolution, so gauges and text remain sharp.
                 pipeline.renderScale = new[] { .58f, .82f, 1f, 1f }[s.quality];
                 // Heat haze is disabled by the Low effects path, so do not pay for an opaque scene copy there.
@@ -171,12 +175,51 @@ namespace MadeInArizona
             DevVisuals.Apply(); // ambient occlusion quality follows the preset
             Shader.SetGlobalFloat("_ArizonaDetail", s.quality >= 2 ? 1 : 0);
             AudioListener.volume = AudioManager.OutputVolume(s.master);
-            if (!Application.isBatchMode) {
-                var mode = s.fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-                if (Screen.width != s.width || Screen.height != s.height || Screen.fullScreenMode != mode)
-                    Screen.SetResolution(s.width, s.height, mode);
-            }
             DevTuning.Apply();
+            SaveSystem.Save(Save);
+        }
+
+        /// <summary>Only startup and explicit display controls change the native window.</summary>
+        public void ApplyDisplaySettings()
+        {
+            if (Application.isBatchMode || Save == null) return;
+            var s = Save.settings;
+            if (!s.displayConfigured && !s.fullscreen) return;
+            if (s.fullscreen)
+            {
+                // OS maximized mode uses the work area, so the taskbar cannot cover the bottom of the game.
+                if (Screen.fullScreenMode != FullScreenMode.MaximizedWindow)
+                    Screen.fullScreenMode = FullScreenMode.MaximizedWindow;
+            }
+            else
+            {
+                var size = FitWindowToWorkArea(s.width, s.height, Screen.mainWindowDisplayInfo.workArea);
+                if (Screen.fullScreenMode != FullScreenMode.Windowed || Screen.width != size.x || Screen.height != size.y)
+                    Screen.SetResolution(size.x, size.y, FullScreenMode.Windowed);
+            }
+        }
+
+        public static Vector2Int FitWindowToWorkArea(int width, int height, RectInt workArea)
+        {
+            if (workArea.width <= 0 || workArea.height <= 0) return new Vector2Int(width, height);
+            // Leave room for the title bar and borders when returning to a movable window.
+            float scale = Mathf.Min(1f, (workArea.width - 32f) / width, (workArea.height - 64f) / height);
+            return new Vector2Int(Mathf.Max(1, Mathf.RoundToInt(width * scale)), Mathf.Max(1, Mathf.RoundToInt(height * scale)));
+        }
+
+        public void ChooseWindowMode(bool maximized)
+        {
+            Save.settings.fullscreen = maximized;
+            Save.settings.displayConfigured = true;
+            ApplyDisplaySettings();
+            SaveSystem.Save(Save);
+        }
+
+        public void ChooseWindowResolution(int width, int height)
+        {
+            var s = Save.settings;
+            s.width = width; s.height = height; s.displayConfigured = true;
+            if (!s.fullscreen) ApplyDisplaySettings();
             SaveSystem.Save(Save);
         }
 

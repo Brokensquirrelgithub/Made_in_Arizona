@@ -38,6 +38,8 @@ namespace MadeInArizona
             current.Variation = tuning.enginePulseVariation; current.Rasp = tuning.engineRasp; current.Body = tuning.engineBody;
             current.Drive = tuning.engineSaturation; current.LoadLevel = tuning.engineLoadLevel; current.OverrunLevel = tuning.engineOverrunLevel;
             current.TurboLevel = tuning.turboWhineLevel; current.Brightness = tuning.engineBrightness; current.Resonance = tuning.engineResonance;
+            current.HeaderBalance = tuning.engineHeaderBalance;
+            current.IntakeLevel = tuning.engineIntakeLevel; current.AccessoryLevel = tuning.engineAccessoryLevel;
         }
 
         void OnAudioFilterRead(float[] data, int channels)

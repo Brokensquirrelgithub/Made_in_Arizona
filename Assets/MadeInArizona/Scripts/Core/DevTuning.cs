@@ -35,7 +35,13 @@ namespace MadeInArizona
         public float engineBrightness=1f;
         /// <summary>Physical voice: strength of the waves ringing in the headers and tailpipe (1 = default).</summary>
         public float engineResonance=1f;
-        public int audioVersion=5;
+        /// <summary>Physical voice: 0 = tailpipe only, 1 = engine-bay header only.</summary>
+        public float engineHeaderBalance=.7f;
+        /// <summary>Physical voice induction and belt-accessory layers; zero bypasses either layer.</summary>
+        public float engineIntakeLevel=1f, engineAccessoryLevel=1f;
+        /// <summary>Physical voice drive-aware inputs; zero restores the original throttle and wheel-derived RPM.</summary>
+        public float engineDriveResponse=1f;
+        public int audioVersion=8;
         public int presentationVersion;
         static readonly DevTuning defaults=new DevTuning();
         static DevTuning coopOverride;
@@ -147,6 +153,21 @@ namespace MadeInArizona
                 engineResonance=defaults.engineResonance;
                 audioVersion=5;
             }
+            if (audioVersion < 6)
+            {
+                engineHeaderBalance=defaults.engineHeaderBalance;
+                audioVersion=6;
+            }
+            if (audioVersion < 7)
+            {
+                engineIntakeLevel=defaults.engineIntakeLevel; engineAccessoryLevel=defaults.engineAccessoryLevel;
+                audioVersion=7;
+            }
+            if (audioVersion < 8)
+            {
+                engineDriveResponse=defaults.engineDriveResponse;
+                audioVersion=8;
+            }
             // Saves from before the nitro slider existed carry no value for it.
             if (nitro<=0) nitro=defaults.nitro;
             if (partHpPerKg<=0) partHpPerKg=defaults.partHpPerKg;
@@ -219,6 +240,10 @@ namespace MadeInArizona
             new DevControl("ENGINE","engineSaturation","Combustion saturation / growl",.25f,2.5f),
             new DevControl("ENGINE","engineBrightness","Engine brightness (physical voice: low = darker, high = buzzier)",0,2.5f),
             new DevControl("ENGINE","engineResonance","Exhaust resonance (physical voice: header and tailpipe waves)",0,2),
+            new DevControl("ENGINE","engineHeaderBalance","Header / tailpipe balance (0 = tailpipe, 1 = header)",0,1),
+            new DevControl("ENGINE","engineIntakeLevel","Intake induction (physical voice)",0,2),
+            new DevControl("ENGINE","engineAccessoryLevel","Accessory whir (physical voice)",0,2),
+            new DevControl("ENGINE","engineDriveResponse","Drive-aware response (0 = original RPM and load)",0,1),
             new DevControl("ENGINE","enginePitch","Engine pitch (1 = default)",.5f,1.5f),
             new DevControl("ENGINE","engineLoadLevel","On-throttle engine level",0,2.5f),
             new DevControl("ENGINE","engineOverrunLevel","Off-throttle engine level",0,2.5f),

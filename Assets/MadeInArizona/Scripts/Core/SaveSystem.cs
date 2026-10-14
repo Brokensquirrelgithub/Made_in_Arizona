@@ -14,6 +14,8 @@ namespace MadeInArizona
         // 0 = VSync on (match display), 1 = off with 120 FPS cap, 2 = off and uncapped.
         public int frameSync=0;
         public bool subtitles=true, fullscreen=false, dynamicZoom=true;
+        // Set only by an explicit display choice. Older saves leave the player window at its launch size.
+        public bool displayConfigured;
         /// <summary>Sunset instead of midday: a low warm sun, long shadows and a darker, easier-on-the-eyes look (TimeOfDay).</summary>
         public bool sunset;
         // Camera sway that reveals terrain relief (0 = fixed overhead camera, 1 = the strongest sway on offer).

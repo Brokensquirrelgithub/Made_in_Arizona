@@ -6,6 +6,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.Rendering.Universal;
 
 namespace MadeInArizona
 {
@@ -33,6 +34,10 @@ namespace MadeInArizona
             Application.logMessageReceived += OnLog;
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDisplayReticleTest")>=0)
+            { yield return TestDisplayAndReticle(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaShadowFilterTest")>=0)
+            { yield return TestShadowFilters(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHealthTest")>=0)
             { TestSegmentedHealth(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
@@ -1511,8 +1516,59 @@ namespace MadeInArizona
                 layoutsValid&=valid;
             }
             Check("every vehicle resolves a valid engine layout",layoutsValid);
+            string[] rosterIds={"ronin","juniper","sunskip","foreclosure","sidehustle","perennial","skitter","vincent","shift",
+                "monsoon","sonora","dustback","monument","executive","heat","citizen","roam4","ae867","espresso",
+                "copperado","contender","scarface"};
+            int[] rosterCylinders={4,4,8,6,6,8,3,8,3,5,6,4,6,8,3,4,4,4,3,8,8,3};
+            bool countsMatch=ContentCatalog.Vehicles.Length==rosterIds.Length,assetsMatch=countsMatch;
+            for(int i=0;i<rosterIds.Length;i++)
+            {
+                var vehicle=Array.Find(ContentCatalog.Vehicles,v=>v.id==rosterIds[i]);
+                countsMatch&=vehicle!=null&&vehicle.Engine.Cylinders==rosterCylinders[i];
+                assetsMatch&=vehicle!=null&&vehicle.engineLayout==EngineLayouts.ForVehicle(rosterIds[i]);
+            }
+            Check("stock roster cylinder counts match the vehicle inspirations",countsMatch);
+            Check("authored engine assets agree with runtime fallback layouts",assetsMatch);
+            Check("DeVille-inspired Executive has its own eight-cylinder voice",Array.Find(ContentCatalog.Vehicles,v=>v.id=="executive")?.Engine.id=="v8-luxury");
+            Check("Outback-inspired Dustback has a boxer voice",Array.Find(ContentCatalog.Vehicles,v=>v.id=="dustback")?.Engine.id=="boxer4");
+            Check("AE86-inspired Runner no longer revs like a motorcycle",Array.Find(ContentCatalog.Vehicles,v=>v.id=="ae867")?.Engine.redlineRpm==7500);
             var shift=Array.Find(ContentCatalog.Vehicles,v=>v.id=="shift");
             Check("Atlas Shift uses the three-cylinder layout",shift&&shift.Engine.id=="inline3"&&shift.Engine.Cylinders==3);
+            var olderCarProfile=new CarTuning { engineAudioVersion=0, engineHeaderBalance=0 };
+            olderCarProfile.Clamp();
+            Check("older per-car audio profiles inherit the new header balance",Mathf.Abs(olderCarProfile.engineHeaderBalance-.7f)<.001f);
+            Check("older per-car audio profiles enable both new layers",olderCarProfile.engineIntakeLevel==1&&olderCarProfile.engineAccessoryLevel==1);
+            var olderAudioSettings=new DevTuning { audioVersion=6, engineIntakeLevel=0, engineAccessoryLevel=0 };
+            olderAudioSettings.Clamp();
+            Check("older global audio settings enable both new layers",olderAudioSettings.engineIntakeLevel==1&&olderAudioSettings.engineAccessoryLevel==1);
+            Check("older global audio settings enable drive-aware response",olderAudioSettings.engineDriveResponse==1);
+            var deliberatelyDisabled=new CarTuning { engineAudioVersion=2, engineIntakeLevel=0, engineAccessoryLevel=0 };
+            deliberatelyDisabled.Clamp();
+            Check("saved layer bypasses remain off",deliberatelyDisabled.engineIntakeLevel==0&&deliberatelyDisabled.engineAccessoryLevel==0);
+            Check("older per-car audio profiles enable drive-aware response",deliberatelyDisabled.engineDriveResponse==1);
+            var originalDriveProfile=new CarTuning { engineAudioVersion=3, engineDriveResponse=0 };
+            originalDriveProfile.Clamp();
+            Check("saved original drive response remains off",originalDriveProfile.engineDriveResponse==0);
+
+            float charge=.35f,freeRev=.4f;
+            AudioManager.ShapePhysicalDrive(2400,.7f,.2f,1,false,0,.02f,ref charge,ref freeRev,out float oldRpm,out float oldLoad);
+            Check("drive response OFF passes through original RPM and load",oldRpm==2400&&oldLoad==.7f&&freeRev==0);
+            charge=0;freeRev=0;
+            for(int step=0;step<25;step++)
+                AudioManager.ShapePhysicalDrive(1800,1,1,0,true,1,.02f,ref charge,ref freeRev,out _,out _);
+            AudioManager.ShapePhysicalDrive(1800,1,1,0,true,1,.02f,ref charge,ref freeRev,out float loadedRpm,out float loadedSound);
+            Check("a low-speed hard pull stays loaded without falsely free-revving",loadedSound>.95f&&loadedRpm==1800);
+            for(int step=0;step<15;step++)
+                AudioManager.ShapePhysicalDrive(1800,1,1,1,true,1,.02f,ref charge,ref freeRev,out _,out _);
+            AudioManager.ShapePhysicalDrive(1800,1,1,1,true,1,.02f,ref charge,ref freeRev,out float spinningRpm,out _);
+            Check("wheelspin frees the sound RPM above wheel-derived RPM",spinningRpm>3500&&spinningRpm<6900);
+            for(int step=0;step<20;step++)
+                AudioManager.ShapePhysicalDrive(2600,.8f,.35f,0,true,1,.02f,ref charge,ref freeRev,out _,out _);
+            AudioManager.ShapePhysicalDrive(2600,.8f,.35f,0,true,1,.02f,ref charge,ref freeRev,out float settledRpm,out float settledLoad);
+            Check("effective drive throttle governs charge after a shift or steering cut",settledRpm==2600&&settledLoad>.34f&&settledLoad<.4f);
+            charge=0;freeRev=0;
+            AudioManager.ShapePhysicalDrive(900,0,0,0,false,1,.02f,ref charge,ref freeRev,out float airborneIdle,out _);
+            Check("an airborne car does not free-rev without throttle",airborneIdle==900);
 
             string wavDir=Environment.GetEnvironmentVariable("MIA_AUDIO_DIR");
             bool allBounded=true;float worstLoad=0;
@@ -1533,6 +1589,15 @@ namespace MadeInArizona
                 bool bounded=finite&&peak<=1&&rms>.02f;
                 if(!bounded)Debug.LogError("MIA_ENGINE_RENDER: "+layout.id+" finite="+finite+" peak="+peak+" rms="+rms);
                 allBounded&=bounded;
+                if(layout.id=="inline3"||layout.id==EngineLayouts.Default)
+                {
+                    double idleEnergy=0;float idlePeak=0;int idleSamples=0;
+                    for(int sample=(int)(.3f*48000)*2;sample<(int)(.9f*48000)*2;sample+=2)
+                    {float value=pcm[sample];idleEnergy+=value*value;idlePeak=Mathf.Max(idlePeak,Mathf.Abs(value));idleSamples++;}
+                    float idleCrest=idlePeak/Mathf.Sqrt((float)(idleEnergy/idleSamples));
+                    Debug.Log("MIA_ENGINE_IDLE: "+layout.id+" crest "+idleCrest.ToString("0.00"));
+                    Check(layout.id+" idle has sustained body between firing pulses",idleCrest<(layout.id=="inline3"?6f:5.2f));
+                }
                 if(!string.IsNullOrEmpty(wavDir)){Directory.CreateDirectory(wavDir);WriteWav(Path.Combine(wavDir,"engine-"+layout.id+".wav"),pcm,48000);}
                 yield return null;
             }
@@ -1540,6 +1605,28 @@ namespace MadeInArizona
             Debug.Log("MIA_ENGINE_CPU: worst smoothed render load "+(worstLoad*100).ToString("0.00")+"% of one core per voice");
             Check("physical engine voice stays under 5% of one core",worstLoad>0&&worstLoad<.05f);
             Check("Shift three-cylinder firing period is present at 3000 rpm",FiringPeriodPresent(shift.Engine,3000));
+            var headerOnly=new EngineVoice(shift.Engine,48000){HeaderBalance=1};
+            var tailOnly=new EngineVoice(shift.Engine,48000){HeaderBalance=0};
+            var headerBlock=new float[2048];var tailBlock=new float[2048];
+            headerOnly.Gain=tailOnly.Gain=1;headerOnly.TargetRpm=tailOnly.TargetRpm=3000;headerOnly.Throttle=tailOnly.Throttle=.7f;
+            double headerEnergy=0,tailEnergy=0,contrastEnergy=0;
+            for(int block=0;block<80;block++)
+            {
+                headerOnly.Render(headerBlock,2);tailOnly.Render(tailBlock,2);
+                if(block<20)continue;
+                for(int sample=0;sample<headerBlock.Length;sample+=2)
+                {
+                    float h=headerBlock[sample],t=tailBlock[sample];
+                    headerEnergy+=h*h;tailEnergy+=t*t;contrastEnergy+=(h-t)*(h-t);
+                }
+            }
+            Check("header and tailpipe control has two distinct audible paths",headerEnergy>1&&tailEnergy>1&&contrastEnergy>headerEnergy*.1f);
+            float intakeLoaded=LayerDifference(shift.Engine,4500,1,true);
+            float intakeCoast=LayerDifference(shift.Engine,4500,0,true);
+            float accessoryCoast=LayerDifference(shift.Engine,4500,0,false);
+            Debug.Log("MIA_ENGINE_LAYERS: induction loaded "+intakeLoaded.ToString("0.0000")+", induction coast "+intakeCoast.ToString("0.0000")+", accessory coast "+accessoryCoast.ToString("0.0000"));
+            Check("intake induction follows throttle and can be bypassed",intakeLoaded>.002f&&intakeLoaded>intakeCoast*3);
+            Check("accessory whir runs on overrun and can be bypassed",accessoryCoast>.001f);
             float stockHigh=HighBandShare(new EngineVoice(shift.Engine,48000),out _,out _);
             float turboHigh=HighBandShare(new EngineVoice(shift.Engine,48000,true),out float boostSpool,out float liftSpool);
             Debug.Log("MIA_ENGINE_TURBO: spool at boost "+boostSpool.ToString("0.00")+", after 1 s lift "+liftSpool.ToString("0.00")+", exhaust >2 kHz share stock "+stockHigh.ToString("0.000")+" turbo "+turboHigh.ToString("0.000"));
@@ -1567,6 +1654,26 @@ namespace MadeInArizona
             if(!installed)save.installedParts.Remove("turbo");if(!owned)save.ownedParts.Remove("turbo");
             game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
             Check("removing the turbo restores the stock voice",!game.Player.Stats.turbocharged&&!live.Voice.Turbocharged);
+            bool swapOwned=save.ownedParts.Contains("swap"),swapInstalled=save.installedParts.Contains("swap");
+            if(!swapOwned)save.ownedParts.Add("swap");if(!swapInstalled)save.installedParts.Add("swap");
+            game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
+            Check("1.8 L engine swap changes the Shift to four cylinders",game.Player.Stats.engineSwapped&&live.Layout.id=="inline4-swap"&&live.Layout.Cylinders==4);
+            if(!swapInstalled)save.installedParts.Remove("swap");if(!swapOwned)save.ownedParts.Remove("swap");
+            game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
+            Check("removing the engine swap restores the three-cylinder voice",!game.Player.Stats.engineSwapped&&live.Layout.id=="inline3");
+        }
+        static float LayerDifference(EngineLayout layout,float rpm,float throttle,bool intake)
+        {
+            var dry=new EngineVoice(layout,48000){IntakeLevel=0,AccessoryLevel=0,TargetRpm=rpm,Throttle=throttle,Gain=1};
+            var wet=new EngineVoice(layout,48000){IntakeLevel=intake?1:0,AccessoryLevel=intake?0:1,TargetRpm=rpm,Throttle=throttle,Gain=1};
+            var a=new float[2048];var b=new float[2048];double energy=0;int count=0;
+            for(int block=0;block<64;block++)
+            {
+                dry.Render(a,2);wet.Render(b,2);
+                if(block<16)continue;
+                for(int i=0;i<a.Length;i+=2){float difference=b[i]-a[i];energy+=difference*difference;count++;}
+            }
+            return (float)Math.Sqrt(energy/count);
         }
         /// <summary>
         /// Two seconds of full throttle at 4500 rpm, then one second lifted. Returns the share of full-load energy
@@ -2062,7 +2169,7 @@ namespace MadeInArizona
             var urp=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
             int lowAtlas=urp?urp.additionalLightsShadowmapResolution:0;
             game.Save.settings.quality=2;game.ApplySettings();
-            Check("effect-light shadow atlas is 4096 on High Octane and 1024 on the lowest preset",urp&&urp.additionalLightsShadowmapResolution==4096&&lowAtlas==1024);
+            Check("effect-light shadow atlas is 4096 on Medium and 1024 on Simple",urp&&urp.additionalLightsShadowmapResolution==4096&&lowAtlas==1024);
             ui.enabled=true;game.Resume();
 
             player.Damage.ApplyDamage(30,player.transform.position,null);
@@ -2201,6 +2308,82 @@ namespace MadeInArizona
             yield return new WaitForSecondsRealtime(1.6f);Capture("suzuki-bowl-full");yield return new WaitForSecondsRealtime(.4f);
             InputSystem.RemoveDevice(mouse);rig.enabled=true;
         }
+        IEnumerator TestShadowFilters()
+        {
+            var game=GameManager.Instance;
+            var settings=game.Save.settings;
+            var pipeline=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            var sunData=game.Sun.GetUniversalAdditionalLightData();
+            settings.shadowDetail=0;
+            settings.quality=0;game.ApplySettings();
+            Check("Simple disables shadows",QualitySettings.shadows==UnityEngine.ShadowQuality.Disable&&game.Sun.shadows==LightShadows.None);
+            settings.quality=1;game.ApplySettings();
+            Check("Low filters its 2048 sun shadow map",pipeline&&pipeline.mainLightShadowmapResolution==2048&&
+                game.Sun.shadows==LightShadows.Soft&&sunData.softShadowQuality==SoftShadowQuality.Low);
+            settings.quality=2;game.ApplySettings();
+            Check("Medium filters its 2048 sun shadow map more widely",pipeline&&pipeline.mainLightShadowmapResolution==2048&&
+                game.Sun.shadows==LightShadows.Soft&&sunData.softShadowQuality==SoftShadowQuality.Medium&&GameManager.SoftShadows);
+            settings.quality=3;game.ApplySettings();
+            Check("High uses filtered 4K sun shadows",pipeline&&pipeline.mainLightShadowmapResolution==4096&&game.Sun.shadows==LightShadows.Soft);
+            settings.quality=0;settings.shadowDetail=1;game.ApplySettings();
+            Check("4K shadow override remains available on Simple",pipeline&&pipeline.mainLightShadowmapResolution==4096&&game.Sun.shadows==LightShadows.Soft);
+            settings.quality=2;settings.shadowDetail=2;game.ApplySettings();
+            Check("8K shadow override keeps its widest filter",pipeline&&pipeline.mainLightShadowmapResolution==8192&&sunData.softShadowQuality==SoftShadowQuality.High);
+
+            settings.quality=1;settings.shadowDetail=0;settings.perspectiveCamera=true;game.ApplySettings();
+            game.StartCampaign(173,1600);
+            yield return new WaitUntil(()=>game.State==GameState.Playing);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(1);
+            var rig=CameraController.Instance;var view=Camera.main;
+            rig.enabled=false;view.orthographic=false;view.fieldOfView=48;
+            Vector3 car=game.Player.transform.position+Vector3.up;
+            view.transform.position=car+new Vector3(-14,9,-12);
+            view.transform.LookAt(car);
+            for(int quality=1;quality<=3;quality++)
+            {
+                settings.quality=quality;game.ApplySettings();
+                yield return new WaitForSecondsRealtime(.35f);
+                SceneLuminance("shadow-"+new[]{"simple","low","medium","high"}[quality],view);
+            }
+        }
+        IEnumerator TestDisplayAndReticle()
+        {
+            var game=GameManager.Instance;
+            int width=Screen.width,height=Screen.height;
+            FullScreenMode mode=Screen.fullScreenMode;
+            game.ApplySettings();
+            yield return new WaitForSecondsRealtime(.2f);
+            Check("ordinary settings leave the player window unchanged",Screen.width==width&&Screen.height==height&&Screen.fullScreenMode==mode);
+
+            game.ChooseWindowMode(true);
+            yield return new WaitForSecondsRealtime(.6f);
+            var workArea=Screen.mainWindowDisplayInfo.workArea;
+            Check("maximized mode fits above the taskbar",Screen.fullScreenMode==FullScreenMode.MaximizedWindow&&Screen.height<=workArea.height);
+
+            game.ChooseWindowMode(false);
+            game.ChooseWindowResolution(960,540);
+            yield return new WaitForSecondsRealtime(.6f);
+            Check("explicit window size applies",Screen.fullScreenMode==FullScreenMode.Windowed&&Screen.width==960&&Screen.height==540);
+
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(1);
+            var mouse=InputSystem.AddDevice<Mouse>();
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=new Vector2(Screen.width*.5f,Screen.height*.5f)});
+            var camera=Camera.main;
+            camera.cullingMask=0;
+            camera.clearFlags=CameraClearFlags.SolidColor;
+            camera.backgroundColor=Color.white;
+            yield return new WaitForSecondsRealtime(.6f);
+            var ui=game.GetComponent<GameUI>();
+            Check("reticle turns black over a light view",ui.ReticleInkForTest==Color.black);
+            camera.backgroundColor=Color.black;
+            yield return new WaitForSecondsRealtime(.6f);
+            Check("reticle turns white over a dark view",ui.ReticleInkForTest==Color.white);
+            InputSystem.RemoveDevice(mouse);
+        }
+
         IEnumerator TestVehicleRoster()
         {
             var game=GameManager.Instance;
@@ -2258,6 +2441,29 @@ namespace MadeInArizona
                     var grime=game.Player.GetComponent<VehicleDust>();
                     Check("Scarface's whip stands about four car-heights tall ("+(tip/roof).ToString("0.0")+"), and is not taken for the roof",
                         whip&&tip/roof>3.5f&&tip/roof<4.6f&&grime&&grime.BodyTop<roof+.6f);
+                    var windings=whip?whip.GetComponentsInChildren<LineRenderer>():Array.Empty<LineRenderer>();
+                    bool ropeWrapped=windings.Length==5;
+                    foreach(var strand in windings)
+                    {
+                        ropeWrapped&=strand.positionCount>16;
+                        if(strand.positionCount>16)
+                        {
+                            Vector3 a=strand.GetPosition(0),b=strand.GetPosition(2);
+                            ropeWrapped&=Vector2.Distance(new Vector2(a.x,a.z),new Vector2(b.x,b.z))>.01f;
+                        }
+                    }
+                    Check("Scarface's whip carries five rope-light windings around the mast",ropeWrapped);
+                    var glowBlock=new MaterialPropertyBlock();
+                    if(windings.Length>0)windings[0].GetPropertyBlock(glowBlock);
+                    float middayGlow=glowBlock.GetColor("_EmissionColor").maxColorComponent;
+                    bool earlierSunset=game.Save.settings.sunset;
+                    game.Save.settings.sunset=true;
+                    yield return new WaitForSecondsRealtime(3.7f);
+                    glowBlock.Clear();
+                    if(windings.Length>0)windings[0].GetPropertyBlock(glowBlock);
+                    float sunsetGlow=glowBlock.GetColor("_EmissionColor").maxColorComponent;
+                    Check("Scarface's rope light brightens at sunset",windings.Length==5&&sunsetGlow>middayGlow*8f&&sunsetGlow>2f);
+                    game.Save.settings.sunset=earlierSunset;
                     // The pennant is a small orange triangle: full height at the whip, closing to a point behind it.
                     var pennant=VehicleController.FindChild(game.Player.Visual,"Whip pennant");
                     var cloth=pennant?pennant.GetComponent<MeshFilter>().sharedMesh:null;

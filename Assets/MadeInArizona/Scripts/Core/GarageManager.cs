@@ -24,6 +24,7 @@ namespace MadeInArizona
                 stats.damping*=p.dampingMultiplier; stats.finalDrive*=p.finalDriveMultiplier;
                 if(p.changesDrivetrain)stats.drivetrain=p.drivetrain; if(p.changesDifferential)stats.differential=p.differential;
                 if(p.turbocharger)stats.turbocharged=true;
+                if(p.id=="swap")stats.engineSwapped=true;
             }
             var driver=ContentCatalog.Drivers[Mathf.Clamp(save.selectedDriver,0,ContentCatalog.Drivers.Length-1)];
             stats.horsepower*=driver.powerMultiplier; stats.torque*=driver.powerMultiplier; stats.grip*=driver.gripMultiplier;

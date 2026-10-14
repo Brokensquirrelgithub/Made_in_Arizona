@@ -28,13 +28,12 @@ namespace MadeInArizona
             game.Save.settings.quality = 0;
             game.Save.settings.shadowDetail = 0;
             game.Save.settings.frameSync = 2;
-            game.Save.settings.width = 1600;
-            game.Save.settings.height = 900;
-            game.Save.settings.fullscreen = false;
             game.ApplySettings();
+            game.ChooseWindowMode(false);
+            game.ChooseWindowResolution(1600, 900);
             var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
             var cameraData = Camera.main.GetUniversalAdditionalCameraData();
-            check("low preset applies the reduced renderer path", QualitySettings.GetQualityLevel() == 0 &&
+            check("Simple preset applies the reduced renderer path", QualitySettings.GetQualityLevel() == 0 &&
                 pipeline && pipeline.renderScale <= .6f && !pipeline.supportsCameraOpaqueTexture &&
                 !Camera.main.allowHDR && !cameraData.renderPostProcessing && QualitySettings.shadows == UnityEngine.ShadowQuality.Disable);
             game.WorldConfig.seed = 173; game.WorldConfig.size = 1600;

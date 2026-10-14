@@ -25,7 +25,9 @@ namespace MadeInArizona
         // Inputs, written from the main thread and read once per rendered block.
         public volatile float TargetRpm, Throttle, Gain;
         /// <summary>Live shaping from the dev tuning sliders (1 = layout as authored).</summary>
-        public volatile float Variation = 1, Rasp = 1, Body = 1, Drive = 1, OverrunLevel = 1, LoadLevel = 1, Brightness = 1, Resonance = 1;
+        public volatile float Variation = 1, Rasp = 1, Body = 1, Drive = 1, OverrunLevel = 1, LoadLevel = 1, Brightness = 1, Resonance = 1, HeaderBalance = .7f;
+        /// <summary>Independent non-exhaust layers. Zero bypasses each layer entirely.</summary>
+        public volatile float IntakeLevel = 1, AccessoryLevel = 1;
         /// <summary>Turbo whistle and hiss level (dev slider; the exhaust-side turbo effects are not scaled).</summary>
         public volatile float TurboLevel = 1;
         /// <summary>Fraction of real time spent rendering, smoothed (0.01 = 1% of one core).</summary>
@@ -43,26 +45,29 @@ namespace MadeInArizona
         float spool, whistlePhase; readonly float turbineCoefficient; readonly float[] turbineLow; Biquad hissBand;
 
         readonly int cylinders, collectors, divider;
-        readonly float clearance, flowConstant, crankStep, idleRpm, redlineRpm;
+        readonly float clearance, flowConstant, crankStep, idleRpm, redlineRpm, envelopeCoefficient;
         readonly float[] firing, runnerVolume, cylinderGas, cylinderPressure, runnerGas, runnerDrain, lastGauge, jitter;
         readonly float JitterSamples; // ~0.25 ms of timing jitter, in samples
         readonly ExhaustTail[] tails;
         // Tailpipe radiation, applied partly: the full physical rise (corner 300 Hz) made engines a thin, fly-like buzz in
         // this game's mix, so it is blended in at RadiationMix and a 400 Hz corner. Brightness (dev slider) scales it live.
         const float RadiationTime = .0004f, RadiationMix = .45f;
-        // Wave propagation in the exhaust: header echo strength, and how much stronger and less damped the tailpipe's
-        // reflections are than the layouts give (Resonance, a dev slider, scales the echo and the reflection live).
-        const float HeaderEcho = .35f, PipeReflectionScale = 1.35f, PipeDampingScale = .65f;
+        // Wave propagation in the exhaust: the collector reflects a dark wave back through each primary. It returns
+        // repeatedly, so header length produces a short resonant body instead of a single copy of each firing pulse.
+        const float HeaderReflection = .62f, HeaderDampingHz = 1800f;
+        const float PipeReflectionScale = 1.35f, PipeDampingScale = .65f;
+        readonly float headerDamping;
         readonly bool[] open;
         readonly float[] lastAngle;
-        readonly float[][] headerLine; readonly int[] headerMask; readonly float[] headerDelay; int headerWrite;
+        readonly float[][] headerLine; readonly int[] headerMask; readonly float[] headerDelay, headerLow; int headerWrite;
         readonly int[] collector;
         readonly float[] collectorSum, dcState, panLeft, panRight;
         readonly float[][] pipeLine; readonly int pipeMask; readonly float[] pipeDelay, pipeLow, lastMuffled; int pipeWrite;
-        readonly Biquad[][] modes; readonly Biquad[] lowPass;
+        readonly Biquad[][] modes; readonly Biquad[] lowPass, headerBody, headerLowPass;
         Biquad knockMode; float knockAmount;
         float crank, rpm, throttle, noiseLow, outputGain = 1, appliedGain, envelope, leveler = 1, lastLeft, lastRight, nextLeft, nextRight;
-        int phase; uint seed = 0x2545F491;
+        int phase; uint seed = 0x2545F491, layerSeed = 0xD78441A5;
+        Biquad intakeBand; float intakeLow, accessoryPhase, accessoryLow;
 
         struct Biquad
         {
@@ -92,7 +97,7 @@ namespace MadeInArizona
         /// </summary>
         sealed class ExhaustTail
         {
-            const float Wet = .55f, Feedback = .5f;
+            const float Wet = .85f, Feedback = .62f;
             readonly float[] combA, combB, passA, passB; readonly int maskA, maskB, maskPA, maskPB, lengthA, lengthB, lengthPA, lengthPB;
             float lowA, lowB; int write; readonly float damping;
             public ExhaustTail(int rate, int index)
@@ -129,6 +134,8 @@ namespace MadeInArizona
         {
             Layout = layout; OutputRate = outputRate; Turbocharged = turbocharged;
             divider = outputRate >= 44100 ? 2 : 1; SimRate = outputRate / divider;
+            headerDamping = 1 - MathF.Exp(-2 * MathF.PI * HeaderDampingHz / SimRate);
+            envelopeCoefficient = 1 - MathF.Exp(-1f / (.25f * SimRate));
             cylinders = layout.Cylinders; collectors = Math.Max(1, layout.Collectors);
             idleRpm = layout.idleRpm; redlineRpm = Math.Max(layout.idleRpm + 500, layout.redlineRpm);
             // Volumes are in units of one cylinder's swept volume; pressures in atmospheres; gas amount = p·V.
@@ -141,7 +148,8 @@ namespace MadeInArizona
             cylinderGas = new float[cylinders]; cylinderPressure = new float[cylinders]; runnerGas = new float[cylinders]; lastGauge = new float[cylinders];
             jitter = new float[cylinders]; JitterSamples = .00025f * SimRate;
             open = new bool[cylinders]; lastAngle = new float[cylinders]; collector = new int[cylinders];
-            headerLine = new float[cylinders][]; headerMask = new int[cylinders]; headerDelay = new float[cylinders];
+            headerLine = new float[cylinders][]; headerMask = new int[cylinders]; headerDelay = new float[cylinders]; headerLow = new float[cylinders];
+            var headerLengthSum = new float[collectors]; var headersPerCollector = new int[collectors];
             for (int i = 0; i < cylinders; i++)
             {
                 firing[i] = layout.firingAngle[i];
@@ -152,8 +160,9 @@ namespace MadeInArizona
                 runnerDrain[i] = runnerVolume[i] / .0008f;
                 runnerGas[i] = runnerVolume[i];
                 collector[i] = layout.collector != null && i < layout.collector.Length ? Math.Clamp(layout.collector[i], 0, collectors - 1) : 0;
+                headerLengthSum[collector[i]] += length; headersPerCollector[collector[i]]++;
                 headerDelay[i] = length / SoundSpeed * SimRate;
-                // Room for the pulse and its header echo (three header lengths: out, back to the port, out again).
+                // Room for the pulse and its return from the collector; feedback reuses the same circular line.
                 int size = NextPowerOfTwo((int)(3 * headerDelay[i] + 2 * JitterSamples) + 6);
                 headerLine[i] = new float[size]; headerMask[i] = size - 1;
             }
@@ -175,6 +184,7 @@ namespace MadeInArizona
             pipeLine = new float[collectors][];
             int modeCount = layout.mufflerHz != null ? layout.mufflerHz.Length : 0;
             modes = new Biquad[collectors][]; lowPass = new Biquad[collectors];
+            headerBody = new Biquad[collectors]; headerLowPass = new Biquad[collectors];
             for (int c = 0; c < collectors; c++)
             {
                 pipeLine[c] = new float[pipeSize];
@@ -182,17 +192,22 @@ namespace MadeInArizona
                 for (int m = 0; m < modeCount; m++)
                     modes[c][m] = Biquad.BandPass(layout.mufflerHz[m], layout.mufflerQ != null && m < layout.mufflerQ.Length ? layout.mufflerQ[m] : 3, SimRate);
                 lowPass[c] = Biquad.LowPass(layout.mufflerCutoff, .707f, SimRate);
+                float averagePrimary = headerLengthSum[c] / Math.Max(1, headersPerCollector[c]);
+                headerBody[c] = Biquad.BandPass(Math.Clamp(SoundSpeed / (4 * averagePrimary), 100, 650), 7, SimRate);
+                headerLowPass[c] = Biquad.LowPass(900, .707f, SimRate);
             }
             knockMode = Biquad.BandPass(1900, 6, SimRate);
             turbineLow = new float[collectors];
             turbineCoefficient = 1 - MathF.Exp(-2 * MathF.PI * TurbineCutoff / SimRate);
             hissBand = Biquad.BandPass(3200, 1.2f, SimRate);
+            intakeBand = Biquad.BandPass(850, .85f, SimRate);
             Reset(idleRpm);
             Calibrate();
         }
 
         static int NextPowerOfTwo(int value) { int size = 8; while (size < value) size <<= 1; return size; }
         float Noise() { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return (seed & 0xFFFFFF) / 8388608f - 1; }
+        float LayerNoise() { layerSeed ^= layerSeed << 13; layerSeed ^= layerSeed >> 17; layerSeed ^= layerSeed << 5; return (layerSeed & 0xFFFFFF) / 8388608f - 1; }
         float Volume(float angle) => clearance + .5f * (1 - MathF.Cos(angle * (MathF.PI / 180)));
 
         void Reset(float startRpm)
@@ -202,7 +217,7 @@ namespace MadeInArizona
             lastLeft = lastRight = nextLeft = nextRight = 0; headerWrite = pipeWrite = 0;
             for (int i = 0; i < cylinders; i++)
             {
-                open[i] = false; runnerGas[i] = runnerVolume[i]; cylinderGas[i] = 0; cylinderPressure[i] = 1; lastGauge[i] = 0;
+                open[i] = false; runnerGas[i] = runnerVolume[i]; cylinderGas[i] = 0; cylinderPressure[i] = 1; lastGauge[i] = headerLow[i] = 0;
                 lastAngle[i] = Wrap(-firing[i]);
                 Array.Clear(headerLine[i], 0, headerLine[i].Length);
             }
@@ -210,11 +225,12 @@ namespace MadeInArizona
             {
                 dcState[c] = pipeLow[c] = lastMuffled[c] = 0; Array.Clear(pipeLine[c], 0, pipeLine[c].Length);
                 for (int m = 0; m < modes[c].Length; m++) modes[c][m].Clear();
-                lowPass[c].Clear();
+                lowPass[c].Clear(); headerBody[c].Clear(); headerLowPass[c].Clear();
             }
             knockMode.Clear();
             if (tails != null) foreach (var tail in tails) tail.Clear();
             spool = whistlePhase = 0; Array.Clear(turbineLow, 0, collectors); hissBand.Clear();
+            layerSeed = 0xD78441A5; intakeLow = accessoryPhase = accessoryLow = 0; intakeBand.Clear();
         }
 
         /// <summary>
@@ -286,6 +302,9 @@ namespace MadeInArizona
             float variation = Layout.combustionVariation * (live ? Variation : 1) * (1 + 1.5f * (1 - throttle) * (1 - revs));
             noiseLow += (Noise() - noiseLow) * .35f;
             float turbulence = Layout.turbulence * (live ? Rasp : 1), resonance = live ? Resonance : 1;
+            float headerReflection = Math.Min(.78f, HeaderReflection * resonance);
+            float balance = Math.Clamp(live ? HeaderBalance : .7f, 0, 1);
+            float headerMix = 1.4f * balance, tailMix = 1.2f * (1 - balance);
             bool turbo = Turbocharged && live;
             if (turbo)
             {
@@ -357,15 +376,14 @@ namespace MadeInArizona
                 // The runner now drains in 0.5 ms, so between pulses there is little left for it to hiss on.
                 float source = (gauge + Layout.edge * front) * (1 + turbulence * 2 * noiseLow);
                 float[] line = headerLine[i];
-                line[headerWrite & headerMask[i]] = source;
+                float returning = ReadDelay(line, headerMask[i], headerWrite, 2 * headerDelay[i] + JitterSamples);
+                headerLow[i] += (returning - headerLow[i]) * headerDamping;
+                line[headerWrite & headerMask[i]] = source - headerReflection * headerLow[i];
                 // engine-sim's input jitter: each pulse is read from a slightly wandering point in time (up to ~0.25 ms),
                 // so no two pulses are identical even at a steady idle.
                 jitter[i] += (Noise() * JitterSamples - jitter[i]) * .1f;
                 float arrival = ReadDelay(line, headerMask[i], headerWrite, headerDelay[i] + JitterSamples + jitter[i]);
-                // Header echo: part of each pulse reflects (inverted) off the open collector, runs back to the port and
-                // returns, so every runner rings at its own tuned length, as the waves in a real header do.
-                float echo = ReadDelay(line, headerMask[i], headerWrite, 3 * headerDelay[i] + JitterSamples + jitter[i]);
-                collectorSum[collector[i]] += arrival - HeaderEcho * resonance * echo;
+                collectorSum[collector[i]] += arrival;
             }
             headerWrite++;
 
@@ -376,6 +394,9 @@ namespace MadeInArizona
                 float x = collectorSum[c];
                 dcState[c] += (x - dcState[c]) * (2 * MathF.PI * 18 / SimRate);
                 x -= dcState[c];
+                // Engine-bay radiation from the primaries: their quarter-wave mode and a warm low-passed body reach
+                // the listener before the collector is filtered by the turbine, muffler and tailpipe.
+                float headerSound = .4f * headerLowPass[c].Step(x) + 1.3f * headerBody[c].Step(x);
                 if (turbo)
                 {
                     // The turbine wheel smears each pulse's edge and takes energy out of it as the shaft speeds up.
@@ -401,7 +422,7 @@ namespace MadeInArizona
                 // it rises 6 dB per octave over the flow itself. Without this every engine sounded dark, deep and diesel.
                 float radiated = muffled + (muffled - lastMuffled[c]) * SimRate * RadiationTime * RadiationMix * (live ? Brightness : 1);
                 lastMuffled[c] = muffled;
-                radiated = tails[c].Step(radiated);
+                radiated = tails[c].Step(headerMix * headerSound + tailMix * radiated);
                 mixLeft += radiated * panLeft[c]; mixRight += radiated * panRight[c];
             }
             pipeWrite++;
@@ -416,7 +437,7 @@ namespace MadeInArizona
             // engine-sim levels its output fully; here quiet passages (idle, overrun) are only lifted, halving their
             // distance in dB from the full-load reference, so load still changes loudness the way it should.
             float calibrated = .5f * (MathF.Abs(mixLeft) + MathF.Abs(mixRight)) * outputGain;
-            envelope += (calibrated * calibrated - envelope) * (1 - MathF.Exp(-1f / (.25f * SimRate)));
+            envelope += (calibrated * calibrated - envelope) * envelopeCoefficient;
             if ((headerWrite & 31) == 0)
                 leveler = Math.Clamp(MathF.Pow(CalibrationRms * CalibrationRms / Math.Max(1e-8f, envelope), .25f), 1, 3.5f);
             float level = outputGain * leveler * (LoadLevel * throttle + OverrunLevel * (1 - throttle));
@@ -428,8 +449,28 @@ namespace MadeInArizona
                 float amount = spool * spool * (.35f + .65f * throttle) * TurboLevel;
                 whistle = amount * (WhistleLevel * MathF.Sin(2 * MathF.PI * whistlePhase) + HissLevel * hissBand.Step(Noise()));
             }
-            left = SoftLimit((mixLeft * level + whistle) * drive) / drive;
-            right = SoftLimit((mixRight * level + whistle) * drive) / drive;
+            // Airbox/runner induction is strongest with an open throttle and high airflow. The separate random stream
+            // leaves the original exhaust sequence unchanged when this optional layer is switched on or off.
+            float layers = 0;
+            if (IntakeLevel > 0)
+            {
+                float air = LayerNoise();
+                intakeLow += (air - intakeLow) * .11f;
+                float induction = .18f * intakeBand.Step(air) + .12f * intakeLow;
+                layers += IntakeLevel * induction * (.06f + .94f * throttle * throttle) * (.2f + .8f * revs);
+            }
+            // Belt-driven accessories keep turning on overrun. A rounded, slightly off-ratio pulley tone remains
+            // separate from the combustion cadence and costs no per-sample trigonometry.
+            if (AccessoryLevel > 0)
+            {
+                accessoryPhase += rpm * (2.37f / (60 * SimRate));
+                if (accessoryPhase >= 1) accessoryPhase -= 1;
+                float triangle = 1 - 4 * MathF.Abs(accessoryPhase - .5f);
+                accessoryLow += (triangle - accessoryLow) * .21f;
+                layers += AccessoryLevel * .022f * accessoryLow * (.35f + .65f * revs) * (.9f + .1f * throttle);
+            }
+            left = SoftLimit((mixLeft * level + whistle + layers) * drive) / drive;
+            right = SoftLimit((mixRight * level + whistle + layers) * drive) / drive;
         }
 
         static float ReadDelay(float[] line, int mask, int write, float delay)

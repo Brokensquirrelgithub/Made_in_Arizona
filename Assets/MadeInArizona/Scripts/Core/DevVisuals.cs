@@ -179,7 +179,7 @@ namespace MadeInArizona
                 SetAmbientOcclusionEnum(settings, "BlurQuality", quality >= 2 ? 0 : 1);     // bilateral, else Gaussian
                 SetAmbientOcclusionBool(settings, "Downsample", quality < 2);
                 // SSAO requires a depth/normal prepass and a full-screen blur. It is one of the most expensive
-                // remaining effects after Low has already removed shadows, and is presentation-only.
+                // remaining effects after Simple has already removed shadows, and is presentation-only.
                 feature.SetActive(quality > 0 && amount > 0f);
             }
         }

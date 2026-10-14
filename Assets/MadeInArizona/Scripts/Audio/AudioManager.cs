@@ -33,6 +33,8 @@ namespace MadeInArizona
         /// <summary>Physical engine voice (dev model C), rendered on the audio thread for the player's own engine layout.</summary>
         EngineVoiceSource physicalEngine;
         public EngineVoiceSource PhysicalEngine => physicalEngine;
+        VehicleController physicalResponseVehicle;
+        float physicalCharge, physicalFreeRev;
         AudioSource[] pool;int cursor,previousGear,hurtCursor;float duck=1,lastThrottle,blowoffAt,loadMix,crackleUntil,crackleAt,hurtAt,debrisAt,nitroLevel,nitroOffAt=-10;
         bool wasBoosting;
         MusicManager music;
@@ -125,7 +127,7 @@ namespace MadeInArizona
             physicalBlend=Mathf.MoveTowards(physicalBlend,tuning.enginePhysical?1:0,Time.unscaledDeltaTime*20);
             if(player&&player.Damage!=null)
             {
-                float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.Throttle;
+                float rpm=Mathf.Clamp01((player.RPM-850)/6200),load=player.EngineLoad;
                 // Idling quietly in the garage; silent while paused (it used to keep running at 30% under the pause menu).
                 bool idle=game.State==GameState.Garage||game.State==GameState.MainMenu;
                 enginePresence=Mathf.MoveTowards(enginePresence,player.Damage.IsDead?0:active?1:idle?.3f:0,Time.unscaledDeltaTime*4);
@@ -216,12 +218,35 @@ namespace MadeInArizona
         const float PhysicalMixLevel=.5f;
         void UpdatePhysicalEngine(VehicleController player,float presence,float gain)
         {
-            if(player&&player.Definition)physicalEngine.Bind(player.Definition.Engine,player.Stats!=null&&player.Stats.turbocharged);
+            if(player&&player.Definition)physicalEngine.Bind(player.Stats!=null&&player.Stats.engineSwapped
+                ? EngineLayouts.Find("inline4-swap") : player.Definition.Engine,player.Stats!=null&&player.Stats.turbocharged);
             var engine=physicalEngine.Layout;if(engine==null)return;
             var tuning=DevTuning.ForCar(player);
-            float revs=player?Mathf.Clamp01((player.RPM-850)/(7200-850)):0;
+            if(physicalResponseVehicle!=player)
+            {physicalResponseVehicle=player;physicalCharge=player?player.EngineLoad:0;physicalFreeRev=0;}
+            ShapePhysicalDrive(player?player.RPM:850,player?player.EngineLoad:0,player?player.AppliedEngineLoad:0,
+                player?player.WheelSpin:0,player&&player.HasDriveContact,player?tuning.engineDriveResponse:0,
+                Time.unscaledDeltaTime,ref physicalCharge,ref physicalFreeRev,out float soundRpm,out float soundLoad);
+            float revs=player?Mathf.Clamp01((soundRpm-850)/(7200-850)):0;
             float rpm=Mathf.Lerp(engine.idleRpm,engine.redlineRpm,revs)*tuning.enginePitch;
-            physicalEngine.Drive(rpm,player?player.Throttle:0,presence*gain*physicalBlend*PhysicalMixLevel,tuning);
+            physicalEngine.Drive(rpm,soundLoad,presence*gain*physicalBlend*PhysicalMixLevel,tuning);
+        }
+        /// <summary>Audio-only response. A zero blend passes through the previous RPM/load inputs exactly.</summary>
+        internal static void ShapePhysicalDrive(float rpm,float legacyLoad,float appliedLoad,float wheelSpin,bool hasContact,
+            float blend,float dt,ref float charge,ref float freeRev,out float soundRpm,out float soundLoad)
+        {
+            if(blend<=0)
+            {charge=legacyLoad;freeRev=0;soundRpm=rpm;soundLoad=legacyLoad;return;}
+            // The game's applied throttle is a charge proxy. A short intake filling lag rounds out pedal changes
+            // before the audio thread's own click-prevention smoothing, without adding per-sample DSP work.
+            charge+= (Mathf.Clamp01(appliedLoad)-charge)*(1-Mathf.Exp(-Mathf.Max(0,dt)*12f));
+            // Wheelspin and loss of drive contact let the engine rev above wheel-derived RPM. They alter pitch,
+            // while cylinder charge remains governed by throttle; low vehicle acceleration is not low engine load.
+            float loose=Mathf.Max(Mathf.Clamp01(wheelSpin)*.7f,hasContact?0:.65f)*Mathf.Clamp01(charge);
+            freeRev=Mathf.MoveTowards(freeRev,loose,Mathf.Max(0,dt)*(loose>freeRev?5f:8f));
+            float freeRpm=Mathf.Lerp(1800f,6900f,Mathf.Clamp01(charge));
+            soundRpm=Mathf.Lerp(rpm,Mathf.Max(rpm,freeRpm),freeRev*Mathf.Clamp01(blend));
+            soundLoad=Mathf.Lerp(legacyLoad,charge,Mathf.Clamp01(blend));
         }
         /// <summary>
         /// Nitro: a whump as the charge lights, a roaring burn that climbs in pitch with road speed while held, and a

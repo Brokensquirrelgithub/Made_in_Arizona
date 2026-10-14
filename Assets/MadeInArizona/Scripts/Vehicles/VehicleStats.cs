@@ -13,6 +13,8 @@ namespace MadeInArizona
         public float[] healthShares = { .5f, 0, 0, .15f, .15f, .2f };
         /// <summary>A turbocharger part is installed (physical engine voice: boost, turbine damping, whistle).</summary>
         public bool turbocharged;
+        /// <summary>The salvage-yard 1.8 L engine replaces the original cylinder layout.</summary>
+        public bool engineSwapped;
         public Drivetrain drivetrain;
         public Differential differential;
 
