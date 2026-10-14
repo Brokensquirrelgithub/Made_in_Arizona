@@ -86,7 +86,7 @@ namespace MadeInArizona
                 case "mortar": return new Vector2Int(3, 6);
                 case "cluster": return new Vector2Int(3, 6);
                 case "scattermortar": return new Vector2Int(4, 8);
-                case "crossbow": return new Vector2Int(5, 10);
+                case "crossbow": return new Vector2Int(10, 40);
                 case "deathray": return new Vector2Int(60, 120); // 12 damage ticks/s: five seconds per drop
                 case "harpoon": return new Vector2Int(4, 8);
                 case "aircannon": return new Vector2Int(10, 20);

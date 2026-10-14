@@ -56,7 +56,7 @@ namespace MadeInArizona
         }
         // Detours round impassable terrain (hostiles): the A* route, when it was planned and toward what.
         readonly List<Vector3> detour = new List<Vector3>();
-        int detourIndex; Vector3 detourGoal; float detourCheckAt, detourPlannedAt = float.NegativeInfinity; bool detouring;
+        int detourIndex; Vector3 detourGoal; float detourCheckAt, detourPlannedAt = float.NegativeInfinity; bool detouring, directRouteOpen = true;
         /// <summary>Frame of the last detour search by any hostile: one A* search a frame across them all.</summary>
         static int detourPlanFrame = -1;
         const float DetourCheckInterval = .8f, DetourReplanMove = 30, DetourMaxAge = 8;
@@ -189,13 +189,20 @@ namespace MadeInArizona
             if (!world) return null;
             Vector3 here = transform.position;
             if (FlatDelta(goal, here).magnitude < 18 && world.DirectDrivable(here, goal))
-            { detouring = false; detour.Clear(); return null; }
+            { directRouteOpen = true; detouring = false; detour.Clear(); return null; }
             if (Time.time >= detourCheckAt)
             {
                 detourCheckAt = Time.time + DetourCheckInterval * Random.Range(.8f, 1.2f);
-                if (world.DirectDrivable(here, goal)) { detouring = false; detour.Clear(); }
+                if (world.DirectDrivable(here, goal))
+                {
+                    directRouteOpen = true;
+                    detouring = false;
+                    detour.Clear();
+                    return null; // The normal combat or destination steering still drives on open ground.
+                }
                 else
                 {
+                    directRouteOpen = false;
                     bool stale = float.IsNegativeInfinity(detourPlannedAt) ||
                         FlatDelta(goal, detourGoal).magnitude > DetourReplanMove ||
                         Time.time - detourPlannedAt > DetourMaxAge ||
@@ -213,6 +220,7 @@ namespace MadeInArizona
             }
             // An unreachable goal must not turn a failed A* search into a straight drive up the cliff.
             // Pause at the safe approach and retry when the target moves or the route ages out.
+            if (directRouteOpen) return null;
             if (!detouring || detour.Count == 0) return Vector3.zero;
             float lookAhead = 8 + vehicle.Body.linearVelocity.magnitude * .5f;
             // Only advance across a bend when the car can actually drive to the next waypoint. Choosing the

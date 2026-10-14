@@ -14,6 +14,7 @@ namespace MadeInArizona
     public sealed class SmokeTestRunner : MonoBehaviour
     {
         public static bool Active => Array.IndexOf(Environment.GetCommandLineArgs(), "-miaSmokeTest") >= 0;
+        public static bool UseGeneratedTerrainForSmoke { get; private set; }
         /// <summary>Seconds before a hung run is abandoned; an escort run on a larger map needs longer.</summary>
         static float TimeLimit => Array.Exists(Environment.GetCommandLineArgs(), a => a.StartsWith("-miaEscortSize=")) ? 720 : 240;
         readonly List<string> checks = new List<string>();
@@ -50,6 +51,8 @@ namespace MadeInArizona
             { yield return TestSoundtrack(false); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMountainTest")>=0)
             { yield return TestMountainWorld(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaGeneratedEnemyTest")>=0)
+            { yield return TestGeneratedEnemyMovement(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMinimapCapture")>=0)
             { yield return TestMinimapCapture(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEnemyBalanceTest")>=0)
@@ -387,6 +390,15 @@ namespace MadeInArizona
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCombatTest") >= 0) yield return TestVehicleCombat(keyboard);
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCampaignTest") >= 0) yield return TestCampaign(keyboard);
             InputSystem.RemoveDevice(keyboard);
+            // The regular smoke run must exercise a live hostile on generated terrain too. Flat mission fixtures
+            // cannot catch a steering regression in GeneratedWorld navigation.
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCombatTest") < 0 &&
+                Array.IndexOf(Environment.GetCommandLineArgs(), "-miaCampaignTest") < 0)
+            {
+                UseGeneratedTerrainForSmoke = true;
+                yield return TestGeneratedEnemyMovement();
+                UseGeneratedTerrainForSmoke = false;
+            }
             FinishResults();
         }
         IEnumerator TestLobTargeting()
@@ -506,6 +518,64 @@ namespace MadeInArizona
             damage.Repair(20);
             Check("dead vehicles do not revive from repair",damage.IsDead&&damage.Health==0);
             Destroy(obj);
+        }
+        /// <summary>Exercise hostile steering and real vehicle physics on a generated map, not the flat combat arena.</summary>
+        IEnumerator TestGeneratedEnemyMovement()
+        {
+            var game = GameManager.Instance;
+            game.StartCampaign(173, 1600);
+            float deadline = Time.realtimeSinceStartup + 80;
+            while ((game.State != GameState.Playing || !GeneratedWorld.Active) && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            var world = GeneratedWorld.Active;
+            Check("hostile movement test generated terrain", world && world.LandformCount >= 8 && game.IsPlaying);
+            if (!world || !game.IsPlaying) yield break;
+
+            QuietMissionHostiles();
+            var player = game.Player;
+            Vector3 goal = world.ClearOfObstacles(game.World.PlayerSpawn, 6);
+            goal.y = GeneratedWorld.HeightAt(goal) + 1.1f;
+            Teleport(goal);
+            player.Body.isKinematic = true;
+            Vector3 spawn = Vector3.zero;
+            bool found = false;
+            for (int radius = 30; radius <= 60 && !found; radius += 10)
+                for (int angle = 0; angle < 24 && !found; angle++)
+                {
+                    float bearing = angle * Mathf.PI * 2 / 24;
+                    Vector3 point = goal + new Vector3(Mathf.Cos(bearing), 0, Mathf.Sin(bearing)) * radius;
+                    point = world.ClearOfObstacles(point, 6);
+                    point.y = GeneratedWorld.HeightAt(point) + 1.1f;
+                    if (!GeneratedWorld.Contains(point) || Vector3.Distance(point, goal) < 26 ||
+                        !world.DirectDrivable(point, goal)) continue;
+                    spawn = point;
+                    found = true;
+                }
+            Check("generated terrain offers a clear hostile approach", found);
+            if (!found) yield break;
+
+            var enemy = SpawnManager.Spawn(spawn, 0, player);
+            Check("hostile spawns on generated terrain", enemy && enemy.GetComponent<EnemyAI>());
+            if (!enemy) yield break;
+            var ai = enemy.GetComponent<EnemyAI>();
+            ai.UseDestination = true;
+            ai.Destination = goal;
+            Vector3 start = enemy.transform.position;
+            float elapsed = 0, peakSpeed = 0;
+            while (elapsed < 2.5f && enemy && !enemy.Damage.IsDead && game.IsPlaying)
+            {
+                yield return null;
+                elapsed += Time.deltaTime;
+                Vector3 velocity = enemy.Body.linearVelocity;
+                peakSpeed = Mathf.Max(peakSpeed, new Vector2(velocity.x, velocity.z).magnitude);
+                player.Damage.Repair(1000 * Time.deltaTime);
+            }
+            Vector3 delta = enemy ? enemy.transform.position - start : Vector3.zero;
+            float travelled = new Vector2(delta.x, delta.z).magnitude;
+            Debug.Log("MIA_GENERATED_ENEMY: start=" + start.ToString("F1") + " goal=" + goal.ToString("F1") +
+                " travelled=" + travelled.ToString("F1") + " peakSpeed=" + peakSpeed.ToString("F1") +
+                " detouring=" + (ai && ai.Detouring));
+            Check("hostile drives across clear generated terrain", travelled > 2 && peakSpeed > 2 && !ai.Detouring);
         }
         IEnumerator TestMountainWorld()
         {
