@@ -47,6 +47,7 @@ namespace MadeInArizona
         public bool BeamActive => beam && beam.Active;
         public Vector3 BeamEnd => beam ? beam.End : Vector3.zero;
         public float BeamHeat => beam ? beam.Heat : 0;
+        public Vector3 AimDirection => aimDirection;
         DeathRayBeam beam;
         readonly List<RaycastHit> traceHits = new List<RaycastHit>();
         DeathRayBeam Beam

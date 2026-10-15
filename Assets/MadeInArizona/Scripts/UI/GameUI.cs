@@ -99,7 +99,7 @@ namespace MadeInArizona
             if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame && game.State == GameState.Garage) { station = (station + 1) % stations.Length; listScroll = Vector2.zero; }
             if (Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame && game.State == GameState.Garage && !settings) ConfirmSelection();
             if (Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame) DialogueSystem.Instance.Skip();
-            if(Keyboard.current!=null && Keyboard.current.f2Key.wasPressedThisFrame && game.State==GameState.Garage && !settings)game.StartCombatTrial();
+            if(Keyboard.current!=null && Keyboard.current.f2Key.wasPressedThisFrame && game.State==GameState.Garage && !settings && !(CoopSession.Instance && CoopSession.Instance.InLobby))game.StartCombatTrial();
             if(devMenu)return;
             var pad = Gamepad.current;
             if (pad == null) return;
@@ -116,12 +116,12 @@ namespace MadeInArizona
             }
             if (pad.buttonNorth.wasPressedThisFrame && (game.State == GameState.Garage || game.State == GameState.Paused)) { settings = true; menuFocus = 0; return; }
             if (game.State == GameState.Garage) {
-                if(pad.buttonWest.wasPressedThisFrame){game.StartCombatTrial();return;}
+                if(pad.buttonWest.wasPressedThisFrame && !(CoopSession.Instance && CoopSession.Instance.InLobby)){game.StartCombatTrial();return;}
                 if (pad.leftShoulder.wasPressedThisFrame) { station = (station + stations.Length - 1) % stations.Length; listScroll = Vector2.zero; }
                 if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % stations.Length; listScroll = Vector2.zero; }
                 int change = pad.dpad.down.wasPressedThisFrame || pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.up.wasPressedThisFrame || pad.dpad.left.wasPressedThisFrame ? -1 : 0;
                 if (change != 0) {
-                    if (station == 0) game.SelectedMission = Mathf.Clamp(game.SelectedMission + change, 0, game.Save.unlockedMission);
+                    if (station == 0 && !CoopSession.IsRemoteClient) game.SelectedMission = Mathf.Clamp(game.SelectedMission + change, 0, game.Save.unlockedMission);
                     if (station == 1) { int v = Mathf.Clamp(game.Save.selectedVehicle + change, 0, ContentCatalog.Vehicles.Length - 1); if (GarageManager.SelectVehicle(v, game.Save)) game.RefreshGarageVehicle(); }
                     if (station == 2) {
                         EnsureVisibleParts();
@@ -141,7 +141,7 @@ namespace MadeInArizona
 
         void ConfirmSelection()
         {
-            if (station == 0) game.StartMission(game.SelectedMission);
+            if (station == 0) { if (CoopSession.Instance && CoopSession.Instance.InLobby) CoopSession.Instance.SetReady(!CoopSession.Instance.LocalReady); else game.StartMission(game.SelectedMission); }
             if (station == 2) { EnsureVisibleParts(); if (visibleParts.Count > 0) BuyOrInstall(ContentCatalog.Parts[selectedPart]); }
             if (station == 3) SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
         }
@@ -271,7 +271,14 @@ namespace MadeInArizona
             Tag(left + 25, top + 344, "THE FINE PRINT", Muted);
             Text(left + 25, top + 371, w - 50, 90, mission.optionalObjective, 16, Muted);
             Text(left + 25, top + panelHeight - 132, 225, 30, "$" + mission.reward.ToString("N0") + "  +  SALVAGE", 21, Lime, true);
-            if (Button(left + 25, top + panelHeight - 83, w - 50, 58, "CLOCK IN. CAUSE A PROBLEM.  →", true)) game.StartMission(game.SelectedMission);
+            var coop = CoopSession.Instance;
+            if (coop && coop.InLobby)
+            {
+                string label = coop.CountdownRemaining > 0 ? "STARTING IN " + Mathf.CeilToInt(coop.CountdownRemaining) + "  •  CANCEL READY" :
+                    coop.LocalReady ? "READY  •  CLICK TO UNREADY" : "READY FOR MISSION  →";
+                if (Button(left + 25, top + panelHeight - 83, w - 50, 58, label, true)) coop.SetReady(!coop.LocalReady);
+            }
+            else if (Button(left + 25, top + panelHeight - 83, w - 50, 58, "CLOCK IN. CAUSE A PROBLEM.  →", true)) game.StartMission(game.SelectedMission);
             float right = width - 360;
             Rect(right, top, 328, 88, Ink);
             Tag(right + 20, top + 16, "FLEET STATUS", Lime);
@@ -280,9 +287,19 @@ namespace MadeInArizona
             Rect(right, top + 100, 328, 91, Ink);
             Text(right + 20, top + 116, 285, 26, Mathf.RoundToInt(stats.horsepower) + " HP     " + Mathf.RoundToInt(stats.mass) + " KG     " + stats.drivetrain, 19, Cream, true);
             Text(right + 20, top + 151, 285, 24, "STALLION • FIELD MECHANIC   /   JOHNNY • DISPATCH", 12, Muted, true);
-            Rect(right,top+207,328,130,Ink);
-            Text(right+20,top+220,290,36,"TWO WAVES. SIX HOSTILE VEHICLES.",13,Cream,true);
-            if(Button(right+20,top+262,288,56,"COMBAT TRIAL  /  F2 · X",true))game.StartCombatTrial();
+            Rect(right,top+207,328,coop && coop.InLobby ? 244 : 130,Ink);
+            if (coop && coop.InLobby)
+            {
+                Tag(right + 20, top + 218, "CO-OP / HOST CHOOSES MISSION", Orange);
+                Text(right + 20, top + 251, 290, 150, coop.LobbyRoster(), 17, Cream, true);
+                Text(right + 20, top + 405, 290, 30, coop.CountdownRemaining > 0 ?
+                    "DEPLOYING IN " + Mathf.CeilToInt(coop.CountdownRemaining) : "ALL PLAYERS MUST READY", 14, Lime, true);
+            }
+            else
+            {
+                Text(right+20,top+220,290,36,"TWO WAVES. SIX HOSTILE VEHICLES.",13,Cream,true);
+                if(Button(right+20,top+262,288,56,"COMBAT TRIAL  /  F2 · X",true))game.StartCombatTrial();
+            }
             float trayX = left + w + 24, trayW = width - trayX - 32;
             Rect(trayX, top + panelHeight - 175, trayW, 175, Ink);
             Tag(trayX + 20, top + panelHeight - 155, "THE ROAD TO UNLIMITED LIABILITY", Orange);
@@ -290,7 +307,8 @@ namespace MadeInArizona
             for (int i = 0; i < ContentCatalog.Missions.Length; i++) {
                 float bWidth = Mathf.Min(44, (trayW - 40) / 15 - 5);
                 bool completed = game.Save.completedMissions.Contains(i);
-                if (Button(trayX + 20 + i * (bWidth + 5), top + panelHeight - 65, bWidth, 38, completed ? "✓" : (i + 1).ToString("00"), game.SelectedMission == i, i <= game.Save.unlockedMission)) game.SelectedMission = i;
+                if (Button(trayX + 20 + i * (bWidth + 5), top + panelHeight - 65, bWidth, 38, completed ? "✓" : (i + 1).ToString("00"), game.SelectedMission == i,
+                    !CoopSession.IsRemoteClient && i <= game.Save.unlockedMission)) game.SelectedMission = i;
             }
             Text(trayX + 20, top + 350, trayW - 45, 42, "GOOD DOG. BAD DECISIONS.", 16, Cream, true, TextAnchor.MiddleRight);
         }
@@ -569,6 +587,7 @@ namespace MadeInArizona
                     Text(point.x-110,point.y+20,220,25,ai.AttackTelegraph.ToString().ToUpperInvariant()+"  "+ai.TelegraphRemaining.ToString("0.0")+"s",13,Orange,true,TextAnchor.MiddleCenter);
                 }
             }
+            DrawTeammateWaypoints();
             if(sniperThreat) {
                 float warningY=height*.18f;
                 Rect(width*.5f-190,warningY,380,42,new Color(.22f,.015f,.018f,.86f));
@@ -606,6 +625,12 @@ namespace MadeInArizona
                 var ai=vehicle.GetComponent<EnemyAI>();if(!ai)continue;
                 var dot=map(vehicle.transform.position);Rect(dot.x-3,dot.y-3,6,6,ai.IsFriendly?Blue:FactionRules.Accent(ai.Faction));
             }
+            var coop = CoopSession.Instance;
+            if (coop)
+                foreach (var vehicle in VehicleController.Active)
+                    if (vehicle && vehicle != game.Player && vehicle.IsPlayer && vehicle.Damage && !vehicle.Damage.IsDead &&
+                        coop.PlayerSlotForCar(vehicle) > 0)
+                    { var dot = map(vehicle.transform.position); Rect(dot.x - 4, dot.y - 4, 8, 8, Blue); }
             Vector2 pp = map(player), op = map(objective);
             Rect(op.x - 5, op.y - 5, 10, 10, Orange); Rect(pp.x - 4, pp.y - 4, 8, 8, Lime);
             Text(x + 12, y + size + 5, size, 22, "ESC  PAUSE / SETTINGS", 11, Muted, true);

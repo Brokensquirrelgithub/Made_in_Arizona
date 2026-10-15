@@ -48,7 +48,13 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHealthTest")>=0)
             { TestSegmentedHealth(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopSnapshotTest")>=0)
-            { TestCoopSnapshotAndSmoke(); FinishResults(); yield break; }
+            { yield return TestCoopSnapshotAndSmoke(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyGuestTest")>=0)
+            {
+                yield return TestCoopLobbyLive(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0);
+                FinishResults(); yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
             { yield return TestSoundtrack(true); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicExistingTest")>=0)
@@ -436,13 +442,89 @@ namespace MadeInArizona
             Debug.Log("MIA_SMOKE_RESULTS\n" + result + "\n" + output);
             Application.Quit(failures.Count == 0 ? 0 : 1);
         }
-        void TestCoopSnapshotAndSmoke()
+        IEnumerator TestCoopLobbyLive(bool host)
+        {
+            UseGeneratedTerrainForSmoke = true;
+            var game = GameManager.Instance;
+            var coop = CoopSession.Instance;
+            string codePath = Environment.GetEnvironmentVariable("MIA_COOP_CODE_PATH");
+            if (string.IsNullOrEmpty(codePath)) { Check("live co-op test has a code path", false); yield break; }
+            if (host)
+            {
+                game.WorldConfig.seed = 173;
+                game.WorldConfig.size = 1600;
+                coop.Host();
+                float deadline = Time.unscaledTime + 60;
+                while (string.IsNullOrEmpty(coop.JoinCode) && Time.unscaledTime < deadline) yield return null;
+                Check("relay host opens garage lobby", coop.IsHost && coop.InLobby && !string.IsNullOrEmpty(coop.JoinCode));
+                if (!coop.IsHost) yield break;
+                game.SelectedMission = 0;
+                string pendingCodePath = codePath + ".pending";
+                File.WriteAllText(pendingCodePath, coop.JoinCode);
+                File.Move(pendingCodePath, codePath);
+                deadline = Time.unscaledTime + 60;
+                while (coop.PlayerCount < 2 && Time.unscaledTime < deadline) yield return null;
+                Check("guest joins host lobby", coop.PlayerCount == 2);
+                if (coop.PlayerCount < 2) yield break;
+                yield return new WaitForSecondsRealtime(1);
+                Check("host cannot launch before all players ready", game.State == GameState.Garage && coop.CountdownRemaining == 0);
+                coop.SetReady(true);
+            }
+            else
+            {
+                float deadline = Time.unscaledTime + 60;
+                while (!File.Exists(codePath) && Time.unscaledTime < deadline) yield return null;
+                if (!File.Exists(codePath)) { Check("guest receives relay code", false); yield break; }
+                coop.Join(File.ReadAllText(codePath));
+                deadline = Time.unscaledTime + 60;
+                while ((!coop.InLobby || game.State != GameState.Garage) && Time.unscaledTime < deadline) yield return null;
+                Check("guest enters own garage lobby", coop.InLobby && game.Player && game.Player.Body.isKinematic);
+                if (!coop.InLobby) yield break;
+                deadline = Time.unscaledTime + 15;
+                while (!coop.LobbyRoster().Contains("PLAYER 2") && Time.unscaledTime < deadline) yield return null;
+                Check("guest receives host lobby roster", coop.LobbyRoster().Contains("PLAYER 2"));
+                var desiredCar = ContentCatalog.Vehicles[1];
+                game.Save.unlockedMission = Mathf.Max(game.Save.unlockedMission, desiredCar.unlockMission);
+                game.Save.money = Mathf.Max(game.Save.money, desiredCar.cost);
+                bool selected = GarageManager.SelectVehicle(1, game.Save);
+                if (selected) game.RefreshGarageVehicle();
+                Debug.Log("MIA_COOP_GARAGE_TEST: selected=" + selected + " index=" + game.Save.selectedVehicle +
+                    " preview=" + (game.Player && game.Player.Definition ? game.Player.Definition.id : "none") +
+                    " expected=" + desiredCar.id + " state=" + game.State + " reason=" + GarageManager.LastMessage);
+                Check("guest can choose a garage vehicle", selected && game.Save.selectedVehicle == 1 && game.Player &&
+                    game.Player.Definition == ContentCatalog.Vehicles[1]);
+                yield return new WaitForSecondsRealtime(1);
+                coop.SetReady(true);
+            }
+            float launchDeadline = Time.unscaledTime + 60;
+            bool sawCountdown = false;
+            while (game.State != GameState.Playing && Time.unscaledTime < launchDeadline)
+            {
+                sawCountdown |= coop.CountdownRemaining > 0;
+                yield return null;
+            }
+            Debug.Log("MIA_COOP_LOBBY_TEST: " + (host ? "host" : "guest") + " state=" + game.State +
+                " mission=" + game.SelectedMission + " ready=" + coop.LocalReady +
+                " roster=" + coop.LobbyRoster().Replace('\n', ';') + " status=" + coop.Status);
+            Check("all ready starts five-second countdown", sawCountdown);
+            Check("lobby launches selected mission for both players", game.State == GameState.Playing && game.SelectedMission == 0);
+            if (game.State != GameState.Playing) yield break;
+            float playerDeadline = Time.unscaledTime + 15;
+            while ((!game.Player || VehicleController.Active.Count(v => v && v.IsPlayer) < 2) && Time.unscaledTime < playerDeadline) yield return null;
+            Check("both player cars appear after launch", game.Player && VehicleController.Active.Count(v => v && v.IsPlayer) >= 2);
+            if (host) Check("guest garage car reaches host spawn", VehicleController.Active.Any(v => v && v.IsPlayer &&
+                v != game.Player && v.Definition == ContentCatalog.Vehicles[1]));
+            Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
+            if (host) yield return new WaitForSecondsRealtime(3);
+        }
+        IEnumerator TestCoopSnapshotAndSmoke()
         {
             var original = new CoopSession.VehiclePacket {
                 id = 17, owner = 2, archetype = 7, faction = 3, failedDepth = 2,
                 definition = "scarface", weapon = "skewer", fieldWeapon = "crossbow",
                 player = true, friendly = false, position = new Vector3(123.5f, 2.25f, -456.75f),
                 velocity = new Vector3(12, -1, 9), rotation = Quaternion.Euler(5, 120, 3),
+                aim = new Vector3(.6f, .1f, .8f),
                 health = 541.5f, maximum = 920, boost = 28.5f, rpm = 5400,
                 throttle = .75f, yawRate = .3f, boosting = true, fieldAmmo = 99,
                 beam = true, beamEnd = new Vector3(150, 3, -400), beamHeat = .6f, tow = 16
@@ -460,7 +542,7 @@ namespace MadeInArizona
                         copy.failedDepth == original.failedDepth && copy.definition == original.definition &&
                         copy.weapon == original.weapon && copy.fieldWeapon == original.fieldWeapon &&
                         copy.player == original.player && copy.friendly == original.friendly &&
-                        copy.position == original.position && copy.velocity == original.velocity &&
+                        copy.position == original.position && copy.velocity == original.velocity && copy.aim == original.aim &&
                         copy.rotation == original.rotation && copy.health == original.health &&
                         copy.maximum == original.maximum && copy.boost == original.boost &&
                         copy.rpm == original.rpm && copy.throttle == original.throttle &&
@@ -484,6 +566,18 @@ namespace MadeInArizona
                             Mathf.Approximately(sheet.startFrame.constantMax, 63f/64f)) banks++;
                     }
             Check("both six-way smoke banks randomize across all 64 start frames", banks == 2);
+            var preview = GameManager.Instance.Player;
+            if (preview && preview.Damage)
+            {
+                preview.SetNetworkProxy();
+                preview.ApplyNetworkMotion(preview.transform.position, preview.transform.rotation, Vector3.zero,
+                    preview.Damage.Health, preview.Damage.MaxHealth, 1, 4500, 1, 0, true);
+                yield return new WaitForSecondsRealtime(.15f);
+                var glow = VehicleController.FindChild(preview.transform, "Nitro glow");
+                Check("co-op proxy retains nitro and lights its exhaust", preview.Boosting &&
+                    preview.GetComponent<NitroExhaust>() && glow && glow.GetComponent<Light>() && glow.GetComponent<Light>().enabled);
+            }
+            else Check("co-op proxy retains nitro and lights its exhaust", false);
         }
         void TestSegmentedHealth()
         {

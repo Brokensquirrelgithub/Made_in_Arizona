@@ -247,16 +247,20 @@ namespace MadeInArizona
         public void StartCombatTrial()
         {
             if (CoopSession.IsRemoteClient) return;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost &&
+                (State == GameState.Garage || State == GameState.MainMenu) && !CoopSession.Instance.CanLaunchMatch) return;
             Time.timeScale=1;IsCombatTrial=true;State=GameState.Playing;NotificationUntil=0;DevVisuals.Apply();
             World.BuildCombatArena();SpawnPlayer(false);InputManager.Instance.SetEnabled(true);
             Mission.BeginCombatTrial();AudioManager.Instance.SetCombat(true);CameraController.Instance.Snap();StateChanged?.Invoke();
             CoopSession.Instance?.HostWorldChanged();
         }
-        public void RetryMission() { if(IsCombatTrial)StartCombatTrial();else StartMission(SelectedMission); }
+        public void RetryMission() { if(CoopSession.Instance && CoopSession.Instance.IsHost)ReturnToGarage();else if(IsCombatTrial)StartCombatTrial();else StartMission(SelectedMission); }
 
         public void StartMission(int index)
         {
             if (CoopSession.IsRemoteClient) return;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost &&
+                (State == GameState.Garage || State == GameState.MainMenu) && !CoopSession.Instance.CanLaunchMatch) return;
             if (index < 0 || index >= ContentCatalog.Missions.Length || index > Save.unlockedMission) return;
             Time.timeScale = 1;
             IsCombatTrial=false;
@@ -300,6 +304,7 @@ namespace MadeInArizona
             if (Player) Destroy(Player.gameObject);
             SpawnPlayer(true);
             SaveSystem.Save(Save);
+            CoopSession.Instance?.GarageLoadoutChanged();
         }
 
         /// <summary>True while the player's wreck plays out its death sequence, before the debrief appears.</summary>

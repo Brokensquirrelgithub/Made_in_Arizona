@@ -45,7 +45,9 @@ namespace MadeInArizona
             refresh = .2f;
             if (CoopSession.Instance && CoopSession.Instance.IsHost)
             {
-                foreach (var car in VehicleController.Active)
+                // Garage interactions can despawn a player during TickPins. Iterate a
+                // snapshot so OnDisable may safely update the live vehicle registry.
+                foreach (var car in VehicleController.Active.ToArray())
                 {
                     if (!car || !car.IsPlayer || !car.Damage || car.Damage.IsDead) continue;
                     bool use = car.HasRemoteInput ? car.RemoteControls.interact : InputManager.Instance != null && InputManager.Instance.Interact;

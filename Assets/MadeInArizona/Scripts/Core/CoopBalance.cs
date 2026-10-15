@@ -12,6 +12,7 @@ namespace MadeInArizona
         [Serializable] sealed class LoadoutPacket
         {
             public int protocol;
+            public bool ready;
             public string carId, weaponId;
             public VehicleStats stats;
             public VehicleStats[] profiles;
@@ -63,7 +64,7 @@ namespace MadeInArizona
                 ? player.Weapons.GarageWeapon.id : save.selectedWeapon;
             string fieldId = player && player.Weapons && player.Weapons.FieldWeapon
                 ? player.Weapons.FieldWeapon.id : null;
-            return new LoadoutPacket { protocol = Protocol, carId = carId, weaponId = weaponId,
+            return new LoadoutPacket { protocol = Protocol, ready = localReadyRequested, carId = carId, weaponId = weaponId,
                 stats = GarageManager.StatsFor(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
                 profiles = GarageManager.DamageProfiles(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
                 car = BalanceTuning.LocalCar(carId), slot1 = BalanceTuning.LocalWeapon(weaponId),
@@ -105,10 +106,14 @@ namespace MadeInArizona
                 ? existing.Weapons.FieldWeapon.id : null;
             if (packet.slot2 == null || packet.slot2.id != activeField) packet.slot2 = null;
             else packet.slot2.Clamp(WeaponRules.Find(activeField));
+            bool requestedReady = packet.ready;
+            packet.ready = false; // Readiness does not change the car/weapon balance profile.
             string normalized = JsonUtility.ToJson(packet);
             bool changed = !guestLoadoutJson.TryGetValue(sender, out string previous) || previous != normalized;
             guestLoadouts[sender] = packet;
             guestLoadoutJson[sender] = normalized;
+            if (changed) LobbyLoadoutChanged(sender);
+            LobbyReadyFromLoadout(sender, requestedReady);
             if (!existing && (GameManager.Instance.IsPlaying || GameManager.Instance.State == GameState.Paused)) SpawnGuest(sender);
             else if(existing && changed)existing.SetDamageProfiles(packet.profiles);
             if (changed) lastBalanceJson = null;

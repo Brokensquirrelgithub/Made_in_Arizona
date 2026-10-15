@@ -24,8 +24,16 @@ namespace MadeInArizona
             if (mode == 0)
             {
                 World.BuildGarage();
-                Player = null;
-                State = GameState.MainMenu;
+                if (CoopSession.IsRemoteClient)
+                {
+                    SpawnPlayer(true);
+                    State = GameState.Garage;
+                }
+                else
+                {
+                    Player = null;
+                    State = GameState.MainMenu;
+                }
                 AudioManager.Instance.SetCombat(false);
             }
             else

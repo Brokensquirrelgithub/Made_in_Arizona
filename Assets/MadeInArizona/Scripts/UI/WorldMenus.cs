@@ -46,11 +46,14 @@ namespace MadeInArizona
             Text(x+580,y+305,120,28,(worldSize/1000).ToString("0.0")+" km",19,Lime,true);
             Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);
-            if(Button(x+25,y+438,panelW-50,56,"START CAMPAIGN  /  GENERATE WORLD",true,valid&&!CoopSession.IsRemoteClient))BeginOpening(seed,Mathf.Round(worldSize/50)*50);
+            bool inCoop=CoopSession.Instance&&(CoopSession.Instance.IsHost||CoopSession.Instance.IsClient);
+            if(Button(x+25,y+438,panelW-50,56,inCoop?"OPEN CO-OP GARAGE / READY":"START CAMPAIGN  /  GENERATE WORLD",true,
+                inCoop?CoopSession.Instance.IsHost:valid))
+            { if(inCoop)game.ReturnToGarage();else BeginOpening(seed,Mathf.Round(worldSize/50)*50); }
             if(Button(x+25,y+512,220,48,"GARAGE / SAVED",false,!CoopSession.IsRemoteClient))game.ReturnToGarage();
-            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
+            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!inCoop)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
-            if(Button(x+25,y+568,220,38,"RESET PROGRESS",false,!CoopSession.IsRemoteClient))
+            if(Button(x+25,y+568,220,38,"RESET PROGRESS",false,!inCoop))
             { resetProgressPending=true; resetProgressError=null; }
             Text(x+260,y+573,panelW-285,35,"Erase campaign progress. Keeps normal settings and controls.",13,Muted);
             DrawUpdateEntry(x,y+640,panelW);
@@ -104,6 +107,18 @@ namespace MadeInArizona
                 var p=WorldMapPoint(vehicle.transform.position,area);
                 if(area.Contains(p))Rect(p.x-3,p.y-3,6,6,ai.IsFriendly?Blue:FactionRules.Accent(ai.Faction));
             }
+            var coop = CoopSession.Instance;
+            if (coop)
+                foreach (var vehicle in VehicleController.Active)
+                    if (vehicle && vehicle != game.Player && vehicle.IsPlayer && vehicle.Damage && !vehicle.Damage.IsDead)
+                    {
+                        int slot = coop.PlayerSlotForCar(vehicle);
+                        if (slot <= 0) continue;
+                        var p = WorldMapPoint(vehicle.transform.position, area);
+                        if (!area.Contains(p)) continue;
+                        Rect(p.x - 5, p.y - 5, 10, 10, Blue);
+                        if (full) Text(p.x + 8, p.y - 10, 100, 25, "PLAYER " + slot, 12, Blue, true);
+                    }
             if(game.Player){var p=WorldMapPoint(game.Player.transform.position,area);Rect(p.x-5,p.y-5,10,10,Lime);}
             if(game.Mission!=null){var p=WorldMapPoint(game.Mission.ObjectivePosition,area);Rect(p.x-4,p.y-4,8,8,Orange);}
             if(mapWaypoint.HasValue){var p=WorldMapPoint(mapWaypoint.Value,area);Text(p.x-8,p.y-13,24,25,"+",22,Blue,true);}

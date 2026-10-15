@@ -374,8 +374,8 @@ namespace MadeInArizona
         }
         void FixedUpdate()
         {
-            Boosting = false;
             if (!initialized || Damage.IsDead || Body.isKinematic || IsNetworkProxy) return;
+            Boosting = false;
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {

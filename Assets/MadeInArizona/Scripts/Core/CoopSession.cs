@@ -42,7 +42,7 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 5;
+        const int Protocol = 6;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -98,6 +98,7 @@ namespace MadeInArizona
             public bool player, friendly;
             public Vector3 position;
             public Vector3 velocity;
+            public Vector3 aim;
             public Quaternion rotation;
             public float health, maximum, boost, rpm, throttle, yawRate;
             public bool boosting;
@@ -178,6 +179,7 @@ namespace MadeInArizona
             messages.RegisterNamedMessageHandler(FxMessage, ReceiveFx);
             RegisterBalanceMessages(messages);
             RegisterDraftMessages(messages);
+            RegisterLobbyMessages(messages);
         }
 
         public async void Host()
@@ -194,6 +196,7 @@ namespace MadeInArizona
                 transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
                 if (!network.StartHost()) throw new InvalidOperationException("Could not start the host transport.");
                 RegisterMessages();
+                InitializeHostLobby();
                 JoinCode = code;
                 Status = "Hosting • share code " + code;
             }
@@ -243,6 +246,7 @@ namespace MadeInArizona
             if (IsHost)
             {
                 if (clientId == NetworkManager.ServerClientId) return;
+                HostClientJoined(clientId);
                 Status = "Hosting • " + PlayerCount + "/" + MaxPlayers + " players";
                 SendWorld(clientId);
             }
@@ -257,6 +261,7 @@ namespace MadeInArizona
         {
             if (IsHost)
             {
+                HostClientLeft(clientId);
                 if (guestCars.TryGetValue(clientId, out var car) && car) Destroy(car.gameObject);
                 guestCars.Remove(clientId);
                 GuestLeftBalance(clientId);
@@ -293,6 +298,7 @@ namespace MadeInArizona
         public void HostWorldChanged()
         {
             if (!IsHost) return;
+            LobbyWorldChanged();
             vehicleIds.Clear(); nextVehicleId = 0;
             pickupIds.Clear(); nextPickupId = 0;
             brokenProps.Clear();
@@ -338,11 +344,13 @@ namespace MadeInArizona
                     Leave(); Status = "Host world settings are invalid."; return;
                 }
             }
+            bool wasLobby = remoteWorldReady && InLobby;
             remoteWorldReady = false;
             remoteMode = packet.mode;
+            if (packet.mode != 0 || !wasLobby) GuestWorldChanged();
             HostTier = Mathf.Clamp(packet.tier, 0, 3);
             DevTuning.SetCoopOverride(packet.tuning);
-            proxies.Clear(); seenAt.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            proxies.Clear(); proxyOwners.Clear(); seenAt.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
             GameManager.Instance.LoadCoopWorld(packet.mode, packet.mission, config);
         }
 
@@ -406,8 +414,10 @@ namespace MadeInArizona
                 car.SetNetworkProxy();
                 proxies[packet.id] = car;
             }
+            proxyOwners[car] = packet.owner;
             car.ApplyNetworkMotion(packet.position, packet.rotation, packet.velocity, packet.health,
                 packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting,packet.failedDepth);
+            car.Weapons.AimAt(packet.aim);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
             car.Weapons.SetNetworkBeam(packet.beam, packet.beamEnd, packet.beamHeat);
@@ -582,6 +592,7 @@ namespace MadeInArizona
 
         void Update()
         {
+            TickLobby();
             TickBalance();
             UpdateSpectatorCamera();
             if (IsClient && remoteWorldReady && remoteMode != 0)
@@ -605,6 +616,7 @@ namespace MadeInArizona
                 foreach (int id in expired)
                 {
                     if (proxies.TryGetValue(id, out var car) && car) Destroy(car.gameObject);
+                    if (car) proxyOwners.Remove(car);
                     proxies.Remove(id); seenAt.Remove(id);
                 }
                 expired.Clear();
@@ -658,6 +670,7 @@ namespace MadeInArizona
                         archetype = ai ? ai.Archetype : 0, faction = ai ? (int)ai.Faction : 0,
                         friendly = ai && ai.IsFriendly, position = car.transform.position,
                         rotation = car.transform.rotation, velocity = car.Body ? car.Body.linearVelocity : Vector3.zero,
+                        aim = car.Weapons ? car.Weapons.AimDirection : car.transform.forward,
                         rpm = car.RPM, throttle = car.Throttle,
                         yawRate = car.Body ? car.Body.angularVelocity.y : 0, boosting = car.Boosting,
                         health = car.Damage.Health,
@@ -755,7 +768,7 @@ namespace MadeInArizona
             writer.WriteValueSafe(packet.weapon, true);
             writer.WriteValueSafe(packet.fieldWeapon, true);
             writer.WriteValueSafe(packet.player); writer.WriteValueSafe(packet.friendly);
-            writer.WriteValueSafe(packet.position); writer.WriteValueSafe(packet.velocity);
+            writer.WriteValueSafe(packet.position); writer.WriteValueSafe(packet.velocity); writer.WriteValueSafe(packet.aim);
             writer.WriteValueSafe(packet.rotation);
             writer.WriteValueSafe(packet.health); writer.WriteValueSafe(packet.maximum);
             writer.WriteValueSafe(packet.boost); writer.WriteValueSafe(packet.rpm);
@@ -775,7 +788,7 @@ namespace MadeInArizona
             reader.ReadValueSafe(out packet.weapon, true);
             reader.ReadValueSafe(out packet.fieldWeapon, true);
             reader.ReadValueSafe(out packet.player); reader.ReadValueSafe(out packet.friendly);
-            reader.ReadValueSafe(out packet.position); reader.ReadValueSafe(out packet.velocity);
+            reader.ReadValueSafe(out packet.position); reader.ReadValueSafe(out packet.velocity); reader.ReadValueSafe(out packet.aim);
             reader.ReadValueSafe(out packet.rotation);
             reader.ReadValueSafe(out packet.health); reader.ReadValueSafe(out packet.maximum);
             reader.ReadValueSafe(out packet.boost); reader.ReadValueSafe(out packet.rpm);
@@ -808,6 +821,7 @@ namespace MadeInArizona
             }
             network = null; transport = null;
             guestCars.Clear(); proxies.Clear(); seenAt.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            ResetLobby();
             vehicleIds.Clear(); nextVehicleId = 0;
             pickupIds.Clear(); nextPickupId = 0;
             brokenProps.Clear();

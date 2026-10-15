@@ -33,7 +33,7 @@ namespace MadeInArizona
             }
             else if (coop.IsClient)
             {
-                Text(x + 20, y + 152, w - 40, 90, "Waiting for the host to start a campaign or combat trial.", 20, Cream);
+                Text(x + 20, y + 152, w - 40, 90, "Opening your garage. Select your car and weapon, then ready up for the host's mission.", 20, Cream);
             }
             else
             {
@@ -53,12 +53,41 @@ namespace MadeInArizona
             var coop = CoopSession.Instance;
             if (!coop || (!coop.IsHost && !coop.IsClient)) return;
             float x = width * .5f - 180;
-            Rect(x, 18, 360, 42, Ink);
             bool spectating = game.Player && game.Player.Damage && game.Player.Damage.IsDead;
             string label = spectating ? "CO-OP  •  SPECTATING TEAMMATE"
-                : coop.IsHost ? "CO-OP  " + coop.PlayerCount + "/4  •  CODE " + coop.JoinCode
+                : coop.IsHost ? "CO-OP  " + coop.PlayerCount + "/4  •  CODE " + coop.JoinCode + "  •  COPY"
                 : coop.HostPaused ? "CO-OP  •  HOST PAUSED" : "CO-OP  •  HOST WORLD";
-            Text(x + 8, 27, 344, 24, label, 15, Lime, true, TextAnchor.MiddleCenter);
+            if (coop.IsHost)
+            {
+                if (Button(x, 18, 360, 42, label, false, true, 14)) GUIUtility.systemCopyBuffer = coop.JoinCode;
+            }
+            else
+            {
+                Rect(x, 18, 360, 42, Ink);
+                Text(x + 8, 27, 344, 24, label, 15, Lime, true, TextAnchor.MiddleCenter);
+            }
+        }
+
+        void DrawTeammateWaypoints()
+        {
+            var coop = CoopSession.Instance;
+            var camera = Camera.main;
+            if (!coop || (!coop.IsHost && !coop.IsClient) || !camera || !game.Player) return;
+            foreach (var vehicle in VehicleController.Active)
+            {
+                if (!vehicle || vehicle == game.Player || !vehicle.IsPlayer || !vehicle.Damage || vehicle.Damage.IsDead) continue;
+                int slot = coop.PlayerSlotForCar(vehicle);
+                if (slot <= 0) continue;
+                Vector3 view = camera.WorldToViewportPoint(vehicle.transform.position + Vector3.up * 2.5f);
+                if (view.z < 0 && !camera.orthographic) { view.x = 1 - view.x; view.y = -1; }
+                float markerX = Mathf.Clamp(view.x * width, 92, width - 92);
+                float markerY = Mathf.Clamp((1 - view.y) * height, 155, height - 255);
+                int metres = Mathf.RoundToInt(Vector3.Distance(game.Player.transform.position, vehicle.transform.position));
+                Rect(markerX - 79, markerY - 13, 158, 29, new Color(.025f, .08f, .11f, .88f));
+                Rect(markerX - 79, markerY - 13, 4, 29, Blue);
+                Text(markerX - 70, markerY - 11, 143, 26, "PLAYER " + slot + "  •  " + metres + " m",
+                    13, Cream, true, TextAnchor.MiddleCenter);
+            }
         }
 
         void DrawCoopEndPrompt()

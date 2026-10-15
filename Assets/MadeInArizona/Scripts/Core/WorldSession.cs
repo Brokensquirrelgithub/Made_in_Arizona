@@ -31,6 +31,8 @@ namespace MadeInArizona
         public void StartCampaign(int seed,float size)
         {
             if (CoopSession.IsRemoteClient) return;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost &&
+                (State == GameState.MainMenu || State == GameState.Garage)) { ReturnToGarage(); return; }
             if(State==GameState.Generating)return;
             WorldConfig.seed=seed;WorldConfig.size=size;
             if(!WorldConfigStore.Save(WorldConfig)){Notify(WorldConfigStore.LastError);return;}
