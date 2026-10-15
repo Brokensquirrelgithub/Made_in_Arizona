@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -45,6 +47,8 @@ namespace MadeInArizona
             { yield return TestShadowFilters(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaHealthTest")>=0)
             { TestSegmentedHealth(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopSnapshotTest")>=0)
+            { TestCoopSnapshotAndSmoke(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
             { yield return TestSoundtrack(true); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicExistingTest")>=0)
@@ -431,6 +435,55 @@ namespace MadeInArizona
             if (failures.Count > 0 && fixtureTrace.Count > 0) Debug.Log("MIA_SMOKE_TRACE\n" + string.Join("\n", fixtureTrace));
             Debug.Log("MIA_SMOKE_RESULTS\n" + result + "\n" + output);
             Application.Quit(failures.Count == 0 ? 0 : 1);
+        }
+        void TestCoopSnapshotAndSmoke()
+        {
+            var original = new CoopSession.VehiclePacket {
+                id = 17, owner = 2, archetype = 7, faction = 3, failedDepth = 2,
+                definition = "scarface", weapon = "skewer", fieldWeapon = "crossbow",
+                player = true, friendly = false, position = new Vector3(123.5f, 2.25f, -456.75f),
+                velocity = new Vector3(12, -1, 9), rotation = Quaternion.Euler(5, 120, 3),
+                health = 541.5f, maximum = 920, boost = 28.5f, rpm = 5400,
+                throttle = .75f, yawRate = .3f, boosting = true, fieldAmmo = 99,
+                beam = true, beamEnd = new Vector3(150, 3, -400), beamHeat = .6f, tow = 16
+            };
+            using (var writer = new FastBufferWriter(512, Allocator.Temp))
+            {
+                CoopSession.WriteVehiclePacket(writer, original);
+                Check("co-op vehicle snapshot fits unreliable delivery", writer.Length < 512 && writer.Length < 1264);
+                using (var reader = new FastBufferReader(writer, Allocator.Temp))
+                {
+                    var copy = CoopSession.ReadVehiclePacket(reader);
+                    Check("co-op vehicle snapshot preserves motion, loadout, health and effects",
+                        copy.id == original.id && copy.owner == original.owner &&
+                        copy.archetype == original.archetype && copy.faction == original.faction &&
+                        copy.failedDepth == original.failedDepth && copy.definition == original.definition &&
+                        copy.weapon == original.weapon && copy.fieldWeapon == original.fieldWeapon &&
+                        copy.player == original.player && copy.friendly == original.friendly &&
+                        copy.position == original.position && copy.velocity == original.velocity &&
+                        copy.rotation == original.rotation && copy.health == original.health &&
+                        copy.maximum == original.maximum && copy.boost == original.boost &&
+                        copy.rpm == original.rpm && copy.throttle == original.throttle &&
+                        copy.yawRate == original.yawRate && copy.boosting == original.boosting &&
+                        copy.fieldAmmo == original.fieldAmmo && copy.beam == original.beam &&
+                        copy.beamEnd == original.beamEnd && copy.beamHeat == original.beamHeat &&
+                        copy.tow == original.tow);
+                }
+            }
+            ExplosionSystem.TireSmoke(new Vector3(0, 200, 0), Vector3.zero, 1, 1, 1);
+            var effects = FindFirstObjectByType<ExplosionSystem>();
+            int banks = 0;
+            if (effects)
+                foreach (var particle in effects.GetComponentsInChildren<ParticleSystem>())
+                    if (particle.name == "Six-way rolling smoke" || particle.name == "Six-way tyre smoke")
+                    {
+                        var sheet = particle.textureSheetAnimation;
+                        if (sheet.enabled && sheet.numTilesX == 8 && sheet.numTilesY == 8 &&
+                            sheet.startFrame.mode == ParticleSystemCurveMode.TwoConstants &&
+                            Mathf.Approximately(sheet.startFrame.constantMin, 0) &&
+                            Mathf.Approximately(sheet.startFrame.constantMax, 63f/64f)) banks++;
+                    }
+            Check("both six-way smoke banks randomize across all 64 start frames", banks == 2);
         }
         void TestSegmentedHealth()
         {

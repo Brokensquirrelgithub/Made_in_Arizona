@@ -42,7 +42,7 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 4;
+        const int Protocol = 5;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -91,7 +91,7 @@ namespace MadeInArizona
         [Serializable] sealed class TuningPacket { public int protocol; public string tuning; }
         [Serializable] sealed class PinStatePacket { public int protocol, seed; public string flags; }
         [Serializable] sealed class InputPacket { public CoopControls controls; }
-        [Serializable] sealed class VehiclePacket
+        [Serializable] internal sealed class VehiclePacket
         {
             public int id, owner, archetype, faction, failedDepth;
             public string definition, weapon, fieldWeapon;
@@ -381,9 +381,7 @@ namespace MadeInArizona
         void ReceiveVehicle(ulong sender, FastBufferReader reader)
         {
             if (!IsClient || sender != NetworkManager.ServerClientId || !remoteWorldReady || remoteMode == 0) return;
-            reader.ReadValueSafe(out string json);
-            var packet = JsonUtility.FromJson<VehiclePacket>(json);
-            if (packet == null) return;
+            var packet = ReadVehiclePacket(reader);
             if (!proxies.TryGetValue(packet.id, out var car) || !car)
             {
                 var definition = Array.Find(ContentCatalog.Vehicles, value => value && value.id == packet.definition);
@@ -673,7 +671,7 @@ namespace MadeInArizona
                         tow = car.Towing && vehicleIds.TryGetValue(car.Towing, out int towId) ? towId : 0 };
                     foreach (ulong clientId in network.ConnectedClientsIds)
                         if (clientId != NetworkManager.ServerClientId)
-                            Send(VehicleMessage, clientId, packet, NetworkDelivery.Unreliable);
+                            SendVehicle(clientId, packet);
                 }
             }
             if (Time.unscaledTime >= pickupAt)
@@ -734,6 +732,58 @@ namespace MadeInArizona
                 writer.WriteValueSafe(json);
                 network.CustomMessagingManager.SendNamedMessage(name, clientId, writer, delivery);
             }
+        }
+
+        // Vehicle snapshots are sent for every active car ten times a second. JSON field names and
+        // decimal floats pushed a single car past the 1264-byte unreliable message limit.
+        void SendVehicle(ulong clientId, VehiclePacket packet)
+        {
+            if (!network || !network.IsListening) return;
+            using (var writer = new FastBufferWriter(512, Allocator.Temp))
+            {
+                WriteVehiclePacket(writer, packet);
+                network.CustomMessagingManager.SendNamedMessage(VehicleMessage, clientId, writer, NetworkDelivery.Unreliable);
+            }
+        }
+
+        internal static void WriteVehiclePacket(FastBufferWriter writer, VehiclePacket packet)
+        {
+            writer.WriteValueSafe(packet.id); writer.WriteValueSafe(packet.owner);
+            writer.WriteValueSafe(packet.archetype); writer.WriteValueSafe(packet.faction);
+            writer.WriteValueSafe(packet.failedDepth);
+            writer.WriteValueSafe(packet.definition, true);
+            writer.WriteValueSafe(packet.weapon, true);
+            writer.WriteValueSafe(packet.fieldWeapon, true);
+            writer.WriteValueSafe(packet.player); writer.WriteValueSafe(packet.friendly);
+            writer.WriteValueSafe(packet.position); writer.WriteValueSafe(packet.velocity);
+            writer.WriteValueSafe(packet.rotation);
+            writer.WriteValueSafe(packet.health); writer.WriteValueSafe(packet.maximum);
+            writer.WriteValueSafe(packet.boost); writer.WriteValueSafe(packet.rpm);
+            writer.WriteValueSafe(packet.throttle); writer.WriteValueSafe(packet.yawRate);
+            writer.WriteValueSafe(packet.boosting); writer.WriteValueSafe(packet.fieldAmmo);
+            writer.WriteValueSafe(packet.beam); writer.WriteValueSafe(packet.beamEnd);
+            writer.WriteValueSafe(packet.beamHeat); writer.WriteValueSafe(packet.tow);
+        }
+
+        internal static VehiclePacket ReadVehiclePacket(FastBufferReader reader)
+        {
+            var packet = new VehiclePacket();
+            reader.ReadValueSafe(out packet.id); reader.ReadValueSafe(out packet.owner);
+            reader.ReadValueSafe(out packet.archetype); reader.ReadValueSafe(out packet.faction);
+            reader.ReadValueSafe(out packet.failedDepth);
+            reader.ReadValueSafe(out packet.definition, true);
+            reader.ReadValueSafe(out packet.weapon, true);
+            reader.ReadValueSafe(out packet.fieldWeapon, true);
+            reader.ReadValueSafe(out packet.player); reader.ReadValueSafe(out packet.friendly);
+            reader.ReadValueSafe(out packet.position); reader.ReadValueSafe(out packet.velocity);
+            reader.ReadValueSafe(out packet.rotation);
+            reader.ReadValueSafe(out packet.health); reader.ReadValueSafe(out packet.maximum);
+            reader.ReadValueSafe(out packet.boost); reader.ReadValueSafe(out packet.rpm);
+            reader.ReadValueSafe(out packet.throttle); reader.ReadValueSafe(out packet.yawRate);
+            reader.ReadValueSafe(out packet.boosting); reader.ReadValueSafe(out packet.fieldAmmo);
+            reader.ReadValueSafe(out packet.beam); reader.ReadValueSafe(out packet.beamEnd);
+            reader.ReadValueSafe(out packet.beamHeat); reader.ReadValueSafe(out packet.tow);
+            return packet;
         }
 
         public void Leave()

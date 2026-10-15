@@ -176,7 +176,9 @@ namespace MadeInArizona
                 bool flame=name.Contains("fireballs");main.startSize3D=flame;renderer.sharedMaterial=flame?fireMaterial:smokeMaterial;
                 var sheet=ps.textureSheetAnimation;sheet.enabled=true;sheet.numTilesX=flame?16:8;sheet.numTilesY=flame?4:8;
                 sheet.animation=ParticleSystemAnimationType.WholeSheet;sheet.frameOverTime=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,0,1,.999f));
-                sheet.cycleCount=1;sheet.startFrame=flame?new ParticleSystem.MinMaxCurve(0):new ParticleSystem.MinMaxCurve(0,1);
+                // Unity 6 stores the start frame as a normalized sheet position. Stop at the last
+                // of the 64 smoke cells so each particle starts on a valid, independently random frame.
+                sheet.cycleCount=1;sheet.startFrame=flame?new ParticleSystem.MinMaxCurve(0):new ParticleSystem.MinMaxCurve(0,63f/64f);
                 renderer.SetActiveVertexStreams(new List<ParticleSystemVertexStream>{ParticleSystemVertexStream.Position,ParticleSystemVertexStream.Normal,ParticleSystemVertexStream.Tangent,ParticleSystemVertexStream.Color,ParticleSystemVertexStream.UV,ParticleSystemVertexStream.UV2,ParticleSystemVertexStream.AnimBlend});
                 main.gravityModifier=0;
                 size.size=new ParticleSystem.MinMaxCurve(1,new AnimationCurve(new Keyframe(0,flame?.85f:.65f),new Keyframe(.35f,1),new Keyframe(1,growth)));
