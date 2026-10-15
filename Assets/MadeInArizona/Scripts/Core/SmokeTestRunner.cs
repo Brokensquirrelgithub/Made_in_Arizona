@@ -49,6 +49,10 @@ namespace MadeInArizona
             { TestSegmentedHealth(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopSnapshotTest")>=0)
             { yield return TestCoopSnapshotAndSmoke(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFlailTest")>=0)
+            { yield return TestWashingMachineFlail(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReleaseFeaturesTest")>=0)
+            { yield return TestReleaseFeatures(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyGuestTest")>=0)
             {
@@ -517,6 +521,75 @@ namespace MadeInArizona
             Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
             if (host) yield return new WaitForSecondsRealtime(3);
         }
+        IEnumerator TestReleaseFeatures()
+        {
+            var game = GameManager.Instance;
+            var limiter = Array.Find(ContentCatalog.Parts, p => p && p.id == "revlimiter");
+            var loadout = new SaveData();
+            loadout.ownedParts.Add("revlimiter"); loadout.installedParts.Add("revlimiter");
+            Check("garage rev limiter installs on player vehicle", limiter && GarageManager.StatsFor(ContentCatalog.Vehicles[0], loadout).revLimiter);
+            Check("harpoon and crossbow carry 25 shots", WeaponRules.MaxAmmo("harpoon") == 25 && WeaponRules.MaxAmmo("crossbow") == 25);
+            var rewards = new SaveData();
+            MissionManager.AwardCampaign(rewards, 0, 1200, 8, true, out int firstMoney, out int firstSalvage, out bool first);
+            Check("campaign award advances guest save and grants first completion", first && rewards.completedMissions.Contains(0) &&
+                rewards.unlockedMission == 1 && rewards.money == 1100 + firstMoney && rewards.salvage == firstSalvage && rewards.reputation == 100);
+            MissionManager.AwardCampaign(rewards, 0, 1200, 8, true, out int replayMoney, out _, out bool replayFirst);
+            Check("repeat co-op award uses replay rate", !replayFirst && replayMoney < firstMoney && rewards.reputation == 120);
+            Check("Car Otaku wrap texture is packaged", Resources.Load<Texture2D>("Art/OtakuWraps"));
+            var wrapProbe = new GameObject("Otaku wrap probe");
+            var wrapped = VehicleVisual.Build(ContentCatalog.Vehicles[0], wrapProbe.transform, true, EnemyFaction.CarOtaku);
+            Check("Car Otaku cars wear both illustrated side decals", VehicleController.FindChild(wrapped, "Otaku mechanic wrap") &&
+                VehicleController.FindChild(wrapped, "Otaku racer wrap"));
+            Destroy(wrapProbe);
+            game.Save.unlockedMission = 1;
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(.5f);
+            int beams = 0;
+            foreach (var light in game.Player.GetComponentsInChildren<Light>(true))
+                if (light.name == "Left headlight beam" || light.name == "Right headlight beam") beams++;
+            Check("cars have a beam at each headlight", beams == 2);
+            ExplosionSystem.ScatterFracturedCells(new Bounds(game.Player.transform.position + Vector3.up * 3, Vector3.one * 3), 3, 8, Color.gray, Vector3.zero);
+            var explosion = FindAnyObjectByType<ExplosionSystem>();
+            bool fractured = false;
+            foreach (var mesh in explosion.GetComponentsInChildren<MeshFilter>())
+                if (mesh.sharedMesh && mesh.sharedMesh.name.StartsWith("Procedural fracture cell")) { fractured = true; break; }
+            Check("broken world props spawn shaped cell fragments", fractured);
+            game.CompleteMission(); game.ReturnToGarage();
+            Check("garage defaults to the next unlocked mission after victory", game.SelectedMission == 1);
+        }
+
+        IEnumerator TestWashingMachineFlail()
+        {
+            var game = GameManager.Instance;
+            Check("flail is sold in garage", WeaponRules.GarageWeapon("flail") && WeaponRules.Find("flail") && WeaponRules.ScrapCost("flail") > 0);
+            game.Save.selectedWeapon = "flail";
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(.5f);
+            var player = game.Player;
+            var flail = player ? player.GetComponent<WashingMachineFlail>() : null;
+            Check("equipped car has washer and chain visual", flail && player.Weapons.GarageWeapon.id == "flail" &&
+                player.transform.Find("Washing machine flail/Washer head") &&
+                player.transform.Find("Washing machine flail/Chain link 1"));
+            if (!flail) yield break;
+            var target = new GameObject("Flail impact probe").AddComponent<VehicleController>();
+            target.transform.position = player.transform.position + player.transform.forward * 5f;
+            target.transform.rotation = player.transform.rotation;
+            target.Initialize(ContentCatalog.Vehicles[0], VehicleStats.From(ContentCatalog.Vehicles[0]), false);
+            target.Body.isKinematic = true;
+            float before = target.Damage.Health;
+            for (int i = 0; i < 45; i++)
+            {
+                flail.Swing(player.transform.forward, WeaponRules.Find("flail").damage);
+                yield return new WaitForFixedUpdate();
+            }
+            Check("held flail extends and damages an enemy in its swept path", flail.Extended && target.Damage.Health < before);
+            yield return new WaitForSecondsRealtime(.7f);
+            Check("released flail retracts", !flail.Extended);
+            Destroy(target.gameObject);
+        }
+
         IEnumerator TestCoopSnapshotAndSmoke()
         {
             var original = new CoopSession.VehiclePacket {
@@ -527,7 +600,8 @@ namespace MadeInArizona
                 aim = new Vector3(.6f, .1f, .8f),
                 health = 541.5f, maximum = 920, boost = 28.5f, rpm = 5400,
                 throttle = .75f, yawRate = .3f, boosting = true, fieldAmmo = 99,
-                beam = true, beamEnd = new Vector3(150, 3, -400), beamHeat = .6f, tow = 16
+                beam = true, beamEnd = new Vector3(150, 3, -400), beamHeat = .6f, tow = 16,
+                flail = true, flailHead = new Vector3(126, 2, -452)
             };
             using (var writer = new FastBufferWriter(512, Allocator.Temp))
             {
@@ -549,7 +623,7 @@ namespace MadeInArizona
                         copy.yawRate == original.yawRate && copy.boosting == original.boosting &&
                         copy.fieldAmmo == original.fieldAmmo && copy.beam == original.beam &&
                         copy.beamEnd == original.beamEnd && copy.beamHeat == original.beamHeat &&
-                        copy.tow == original.tow);
+                        copy.tow == original.tow && copy.flail == original.flail && copy.flailHead == original.flailHead);
                 }
             }
             ExplosionSystem.TireSmoke(new Vector3(0, 200, 0), Vector3.zero, 1, 1, 1);
@@ -1695,7 +1769,7 @@ namespace MadeInArizona
             var game=GameManager.Instance;var audio=AudioManager.Instance;
             var bank=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             Check("pack grenade explosion is packaged",bank&&bank.ordnanceExplosion&&bank.ordnanceExplosion.name=="GL_explosion");
-            Check("other weapons retain imported recordings; crossbow has its own release",ContentCatalog.Weapons.Length==31&&
+            Check("other weapons retain imported recordings; crossbow has its own release",ContentCatalog.Weapons.Length==32&&
                 Array.TrueForAll(ContentCatalog.Weapons,w=>w.id=="crossbow" ? w.fireSounds!=null&&w.fireSounds.Length==0&&audio.CrossbowShot :
                     w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
             float oldVolume=game.Save.settings.weapons;game.Save.settings.weapons=1;

@@ -11,7 +11,7 @@ namespace MadeInArizona
     public sealed class ExplosionSystem : MonoBehaviour
     {
         struct Blast { public Vector3 point, direction; public float radius, damage, falloffPower; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
-        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public float born, until; public Vector3 scale; }
+        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public MeshFilter mesh; public float born, until; public Vector3 scale; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
         sealed class ConeVisual { public LineRenderer outline, innerLeft, innerRight; public float start, until; public Color color; }
@@ -32,6 +32,8 @@ namespace MadeInArizona
         readonly HashSet<BossWeakPoint> damagedPoints = new HashSet<BossWeakPoint>();
         readonly List<Fragment> fragments = new List<Fragment>();
         readonly Stack<Fragment> fragmentPool = new Stack<Fragment>();
+        static Mesh[] fractureCells;
+        static Mesh cubeFragmentMesh;
         readonly List<Flash> flashes = new List<Flash>();
         readonly List<Wave> waves = new List<Wave>();
         readonly List<ConeVisual> cones = new List<ConeVisual>();
@@ -568,6 +570,10 @@ namespace MadeInArizona
         /// </summary>
         public static void ScatterPieces(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread)
             => Get().Scatter(point, force, count, color, push, minScale, maxScale, spread, 12);
+        /// <summary>Break a prop's bounds into adjacent irregular cells before launching the pieces.</summary>
+        public static void ScatterFracturedCells(Bounds bounds, float force, int count, Color color, Vector3 push)
+            => Get().Scatter(bounds.center, force, count, color, push, Vector3.one * .1f, Vector3.one,
+                bounds.extents.y, 12, bounds);
         /// <summary>Velocity a blast gives the pieces of a prop it breaks: outwards and a little upwards, stronger close in.</summary>
         static Vector3 BlastPush(DestructionSystem prop, Vector3 center, float falloff)
         {
@@ -577,9 +583,11 @@ namespace MadeInArizona
         }
         static readonly Vector3 ChipMin = new Vector3(.1f, .07f, .15f), ChipMax = new Vector3(.45f, .24f, .7f);
         void Scatter(Vector3 point, float force, int count, Color color, Vector3 push) => Scatter(point, force, count, color, push, ChipMin, ChipMax, .5f, 4);
-        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread, float mass)
+        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread, float mass, Bounds? fracture = null)
         {
             count = Mathf.Min(count, quality == 0 ? 5 : quality == 1 ? 12 : quality==3?48:24);
+            if (fracture.HasValue && fractureCells == null) BuildFractureCells();
+            int cells = fracture.HasValue ? Mathf.CeilToInt(Mathf.Pow(count, 1f / 3f)) : 0;
             for (int i = 0; i < count; i++)
             {
                 if (fragments.Count >= DebrisLimit) RetireFragment(0);
@@ -588,26 +596,67 @@ namespace MadeInArizona
                 else
                 {
                     var go = GameObject.CreatePrimitive(PrimitiveType.Cube); go.name = "Pooled debris"; go.layer = 2; go.transform.SetParent(transform);
+                    if (!cubeFragmentMesh) cubeFragmentMesh = go.GetComponent<MeshFilter>().sharedMesh;
                     var rb = go.AddComponent<Rigidbody>(); rb.mass = 4; rb.linearDamping = .2f; rb.angularDamping = .2f;
                     rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
                     var renderer = go.GetComponent<Renderer>(); renderer.sharedMaterial = debrisMaterial; renderer.shadowCastingMode = quality > 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
-                    f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer };
+                    f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer, mesh = go.GetComponent<MeshFilter>() };
                 }
                 f.view.SetActive(true); f.collider.enabled = true; f.body.isKinematic = false;
                 foreach (var vehicle in VehicleController.Active)
                     if (vehicle != null)
                         foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
                             if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, true);
-                f.scale = new Vector3(Random.Range(minScale.x, maxScale.x), Random.Range(minScale.y, maxScale.y), Random.Range(minScale.z, maxScale.z));
+                if (fracture.HasValue)
+                {
+                    Vector3 size = fracture.Value.size / cells;
+                    f.scale = new Vector3(Mathf.Max(.12f, size.x), Mathf.Max(.12f, size.y), Mathf.Max(.12f, size.z));
+                    f.mesh.sharedMesh = fractureCells[i % fractureCells.Length];
+                }
+                else
+                {
+                    f.scale = new Vector3(Random.Range(minScale.x, maxScale.x), Random.Range(minScale.y, maxScale.y), Random.Range(minScale.z, maxScale.z));
+                    f.mesh.sharedMesh = cubeFragmentMesh;
+                }
                 f.t.localScale = f.scale;
                 f.body.mass = mass;
-                f.t.SetPositionAndRotation(point + Random.insideUnitSphere * .5f + Vector3.up * (.3f + Random.Range(-spread, spread)), Random.rotation);
+                Vector3 at = point + Random.insideUnitSphere * .5f + Vector3.up * (.3f + Random.Range(-spread, spread));
+                if (fracture.HasValue)
+                {
+                    int x = i % cells, y = i * cells / count, z = (i / cells) % cells;
+                    Bounds b = fracture.Value;
+                    at = b.min + Vector3.Scale(b.size, new Vector3((x + .5f) / cells, (y + .5f) / cells, (z + .5f) / cells));
+                }
+                f.t.SetPositionAndRotation(at, Random.rotation);
                 Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + (force > 0 ? 2 : 0);
                 velocity += push * Random.Range(.55f, 1.1f);
                 f.body.linearVelocity = velocity; f.body.angularVelocity = force > 0 ? Random.insideUnitSphere * 18 : Vector3.zero;
                 f.born = Time.time; f.until = Time.time + 2.8f + Random.value * 1.4f;
                 block.SetColor("_BaseColor", color * Random.Range(.75f, 1.3f)); f.renderer.SetPropertyBlock(block);
                 fragments.Add(f);
+            }
+        }
+        static void BuildFractureCells()
+        {
+            fractureCells = new Mesh[4];
+            int[] corners = { 0, 4, 6, 2, 1, 3, 7, 5, 0, 1, 5, 4, 2, 6, 7, 3, 0, 2, 3, 1, 4, 5, 7, 6 };
+            for (int variant = 0; variant < fractureCells.Length; variant++)
+            {
+                var random = new System.Random(117 + variant * 47);
+                var points = new Vector3[8];
+                for (int c = 0; c < 8; c++)
+                    points[c] = new Vector3((c & 1) == 0 ? -.5f : .5f, (c & 2) == 0 ? -.5f : .5f, (c & 4) == 0 ? -.5f : .5f)
+                        + new Vector3((float)random.NextDouble() - .5f, (float)random.NextDouble() - .5f, (float)random.NextDouble() - .5f) * .18f;
+                var vertices = new Vector3[24]; var triangles = new int[36];
+                for (int face = 0; face < 6; face++)
+                {
+                    for (int k = 0; k < 4; k++) vertices[face * 4 + k] = points[corners[face * 4 + k]];
+                    int v = face * 4, t = face * 6;
+                    triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
+                    triangles[t + 3] = v; triangles[t + 4] = v + 2; triangles[t + 5] = v + 3;
+                }
+                var mesh = new Mesh { name = "Procedural fracture cell " + variant, vertices = vertices, triangles = triangles };
+                mesh.RecalculateNormals(); mesh.RecalculateBounds(); fractureCells[variant] = mesh;
             }
         }
         void RetireFragment(int i)

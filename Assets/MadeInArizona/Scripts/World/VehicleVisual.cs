@@ -9,6 +9,8 @@ namespace MadeInArizona
     /// </summary>
     public static partial class VehicleVisual
     {
+        static Material otakuWrapMaterial;
+        static readonly Mesh[] otakuWrapMeshes = new Mesh[2];
         public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             Transform root=Group("Original procedural vehicle model",parent,Vector3.zero);
@@ -144,11 +146,50 @@ namespace MadeInArizona
             {
                 Box("Otaku rear wing",root,new Vector3(0,roofY+.08f,wingZ),new Vector3(width*1.08f,.08f,.31f),FactionRules.Accent(faction),false,1.7f);
                 for(int side=-1;side<=1;side+=2) Box("Otaku wing mount",root,new Vector3(side*width*.32f,roofY-.1f,wingZ),new Vector3(.07f,.4f,.08f),Ink);
+                AddOtakuWrap(root,width,roofY,cabZ);
+                Text("WAIFU WARRANTY VOID",root,new Vector3(0,roofY+.14f,wingZ),.085f,Cream,Quaternion.Euler(90,0,0));
             }
             Text(enemy?FactionRules.Tag(faction):"AZ • 173",root,plate,.115f,Cream,Quaternion.Euler(0,180,0));
             Transform turret=BuildTurret(root,turretAt,enemy);
             if(enemy) Box("Faction turret beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.1f,.08f,.12f),FactionRules.Accent(faction),false,2);
             if(!enemy) Box("Turquoise friend beacon",turret,new Vector3(-.22f,.17f,-.24f),new Vector3(.10f,.08f,.12f),Turquoise,false,3);
+        }
+
+        static void AddOtakuWrap(Transform root,float width,float roofY,float cabZ)
+        {
+            if (!otakuWrapMaterial)
+            {
+                var texture = Resources.Load<Texture2D>("Art/OtakuWraps");
+                if (!texture) return;
+                var shader = Shader.Find("Universal Render Pipeline/Unlit");
+                otakuWrapMaterial = new Material(shader) { name = "Car Otaku illustrated wrap", mainTexture = texture };
+                otakuWrapMaterial.SetFloat("_Surface", 1);
+                otakuWrapMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                otakuWrapMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                otakuWrapMaterial.SetInt("_ZWrite", 0);
+                otakuWrapMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                otakuWrapMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+            for (int side = -1; side <= 1; side += 2)
+            {
+                int portrait = side < 0 ? 0 : 1;
+                if (!otakuWrapMeshes[portrait])
+                {
+                    float u = portrait * .5f;
+                    var mesh = new Mesh { name = portrait == 0 ? "Mechanic heroine decal" : "Desert racer heroine decal" };
+                    mesh.vertices = new[] { new Vector3(-.5f,-.5f,0),new Vector3(.5f,-.5f,0),new Vector3(.5f,.5f,0),new Vector3(-.5f,.5f,0) };
+                    mesh.uv = new[] { new Vector2(u,0),new Vector2(u+.5f,0),new Vector2(u+.5f,1),new Vector2(u,1) };
+                    mesh.triangles = new[] { 0,1,2,0,2,3 }; mesh.RecalculateNormals();
+                    otakuWrapMeshes[portrait] = mesh;
+                }
+                var decal = new GameObject(side < 0 ? "Otaku mechanic wrap" : "Otaku racer wrap", typeof(MeshFilter), typeof(MeshRenderer));
+                decal.transform.SetParent(root,false);
+                decal.transform.localPosition = new Vector3(side * (width * .565f), roofY * .56f, cabZ);
+                decal.transform.localRotation = Quaternion.Euler(0,side * 90,0);
+                decal.transform.localScale = new Vector3(1.5f,1.05f,1);
+                decal.GetComponent<MeshFilter>().sharedMesh = otakuWrapMeshes[portrait];
+                decal.GetComponent<MeshRenderer>().sharedMaterial = otakuWrapMaterial;
+            }
         }
 
         /// <summary>Painted body panels use the glossy clear-coat material; glass gets a mirror finish.</summary>

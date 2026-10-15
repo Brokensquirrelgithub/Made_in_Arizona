@@ -132,7 +132,7 @@ namespace MadeInArizona
                     if (delta.sqrMagnitude > .3f) Aim = new Vector2(delta.x, delta.z).normalized;
                 }
             }
-            if (UsingGamepad && player != null && GameManager.Instance.Save.settings.aimAssist > 0)
+            if (UsingGamepad && player != null && (player.Weapons == null || player.Weapons.GarageWeapon == null || player.Weapons.GarageWeapon.id != "flail") && GameManager.Instance.Save.settings.aimAssist > 0)
             {
                 float best = GameManager.Instance.Save.settings.aimAssist == 2 ? .88f : .96f;
                 Vector2 corrected = Aim;

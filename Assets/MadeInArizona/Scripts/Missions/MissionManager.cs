@@ -71,6 +71,24 @@ namespace MadeInArizona
             AwardedMoney = money;
             Debrief = debrief;
         }
+        internal void SetRemoteAward(int money, int salvage, bool first)
+        {
+            AwardedMoney = money; AwardedSalvage = salvage;
+            Debrief = (first ? "FIRST COMPLETION" : "REPLAY COMPLETE") + " • $" + money + " • " + salvage + " salvage • combo x" + Combo;
+        }
+        internal static void AwardCampaign(SaveData save, int index, int score, int destruction, bool optional,
+            out int money, out int salvage, out bool first)
+        {
+            first = !save.completedMissions.Contains(index);
+            money = (first ? ContentCatalog.Missions[index].reward : Mathf.RoundToInt(ContentCatalog.Missions[index].reward * .3f))
+                + (optional ? 250 : 0) + Mathf.Min(500, score / 40);
+            salvage = 3 + destruction / 8 + (optional ? 3 : 0);
+            save.money += money; save.salvage += salvage; save.reputation += first ? 100 : 20;
+            if (first) save.completedMissions.Add(index);
+            save.unlockedMission = Mathf.Min(ContentCatalog.Missions.Length - 1, Mathf.Max(save.unlockedMission, index + 1));
+            while (save.bestScores.Count < ContentCatalog.Missions.Length) save.bestScores.Add(0);
+            save.bestScores[index] = Mathf.Max(save.bestScores[index], score);
+        }
         int missionIndex, stageKills, wave, checkpoint, bestCombo, pickupCount;
         float heldSeconds, comboTimeout, nextWaveTime, stageStarted, effectiveTimeLimit;
         bool ended, midwaySaid, finalStand, collecting;
@@ -574,12 +592,9 @@ namespace MadeInArizona
             if(ended)return;ended=true;Progress=1;UpdateOptional(true);
             Score+=Mathf.RoundToInt(Remaining*4)+Mathf.RoundToInt(TeamHealthRatio*1000);
             if(missionIndex<0){Debrief="COMBAT TRIAL COMPLETE • "+Score+" points • no campaign progress changed";Game.CompleteMission();return;}
-            var save=Game.Save;bool first=!save.completedMissions.Contains(missionIndex);
-            AwardedMoney=(first?definition.reward:Mathf.RoundToInt(definition.reward*.3f))+(OptionalComplete?250:0)+Mathf.Min(500,Score/40);
-            AwardedSalvage=3+DestructionCount/8+(OptionalComplete?3:0);save.money+=AwardedMoney;save.salvage+=AwardedSalvage;save.reputation+=first?100:20;
-            if(first)save.completedMissions.Add(missionIndex);
-            save.unlockedMission=Mathf.Min(ContentCatalog.Missions.Length-1,Mathf.Max(save.unlockedMission,missionIndex+1));
-            while(save.bestScores.Count<ContentCatalog.Missions.Length)save.bestScores.Add(0);save.bestScores[missionIndex]=Mathf.Max(save.bestScores[missionIndex],Score);
+            var save=Game.Save;
+            AwardCampaign(save,missionIndex,Score,DestructionCount,OptionalComplete,out int money,out int salvage,out bool first);
+            AwardedMoney=money;AwardedSalvage=salvage;
             if(missionIndex==4)UnlockAchievement("dog_director","DIRECTOR OF GOOD DECISIONS");
             if(missionIndex==14)UnlockAchievement("paid_full","PAID IN FULL");
             Debrief=(first?"FIRST COMPLETION":"REPLAY COMPLETE")+" • $"+AwardedMoney+" • "+AwardedSalvage+" salvage • best combo x"+bestCombo;

@@ -49,6 +49,9 @@ namespace MadeInArizona
         public float BeamHeat => beam ? beam.Heat : 0;
         public Vector3 AimDirection => aimDirection;
         DeathRayBeam beam;
+        WashingMachineFlail flail;
+        public bool FlailActive => flail && flail.Extended;
+        public Vector3 FlailHead => flail ? flail.HeadPosition : Vector3.zero;
         readonly List<RaycastHit> traceHits = new List<RaycastHit>();
         DeathRayBeam Beam
         {
@@ -90,6 +93,7 @@ namespace MadeInArizona
                 muzzleFlash.type = LightType.Point; muzzleFlash.range = 9;
                 muzzleFlash.intensity = 0; muzzleFlash.shadows = LightShadows.None;
             }
+            RefreshFlail();
         }
         void Update()
         {
@@ -123,12 +127,16 @@ namespace MadeInArizona
         public void ConfigureEnemyPrimary(string id)
         {
             if (owner != null && !owner.IsPlayer)
+            {
                 GarageWeapon = WeaponRules.Find(id) ?? WeaponRules.Find("riveter");
+                RefreshFlail();
+            }
         }
         public void ConfigurePlayerPrimary(string id)
         {
             if (!owner || !owner.IsPlayer || !WeaponRules.GarageWeapon(id)) return;
             GarageWeapon = WeaponRules.Find(id) ?? GarageWeapon;
+            RefreshFlail();
         }
         WeaponDefinition Effective(WeaponDefinition source)
         {
@@ -151,7 +159,24 @@ namespace MadeInArizona
         {
             if (!CoopSession.IsRemoteClient) return;
             var weapon = WeaponRules.Find(id);
-            if (weapon) GarageWeapon = weapon;
+            if (weapon && GarageWeapon != weapon) { GarageWeapon = weapon; RefreshFlail(); }
+        }
+        void RefreshFlail()
+        {
+            bool equipped = GarageWeapon && GarageWeapon.id == "flail";
+            if (equipped && !flail)
+            {
+                flail = GetComponent<WashingMachineFlail>();
+                if (!flail) flail = gameObject.AddComponent<WashingMachineFlail>();
+                flail.Bind(owner);
+            }
+            if (flail) flail.SetEquipped(equipped);
+            if (turret) turret.gameObject.SetActive(!equipped);
+        }
+        public void SetNetworkFlail(bool active, Vector3 head)
+        {
+            if (CoopSession.IsRemoteClient && flail && GarageWeapon && GarageWeapon.id == "flail")
+                flail.SetNetwork(active, head);
         }
         public void SetNetworkFieldWeapon(string id, int ammo)
         {
@@ -162,6 +187,7 @@ namespace MadeInArizona
         public void FirePrimary(Vector3 direction)
         {
             if (!CanFire() || !GarageWeapon) return;
+            if (GarageWeapon.id == "flail") { if (flail) flail.Swing(aimDirection, Effective(GarageWeapon).damage); return; }
             var weapon = Effective(GarageWeapon);
             if (weapon.id == "skewer")
             {

@@ -322,6 +322,11 @@ namespace MadeInArizona
             Box("Garage rooftop badge",g,new Vector3(0,height+.32f,0),new Vector3(10,.03f,2.3f),Ink);
             Text("117° AUTO CARE",g,new Vector3(0,height+.35f,0),.52f,Turquoise,Quaternion.Euler(90,0,0));
             Box("Service bay lintel",g,new Vector3(0,height-.48f,-depth*.5f),new Vector3(5.1f,.95f,.4f),Ink,true);
+            Box("Closed garage roll-up door",g,new Vector3(0,(height-.95f)*.5f,-depth*.5f),
+                new Vector3(5.05f,height-.95f,.28f),new Color(.34f,.38f,.37f),true);
+            for(int stripe=1;stripe<9;stripe++)
+                Box("Garage door seam",g,new Vector3(0,stripe*(height-.95f)/9f,-depth*.5f-.16f),
+                    new Vector3(5.04f,.025f,.02f),Ink);
             Box("Garage sign backing",g,new Vector3(0,height+1.05f,-depth*.5f-.22f),new Vector3(12,1.55f,.18f),Ink);
             Text("117° AUTO CARE",g,new Vector3(0,height+1.05f,-depth*.5f-.34f),.66f,Turquoise);
             Text("GARAGE  •  SERVICE",g,new Vector3(0,height-.46f,-depth*.5f-.24f),.27f,Cream);

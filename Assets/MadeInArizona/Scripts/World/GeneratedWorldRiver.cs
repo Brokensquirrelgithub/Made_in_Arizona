@@ -255,6 +255,20 @@ namespace MadeInArizona
             for (int i = first; i < last; i += 3)
             {
                 int j = Mathf.Min(last, i + 3);
+                // The deck is drivable above; a solid volume below prevents vehicles from slipping into its underside.
+                Vector3 deckMid = (centers[i] + centers[j]) * .5f;
+                float bed = Mathf.Min(SampleHeight(centers[i]), SampleHeight(centers[j])) - .5f;
+                float top = Mathf.Min(centers[i].y, centers[j].y) - .45f;
+                if (top > bed)
+                {
+                    var blocker = new GameObject("Bridge underpass blocker");
+                    blocker.transform.SetParent(bridge, false);
+                    blocker.transform.position = new Vector3(deckMid.x, (top + bed) * .5f, deckMid.z);
+                    blocker.transform.rotation = Quaternion.LookRotation(centers[j] - centers[i], Vector3.up);
+                    var solid = blocker.AddComponent<BoxCollider>();
+                    solid.size = new Vector3((surface[i, 0] - surface[i, columns - 1]).magnitude + .8f,
+                        top - bed, (centers[j] - centers[i]).magnitude + .5f);
+                }
                 for (int side = 0; side < 2; side++)
                 {
                     float outward = side == 0 ? 1 : -1;

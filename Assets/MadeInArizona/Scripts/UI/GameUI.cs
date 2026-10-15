@@ -11,7 +11,7 @@ namespace MadeInArizona
         static readonly Color Ink = new Color(.055f, .081f, .09f, .97f);
         static readonly Color Panel = new Color(.09f, .125f, .135f, .95f);
         static readonly Color Cream = new Color(.94f, .90f, .79f);
-        static readonly Color Muted = new Color(.57f, .64f, .63f);
+        static readonly Color Muted = new Color(.72f, .78f, .76f);
         static readonly Color Orange = new Color(1f, .36f, .17f);
         static readonly Color Lime = new Color(.80f, .90f, .42f);
         static readonly Color Blue = new Color(.30f, .83f, .87f);
@@ -151,7 +151,8 @@ namespace MadeInArizona
             string key = size + "/" + color.GetHashCode() + "/" + bold + "/" + anchor;
             if (styles.TryGetValue(key, out var style)) return style;
             style = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = bold ? FontStyle.Bold : FontStyle.Normal, alignment = anchor, wordWrap = true, richText = false, padding = new RectOffset(0, 0, 0, 0) };
-            style.normal.textColor = QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color;
+            // IMGUI text is composed in display space; converting these colors to linear darkens labels on dark panels.
+            style.normal.textColor = color;
             styles[key] = style; return style;
         }
 

@@ -19,6 +19,8 @@ namespace MadeInArizona
         public bool turbocharged;
         /// <summary>The salvage-yard 1.8 L engine replaces the original cylinder layout.</summary>
         public bool engineSwapped;
+        /// <summary>Ignition cuts briefly at top-gear redline and prevents sustained over-rev damage.</summary>
+        public bool revLimiter;
         public Drivetrain drivetrain;
         public Differential differential;
 

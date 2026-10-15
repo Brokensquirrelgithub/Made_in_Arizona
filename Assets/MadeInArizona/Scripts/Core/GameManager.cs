@@ -282,6 +282,8 @@ namespace MadeInArizona
         public void ReturnToGarage()
         {
             if (CoopSession.IsRemoteClient) return;
+            if (State == GameState.Won && !IsCombatTrial)
+                SelectedMission = Mathf.Clamp(SelectedMission + 1, 0, Save.unlockedMission);
             Time.timeScale = 1;
             IsCombatTrial=false;
             State = GameState.Garage;

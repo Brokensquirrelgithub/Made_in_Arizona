@@ -3,8 +3,7 @@ using UnityEngine;
 namespace MadeInArizona
 {
     /// <summary>
-    /// Headlights come on as the sun goes down (TimeOfDay): one spot light between the car's headlamps, throwing a warm
-    /// pool of light down the road. Only cars near the camera light up, which keeps the light count bounded in big
+    /// Headlights come on as the sun goes down (TimeOfDay): one beam at each lamp. Only cars near the camera light up, which keeps the light count bounded in big
     /// fights; the low graphics preset has no extra lights at all.
     /// </summary>
     public sealed class VehicleLights : MonoBehaviour
@@ -13,33 +12,46 @@ namespace MadeInArizona
         public static readonly Color HeadlightAmber = new Color(1f, .55f, .12f);
         const float Range = 26, VisibleRange = 70;
         VehicleController vehicle;
-        Light beam;
+        readonly Light[] beams = new Light[2];
 
         public void Bind(VehicleController owner)
         {
             vehicle = owner;
-            if (beam) Destroy(beam.gameObject);
+            foreach (var beam in beams) if (beam) Destroy(beam.gameObject);
             if (!owner.Visual) return;
-            Vector3 sum = Vector3.zero; int count = 0;
+            var sum = new Vector3[2]; var count = new int[2];
             foreach (var part in owner.Visual.GetComponentsInChildren<Transform>(true))
-                if (part.name == "Headlight") { sum += owner.Visual.InverseTransformPoint(part.position); count++; }
-            var go = new GameObject("Headlight beams");
-            go.transform.SetParent(owner.Visual, false);
-            go.transform.localPosition = (count > 0 ? sum / count : new Vector3(0, .75f, 2)) + Vector3.forward * .15f;
-            go.transform.localRotation = Quaternion.Euler(6, 0, 0); // dipped beams
-            beam = go.AddComponent<Light>();
-            beam.type = LightType.Spot; beam.color = HeadlightAmber; beam.range = Range;
-            beam.spotAngle = 64; beam.innerSpotAngle = 30; beam.shadows = LightShadows.None; beam.enabled = false;
+                if (part.name == "Headlight")
+                {
+                    Vector3 local = owner.Visual.InverseTransformPoint(part.position);
+                    int side = local.x < 0 ? 0 : 1;
+                    sum[side] += local; count[side]++;
+                }
+            for (int side = 0; side < 2; side++)
+            {
+                var go = new GameObject(side == 0 ? "Left headlight beam" : "Right headlight beam");
+                go.transform.SetParent(owner.Visual, false);
+                go.transform.localPosition = (count[side] > 0 ? sum[side] / count[side] : new Vector3(side == 0 ? -.45f : .45f, .75f, 2)) + Vector3.forward * .15f;
+                go.transform.localRotation = Quaternion.Euler(6, side == 0 ? -3 : 3, 0);
+                var beam = go.AddComponent<Light>();
+                beam.type = LightType.Spot; beam.color = HeadlightAmber; beam.range = Range;
+                beam.spotAngle = 54; beam.innerSpotAngle = 28; beam.shadows = LightShadows.None; beam.enabled = false;
+                beams[side] = beam;
+            }
         }
 
         void LateUpdate()
         {
-            if (!beam) return;
+            if (!beams[0]) return;
             float on = Mathf.InverseLerp(.35f, .85f, TimeOfDay.Blend);
             bool show = on > 0 && vehicle && vehicle.Damage != null && !vehicle.Damage.IsDead
                 && (!CameraController.HasFocus || (transform.position - CameraController.FocusPoint).sqrMagnitude < VisibleRange * VisibleRange);
-            if (beam.enabled != show) beam.enabled = show;
-            if (show) beam.intensity = 18 * on;
+            foreach (var beam in beams)
+            {
+                if (!beam) continue;
+                if (beam.enabled != show) beam.enabled = show;
+                if (show) beam.intensity = 11 * on;
+            }
         }
     }
 }

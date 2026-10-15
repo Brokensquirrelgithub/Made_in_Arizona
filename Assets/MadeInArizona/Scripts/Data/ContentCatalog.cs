@@ -134,7 +134,8 @@ namespace MadeInArizona
                 Part("muffler","Muffler attached at both ends","Muffler","+3% power, +2% top speed, -3 kg. The last one was bolted on at the front and dragging at the back, which counted as a brake.",95,0,-3,1.03f),
                 Part("timing","Timing belt with all its teeth","Timing","+3% power, +6% torque, +1 kg. Valve timing is now a schedule instead of a suggestion.",210,2,1,1.03f),
                 Part("lugs","The full set of lug nuts","Hardware","Adds 3% grip and 1 kg of suspension structure. A full set of lug nuts.",40,0,1,1,1.03f,1),
-                Part("seat","Driver's seat bolted down","Interior","Adds 5% turn response and 3 kg to the Equipment pool.",70,0,3,1,1,1)
+                Part("seat","Driver's seat bolted down","Interior","Adds 5% turn response and 3 kg to the Equipment pool.",70,0,3,1,1,1),
+                Part("revlimiter","Rev limiter","Engine management","Cuts ignition in a short audible pulse at top-gear redline, protecting the engine from sustained over-revving. +2 kg.",260,0,2)
             };
             for (int i = 0; i < Parts.Length; i++) Parts[i].contentOrder = i;
             SetDurability(HealthCategory.Engine, 20, "intake");
@@ -145,6 +146,7 @@ namespace MadeInArizona
             SetDurability(HealthCategory.Engine, 40, "radiator", "muffler");
             SetDurability(HealthCategory.Engine, 15, "nitrous");
             SetDurability(HealthCategory.Engine, 75, "mounts");
+            SetDurability(HealthCategory.Engine, 0, "revlimiter");
             SetDurability(HealthCategory.Equipment, 10, "ecu");
             SetDurability(HealthCategory.Equipment, 50, "boards", "seat");
             SetDurability(HealthCategory.Armor, 125, "cage");
@@ -260,7 +262,9 @@ namespace MadeInArizona
                 Weapon(29,"scattermortar","Scatter Mortar","Nine mini charges arc out in a shotgun fan. The near shells burst first, then the far shells rain down.",24,.65f,36,2.6f,new Color(1,.57f,.18f),
                     "ARCING SHOTGUN","A directed shower of explosives blankets near and far ground.","No tracking; moving targets can slip between the bursts."),
                 Weapon(30,"fireworks","Firework Cannon","A show mortar mounted at the nose fires aerial shells. Each shell blooms into a real firework over the road.",72,.7f,35,7,new Color(1f,.64f,.25f),
-                    "AERIAL BURST","A bright skyburst catches vehicles below it.","The fuse and high arc make close targets hard to hit.")
+                    "AERIAL BURST","A bright skyburst catches vehicles below it.","The fuse and high arc make close targets hard to hit."),
+                Weapon(31,"flail","Washing Machine Flail","A washing machine on a long chain. Hold fire and circle the mouse or right stick around your car to swing it; release to reel it in.",60,1,0,0,new Color(.72f,.79f,.83f),
+                    "SWEPT MELEE","A fast swing smashes cars and roadside obstacles in a wide arc.","Slow swings glance off; it must build speed before it hits hard.")
             };
         }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color,string role,string strength,string weakness)

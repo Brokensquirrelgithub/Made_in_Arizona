@@ -8,7 +8,7 @@ namespace MadeInArizona
         /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
             "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "railgun",
-            "sprinkler", "pinata", "minigun", "skewer", "bowling", "firecracker" };
+            "sprinkler", "pinata", "minigun", "skewer", "bowling", "firecracker", "flail" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
         static readonly string[] Oddballs = { "sprinkler", "pinata", "skewer", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
@@ -32,6 +32,7 @@ namespace MadeInArizona
                 case "pinata": return 340;
                 case "minigun": return 380;
                 case "skewer": return 420;
+                case "flail": return 400;
                 default: return 0;
             }
         }
@@ -88,9 +89,9 @@ namespace MadeInArizona
                 case "mortar": return new Vector2Int(3, 6);
                 case "cluster": return new Vector2Int(3, 6);
                 case "scattermortar": return new Vector2Int(4, 8);
-                case "crossbow": return new Vector2Int(10, 40);
+                case "crossbow": return new Vector2Int(12, 25);
                 case "deathray": return new Vector2Int(60, 120); // 12 damage ticks/s: five seconds per drop
-                case "harpoon": return new Vector2Int(4, 8);
+                case "harpoon": return new Vector2Int(12, 25);
                 case "aircannon": return new Vector2Int(10, 20);
                 case "torch": return new Vector2Int(70, 140); // 14 flame shots/s: five seconds per drop
                 case "boomerang": return new Vector2Int(8, 16);

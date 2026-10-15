@@ -42,7 +42,7 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 6;
+        const int Protocol = 7;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -78,6 +78,8 @@ namespace MadeInArizona
         int nextVehicleId;
         int nextPickupId;
         float inputAt, snapshotAt, missionAt, pickupAt, tuningAt, pinAt;
+        bool remoteRewardApplied, remoteRewardFirst;
+        int remoteRewardMoney, remoteRewardSalvage;
         string lastTuningJson, lastPinFlags;
         bool queuedInteract, queuedSwap;
         bool remoteWorldReady;
@@ -108,6 +110,8 @@ namespace MadeInArizona
             public Vector3 beamEnd;
             public float beamHeat;
             public int tow;
+            public bool flail;
+            public Vector3 flailHead;
         }
         [Serializable] sealed class PickupPacket
         {
@@ -141,7 +145,8 @@ namespace MadeInArizona
         [Serializable] sealed class ReadyPacket { public int protocol; }
         [Serializable] sealed class MissionPacket
         {
-            public int state, stage, score, kills, combo, destruction, money;
+            public int state, stage, score, kills, combo, destruction, money, missionIndex;
+            public bool optional;
             public string objective, debrief;
             public Vector3 position;
             public float progress, remaining;
@@ -347,6 +352,7 @@ namespace MadeInArizona
             bool wasLobby = remoteWorldReady && InLobby;
             remoteWorldReady = false;
             remoteMode = packet.mode;
+            remoteRewardApplied = false;
             if (packet.mode != 0 || !wasLobby) GuestWorldChanged();
             HostTier = Mathf.Clamp(packet.tier, 0, 3);
             DevTuning.SetCoopOverride(packet.tuning);
@@ -421,6 +427,7 @@ namespace MadeInArizona
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
             car.Weapons.SetNetworkBeam(packet.beam, packet.beamEnd, packet.beamHeat);
+            car.Weapons.SetNetworkFlail(packet.flail, packet.flailHead);
             if (packet.tow > 0 && proxies.TryGetValue(packet.tow, out var towed) && towed) TowLink.ShowNetwork(car, towed);
             seenAt[packet.id] = Time.unscaledTime;
             if (packet.player && packet.owner == (int)network.LocalClientId && GameManager.Instance.Player != car)
@@ -540,6 +547,21 @@ namespace MadeInArizona
             GameManager.Instance.Mission.ApplyRemoteState(packet.objective, packet.position, packet.progress,
                 packet.remaining, packet.stage, packet.score, packet.kills, packet.combo, packet.destruction,
                 packet.money, packet.debrief);
+            if (remoteMode == 1 && packet.state == (int)GameState.Won && !remoteRewardApplied &&
+                packet.missionIndex >= 0 && packet.missionIndex < ContentCatalog.Missions.Length)
+            {
+                MissionManager.AwardCampaign(GameManager.Instance.Save, packet.missionIndex, packet.score,
+                    packet.destruction, packet.optional, out remoteRewardMoney, out remoteRewardSalvage, out remoteRewardFirst);
+                if (packet.missionIndex == 4 && !GameManager.Instance.Save.achievements.Contains("dog_director"))
+                    GameManager.Instance.Save.achievements.Add("dog_director");
+                if (packet.missionIndex == 14 && !GameManager.Instance.Save.achievements.Contains("paid_full"))
+                    GameManager.Instance.Save.achievements.Add("paid_full");
+                remoteRewardApplied = true;
+                SaveSystem.Save(GameManager.Instance.Save);
+                GameManager.Instance.Notify("CO-OP REWARD • $" + remoteRewardMoney + " • " + remoteRewardSalvage + " salvage");
+            }
+            if (remoteRewardApplied && packet.state == (int)GameState.Won)
+                GameManager.Instance.Mission.SetRemoteAward(remoteRewardMoney, remoteRewardSalvage, remoteRewardFirst);
             bool paused = packet.state == (int)GameState.Paused;
             if (HostPaused != paused)
             {
@@ -681,6 +703,8 @@ namespace MadeInArizona
                         beam = car.Weapons && car.Weapons.BeamActive,
                         beamEnd = car.Weapons ? car.Weapons.BeamEnd : Vector3.zero,
                         beamHeat = car.Weapons ? car.Weapons.BeamHeat : 0,
+                        flail = car.Weapons && car.Weapons.FlailActive,
+                        flailHead = car.Weapons ? car.Weapons.FlailHead : Vector3.zero,
                         tow = car.Towing && vehicleIds.TryGetValue(car.Towing, out int towId) ? towId : 0 };
                     foreach (ulong clientId in network.ConnectedClientsIds)
                         if (clientId != NetworkManager.ServerClientId)
@@ -709,6 +733,7 @@ namespace MadeInArizona
                 var packet = new MissionPacket { state = (int)game.State, stage = mission.Stage,
                     score = mission.Score, kills = mission.Kills, combo = mission.Combo,
                     destruction = mission.DestructionCount, money = mission.AwardedMoney,
+                    missionIndex = game.SelectedMission, optional = mission.OptionalComplete,
                     objective = mission.Objective, debrief = mission.Debrief,
                     position = mission.ObjectivePosition, progress = mission.Progress, remaining = mission.Remaining };
                 foreach (ulong clientId in network.ConnectedClientsIds)
@@ -776,6 +801,7 @@ namespace MadeInArizona
             writer.WriteValueSafe(packet.boosting); writer.WriteValueSafe(packet.fieldAmmo);
             writer.WriteValueSafe(packet.beam); writer.WriteValueSafe(packet.beamEnd);
             writer.WriteValueSafe(packet.beamHeat); writer.WriteValueSafe(packet.tow);
+            writer.WriteValueSafe(packet.flail); writer.WriteValueSafe(packet.flailHead);
         }
 
         internal static VehiclePacket ReadVehiclePacket(FastBufferReader reader)
@@ -796,6 +822,7 @@ namespace MadeInArizona
             reader.ReadValueSafe(out packet.boosting); reader.ReadValueSafe(out packet.fieldAmmo);
             reader.ReadValueSafe(out packet.beam); reader.ReadValueSafe(out packet.beamEnd);
             reader.ReadValueSafe(out packet.beamHeat); reader.ReadValueSafe(out packet.tow);
+            reader.ReadValueSafe(out packet.flail); reader.ReadValueSafe(out packet.flailHead);
             return packet;
         }
 

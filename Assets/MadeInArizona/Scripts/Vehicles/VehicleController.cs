@@ -206,6 +206,9 @@ namespace MadeInArizona
         public const float UpshiftDuration = .34f;
         public const float RamDamageScale = .5f;
         public const float SoftTopSpeedExtension = .2f;
+        public bool RevLimiterCut { get; private set; }
+        public float RedlineSeconds { get; private set; }
+        float redlineTick;
         float upshiftRemaining;
         float gearHoldRemaining;
         // Same integrated drive loss as the original 0.18 s / 0.62-to-1 shift, spread across the
@@ -485,7 +488,23 @@ namespace MadeInArizona
                     driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                 }
                 RPM = Mathf.Clamp(RPM, 850, 7200);
-                AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftSoundLoad);
+                bool overRev = driveDirection > 0 && Gear == gears.Length && Throttle > .9f &&
+                    forwardSpeed > Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed && desiredRPM >= FullThrottleUpshiftRpm;
+                RevLimiterCut = overRev && Stats.revLimiter && Mathf.Repeat(Time.time, .16f) < .055f;
+                if (RevLimiterCut) RPM = Mathf.Min(RPM, 6300f);
+                RedlineSeconds = overRev && !Stats.revLimiter ? RedlineSeconds + Time.fixedDeltaTime : 0;
+                if (RedlineSeconds >= 7f)
+                {
+                    redlineTick += Time.fixedDeltaTime;
+                    if (redlineTick >= 1f)
+                    {
+                        redlineTick -= 1f;
+                        Damage.ApplyDamage(Mathf.Max(1f, Damage.MaxHealth * .004f), transform.position + Vector3.up, null, false, true);
+                        if (IsPlayer && RedlineSeconds < 8f) GameManager.Instance?.Notify("ENGINE OVER-REVVING • FIT A REV LIMITER");
+                    }
+                }
+                else redlineTick = 0;
+                AppliedEngineLoad = Mathf.Clamp01(targetThrottle * ShiftSoundLoad) * (RevLimiterCut ? .15f : 1f);
                 float torqueCurve = .62f + .38f * Mathf.Sin(Mathf.Clamp01((RPM - 800) / 7000) * Mathf.PI);
                 float wheelForce = Stats.torque * torqueCurve *
                     (TransmissionProfiles.DriveRatio(Gear) * Mathf.Max(2.5f, Stats.finalDrive)) / .34f;
@@ -502,6 +521,7 @@ namespace MadeInArizona
                 acceleration *= footing.drive;
                 if (Afflictions && Afflictions.IsChilled) acceleration *= .8f;
                 acceleration *= ShiftDrive;
+                if (RevLimiterCut) acceleration *= .15f;
                 if (IsPlayer) acceleration *= tuning.acceleration;
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
@@ -539,6 +559,7 @@ namespace MadeInArizona
             }
             else
             {
+                RevLimiterCut = false; RedlineSeconds = redlineTick = 0;
                 driveDirection = 1;
                 AppliedEngineLoad = 0;
                 RPM = Mathf.Lerp(RPM, 900, Time.fixedDeltaTime * 3);
