@@ -103,5 +103,7 @@ jobs:
           # Keep in step with GameUpdater.Protocol: builds without this line are never offered in game.
           protocol="$(grep -o 'Protocol = [0-9]*' Assets/MadeInArizona/Scripts/Core/GameUpdater.cs | head -n 1 | grep -o '[0-9]*')"
           printf '%s\n\nmia-updater: %s\ncommit: %s\n' "$subject" "$protocol" "$GITHUB_SHA" > notes.md
+          python3 Tools/verify-release-stamps.py --commit "$GITHUB_SHA" \
+            --windows dist/MadeInArizona-Windows.zip --macos dist/MadeInArizona-macOS.zip --notes notes.md
           gh release create "build-$short" dist/MadeInArizona-Windows.zip dist/MadeInArizona-macOS.zip \
             --target "$GITHUB_SHA" --title "Playtest $short • $subject" --notes-file notes.md

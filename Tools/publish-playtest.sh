@@ -24,6 +24,8 @@ ditto -c -k --sequesterRsrc --keepParent "$root/Builds/macOS/Made in Arizona.app
 subject="$(git log -1 --format=%s)"
 protocol="$(grep -o 'Protocol = [0-9]*' Assets/MadeInArizona/Scripts/Core/GameUpdater.cs | head -n 1 | grep -o '[0-9]*')"
 printf '%s\n\nmia-updater: %s\ncommit: %s\n' "$subject" "$protocol" "$commit" > "$dist/notes.md"
+python3 "$root/Tools/verify-release-stamps.py" --commit "$commit" \
+  --windows "$dist/MadeInArizona-Windows.zip" --macos "$dist/MadeInArizona-macOS.zip" --notes "$dist/notes.md"
 gh release create "$tag" "$dist/MadeInArizona-Windows.zip" "$dist/MadeInArizona-macOS.zip" \
   --target "$commit" --title "Playtest $short • $subject" --notes-file "$dist/notes.md"
 echo "Published $tag. Testers see it under Versions & Updates."

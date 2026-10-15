@@ -44,6 +44,7 @@ SKIP_BUILD=1 Tools/publish-playtest.sh   # publish the players already in Builds
 ```
 
 It needs Unity (as for `Tools/build.sh`), the Windows build module and the GitHub CLI (`brew install gh`, then `gh auth login`). The commit must be committed and pushed, because the release points at it.
+Both publishing paths verify that each ZIP's embedded `StreamingAssets/build.json` has the same full commit and updater protocol as the release notes. If you package a build manually, run `Tools/verify-release-stamps.py` against both archives and the notes before uploading them. Build from committed source; CI's `-miaCommit` must name that same checked-out commit. A mismatch makes the updater keep offering the release after installation.
 
 ## Tester setup (once)
 
