@@ -26,6 +26,7 @@ namespace MadeInArizona
         static readonly Dictionary<Color, Material> Cloths = new Dictionary<Color, Material>();
         readonly Transform[] sections = new Transform[Sections];
         readonly LineRenderer[] rope = new LineRenderer[Sections];
+        readonly LineRenderer[] luminousCore = new LineRenderer[Sections];
         MaterialPropertyBlock ropeBlock;
         Color ropeColour;
         float ropeIntensity = -1;
@@ -72,6 +73,19 @@ namespace MadeInArizona
                         Mathf.Sin(turn) * (radius + .007f)));
                 }
                 whip.rope[i] = winding;
+                // A broad continuous filament remains visible at gameplay camera distance. The fine winding
+                // retains the rope texture up close, but by itself aliases away except at the bright masthead.
+                var filament = Group("Rope light filament", joint, Vector3.zero).gameObject.AddComponent<LineRenderer>();
+                filament.useWorldSpace = false;
+                filament.positionCount = 2;
+                filament.SetPosition(0, Vector3.zero);
+                filament.SetPosition(1, Vector3.up * length);
+                filament.widthMultiplier = .075f;
+                filament.numCapVertices = 3;
+                filament.sharedMaterial = winding.sharedMaterial;
+                filament.shadowCastingMode = ShadowCastingMode.Off;
+                filament.receiveShadows = false;
+                whip.luminousCore[i] = filament;
             }
             // The pennant flies from the last section, its tall edge against the whip and its point trailing behind the car.
             var banner = new GameObject("Whip pennant", typeof(MeshFilter), typeof(MeshRenderer));
@@ -111,7 +125,11 @@ namespace MadeInArizona
             ropeIntensity = intensity;
             ropeBlock ??= new MaterialPropertyBlock();
             ropeBlock.SetColor("_EmissionColor", ropeColour * intensity);
-            for (int i = 0; i < rope.Length; i++) if (rope[i]) rope[i].SetPropertyBlock(ropeBlock);
+            for (int i = 0; i < rope.Length; i++)
+            {
+                if (rope[i]) rope[i].SetPropertyBlock(ropeBlock);
+                if (luminousCore[i]) luminousCore[i].SetPropertyBlock(ropeBlock);
+            }
         }
 
         /// <summary>Pennant cloth: seen from both sides, and faintly lit from within so it still reads at dusk.</summary>

@@ -44,13 +44,13 @@ Shader "MadeInArizona/TrailBlend"
             CBUFFER_START(UnityPerMaterial)
             float4 _Tint; float _HeightBlend,_Ruts,_Crown,_Worn;
             CBUFFER_END
-            struct A { float4 p:POSITION; float3 n:NORMAL; float4 uv:TEXCOORD0; float2 shape:TEXCOORD1; };
-            struct V { float4 p:SV_POSITION; float3 world:TEXCOORD0; float3 n:TEXCOORD1; float4 uv:TEXCOORD2; float fog:TEXCOORD3; float2 shape:TEXCOORD4; };
+            struct A { float4 p:POSITION; float3 n:NORMAL; float4 uv:TEXCOORD0; float2 shape:TEXCOORD1; float2 merge:TEXCOORD2; };
+            struct V { float4 p:SV_POSITION; float3 world:TEXCOORD0; float3 n:TEXCOORD1; float4 uv:TEXCOORD2; float fog:TEXCOORD3; float2 shape:TEXCOORD4; float merge:TEXCOORD5; };
             // Same value noise as BiomeTerrain so cloud shading and grain scale match the ground underneath.
             float Hash21(float2 p){return frac(sin(dot(p,float2(127.1,311.7)))*43758.5453123);}
             float Noise(float2 p){float2 id=floor(p),f=frac(p);f=f*f*(3.0-2.0*f);float a=Hash21(id),b=Hash21(id+float2(1,0)),c=Hash21(id+float2(0,1)),d=Hash21(id+1);return lerp(lerp(a,b,f.x),lerp(c,d,f.x),f.y);}
             float Fbm(float2 p){float n=0,a=.55;[unroll]for(int k=0;k<4;k++){n+=Noise(p)*a;p=p*2.07+float2(19.1,7.7);a*=.5;}return n*.969697;}
-            V vert(A v){V o;VertexPositionInputs p=GetVertexPositionInputs(v.p.xyz);o.p=p.positionCS;o.world=p.positionWS;o.n=TransformObjectToWorldNormal(v.n);o.uv=v.uv;o.shape=v.shape;o.fog=ComputeFogFactor(o.p.z);return o;}
+            V vert(A v){V o;VertexPositionInputs p=GetVertexPositionInputs(v.p.xyz);o.p=p.positionCS;o.world=p.positionWS;o.n=TransformObjectToWorldNormal(v.n);o.uv=v.uv;o.shape=v.shape;o.merge=v.merge.x;o.fog=ComputeFogFactor(o.p.z);return o;}
             half4 frag(V i):SV_Target
             {
                 float2 p=i.world.xz;
@@ -82,7 +82,7 @@ Shader "MadeInArizona/TrailBlend"
                 // Safety fade at the ribbon border, so extreme noise can never expose the mesh edge.
                 float border=saturate((outer-across)/.6);
                 mask*=border;dust*=border;
-                float alpha=mask+dust;
+                float alpha=(mask+dust)*i.merge;
                 if(alpha<.003)discard;
 
                 // 3. Surface wear inside the trail.

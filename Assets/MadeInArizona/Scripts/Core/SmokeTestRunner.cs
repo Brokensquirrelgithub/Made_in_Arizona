@@ -1547,12 +1547,17 @@ namespace MadeInArizona
             var game=GameManager.Instance;var audio=AudioManager.Instance;
             var bank=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             Check("pack grenade explosion is packaged",bank&&bank.ordnanceExplosion&&bank.ordnanceExplosion.name=="GL_explosion");
-            Check("every weapon references imported recordings (own or borrowed)",ContentCatalog.Weapons.Length==30&&Array.TrueForAll(ContentCatalog.Weapons,w=>w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
+            Check("other weapons retain imported recordings; crossbow has its own release",ContentCatalog.Weapons.Length==31&&
+                Array.TrueForAll(ContentCatalog.Weapons,w=>w.id=="crossbow" ? w.fireSounds!=null&&w.fireSounds.Length==0&&audio.CrossbowShot :
+                    w.fireSounds!=null&&w.fireSounds.Length>0&&Array.TrueForAll(w.fireSounds,c=>c&&c.channels==2&&c.frequency==44100&&c.length>.5f)));
             float oldVolume=game.Save.settings.weapons;game.Save.settings.weapons=1;
             foreach(var weapon in ContentCatalog.Weapons)
             {
                 StopPooledAudio(audio);audio.PlayShot(game.Player.transform.position,weapon);yield return null;
-                Check("imported recording plays for "+weapon.id,ImportedShotPlaying(audio,weapon));
+                bool correct = weapon.id=="crossbow" ?
+                    audio.GetComponentsInChildren<AudioSource>().Any(source=>source.isPlaying&&source.clip==audio.CrossbowShot) :
+                    ImportedShotPlaying(audio,weapon);
+                Check("weapon fires its intended sound for "+weapon.id,correct);
             }
             game.StartCombatTrial();game.Pause();yield return null;
             FreezeBalanceEnemies(BalanceHostiles());game.Resume();
@@ -1569,6 +1574,13 @@ namespace MadeInArizona
             game.Save.settings.weapons=0;StopPooledAudio(audio);audio.PlayShot(game.Player.transform.position,WeaponRules.Find("sweeper"));yield return null;
             bool muted=true;foreach(var source in audio.GetComponentsInChildren<AudioSource>())if(source.gameObject!=audio.gameObject&&source.isPlaying)muted&=source.volume==0;
             Check("weapons volume mutes imported shots",muted);
+            game.Save.settings.weapons=1;
+            VehicleAfflictions.For(enemy).AttachCharge(enemy.transform.position+Vector3.up,1.1f,10,3,game.Player.gameObject);
+            yield return null;
+            var marker=enemy.transform.Find("Stuck dynamite bolt");
+            var fuseSource=marker?marker.GetComponent<AudioSource>():null;
+            Check("dynamite stuck to a car sizzles from the moving marker",fuseSource&&fuseSource.isPlaying&&
+                fuseSource.clip==audio.DynamiteFuse&&fuseSource.spatialBlend==1&&fuseSource.volume>0);
             game.Save.settings.weapons=oldVolume;game.ReturnToGarage();
         }
         /// <summary>
@@ -2611,6 +2623,13 @@ namespace MadeInArizona
                 }
                 if(car.id=="scarface")
                 {
+                    var plateBacking=VehicleController.FindChild(game.Player.Visual,"Scarface front plate backing");
+                    var plateMaterial=plateBacking?plateBacking.GetComponent<Renderer>().sharedMaterial:null;
+                    bool matteFront=game.Player.Visual.GetComponentsInChildren<Renderer>().Any(r=>
+                        r.gameObject.name=="Scarface tube bumper"&&r.sharedMaterial==plateMaterial);
+                    Check("Scarface front plate and bumper have a matte mount",plateBacking&&plateBacking.localScale.x>.5f&&
+                        plateMaterial&&plateMaterial.shader.name=="Universal Render Pipeline/Lit"&&
+                        plateMaterial.GetFloat("_Smoothness")<.2f&&matteFront);
                     // What makes it the Scarface: the streaked paint and the dog on its doors, both textures; bare front
                     // wheels on off-road tread; nitro from the stack on the hood; a whip about four car-heights tall with a
                     // small orange pennant at its head, which the dust mask does not mistake for the roof.
@@ -2634,7 +2653,8 @@ namespace MadeInArizona
                     var grime=game.Player.GetComponent<VehicleDust>();
                     Check("Scarface's whip stands about four car-heights tall ("+(tip/roof).ToString("0.0")+"), and is not taken for the roof",
                         whip&&tip/roof>3.5f&&tip/roof<4.6f&&grime&&grime.BodyTop<roof+.6f);
-                    var windings=whip?whip.GetComponentsInChildren<LineRenderer>():Array.Empty<LineRenderer>();
+                    var windings=whip?whip.GetComponentsInChildren<LineRenderer>().Where(r=>r.name=="Rope light winding").ToArray():Array.Empty<LineRenderer>();
+                    var filaments=whip?whip.GetComponentsInChildren<LineRenderer>().Where(r=>r.name=="Rope light filament").ToArray():Array.Empty<LineRenderer>();
                     bool ropeWrapped=windings.Length==5;
                     foreach(var strand in windings)
                     {
@@ -2646,6 +2666,8 @@ namespace MadeInArizona
                         }
                     }
                     Check("Scarface's whip carries five rope-light windings around the mast",ropeWrapped);
+                    Check("Scarface's full mast has a continuous visible rope-light filament",
+                        filaments.Length==5&&filaments.All(r=>r.positionCount==2&&r.widthMultiplier>=.07f));
                     var glowBlock=new MaterialPropertyBlock();
                     if(windings.Length>0)windings[0].GetPropertyBlock(glowBlock);
                     float middayGlow=glowBlock.GetColor("_EmissionColor").maxColorComponent;
@@ -2656,6 +2678,10 @@ namespace MadeInArizona
                     if(windings.Length>0)windings[0].GetPropertyBlock(glowBlock);
                     float sunsetGlow=glowBlock.GetColor("_EmissionColor").maxColorComponent;
                     Check("Scarface's rope light brightens at sunset",windings.Length==5&&sunsetGlow>middayGlow*8f&&sunsetGlow>2f);
+                    var filamentBlock=new MaterialPropertyBlock();
+                    if(filaments.Length>0)filaments[0].GetPropertyBlock(filamentBlock);
+                    Check("Scarface's continuous mast glows at sunset",filaments.Length==5&&
+                        filamentBlock.GetColor("_EmissionColor").maxColorComponent>2f);
                     game.Save.settings.sunset=earlierSunset;
                     // The pennant is a small orange triangle: full height at the whip, closing to a point behind it.
                     var pennant=VehicleController.FindChild(game.Player.Visual,"Whip pennant");
@@ -2804,6 +2830,23 @@ namespace MadeInArizona
                 !legacySave.ownedWeapons.Contains("deathray") && !legacySave.ownedWeapons.Contains("crossbow"));
             legacySave.Normalize();
             Check("field weapon refund is applied only once", legacySave.salvage == 649);
+            var vacuumSave = new SaveData { selectedWeapon = "shopvac" };
+            vacuumSave.ownedWeapons.Add("shopvac"); vacuumSave.Normalize();
+            Check("vacuum ownership and selection convert to garage minigun", vacuumSave.selectedWeapon == "minigun" &&
+                vacuumSave.ownedWeapons.Contains("minigun") && !vacuumSave.ownedWeapons.Contains("shopvac"));
+            Check("Tetrafluoro Skewer is a purchasable garage weapon", WeaponRules.GarageWeapon("skewer") &&
+                WeaponRules.Find("skewer") && WeaponRules.ScrapCost("skewer") > 0);
+            var skewerOwner = new GameObject("Skewer smoke owner");
+            var skewerPoint = new Vector3(0, 200, 0);
+            ProjectileSystem.Fire(skewerPoint, Vector3.forward, 100, 82, 0, skewerOwner,
+                new Color(.55f, .94f, 1f), ExplosionKind.Ammunition, 1.15f,
+                new ShotFx { effect = ShotEffect.Freeze, duration = 3.5f, pierce = 1, detached = true });
+            var projectilePool = FindFirstObjectByType<ProjectileSystem>();
+            int beforeBurst = projectilePool ? projectilePool.ActiveCount : 0;
+            bool burstSkewer = ProjectileSystem.DetonateSkewer(skewerOwner);
+            Check("flying skewer bursts into nine ice shards on second trigger",
+                beforeBurst == 1 && burstSkewer && projectilePool && projectilePool.ActiveCount == 9);
+            Destroy(skewerOwner);
             Check("special drops follow faction roles",
                 WeaponRules.EnemyDropForRoll(EnemyFaction.Sunsprawl, 3, 0) == "crossbow" &&
                 WeaponRules.EnemyDropForRoll(EnemyFaction.CourtesyCompliance, 3, 0) == "scattermortar" &&

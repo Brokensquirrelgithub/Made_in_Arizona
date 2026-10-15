@@ -82,6 +82,9 @@ namespace MadeInArizona
             if(settings != null && settings.cars != null)
                 foreach(var profile in settings.cars)if(profile != null && profile.id == "thimble")profile.id="ronin";
             ownedWeapons=Clean(ownedWeapons);
+            // Existing vacuum purchases become the replacement garage minigun at no additional cost.
+            if(ownedWeapons.Remove("shopvac")&&!ownedWeapons.Contains("minigun"))ownedWeapons.Add("minigun");
+            if(selectedWeapon=="shopvac")selectedWeapon="minigun";
             foreach(string id in ownedWeapons)salvage=Mathf.Min(1000000,salvage+WeaponRules.RetiredGarageRefund(id));
             ownedWeapons.RemoveAll(id=>!WeaponRules.GarageWeapon(id)||WeaponRules.Find(id)==null);
             if(!ownedWeapons.Contains("riveter"))ownedWeapons.Add("riveter");

@@ -87,6 +87,9 @@ namespace MadeInArizona
         static Material Dustable(Material material)
         {
             if (!material) return null;
+            // Scarface's front plate mount sits under the lamps. Converting this flat paint to the
+            // reflective dust shader makes a narrow sun glint strobe across the back of the plate.
+            if (material.name == "Scarface front mount matte") return null;
             string shader = material.shader ? material.shader.name : "";
             if (shader == "MadeInArizona/CarPaint" || shader == "MadeInArizona/Reflective") return material;
             if (shader != "Universal Render Pipeline/Lit" || material.IsKeywordEnabled("_EMISSION")) return null;

@@ -77,7 +77,28 @@ namespace MadeInArizona
             shell.firework = weapon.id == "fireworks";
             shell.payload = weapon.id == "sprinkler" ? Payload.FireRing : weapon.id == "shopvac" ? Payload.Vortex : Payload.None;
             shell.bounces = tennisBall ? Random.Range(1, 3) : 0;
-            if (tennisBall) { shell.transform.localScale = Vector3.one * .26f; shell.ownMaterial.SetColor("_EmissionColor", new Color(2.2f, .85f, .08f)); }
+            if (tennisBall)
+            {
+                shell.transform.localScale = Vector3.one * .26f;
+                shell.ownMaterial.EnableKeyword("_EMISSION");
+                shell.ownMaterial.SetColor("_EmissionColor", new Color(4.2f, 1.55f, .2f));
+                var fire = Resources.Load<GameObject>("VFX/ExplosionGroundFire");
+                if (fire)
+                {
+                    var flame = Instantiate(fire, shell.transform);
+                    flame.name = "Tennis ball fire particles";
+                    flame.transform.localPosition = Vector3.zero;
+                    flame.transform.localScale = Vector3.one * 1.2f;
+                    foreach (var particles in flame.GetComponentsInChildren<ParticleSystem>(true))
+                    {
+                        var emission = particles.emission; emission.rateOverTimeMultiplier *= .35f;
+                        var main = particles.main; main.maxParticles = Mathf.Min(main.maxParticles, 24);
+                    }
+                    foreach (var audio in flame.GetComponentsInChildren<AudioSource>(true)) { audio.Stop(); audio.enabled = false; }
+                    foreach (var child in flame.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "Distortion" || child.name == "Light") child.gameObject.SetActive(false);
+                }
+            }
             if (weapon.id == "shopvac") shell.transform.localScale = new Vector3(.7f, .55f, .7f);
             shell.assistedTarget = assistedTarget;
             if (assistedTarget)
@@ -94,7 +115,7 @@ namespace MadeInArizona
             else
             {
                 Vector3 horizontal = new Vector3(aim.x, 0, aim.z).normalized;
-                shell.velocity = horizontal * (horizontalSpeed > 0 ? horizontalSpeed : weapon.speed * (weapon.id == "sprinkler" ? .75f : 1f)) + Vector3.up * (weapon.id == "mortar" ? 31 : shell.firework ? 23 : 17);
+                shell.velocity = horizontal * (horizontalSpeed > 0 ? horizontalSpeed : weapon.speed * (weapon.id == "sprinkler" ? .75f : 1f)) + Vector3.up * (weapon.id == "mortar" ? 31 : shell.firework ? 23 : tennisBall ? 7.5f : 17);
                 shell.expiresAt = Time.time + (weapon.id == "mortar" ? 5 : shell.firework ? 1.2f : 3);
             }
             if (shell.bounces > 0) shell.expiresAt += 1.2f * shell.bounces;
@@ -209,6 +230,7 @@ namespace MadeInArizona
             var charge = Create("Stuck dynamite", point, color, owner, PrimitiveType.Cylinder);
             charge.mode = Mode.Fuse; charge.damage = damage; charge.radius = radius; charge.expiresAt = Time.time + delay;
             charge.transform.localScale = new Vector3(.18f, .32f, .18f);
+            AudioManager.Instance?.PlayFuse(charge.transform);
             if (owner && !owner.FriendlyToPlayer)
                 charge.gameObject.AddComponent<AttackWarningVisual>().BeginImpact(point, radius, delay);
         }
@@ -405,6 +427,18 @@ namespace MadeInArizona
             velocity += Vector3.down * 32 * Time.deltaTime;
             transform.Rotate(Vector3.right, 420 * Time.deltaTime);
             if ((molotov || firework) && Time.time >= blinkAt) { blinkAt = Time.time + .08f; ExplosionSystem.Burst(transform.position, firework ? new Color(1f, .8f, .42f) : new Color(1f, .35f, .04f), 2, .8f); }
+            if (molotov && Time.time > armedAt + .08f)
+            {
+                // A close pass beside or just above a hostile body still breaks the bottle.
+                foreach (var vehicle in VehicleController.Active)
+                {
+                    if (!Hostile(vehicle)) continue;
+                    Vector3 delta = vehicle.transform.position + Vector3.up * .9f - transform.position;
+                    if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > 3.2f * 3.2f || Mathf.Abs(delta.y) > 4f) continue;
+                    VehicleAfflictions.For(vehicle).Ignite(8f, 2.5f, source);
+                    Land(); return;
+                }
+            }
             if (Time.time > armedAt && velocity.y <= 1 && assistedTarget && assistedTarget.Damage != null && !assistedTarget.Damage.IsDead)
             {
                 Vector3 targetDelta = assistedTarget.transform.position + Vector3.up * .7f - transform.position;

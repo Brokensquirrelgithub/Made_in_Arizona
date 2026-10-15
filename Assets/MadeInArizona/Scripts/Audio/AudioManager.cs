@@ -9,7 +9,9 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop,crossbowShot,dynamiteFuse;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        public AudioClip CrossbowShot => crossbowShot;
+        public AudioClip DynamiteFuse => dynamiteFuse;
         AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
         AudioClip[] pinStrikes, debrisBreaks;
         /// <summary>Death ray beam: the sustained hum loop and the ignition zap (played by each car's DeathRayBeam).</summary>
@@ -72,6 +74,7 @@ namespace MadeInArizona
             debrisBreaks=new[]{Keep(AudioSynthesis.DebrisBreak(true)),Keep(AudioSynthesis.DebrisBreak(false))};
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             firecrackerPop=Keep(AudioSynthesis.FirecrackerPop());
+            crossbowShot=Keep(AudioSynthesis.CrossbowRelease());dynamiteFuse=Keep(AudioSynthesis.DynamiteFuse());
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));repair=Keep(AudioSynthesis.Repair());objective=Keep(AudioSynthesis.ObjectiveChime());
@@ -304,6 +307,11 @@ namespace MadeInArizona
         public void PlayShot(Vector3 position,WeaponDefinition weapon)
         {
             if (Settings == null || !weapon) return;
+            if (weapon.id == "crossbow")
+            {
+                PlayAt(crossbowShot, position, Settings.weapons * .55f * duck, Random.Range(.96f, 1.04f), 60);
+                return;
+            }
             var recordings = weapon.fireSounds;
             if (recordings != null && recordings.Length > 0)
             {
@@ -316,6 +324,18 @@ namespace MadeInArizona
                 }
             }
             PlayShot(position, weapon.blastRadius > 0 ? 1 : weapon.id == "sweeper" || weapon.id == "boomstick" ? 2 : 0);
+        }
+        /// <summary>Runs the fuse at the stuck bolt, so its sizzle follows a moving car until detonation.</summary>
+        public AudioSource PlayFuse(Transform marker)
+        {
+            if (!marker || Settings == null || !dynamiteFuse) return null;
+            var source = marker.gameObject.AddComponent<AudioSource>();
+            source.playOnAwake = false; source.clip = dynamiteFuse;
+            source.spatialBlend = 1; source.minDistance = 6; source.maxDistance = 65;
+            source.rolloffMode = AudioRolloffMode.Linear; source.dopplerLevel = 0;
+            source.priority = 70; source.volume = Mathf.Clamp01(Settings.weapons * .58f * duck);
+            source.pitch = Random.Range(.96f, 1.04f); source.Play();
+            return source;
         }
         /// <summary>The death ray striking up (its sustained hum is each beam's own looping source).</summary>
         public void PlayRayStart(Vector3 position)

@@ -723,6 +723,8 @@ namespace MadeInArizona
             // Flat tan with red showing through in streaks: a pattern on the paint, laid along the body.
             Material body = c.enemy ? c.painted : Patterned(CarTextures.Streaks, Color.white, new Vector2(.42f, .6f), .2f);
             Material steel = Reflective(new Color(.085f, .088f, .095f), SunGlint.Metal, .35f, .6f, 1.4f);
+            Material frontMount = Material(new Color(.075f, .077f, .079f), 0, .12f);
+            frontMount.name = "Scarface front mount matte";
             Material rusty = Reflective(new Color(.46f, .36f, .28f), SunGlint.Metal, .4f, .85f, 1.7f);
             Material mesh = Patterned(CarTextures.Eggcrate, new Color(.17f, .17f, .18f), new Vector2(11, 5), .3f);
             c.Body(.78f, .3f, .5f, .04f);
@@ -754,7 +756,7 @@ namespace MadeInArizona
             c.Pair("Turn signal", .47f, .52f, nose, new Vector3(.12f, .1f, .12f), null, .5f, Amber);
             c.Grille("Scarface radiator", .6f, .3f, .2f, mesh);
             float bar = nose + .2f;
-            void Tube(Vector3 a, Vector3 b) => Use(Beam("Scarface tube bumper", c.root, a, b, .028f, Trim), steel);
+            void Tube(Vector3 a, Vector3 b) => Use(Beam("Scarface tube bumper", c.root, a, b, .028f, Trim), frontMount);
             Tube(new Vector3(-.62f, c.Y(.5f), bar), new Vector3(.62f, c.Y(.5f), bar));
             // The hoop and its mesh stand in the middle; the lamps look out either side of them.
             Tube(new Vector3(-.22f, c.Y(.8f), bar + .02f), new Vector3(.22f, c.Y(.8f), bar + .02f));
@@ -763,6 +765,10 @@ namespace MadeInArizona
                 Tube(new Vector3(side * .62f, c.Y(.5f), bar), new Vector3(side * .5f, c.Y(.47f), nose - .12f));
                 Tube(new Vector3(side * .25f, c.Y(.5f), bar), new Vector3(side * .22f, c.Y(.8f), bar + .02f));
             }
+            // This is the front plate area. Keep its back and surround matte: the reflective strip directly
+            // behind it caught the low sun and strobed against the nearby headlamps as the camera moved.
+            Use(Box("Scarface front plate backing", c.root, new Vector3(0, c.Y(.65f), bar - .015f),
+                new Vector3(.52f, .34f, .018f), Trim), frontMount);
             Use(Box("Scarface bumper mesh", c.root, new Vector3(0, c.Y(.65f), bar + .01f), new Vector3(.44f, .3f, .014f), Trim), mesh);
             Box("Scarface tow hook", c.root, new Vector3(.36f, c.Y(.4f), nose + .12f), new Vector3(.07f, .12f, .18f), Orange);
             c.OnTopPair("Scarface hood pin", .3f, c.F(.36f), c.F(.3f), .05f, .012f, c.chrome, .002f);
@@ -817,7 +823,6 @@ namespace MadeInArizona
             c.Doors(c.F(-.42f), -.38f);
             c.Mirrors(c.F(-.52f), false);
             c.Handles(.84f, -.2f);
-            // Keep the plate off the reflective bumper and give the rear-facing lettering a matte backing.
             c.Plate(.52f, .16f);
             Use(Box("Scarface rear plate backing", c.root, new Vector3(0, c.Y(.52f), c.TailZ - .148f),
                 new Vector3(.44f, .17f, .014f), Trim), Material(new Color(.055f, .06f, .055f), 0, .08f));

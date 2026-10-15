@@ -500,6 +500,7 @@ namespace MadeInArizona
                     acceleration *= Mathf.Lerp(LowSpeedAccelerationBoost, 1f,
                         Mathf.Clamp01((speed - LowSpeedBoostUntil) / (LaunchFadeSpeed - LowSpeedBoostUntil)));
                 acceleration *= footing.drive;
+                if (Afflictions && Afflictions.IsChilled) acceleration *= .8f;
                 acceleration *= ShiftDrive;
                 if (IsPlayer) acceleration *= tuning.acceleration;
                 if (!IsPlayer) acceleration *= Pace;

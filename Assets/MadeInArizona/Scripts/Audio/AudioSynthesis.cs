@@ -146,6 +146,43 @@ namespace MadeInArizona
             }
             return Clip("Original • firecracker pop", samples);
         }
+        /// <summary>A short bowstring twang, spring vibration and wooden latch; no gunshot or explosive tail.</summary>
+        public static AudioClip CrossbowRelease()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .38f)];
+            uint seed = 38107; float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, .09f);
+                float high = noise - low;
+                float pluck = (Wave(178f * t + .16f * Mathf.Exp(-t * 24f)) * .68f +
+                    Wave(356f * t + .13f) * .32f + Wave(533f * t) * .12f) *
+                    (1 - Mathf.Exp(-t * 2200f)) * Mathf.Exp(-t * 17f);
+                float latch = high * Mathf.Exp(-t * 135f) * .28f;
+                float stock = Wave(410f * t) * Mathf.Exp(-t * 48f) * .12f;
+                float bolt = t > .014f ? high * Mathf.Exp(-(t - .014f) * 38f) * .13f : 0;
+                samples[i] = SoftLimit(pluck + latch + stock + bolt) * Mathf.Min(1, t * 3000f);
+            }
+            return Clip("Original • crossbow string and latch", samples);
+        }
+        /// <summary>A close, crackling fuse that runs through the crossbow bolt's one-second delay.</summary>
+        public static AudioClip DynamiteFuse()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * 1.2f)];
+            uint seed = 45119; float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, .045f);
+                float high = noise - low;
+                float sputter = Mathf.Pow(Mathf.Max(0, Wave(31f * t) * .5f + Wave(47f * t + .2f) * .5f), 6f);
+                float rise = .65f + .35f * Mathf.Clamp01(t / 1.1f);
+                float fade = Mathf.Min(1, t * 80f) * Mathf.Clamp01((1.2f - t) * 30f);
+                samples[i] = SoftLimit(high * (.18f + sputter * .34f) * rise) * fade;
+            }
+            return Clip("Original • dynamite fuse sizzle", samples);
+        }
         /// <summary>The player's hull taking a hit: body thump, a low clang of struck sheet steel and a crunch of bending metal.</summary>
         public static AudioClip Hurt(int variant)
         {

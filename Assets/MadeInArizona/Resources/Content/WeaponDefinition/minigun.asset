@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: minigun
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: minigun
-  displayName: 'Lawnmower Gatling'
-  description: 'Six barrels spun by a pull-start mower engine. A short-range storm of scrap.'
-  role: 'SUPPRESSION'
-  strength: 'Overwhelming close-range damage while you hold the line.'
-  weakness: 'Wild spread and a hungry belt: ammunition drains fast.'
+  displayName: Lawnmower Minigun
+  description: 'Six barrels spun by a pull-start mower engine. Hold the trigger to spin up a powerful storm of scrap; recoil shoves the car back.'
+  role: SPUN-UP SUPPRESSION
+  strength: 'Powerful sustained fire, with recoil you can feel in the car.'
+  weakness: 'Takes time to spin up and throws off your speed.'
   contentOrder: 7
-  damage: 8
+  damage: 13
   fireRate: 20
   speed: 105
   blastRadius: 0

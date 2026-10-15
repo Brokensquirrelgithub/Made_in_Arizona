@@ -8,9 +8,9 @@ namespace MadeInArizona
         /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
             "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "railgun",
-            "sprinkler", "pinata", "shopvac", "bowling", "firecracker" };
+            "sprinkler", "pinata", "minigun", "skewer", "bowling", "firecracker" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
-        static readonly string[] Oddballs = { "sprinkler", "pinata", "shopvac", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
+        static readonly string[] Oddballs = { "sprinkler", "pinata", "skewer", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
         public static bool GarageWeapon(string id) => System.Array.IndexOf(Garage, id) >= 0;
         public static bool Oddball(string id) => System.Array.IndexOf(Oddballs, id) >= 0;
@@ -30,7 +30,8 @@ namespace MadeInArizona
                 case "firecracker": return 300;
                 case "railgun": return 320;
                 case "pinata": return 340;
-                case "shopvac": return 380;
+                case "minigun": return 380;
+                case "skewer": return 420;
                 default: return 0;
             }
         }
@@ -53,13 +54,14 @@ namespace MadeInArizona
         {
             switch (id)
             {
+                case "crossbow": return null; // Original string-and-latch synthesis, no gunfire donor.
                 case "needler": case "zapper": return "carbine";
                 case "torch": case "sentry": return "riveter";
                 case "deathray": return "minigun";
-                case "railgun": case "crossbow": case "harpoon": return "sniper";
+                case "railgun": case "harpoon": case "skewer": return "sniper";
                 case "aircannon": case "firecracker": return "boomstick";
                 case "sprinkler": return "grenade";
-                case "shopvac": case "bowling": case "scattermortar": case "fireworks": return "mortar";
+                case "bowling": case "scattermortar": case "fireworks": return "mortar";
                 case "pinata": return "invoice";
                 case "boomerang": return "shredder";
                 case "gokart": return "mines";
@@ -115,7 +117,7 @@ namespace MadeInArizona
             if (faction == EnemyFaction.RoadScavengers)
             {
                 if (archetype == 0 || archetype == 3 || archetype == 6 || archetype == 7)
-                    return roll < .16f ? "boomerang" : roll < .29f ? "torch" : roll < .68f ? "minigun" : "boomstick";
+                    return roll < .16f ? "boomerang" : roll < .29f ? "torch" : roll < .68f ? "boomstick" : "grenade";
                 if (archetype == 4) return roll < .28f ? "torch" : roll < .48f ? "grenade" : roll < .60f ? "boomerang" : "boomstick";
                 return roll < .25f ? "torch" : roll < .37f ? "boomerang" : "boomstick";
             }
@@ -127,14 +129,14 @@ namespace MadeInArizona
             }
             if (faction == EnemyFaction.SnowbirdConvoy)
             {
-                if (archetype == 3 || archetype == 7) return roll < .22f ? "aircannon" : roll < .37f ? "minigun" : roll < .51f ? "sentry" : roll < .65f ? "fireworks" : "gokart";
+                if (archetype == 3 || archetype == 7) return roll < .22f ? "aircannon" : roll < .37f ? "sniper" : roll < .51f ? "sentry" : roll < .65f ? "fireworks" : "gokart";
                 return roll < .18f ? "aircannon" : roll < .28f ? "sentry" : roll < .72f ? "gokart" : "boomstick";
             }
             if (faction == EnemyFaction.CarOtaku)
             {
-                if (archetype == 3) return roll < .18f ? "deathray" : roll < .4f ? "sniper" : "minigun";
-                if (archetype == 4 || archetype == 7) return roll < .18f ? "deathray" : roll < .38f ? "cluster" : "minigun";
-                return roll < .7f ? "minigun" : "boomstick";
+                if (archetype == 3) return roll < .18f ? "deathray" : roll < .4f ? "sniper" : "cluster";
+                if (archetype == 4 || archetype == 7) return roll < .18f ? "deathray" : roll < .38f ? "cluster" : "sniper";
+                return roll < .7f ? "boomstick" : "sniper";
             }
             if (archetype == 3) return roll < .24f ? "crossbow" : roll < .48f ? "sniper" : "invoice";
             if (archetype == 4 || archetype == 7) return roll < .2f ? "crossbow" : roll < .4f ? "cluster" : "invoice";

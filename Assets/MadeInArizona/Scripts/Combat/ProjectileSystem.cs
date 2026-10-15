@@ -5,7 +5,7 @@ using UnityEngine;
 namespace MadeInArizona
 {
     /// <summary>What a round does to a vehicle it hits, on top of its direct damage.</summary>
-    public enum ShotEffect { None, Burn, Stall, Spine, Knockback, Harpoon, Sticky, Pop }
+    public enum ShotEffect { None, Burn, Stall, Spine, Knockback, Harpoon, Sticky, Pop, Freeze }
 
     /// <summary>
     /// Optional behaviour for a round: homing, piercing, a boomerang return, a wider sweep, an on-hit effect and a
@@ -97,6 +97,28 @@ namespace MadeInArizona
                 CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime);
             Get().Launch(position, direction, speed, damage, radius, source, color, kind, lifetime, fx);
         }
+        /// <summary>Second trigger press breaks a flying skewer into a forward cone of ice shards.</summary>
+        public static bool DetonateSkewer(GameObject source)
+        {
+            if (!instance || !source) return false;
+            for (int i = instance.active.Count - 1; i >= 0; i--)
+            {
+                var spike = instance.active[i];
+                if (spike.source != source || spike.fx == null || spike.fx.effect != ShotEffect.Freeze || spike.fx.pierce < 0) continue;
+                Vector3 point = spike.position, forward = spike.direction;
+                instance.Retire(i);
+                ExplosionSystem.Burst(point, new Color(.6f, 1.5f, 2f), 18, 3f);
+                for (int shard = -4; shard <= 4; shard++)
+                {
+                    Vector3 direction = Quaternion.AngleAxis(shard * 6f, Vector3.up) * forward;
+                    direction = Quaternion.AngleAxis(Mathf.Abs(shard) * 1.4f - 3f, Vector3.Cross(Vector3.up, direction)) * direction;
+                    Fire(point + direction * .4f, direction, 110, 15, 0, source, new Color(.55f, .92f, 1.6f),
+                        ExplosionKind.Ammunition, .35f, new ShotFx { effect = ShotEffect.Freeze, duration = 1.6f, castRadius = .12f, detached = true, pierce = -1 });
+                }
+                return true;
+            }
+            return false;
+        }
         /// <summary>True when <paramref name="target"/> is on the other side from the vehicle that owns <paramref name="source"/>.</summary>
         public static bool Hostile(GameObject source, VehicleController target)
         {
@@ -150,10 +172,12 @@ namespace MadeInArizona
             var ai = vehicle != null ? vehicle.GetComponent<EnemyAI>() : null;
             round.friendly = vehicle != null && (vehicle.IsPlayer || (ai != null && ai.IsFriendly));
             round.transform.SetPositionAndRotation(position, Quaternion.LookRotation(round.direction));
-            bool heavy = radius > .1f || (fx != null && (fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback));
+            bool heavy = radius > .1f || (fx != null && (fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback || fx.effect == ShotEffect.Freeze && fx.pierce >= 0));
             bool hubcap = fx != null && fx.boomerang;
             round.transform.localScale = hubcap ? Vector3.one : heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
             if (fx != null && fx.coneBlast) round.transform.localScale *= 1.1f;
+            if (fx != null && fx.effect == ShotEffect.Freeze && fx.pierce >= 0)
+                round.transform.localScale = new Vector3(.22f, .22f, 2.1f);
             round.renderer.enabled = !hubcap;
             if (round.hubcap) round.hubcap.gameObject.SetActive(hubcap);
             if (hubcap)
@@ -387,6 +411,7 @@ namespace MadeInArizona
             switch (fx.effect)
             {
                 case ShotEffect.Burn: afflictions.Ignite(fx.power, fx.duration, round.source); break;
+                case ShotEffect.Freeze: afflictions.Chill(fx.duration); break;
                 case ShotEffect.Spine: afflictions.AddSpine(round.source, fx.power, fx.effectRadius); break;
                 case ShotEffect.Stall:
                     afflictions.Stall(fx.duration);

@@ -31,7 +31,8 @@ namespace MadeInArizona
         {
             foreach (var weapon in Weapons)
             {
-                if (!weapon || (weapon.fireSounds != null && weapon.fireSounds.Length > 0)) continue;
+                // The crossbow uses its own string-and-latch synthesis, not a borrowed firearm recording.
+                if (!weapon || weapon.id == "crossbow" || (weapon.fireSounds != null && weapon.fireSounds.Length > 0)) continue;
                 var donor = Array.Find(Weapons, w => w && w.id == WeaponRules.SoundDonor(weapon.id));
                 if (donor && donor.fireSounds != null) weapon.fireSounds = donor.fireSounds;
             }
@@ -210,8 +211,8 @@ namespace MadeInArizona
                     "LONG-RANGE ARTILLERY","Hits from beyond the enemy's reach.","Long flight time; useless up close; three rounds a drop."),
                 Weapon(6,"mines","Tripwire Pipe Bomb","Enemy road charges: pipe bombs on fishing line, dropped behind a hostile car.",105,1.2f,0,6,new Color(1,.48f,.1f),
                     "ENEMY ROAD CHARGE","Punishes anyone chasing along a narrow road.","Telegraphed and stationary; drive around it."),
-                Weapon(7,"minigun","Lawnmower Gatling","Six barrels spun by a pull-start mower engine. A short-range storm of scrap.",8,20,105,0,new Color(1,.92f,.32f),
-                    "SUPPRESSION","Overwhelming close-range damage while you hold the line.","Wild spread and a hungry belt: ammunition drains fast."),
+                Weapon(7,"minigun","Lawnmower Minigun","Six barrels spun by a pull-start mower engine. Hold the trigger to spin up a powerful storm of scrap; recoil shoves the car back.",13,20,105,0,new Color(1,.92f,.32f),
+                    "SPUN-UP SUPPRESSION","Powerful sustained fire, with recoil you can feel in the car.","Takes time to spin up and throws off your speed."),
                 Weapon(8,"sniper",".50 Cal Weed Whacker","A trimmer motor spinning up a fifty-calibre slug. One accurate, brutal shot.",155,.65f,210,0,new Color(.45f,.95f,1),
                     "LONG-RANGE PRECISION","Enormous single hits from across the map.","Slow to cycle; nearly useless against a swarm on your bumper."),
                 Weapon(9,"cluster","Bottle-Rocket Rack","Three sticks of illegal fireworks taped to a roof rack. Explosive and limited.",75,.7f,54,5,new Color(1,.18f,.65f),
@@ -237,8 +238,8 @@ namespace MadeInArizona
                     "AREA DENIAL","Sets every car around the landing point on fire.","Weak blast and a slow lob; the burn does the work."),
                 Weapon(19,"pinata","Piñata Bottle Rocket","ROCKET + CLUSTER BOMB. A papier-mâché rocket that bursts into seven bouncing bomblets.",60,.6f,55,4.5f,new Color(1,.3f,.75f),
                     "AREA SATURATION","One hit carpets a wide area with bomblets.","Bomblets scatter randomly; poor against a single fast car."),
-                Weapon(20,"shopvac","Shop-Vac Black Hole","GRENADE + GRAVITY. A shop vacuum wired backwards: it lands, drags cars into a heap, then blows.",120,.35f,40,7,new Color(.6f,.45f,1),
-                    "CROWD GATHERER","Pulls a whole pack together for one big blast.","Long recharge and a short delay before it pays off."),
+                Weapon(20,"skewer","Tetrafluoro Skewer","A refrigerant-driven ice spike skewers cars and leaves them crusted in frost. Press fire again while it flies to break it into a cone of shards. Its compressor steals a little of your cabin AC.",82,.9f,100,0,new Color(.55f,.94f,1f),
+                    "FREEZING LANCE","Pierces two cars, chills their drive and can burst into a close-range shard cone.","One precise spike; the cone needs a second trigger press before impact."),
                 Weapon(21,"deathray","Satellite-Dish Death Ray","SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing the sun into one steady, humming beam; damage builds the longer it stays on one car.",5,12,0,0,new Color(1,.93f,.5f),
                     "SUSTAINED FOCUS BEAM","Melts a target you can keep it on for two seconds.","Weak until it warms up; switching targets resets it."),
                 Weapon(22,"crossbow","Dynamite Crossbow","PRECISION RIFLE + STICKY BOMB. A garage-door-spring crossbow firing dynamite bolts that stick, fizz and blow.",20,.9f,170,16.5f,new Color(1,.3f,.2f),

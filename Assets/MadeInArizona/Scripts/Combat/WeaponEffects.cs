@@ -15,12 +15,15 @@ namespace MadeInArizona
         public const float BurnTickMultiplier = 3;
         VehicleController vehicle;
         float burnUntil, burnDps, burnTick, burnFxAt, stallUntil, stallFx, spineDecayAt, spineDamage, spineRadius;
+        float chillUntil, chillFxAt;
+        GameObject frost;
         GameObject burnSource, spineSource;
         sealed class Charge { public Transform marker; public float at, damage, radius; public GameObject source; }
         readonly List<Charge> charges = new List<Charge>();
         public int Spines { get; private set; }
         public bool Burning => Time.time < burnUntil;
         public bool IsStalled => Time.time < stallUntil;
+        public bool IsChilled => Time.time < chillUntil;
 
         public static VehicleAfflictions For(VehicleController target)
         {
@@ -46,6 +49,24 @@ namespace MadeInArizona
             if (Dead) return;
             stallUntil = Mathf.Max(stallUntil, Time.time + duration);
         }
+        public void Chill(float duration)
+        {
+            if (Dead) return;
+            chillUntil = Mathf.Max(chillUntil, Time.time + duration);
+            if (frost) return;
+            frost = new GameObject("Tetrafluoro frost crust");
+            frost.transform.SetParent(vehicle.Visual ? vehicle.Visual : transform, false);
+            // Faceted blue-white crust reads as ice without replacing the car's paint material.
+            var ice = WorldArt.Material(new Color(.55f, .85f, .94f, .68f), 0, .72f, .8f);
+            for (int i = 0; i < 8; i++)
+            {
+                float x = (i % 2 == 0 ? -1 : 1) * (.19f + (i % 3) * .11f);
+                float z = (i / 2 - 1.5f) * .55f;
+                var crystal = WorldArt.Use(WorldArt.Box("Icy texture facet", frost.transform,
+                    new Vector3(x, .95f, z), new Vector3(.14f, .025f, .32f), new Color(.55f, .85f, .94f)), ice);
+                crystal.transform.localRotation = Quaternion.Euler(0, i * 33f, 0);
+            }
+        }
         /// <summary>Adds one needler spine; the seventh within a few seconds ruptures them all at once.</summary>
         public void AddSpine(GameObject source, float ruptureDamage, float ruptureRadius)
         {
@@ -65,6 +86,7 @@ namespace MadeInArizona
             marker.transform.SetParent(transform, true); marker.transform.position = point;
             marker.transform.localScale = new Vector3(.16f, .35f, .16f);
             marker.GetComponent<Renderer>().sharedMaterial = WorldArt.Material(new Color(.85f, .12f, .08f), 0, .3f, 2.5f);
+            AudioManager.Instance?.PlayFuse(marker.transform);
             var shooter = source ? source.GetComponentInParent<VehicleController>() : null;
             if (shooter && !shooter.FriendlyToPlayer)
                 marker.AddComponent<AttackWarningVisual>().BeginImpact(point, radius, delay, marker.transform);
@@ -90,6 +112,12 @@ namespace MadeInArizona
                 stallFx = Time.time + .12f;
                 ExplosionSystem.Burst(transform.position + Vector3.up * 1.1f + Random.insideUnitSphere * .8f, new Color(.45f, .85f, 1), 3, 3);
             }
+            if (IsChilled && !Dead && Time.time >= chillFxAt)
+            {
+                chillFxAt = Time.time + .16f;
+                ExplosionSystem.Burst(transform.position + Vector3.up * .9f, new Color(.68f, .9f, 1f, .55f), 4, 1.5f);
+            }
+            if (!IsChilled && frost) { Destroy(frost); frost = null; }
             for (int i = charges.Count - 1; i >= 0; i--)
             {
                 var charge = charges[i];

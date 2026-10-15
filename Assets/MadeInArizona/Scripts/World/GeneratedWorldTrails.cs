@@ -11,7 +11,7 @@ namespace MadeInArizona
     public sealed partial class GeneratedWorld
     {
         sealed class Trail { public Vector2[] points; public float width; public bool dirtRoad; }
-        struct TrailSegment { public Vector2 a, b; public float half; }
+        struct TrailSegment { public Vector2 a, b; public float half; public int trail; }
 
         // Trail distances are exact out to TrailQueryReach and capped beyond it. Cover and base rocks (up to 45 m
         // across) need up to 24 m of clearance from a trail edge, so the reach must exceed that or the larger ones can
@@ -133,7 +133,7 @@ namespace MadeInArizona
             {
                 Vector2 a = trail.points[i - 1], b = trail.points[i];
                 int index = trailSegments.Count;
-                trailSegments.Add(new TrailSegment { a = a, b = b, half = halfWidth });
+                trailSegments.Add(new TrailSegment { a = a, b = b, half = halfWidth, trail = trails.Count - 1 });
                 float reach = halfWidth + TrailQueryReach;
                 int x0 = Mathf.FloorToInt((Mathf.Min(a.x, b.x) - reach) / TrailCell), x1 = Mathf.FloorToInt((Mathf.Max(a.x, b.x) + reach) / TrailCell);
                 int z0 = Mathf.FloorToInt((Mathf.Min(a.y, b.y) - reach) / TrailCell), z1 = Mathf.FloorToInt((Mathf.Max(a.y, b.y) + reach) / TrailCell);
@@ -158,6 +158,22 @@ namespace MadeInArizona
                 Vector2 d = s.b - s.a;
                 float u = Mathf.Clamp01(Vector2.Dot(p - s.a, d) / Mathf.Max(.0001f, d.sqrMagnitude));
                 best = Mathf.Min(best, Vector2.Distance(s.a + d * u, p) - s.half);
+            }
+            return best;
+        }
+        // A later ribbon yields to the first one at crossings. The centerlines and route widths do not change.
+        float EarlierTrailEdgeDistance(Vector2 p, int trailIndex)
+        {
+            long key = (long)Mathf.FloorToInt(p.x / TrailCell) << 32 | (uint)Mathf.FloorToInt(p.y / TrailCell);
+            if (!trailCells.TryGetValue(key, out var list)) return TrailQueryReach;
+            float best = TrailQueryReach;
+            foreach (int index in list)
+            {
+                var segment = trailSegments[index];
+                if (segment.trail >= trailIndex) continue;
+                Vector2 line = segment.b - segment.a;
+                float u = Mathf.Clamp01(Vector2.Dot(p - segment.a, line) / Mathf.Max(.0001f, line.sqrMagnitude));
+                best = Mathf.Min(best, Vector2.Distance(segment.a + line * u, p) - segment.half);
             }
             return best;
         }
@@ -187,9 +203,9 @@ namespace MadeInArizona
             {
                 var trail = trails[t];
                 var material = trail.dirtRoad ? dirtRoad : trail.width > 3.6f ? track : footpath;
-                // Below the asphalt (0.1 m) and above the road shoulders; a per-trail offset avoids z-fighting at crossings.
+                // The earlier ribbon owns the crossing; this ribbon fades into it, rather than stacking textures.
                 SoilStrip(trail.dirtRoad ? "Graded dirt road" : trail.width > 3.6f ? "Two-track trail" : "Footpath", trail.points,
-                    trail.width * .5f, Mathf.Clamp(trail.width * .22f, .7f, 1.4f), 0, material, .045f + (t % 7) * .0035f, root);
+                    trail.width * .5f, Mathf.Clamp(trail.width * .22f, .7f, 1.4f), 0, material, .045f, root, t);
             }
         }
 
@@ -198,7 +214,7 @@ namespace MadeInArizona
         /// it into the terrain; its reach (edge lobes, clumps and dust spill) is about 2.8 x feather, so nothing is clipped.
         /// Columns closer to the centre than innerSkip are omitted (used where asphalt covers the middle anyway).
         /// </summary>
-        void SoilStrip(string name, Vector2[] points, float halfWidth, float feather, float innerSkip, Material material, float lift, Transform parent)
+        void SoilStrip(string name, Vector2[] points, float halfWidth, float feather, float innerSkip, Material material, float lift, Transform parent, int trailIndex = -1)
         {
             bool blend = material.shader.name == "MadeInArizona/TrailBlend";
             float outer = halfWidth + (blend ? feather * 2.9f + .6f : 0);
@@ -213,6 +229,7 @@ namespace MadeInArizona
                 float across = Mathf.Abs(from - to) / (columns - 1) * .5f;
                 var grid = new Vector3[rows, columns];
                 var uv = new Vector4[rows * columns]; var shape = new Vector2[rows * columns];
+                var merge = new Vector2[rows * columns];
                 float along = 0;
                 for (int i = 0; i < rows; i++)
                 {
@@ -225,9 +242,12 @@ namespace MadeInArizona
                         grid[i, j] = TrailSurfacePoint(points[i] + normal * offset, tangent, normal, across, .6f, lift);
                         uv[i * columns + j] = new Vector4(offset, along, halfWidth, length);
                         shape[i * columns + j] = new Vector2(outer, feather);
+                        float earlier = trailIndex < 0 ? TrailQueryReach : EarlierTrailEdgeDistance(points[i] + normal * offset, trailIndex);
+                        merge[i * columns + j] = new Vector2(Mathf.SmoothStep(0, 1, Mathf.InverseLerp(-.9f, .7f, earlier)), 0);
                     }
                 }
-                TrailSurface(name, grid, uv, shape, material, parent);
+                var surface = TrailSurface(name, grid, uv, shape, material, parent, merge);
+                surface.GetComponent<MeshRenderer>().sortingOrder = Mathf.Max(0, trailIndex);
             }
         }
 
@@ -249,7 +269,7 @@ namespace MadeInArizona
             return material;
         }
 
-        internal static GameObject TrailSurface(string name, Vector3[,] grid, Vector4[] uv, Vector2[] shape, Material material, Transform parent)
+        internal static GameObject TrailSurface(string name, Vector3[,] grid, Vector4[] uv, Vector2[] shape, Material material, Transform parent, Vector2[] merge = null)
         {
             int rows = grid.GetLength(0), cols = grid.GetLength(1);
             var vertices = new Vector3[rows * cols];
@@ -258,7 +278,14 @@ namespace MadeInArizona
             for (int i = 0; i < rows - 1; i++) for (int j = 0; j < cols - 1; j++)
             { int a = i * cols + j, b = a + 1, c = a + cols, d = c + 1; triangles[t++] = a; triangles[t++] = c; triangles[t++] = b; triangles[t++] = b; triangles[t++] = c; triangles[t++] = d; }
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer)); go.transform.SetParent(parent, false);
-            var mesh = new Mesh { name = name }; mesh.vertices = vertices; mesh.SetUVs(0, uv); mesh.SetUVs(1, shape); mesh.triangles = triangles;
+            var mesh = new Mesh { name = name }; mesh.vertices = vertices; mesh.SetUVs(0, uv); mesh.SetUVs(1, shape);
+            if (merge == null)
+            {
+                merge = new Vector2[rows * cols];
+                for (int i = 0; i < merge.Length; i++) merge[i] = Vector2.right;
+            }
+            mesh.SetUVs(2, merge);
+            mesh.triangles = triangles;
             mesh.RecalculateNormals(); mesh.RecalculateBounds();
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = go.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material;

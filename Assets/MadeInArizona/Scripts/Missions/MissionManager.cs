@@ -380,16 +380,16 @@ namespace MadeInArizona
         }
         bool InteractAt(Vector3 point)
         {
-            bool here=Near(point,9);
+            bool here=Near(point,18);
             if(here&&!collecting){Game.Notify("Hold E / gamepad South to recover the marked objective.");collecting=true;}
             if(!here)collecting=false;
             if (!here) return false;
             if (InputManager.Instance != null && InputManager.Instance.Interact && Game.Player &&
-                (Game.Player.transform.position - point).sqrMagnitude < 81) return true;
+                (Game.Player.transform.position - point).sqrMagnitude < 324) return true;
             if (CoopSession.Instance && CoopSession.Instance.IsHost)
                 foreach (var player in VehicleController.Active)
                     if (player && player.IsPlayer && player.Damage && !player.Damage.IsDead && player.HasRemoteInput &&
-                        player.RemoteControls.interact && (player.transform.position - point).sqrMagnitude < 81) return true;
+                        player.RemoteControls.interact && (player.transform.position - point).sqrMagnitude < 324) return true;
             return false;
         }
         void SetStage(int stage){Stage=stage;stageStarted=Elapsed;collecting=false;}
@@ -547,7 +547,7 @@ namespace MadeInArizona
         {
             for(int i=0;i<cachePositions.Count;i++)
             {
-                if(!cacheMarkers[i]||!Near(cachePositions[i],5))continue;
+                if(!cacheMarkers[i]||!Near(cachePositions[i],10))continue;
                 Destroy(cacheMarkers[i]);cacheMarkers[i]=null;
                 RegisterPickup((i==0?"plate:":i==1?"workorder:":"salvage:")+definition.id+"-"+i);
                 if(i==0)DialogueSystem.Instance?.Say("JOHNNY","Suzuki marked a salvage cache. Her inspection rate remains one biscuit per discovery.",6);

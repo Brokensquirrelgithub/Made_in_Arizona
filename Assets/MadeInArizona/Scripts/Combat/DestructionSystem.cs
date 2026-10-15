@@ -112,7 +112,7 @@ namespace MadeInArizona
                 return;
             }
             if (splinters) Splinter(bounds, color, push);
-            else ExplosionSystem.ScatterDebris(bounds.center, 3 + scale * .65f, Mathf.Clamp(Mathf.RoundToInt(3 + scale * .45f), 4, 8), color, push);
+            else ScatterScaledDebris(bounds, color, push);
             ExplosionSystem.Burst(bounds.center, new Color(.58f, .42f, .26f, .5f), Mathf.RoundToInt(8 + scale * 2), 2 + scale * .3f);
             if (Explosive)
             {
@@ -145,7 +145,7 @@ namespace MadeInArizona
             ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);
             // Guests see the same kind of pieces fly, though not the host's exact ones.
             if (splinters) Splinter(bounds, color, Vector3.zero);
-            else if (brittle) ExplosionSystem.ScatterDebris(bounds.center, 4, 5, color);
+            else if (brittle) ScatterScaledDebris(bounds, color, Vector3.zero);
             Destroy(gameObject, .05f);
         }
         /// <summary>A dead snag snaps into trunk sections and limbs that tumble away with whatever broke it.</summary>
@@ -158,8 +158,19 @@ namespace MadeInArizona
                 new Vector3(.22f, .22f, height * .2f), new Vector3(.34f, .34f, height * .32f), height * .25f);
             ExplosionSystem.ScatterPieces(new Vector3(bounds.center.x, bounds.min.y + height * .7f, bounds.center.z), 5, 7, wood * 1.08f, push,
                 new Vector3(.06f, .06f, .6f), new Vector3(.12f, .12f, 1.5f), height * .3f);
-            ExplosionSystem.ScatterDebris(bounds.center, 4, 6, wood * .9f, push * .8f);
+            ScatterScaledDebris(bounds, wood * .9f, push * .8f);
             ExplosionSystem.Burst(new Vector3(bounds.center.x, bounds.min.y + .4f, bounds.center.z), new Color(.55f, .45f, .33f, .5f), 10, 2.2f);
+        }
+        static void ScatterScaledDebris(Bounds bounds, Color color, Vector3 push)
+        {
+            // Use footprint as well as height: a large wall yields more and larger pieces than a small crate.
+            float extent = Mathf.Clamp(Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z), .5f, 12f);
+            float factor = Mathf.Sqrt(extent / 2f);
+            int count = Mathf.Clamp(Mathf.RoundToInt(5f * factor), 3, 18);
+            Vector3 minimum = new Vector3(.10f, .07f, .15f) * Mathf.Clamp(factor, .65f, 2.4f);
+            Vector3 maximum = new Vector3(.45f, .24f, .70f) * Mathf.Clamp(factor, .65f, 2.4f);
+            ExplosionSystem.ScatterPieces(bounds.center, 3f + extent * .65f, count, color, push,
+                minimum, maximum, Mathf.Min(2f, bounds.extents.y));
         }
         /// <summary>
         /// A bullet, pellet or bolt strike. Small props break within two hits, so they soak up fire without slowing a car,

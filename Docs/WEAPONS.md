@@ -14,7 +14,7 @@ Seven former garage weapons now come from faction drops. Existing saves refund t
 | **Coffee-Can Scattergun** | 120 | Shotgun | Shreds anything at bumper distance, several cars at once. | Pellets fizzle out past twenty metres. |
 | **Rain-Gutter Repeater** | 200 | Battle Rifle / DMR | Accurate at range; picks off weak points and fleeing cars. | Slow rate of fire; misses cost you and swarms overwhelm it. |
 | **Sawblade Slingshot** | 140 | Heatwave (horizontal spread) | Blades pass through the first car and keep cutting. | Short reach and light damage per blade. |
-| **Tennis-Ball Mortar** | 180 | Brute Shot / Cindershot (bouncing lob) | Arcs over cover and bounces into hiding spots. | Small blast and slow shells; hopeless against fast movers. |
+| **Molotov Tennis Ball** | 180 | Bouncing incendiary | Flaming balls launch one, two, then three down a line and burst on a close pass. | Small blast and limited reach. |
 | **Cactus-Spine Needler** | 240 | Needler (homing, supercombine) | Spines chase moving cars; seven hits set off a big rupture. | Slow spines, weak until they stack, and cover eats them. |
 | **Jumper-Cable Zapper** | 220 | Plasma Pistol overcharge / Shock Rifle (vehicle EMP, arcs) | Stalls engines and guns; arcs through a pack. | Barely scratches the paint on its own. |
 | **Arc-Welder Railgun** | 320 | Spartan Laser / Skewer (heavy one-shot) | Instant hit at long range that passes through whole convoys. | Two seconds to recharge; a miss hurts. |
@@ -27,7 +27,8 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 |---|---|---|---|---|
 | **Lawn-Sprinkler Firebomb** | 300 | Grenade + Flamethrower | Radial fire jets ignite cars they hit. | Weak blast and a slow lob; the burn does the work. |
 | **Piñata Bottle Rocket** | 340 | Rocket + Cluster bomb | One hit carpets a wide area with bomblets. | Bomblets scatter randomly; poor against a single fast car. |
-| **Shop-Vac Black Hole** | 380 | Grenade + Gravity well | Pulls a whole pack together for one big blast. | Long recharge and a short delay before it pays off. |
+| **Lawnmower Minigun** | 380 | Spun-up automatic | Sustained fire is powerful and pushes the car back. | Requires a short spin-up. Existing vacuum purchases convert to this weapon. |
+| **Tetrafluoro Skewer** | 420 | Ice spike / shard cone | Pierces two cars and chills them; a second RT press in flight bursts it into shards. | Precise aim and timing required. |
 | **Bowling-Ball Cannon** | 260 | Shell + Ram | A 20% wider sweep hurls cars aside (34 m/s shove), and the ball hops off each car to the crash of a rack of pins. | Only goes where the ground goes; hills and walls deflect it. |
 | **Firecracker Blunderbuss** | 300 | Shotgun + Explosive rounds | Splash on every pellet rewards near misses. | Short range, and the pops hurt you up close. |
 | **Lawn-Chair Sentry** | 400 | Mine + Auto-turret | Keeps shooting while you drive elsewhere; two at a time. | Stationary; slow to redeploy; light damage per nail. |
@@ -39,7 +40,6 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 | **Tailpipe Bazooka** | Heavy anti-vehicle | Deletes a car or a cluster of them in one blast. | Slow rockets that fast cars can dodge, and very little ammunition. |
 | **Potato Cannon** | Arcing demolition | Lands over cover and wrecks clusters. | Slow shells; limited rounds; hard to land on moving cars. |
 | **Propane-Tank Mortar** | Long-range artillery | Hits from beyond the enemy's reach. | Long flight time; useless up close; three rounds a drop. |
-| **Lawnmower Gatling** | Suppression | Overwhelming close-range damage while you hold the line. | Wild spread and a hungry belt: ammunition drains fast. |
 | **.50 Cal Weed Whacker** | Long-range precision | Enormous single hits from across the map. | Slow to cycle; nearly useless against a swarm on your bumper. |
 | **Bottle-Rocket Rack** | Area saturation | Three rockets cover a wide spread. | Few volleys; each rocket alone is modest. |
 | **Drainpipe Double-Barrel** | Point-blank shotgun | Two-shot kills on anything touching your bumper. | Slow reload and almost no reach. |
