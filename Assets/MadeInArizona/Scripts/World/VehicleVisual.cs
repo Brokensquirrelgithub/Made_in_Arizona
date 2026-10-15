@@ -10,7 +10,9 @@ namespace MadeInArizona
     public static partial class VehicleVisual
     {
         static Material otakuWrapMaterial;
-        static readonly Mesh[] otakuWrapMeshes = new Mesh[2];
+        const int OtakuWrapCount = 8;
+        static readonly Mesh[] otakuWrapMeshes = new Mesh[OtakuWrapCount];
+        static int nextOtakuWrap;
         public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl)
         {
             Transform root=Group("Original procedural vehicle model",parent,Vector3.zero);
@@ -170,15 +172,20 @@ namespace MadeInArizona
                 otakuWrapMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 otakuWrapMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
+            // Each hostile gets two different decals. The atlas is four columns by two rows,
+            // so repeated faction spawns show the whole collection rather than one fixed pair.
+            int firstPortrait = nextOtakuWrap;
+            nextOtakuWrap = (nextOtakuWrap + 1) % OtakuWrapCount;
             for (int side = -1; side <= 1; side += 2)
             {
-                int portrait = side < 0 ? 0 : 1;
+                int portrait = (firstPortrait + (side < 0 ? 0 : 3)) % OtakuWrapCount;
                 if (!otakuWrapMeshes[portrait])
                 {
-                    float u = portrait * .5f;
-                    var mesh = new Mesh { name = portrait == 0 ? "Mechanic heroine decal" : "Desert racer heroine decal" };
+                    float u = (portrait % 4) * .25f;
+                    float v = portrait < 4 ? .5f : 0f;
+                    var mesh = new Mesh { name = "Car Otaku wrap " + (portrait + 1) };
                     mesh.vertices = new[] { new Vector3(-.5f,-.5f,0),new Vector3(.5f,-.5f,0),new Vector3(.5f,.5f,0),new Vector3(-.5f,.5f,0) };
-                    mesh.uv = new[] { new Vector2(u,0),new Vector2(u+.5f,0),new Vector2(u+.5f,1),new Vector2(u,1) };
+                    mesh.uv = new[] { new Vector2(u,v),new Vector2(u+.25f,v),new Vector2(u+.25f,v+.5f),new Vector2(u,v+.5f) };
                     mesh.triangles = new[] { 0,1,2,0,2,3 }; mesh.RecalculateNormals();
                     otakuWrapMeshes[portrait] = mesh;
                 }

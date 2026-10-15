@@ -535,7 +535,8 @@ namespace MadeInArizona
                 rewards.unlockedMission == 1 && rewards.money == 1100 + firstMoney && rewards.salvage == firstSalvage && rewards.reputation == 100);
             MissionManager.AwardCampaign(rewards, 0, 1200, 8, true, out int replayMoney, out _, out bool replayFirst);
             Check("repeat co-op award uses replay rate", !replayFirst && replayMoney < firstMoney && rewards.reputation == 120);
-            Check("Car Otaku wrap texture is packaged", Resources.Load<Texture2D>("Art/OtakuWraps"));
+            var otakuAtlas = Resources.Load<Texture2D>("Art/OtakuWraps");
+            Check("Car Otaku eight-wrap atlas is packaged", otakuAtlas && otakuAtlas.width == 2048 && otakuAtlas.height == 1024);
             var wrapProbe = new GameObject("Otaku wrap probe");
             var wrapped = VehicleVisual.Build(ContentCatalog.Vehicles[0], wrapProbe.transform, true, EnemyFaction.CarOtaku);
             Check("Car Otaku cars wear both illustrated side decals", VehicleController.FindChild(wrapped, "Otaku mechanic wrap") &&
