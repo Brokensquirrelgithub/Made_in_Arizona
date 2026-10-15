@@ -550,12 +550,77 @@ namespace MadeInArizona
             foreach (var light in game.Player.GetComponentsInChildren<Light>(true))
                 if (light.name == "Left headlight beam" || light.name == "Right headlight beam") beams++;
             Check("cars have a beam at each headlight", beams == 2);
-            ExplosionSystem.ScatterFracturedCells(new Bounds(game.Player.transform.position + Vector3.up * 3, Vector3.one * 3), 3, 8, Color.gray, Vector3.zero);
+            var fractureProbe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            fractureProbe.name = "Cell fracture outline probe";
+            fractureProbe.transform.position = game.Player.transform.position + Vector3.up * 3;
+            fractureProbe.transform.localScale = new Vector3(2, 2, 2);
+            Bounds original = fractureProbe.GetComponent<Renderer>().bounds;
+            ExplosionSystem.ScatterFracturedObject(fractureProbe.transform, original, 3, 8, Color.gray, Vector3.zero);
             var explosion = FindAnyObjectByType<ExplosionSystem>();
-            bool fractured = false;
+            int cellCount = 0;
+            bool haveCellBounds = false;
+            Bounds assembled = new Bounds();
+            double cellVolume = 0;
             foreach (var mesh in explosion.GetComponentsInChildren<MeshFilter>())
-                if (mesh.sharedMesh && mesh.sharedMesh.name.StartsWith("Procedural fracture cell")) { fractured = true; break; }
-            Check("broken world props spawn shaped cell fragments", fractured);
+            {
+                if (!mesh.sharedMesh || !mesh.sharedMesh.name.StartsWith("Voronoi fracture cell")) continue;
+                cellCount++;
+                var pieceBounds = mesh.GetComponent<Renderer>().bounds;
+                if (!haveCellBounds) { assembled = pieceBounds; haveCellBounds = true; }
+                else assembled.Encapsulate(pieceBounds);
+                var points = mesh.sharedMesh.vertices; var triangles = mesh.sharedMesh.triangles;
+                for (int i = 0; i + 2 < triangles.Length; i += 3)
+                    cellVolume += Vector3.Dot(points[triangles[i]], Vector3.Cross(points[triangles[i + 1]], points[triangles[i + 2]])) / 6.0;
+            }
+            Check("broken prop becomes cells within its original outline", cellCount >= 6 &&
+                Vector3.Distance(assembled.min, original.min) < .03f && Vector3.Distance(assembled.max, original.max) < .03f &&
+                Math.Abs(cellVolume - 8.0) < .25);
+            Destroy(fractureProbe);
+            yield return new WaitForSecondsRealtime(.18f);
+            Check("fracture cells release into physics", explosion.GetComponentsInChildren<MeshFilter>().Any(mesh =>
+                mesh.sharedMesh && mesh.sharedMesh.name.StartsWith("Voronoi fracture cell") &&
+                mesh.GetComponent<Rigidbody>() && !mesh.GetComponent<Rigidbody>().isKinematic));
+            var composite = new GameObject("Composite breakable prop probe");
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                part.transform.SetParent(composite.transform, false);
+                part.transform.localPosition = new Vector3(side * .75f, 0, 0);
+            }
+            bool builtComposite = MeshCellFracture.TryBuild(composite.transform, 8, out var compositeCells);
+            double compositeVolume = 0;
+            foreach (var cell in compositeCells)
+            {
+                var points = cell.mesh.vertices; var triangles = cell.mesh.triangles;
+                for (int i = 0; i + 2 < triangles.Length; i += 3)
+                    compositeVolume += Vector3.Dot(points[triangles[i]], Vector3.Cross(points[triangles[i + 1]], points[triangles[i + 2]])) / 6.0;
+                Destroy(cell.mesh);
+            }
+            Check("multiple prop meshes fracture without filling gaps", builtComposite && compositeCells.Count >= 4 && Math.Abs(compositeVolume - 2.0) < .2);
+            Destroy(composite);
+            var rockProbe = new GameObject("Generated rock fracture probe");
+            var rockShape = new SceneryMesh();
+            rockShape.Rock(Vector3.zero, new Vector3(2, 1.4f, 1.6f), Color.gray, new System.Random(117), closed:true);
+            var rockPart = new GameObject("Generated rock", typeof(MeshFilter), typeof(MeshRenderer));
+            rockPart.transform.SetParent(rockProbe.transform, false);
+            var rockMesh = rockShape.ToMesh("Closed generated rock");
+            rockPart.GetComponent<MeshFilter>().sharedMesh = rockMesh;
+            double originalRockVolume = 0;
+            var rockPoints = rockMesh.vertices; var rockIndices = rockMesh.triangles;
+            for (int i = 0; i + 2 < rockIndices.Length; i += 3)
+                originalRockVolume += Vector3.Dot(rockPoints[rockIndices[i]], Vector3.Cross(rockPoints[rockIndices[i + 1]], rockPoints[rockIndices[i + 2]])) / 6.0;
+            bool builtRock = MeshCellFracture.TryBuild(rockProbe.transform, 10, out var rockCells);
+            double brokenRockVolume = 0;
+            foreach (var cell in rockCells)
+            {
+                var points = cell.mesh.vertices; var triangles = cell.mesh.triangles;
+                for (int i = 0; i + 2 < triangles.Length; i += 3)
+                    brokenRockVolume += Vector3.Dot(points[triangles[i]], Vector3.Cross(points[triangles[i + 1]], points[triangles[i + 2]])) / 6.0;
+                Destroy(cell.mesh);
+            }
+            Check("generated rock keeps its volume when split into cells", builtRock && rockCells.Count >= 6 &&
+                Math.Abs(originalRockVolume) > .1 && Math.Abs(brokenRockVolume - originalRockVolume) < Math.Abs(originalRockVolume) * .1);
+            Destroy(rockMesh); Destroy(rockProbe);
             game.CompleteMission(); game.ReturnToGarage();
             Check("garage defaults to the next unlocked mission after victory", game.SelectedMission == 1);
         }

@@ -11,7 +11,7 @@ namespace MadeInArizona
     public sealed class ExplosionSystem : MonoBehaviour
     {
         struct Blast { public Vector3 point, direction; public float radius, damage, falloffPower; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
-        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public MeshFilter mesh; public float born, until; public Vector3 scale; }
+        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public MeshFilter mesh; public Mesh ownedMesh; public float born, until, releaseAt; public Vector3 scale, launchVelocity, launchAngularVelocity; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
         sealed class ConeVisual { public LineRenderer outline, innerLeft, innerRight; public float start, until; public Color color; }
@@ -32,7 +32,6 @@ namespace MadeInArizona
         readonly HashSet<BossWeakPoint> damagedPoints = new HashSet<BossWeakPoint>();
         readonly List<Fragment> fragments = new List<Fragment>();
         readonly Stack<Fragment> fragmentPool = new Stack<Fragment>();
-        static Mesh[] fractureCells;
         static Mesh cubeFragmentMesh;
         readonly List<Flash> flashes = new List<Flash>();
         readonly List<Wave> waves = new List<Wave>();
@@ -40,7 +39,7 @@ namespace MadeInArizona
         readonly List<Scorch> scorches = new List<Scorch>();
         ParticleSystem fire, smoke, sparks, tireSmoke;
         GameObject groundFirePrefab;
-        Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, waveMaterial, scorchMaterial, tireSmokeMaterial;
+        Material smokeMaterial,fireMaterial,particleMaterial, debrisMaterial, cellMaterial, waveMaterial, scorchMaterial, tireSmokeMaterial;
         Texture2D softTexture, scorchTexture;
         MaterialPropertyBlock block;
         int quality;
@@ -132,6 +131,9 @@ namespace MadeInArizona
                 debrisMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { name = "Fractured steel and adobe", enableInstancing = true };
                 debrisMaterial.SetFloat("_Smoothness", .22f);
             }
+            cellMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                { name = "Matte solid fracture cells", enableInstancing = true };
+            cellMaterial.SetFloat("_Metallic", .03f); cellMaterial.SetFloat("_Smoothness", .12f);
             scorchMaterial = new Material(particleMaterial) { name = "Explosion scorch" };
             scorchMaterial.SetTexture("_BaseMap", scorchTexture); scorchMaterial.SetTexture("_MainTex", scorchTexture);
             scorchMaterial.SetColor("_BaseColor", new Color(.12f, .07f, .045f, .68f));
@@ -333,6 +335,12 @@ namespace MadeInArizona
             for (int i = fragments.Count - 1; i >= 0; i--)
             {
                 var f = fragments[i];
+                if (f.releaseAt > 0 && Time.time >= f.releaseAt)
+                {
+                    f.releaseAt = 0; f.body.isKinematic = false;
+                    f.body.linearVelocity = f.launchVelocity;
+                    f.body.angularVelocity = f.launchAngularVelocity;
+                }
                 if (Time.time > f.until - 1) f.t.localScale = f.scale * Mathf.Clamp01(f.until - Time.time);
                 bool offscreen = false;
                 if (camera != null && Time.time > f.born + .35f)
@@ -482,8 +490,19 @@ namespace MadeInArizona
                 CameraController.Instance?.Shake(Mathf.Clamp01(radius / Mathf.Max(5, distance)) * .75f);
             }
             foreach (var fragment in fragments)
-                if (!fragment.body.isKinematic && (fragment.t.position - blast.point).sqrMagnitude < radius * radius)
-                    fragment.body.AddExplosionForce(radius * 22 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
+                if ((fragment.t.position - blast.point).sqrMagnitude < radius * radius)
+                {
+                    if (fragment.releaseAt > 0)
+                    {
+                        // A barrel can detonate during the brief assembled-cell pause. Carry that blast
+                        // into the release instead of losing its force while the cells are kinematic.
+                        Vector3 away = fragment.t.position - blast.point + Vector3.up * .25f;
+                        if (away.sqrMagnitude < .01f) away = Vector3.up;
+                        fragment.launchVelocity += away.normalized * Mathf.Min(12f, radius * 3f * forceAmount / Mathf.Sqrt(fragment.body.mass));
+                    }
+                    else if (!fragment.body.isKinematic)
+                        fragment.body.AddExplosionForce(radius * 22 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
+                }
             if (CoopSession.IsRemoteClient) return; // network explosions are visual; the host applies all damage and forces
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
             int count = Physics.OverlapSphereNonAlloc(blast.point, reach, overlaps, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
@@ -570,10 +589,9 @@ namespace MadeInArizona
         /// </summary>
         public static void ScatterPieces(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread)
             => Get().Scatter(point, force, count, color, push, minScale, maxScale, spread, 12);
-        /// <summary>Break a prop's bounds into adjacent irregular cells before launching the pieces.</summary>
-        public static void ScatterFracturedCells(Bounds bounds, float force, int count, Color color, Vector3 push)
-            => Get().Scatter(bounds.center, force, count, color, push, Vector3.one * .1f, Vector3.one,
-                bounds.extents.y, 12, bounds);
+        /// <summary>Replace a prop's visible mesh with capped Voronoi cells in exactly the same outline, then let them fall.</summary>
+        public static void ScatterFracturedObject(Transform source, Bounds bounds, float force, int count, Color color, Vector3 push)
+            => Get().ScatterObjectCells(source, bounds, force, count, color, push);
         /// <summary>Velocity a blast gives the pieces of a prop it breaks: outwards and a little upwards, stronger close in.</summary>
         static Vector3 BlastPush(DestructionSystem prop, Vector3 center, float falloff)
         {
@@ -583,50 +601,17 @@ namespace MadeInArizona
         }
         static readonly Vector3 ChipMin = new Vector3(.1f, .07f, .15f), ChipMax = new Vector3(.45f, .24f, .7f);
         void Scatter(Vector3 point, float force, int count, Color color, Vector3 push) => Scatter(point, force, count, color, push, ChipMin, ChipMax, .5f, 4);
-        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread, float mass, Bounds? fracture = null)
+        void Scatter(Vector3 point, float force, int count, Color color, Vector3 push, Vector3 minScale, Vector3 maxScale, float spread, float mass)
         {
             count = Mathf.Min(count, quality == 0 ? 5 : quality == 1 ? 12 : quality==3?48:24);
-            if (fracture.HasValue && fractureCells == null) BuildFractureCells();
-            int cells = fracture.HasValue ? Mathf.CeilToInt(Mathf.Pow(count, 1f / 3f)) : 0;
             for (int i = 0; i < count; i++)
             {
-                if (fragments.Count >= DebrisLimit) RetireFragment(0);
-                Fragment f;
-                if (fragmentPool.Count > 0) f = fragmentPool.Pop();
-                else
-                {
-                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube); go.name = "Pooled debris"; go.layer = 2; go.transform.SetParent(transform);
-                    if (!cubeFragmentMesh) cubeFragmentMesh = go.GetComponent<MeshFilter>().sharedMesh;
-                    var rb = go.AddComponent<Rigidbody>(); rb.mass = 4; rb.linearDamping = .2f; rb.angularDamping = .2f;
-                    rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
-                    var renderer = go.GetComponent<Renderer>(); renderer.sharedMaterial = debrisMaterial; renderer.shadowCastingMode = quality > 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
-                    f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer, mesh = go.GetComponent<MeshFilter>() };
-                }
-                f.view.SetActive(true); f.collider.enabled = true; f.body.isKinematic = false;
-                foreach (var vehicle in VehicleController.Active)
-                    if (vehicle != null)
-                        foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
-                            if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, true);
-                if (fracture.HasValue)
-                {
-                    Vector3 size = fracture.Value.size / cells;
-                    f.scale = new Vector3(Mathf.Max(.12f, size.x), Mathf.Max(.12f, size.y), Mathf.Max(.12f, size.z));
-                    f.mesh.sharedMesh = fractureCells[i % fractureCells.Length];
-                }
-                else
-                {
-                    f.scale = new Vector3(Random.Range(minScale.x, maxScale.x), Random.Range(minScale.y, maxScale.y), Random.Range(minScale.z, maxScale.z));
-                    f.mesh.sharedMesh = cubeFragmentMesh;
-                }
+                Fragment f = AcquireFragment();
+                f.scale = new Vector3(Random.Range(minScale.x, maxScale.x), Random.Range(minScale.y, maxScale.y), Random.Range(minScale.z, maxScale.z));
+                f.mesh.sharedMesh = cubeFragmentMesh;
                 f.t.localScale = f.scale;
                 f.body.mass = mass;
                 Vector3 at = point + Random.insideUnitSphere * .5f + Vector3.up * (.3f + Random.Range(-spread, spread));
-                if (fracture.HasValue)
-                {
-                    int x = i % cells, y = i * cells / count, z = (i / cells) % cells;
-                    Bounds b = fracture.Value;
-                    at = b.min + Vector3.Scale(b.size, new Vector3((x + .5f) / cells, (y + .5f) / cells, (z + .5f) / cells));
-                }
                 f.t.SetPositionAndRotation(at, Random.rotation);
                 Vector3 velocity = Random.onUnitSphere * Random.Range(force * .7f, force * 1.6f); velocity.y = Mathf.Abs(velocity.y) + (force > 0 ? 2 : 0);
                 velocity += push * Random.Range(.55f, 1.1f);
@@ -636,32 +621,67 @@ namespace MadeInArizona
                 fragments.Add(f);
             }
         }
-        static void BuildFractureCells()
+        Fragment AcquireFragment()
         {
-            fractureCells = new Mesh[4];
-            int[] corners = { 0, 4, 6, 2, 1, 3, 7, 5, 0, 1, 5, 4, 2, 6, 7, 3, 0, 2, 3, 1, 4, 5, 7, 6 };
-            for (int variant = 0; variant < fractureCells.Length; variant++)
+            if (fragments.Count >= DebrisLimit) RetireFragment(0);
+            Fragment f;
+            if (fragmentPool.Count > 0) f = fragmentPool.Pop();
+            else
             {
-                var random = new System.Random(117 + variant * 47);
-                var points = new Vector3[8];
-                for (int c = 0; c < 8; c++)
-                    points[c] = new Vector3((c & 1) == 0 ? -.5f : .5f, (c & 2) == 0 ? -.5f : .5f, (c & 4) == 0 ? -.5f : .5f)
-                        + new Vector3((float)random.NextDouble() - .5f, (float)random.NextDouble() - .5f, (float)random.NextDouble() - .5f) * .18f;
-                var vertices = new Vector3[24]; var triangles = new int[36];
-                for (int face = 0; face < 6; face++)
-                {
-                    for (int k = 0; k < 4; k++) vertices[face * 4 + k] = points[corners[face * 4 + k]];
-                    int v = face * 4, t = face * 6;
-                    triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
-                    triangles[t + 3] = v; triangles[t + 4] = v + 2; triangles[t + 5] = v + 3;
-                }
-                var mesh = new Mesh { name = "Procedural fracture cell " + variant, vertices = vertices, triangles = triangles };
-                mesh.RecalculateNormals(); mesh.RecalculateBounds(); fractureCells[variant] = mesh;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube); go.name = "Pooled debris"; go.layer = 2; go.transform.SetParent(transform);
+                if (!cubeFragmentMesh) cubeFragmentMesh = go.GetComponent<MeshFilter>().sharedMesh;
+                var rb = go.AddComponent<Rigidbody>(); rb.mass = 4; rb.linearDamping = .2f; rb.angularDamping = .2f;
+                rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
+                var renderer = go.GetComponent<Renderer>(); renderer.sharedMaterial = debrisMaterial; renderer.shadowCastingMode = quality > 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer, mesh = go.GetComponent<MeshFilter>() };
+            }
+            f.view.SetActive(true); f.collider.enabled = true; f.body.isKinematic = false; f.releaseAt = 0;
+            f.renderer.sharedMaterial = debrisMaterial;
+            var box = f.collider as BoxCollider;
+            if (box) { box.center = Vector3.zero; box.size = Vector3.one; }
+            foreach (var vehicle in VehicleController.Active)
+                if (vehicle != null)
+                    foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
+                        if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, true);
+            return f;
+        }
+        void ScatterObjectCells(Transform source, Bounds bounds, float force, int count, Color color, Vector3 push)
+        {
+            int budget = quality == 0 ? 4 : quality == 1 ? 7 : quality == 2 ? 12 : 16;
+            if (!MeshCellFracture.TryBuild(source, Mathf.Clamp(count, 4, budget), out var cells))
+            {
+                // Unsupported or non-readable meshes still make small chips, never large fake cells.
+                Scatter(bounds.center, force * .45f, 5, color, push);
+                return;
+            }
+            var siblings = new List<Fragment>(cells.Count);
+            foreach (var cell in cells)
+            {
+                Fragment f = AcquireFragment();
+                f.mesh.sharedMesh = f.ownedMesh = cell.mesh;
+                f.renderer.sharedMaterial = cellMaterial;
+                f.t.SetPositionAndRotation(cell.center, Quaternion.identity);
+                f.scale = Vector3.one; f.t.localScale = Vector3.one;
+                var box = f.collider as BoxCollider;
+                if (box) box.size = new Vector3(Mathf.Max(.08f, cell.size.x * .7f), Mathf.Max(.08f, cell.size.y * .7f), Mathf.Max(.08f, cell.size.z * .7f));
+                foreach (var sibling in siblings) Physics.IgnoreCollision(f.collider, sibling.collider, true);
+                f.body.mass = Mathf.Clamp(cell.size.x * cell.size.y * cell.size.z * 4f, 1f, 35f);
+                f.body.isKinematic = true;
+                Vector3 away = cell.center - bounds.center;
+                if (away.sqrMagnitude < .01f) away = Random.onUnitSphere;
+                f.launchVelocity = push * .35f + away.normalized * Mathf.Min(force * .16f, 1.5f) + Vector3.up * .35f;
+                f.launchAngularVelocity = Random.insideUnitSphere * 2f;
+                f.born = Time.time; f.releaseAt = Time.time + .12f;
+                f.until = Time.time + 4.5f + Random.value;
+                block.SetColor("_BaseColor", color); f.renderer.SetPropertyBlock(block);
+                fragments.Add(f); siblings.Add(f);
             }
         }
         void RetireFragment(int i)
         {
             var f = fragments[i]; f.view.SetActive(false); f.body.isKinematic = true;
+            if (f.ownedMesh) { Destroy(f.ownedMesh); f.ownedMesh = null; }
+            f.mesh.sharedMesh = cubeFragmentMesh; f.releaseAt = 0;
             fragmentPool.Push(f); fragments.RemoveAt(i);
         }
         Light BurnLight(Vector3 point,float radius)
@@ -797,10 +817,13 @@ namespace MadeInArizona
         void OnDestroy()
         {
             if (instance == this) instance = null;
+            foreach (var fragment in fragments) if (fragment.ownedMesh) Destroy(fragment.ownedMesh);
+            foreach (var fragment in fragmentPool) if (fragment.ownedMesh) Destroy(fragment.ownedMesh);
             if(smokeMaterial)Destroy(smokeMaterial);if(fireMaterial)Destroy(fireMaterial);if(tireSmokeMaterial)Destroy(tireSmokeMaterial);
             if (particleMaterial != null) Destroy(particleMaterial);
             if (waveMaterial != null) Destroy(waveMaterial);
             if (debrisMaterial != null) Destroy(debrisMaterial);
+            if (cellMaterial != null) Destroy(cellMaterial);
             if (scorchMaterial != null) Destroy(scorchMaterial);
             if (softTexture != null) Destroy(softTexture);
             if (scorchTexture != null) Destroy(scorchTexture);

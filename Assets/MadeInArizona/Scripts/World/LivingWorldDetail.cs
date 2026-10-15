@@ -210,7 +210,7 @@ namespace MadeInArizona
             var root=new GameObject("Breakable scenery rock");root.transform.SetParent(tile.transform,false);root.transform.localPosition=at;
             var shape=propMesh;shape.Clear();
             if(!shape.Nature(nature?nature.Pick(Choose(choices,nature.rocks),random):null,Vector3.zero,size,random,color,false))
-                shape.Rock(Vector3.zero,new Vector3(size,size*.72f,size*.82f),color,random);
+                shape.Rock(Vector3.zero,new Vector3(size,size*.72f,size*.82f),color,random,closed:true);
             shape.Build(root,"Fractured stone",material);
             var collider=root.AddComponent<BoxCollider>();collider.center=Vector3.up*size*.2f;collider.size=new Vector3(size*1.7f,size*.75f,size*1.5f);
             WorldArt.MakeBreakable(root.transform,Mathf.Clamp(12+size*6,18,28),false,ExplosionKind.Ammunition,3);
@@ -333,12 +333,13 @@ namespace MadeInArizona
             Vector3 d=(b-a).normalized,u=Vector3.Cross(d,Mathf.Abs(d.y)>.9f?Vector3.right:Vector3.up).normalized,v=Vector3.Cross(d,u);
             for(int i=0;i<sides;i++){float t=i*Mathf.PI*2/sides,t2=(i+1)*Mathf.PI*2/sides;Vector3 n=u*Mathf.Cos(t)+v*Mathf.Sin(t),m=u*Mathf.Cos(t2)+v*Mathf.Sin(t2);Color c=color*Mathf.Lerp(.8f,1.15f,(i%3)/2f);Tri(a+n*ra,b+n*rb,b+m*rb,c);Tri(a+n*ra,b+m*rb,a+m*ra,c);Tri(b,b+n*rb,b+m*rb,c);}
         }
-        public void Rock(Vector3 at,Vector3 scale,Color color,System.Random r)
+        public void Rock(Vector3 at,Vector3 scale,Color color,System.Random r,bool closed=false)
         {
             const int sides=9;var rings=new Vector3[4,sides];
             for(int y=0;y<4;y++)for(int i=0;i<sides;i++){float angle=(i+(y%2)*.3f)*Mathf.PI*2/sides;float rad=(y==0?.65f:y==3?.4f:1)*LivingWorldDetail.Next(r,.78f,1.18f);rings[y,i]=at+Vector3.Scale(new Vector3(Mathf.Cos(angle)*rad,y*.35f-.15f,Mathf.Sin(angle)*rad),scale);}
             for(int y=0;y<3;y++)for(int i=0;i<sides;i++){int j=(i+1)%sides;Color c=color*LivingWorldDetail.Next(r,.82f,1.12f);Tri(rings[y,i],rings[y+1,i],rings[y+1,j],c);Tri(rings[y,i],rings[y+1,j],rings[y,j],c);}
             for(int i=0;i<sides;i++)Tri(at+Vector3.up*scale.y,rings[3,(i+1)%sides],rings[3,i],color*1.1f);
+            if(closed)for(int i=0;i<sides;i++)Tri(at-Vector3.up*scale.y*.15f,rings[0,i],rings[0,(i+1)%sides],color*.8f);
         }
         public void Leaf(Vector3 p,float s,float angle,Color c,float bend=1)
         {
