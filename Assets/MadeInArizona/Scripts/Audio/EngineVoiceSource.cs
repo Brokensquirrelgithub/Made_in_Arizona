@@ -9,9 +9,11 @@ namespace MadeInArizona
     public sealed class EngineVoiceSource : MonoBehaviour
     {
         volatile EngineVoice voice;
+        volatile bool muted;
         int outputRate;
         public EngineVoice Voice => voice;
         public EngineLayout Layout => voice?.Layout;
+        public bool Muted { get => muted; set => muted=value; }
 
         void Awake()
         {
@@ -21,7 +23,8 @@ namespace MadeInArizona
             var ones = new float[1024]; for (int i = 0; i < ones.Length; i++) ones[i] = 1;
             carrier.SetData(ones, 0);
             source.clip = carrier; source.loop = true; source.spatialBlend = 0; source.priority = 70;
-            source.volume = 1; source.pitch = 1; source.dopplerLevel = 0; source.Play();
+            source.volume = 1; source.pitch = 1; source.dopplerLevel = 0;
+            source.ignoreListenerVolume = false; source.Play();
         }
 
         /// <summary>Switches engine or fits/removes the turbo; the new voice is built here and swapped in whole.</summary>
@@ -44,9 +47,17 @@ namespace MadeInArizona
 
         void OnAudioFilterRead(float[] data, int channels)
         {
+            RenderBlock(data, channels);
+        }
+
+        internal void RenderBlock(float[] data, int channels)
+        {
             var current = voice;
             if (current == null) { System.Array.Clear(data, 0, data.Length); return; }
             current.Render(data, channels);
+            // A source filter can replace the carrier signal after Unity has applied source gain.
+            // Keep rendering for phase continuity, then enforce master mute on the final samples.
+            if (muted) System.Array.Clear(data, 0, data.Length);
         }
     }
 }

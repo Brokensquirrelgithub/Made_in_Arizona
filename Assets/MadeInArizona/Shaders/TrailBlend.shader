@@ -82,7 +82,8 @@ Shader "MadeInArizona/TrailBlend"
                 // Safety fade at the ribbon border, so extreme noise can never expose the mesh edge.
                 float border=saturate((outer-across)/.6);
                 mask*=border;dust*=border;
-                float alpha=(mask+dust)*i.merge;
+                float coverageAlpha=mask+dust;
+                float alpha=coverageAlpha*i.merge;
                 if(alpha<.003)discard;
 
                 // 3. Surface wear inside the trail.
@@ -104,7 +105,7 @@ Shader "MadeInArizona/TrailBlend"
                 albedo*=1+worn*.12;
                 albedo*=1-berm*.14*(.6+Noise(p*4.1)*.8);
                 float3 dustColor=lerp(_Tint.rgb,float3(.80,.68,.50),.55)*lerp(.9,1.1,Noise(p*2.7));
-                albedo=lerp(dustColor,albedo,mask/alpha);
+                albedo=lerp(dustColor,albedo,mask/max(coverageAlpha,.003));
 
                 float3 tn=UnpackNormal(SAMPLE_TEXTURE2D(_Normal,sampler_Diffuse,soilUV));
                 float3 n=normalize(i.n+float3(tn.x,0,tn.y)*(.55-rut*.25));

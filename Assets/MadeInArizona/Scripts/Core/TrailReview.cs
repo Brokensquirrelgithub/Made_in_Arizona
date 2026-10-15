@@ -45,6 +45,16 @@ namespace MadeInArizona
                 cam.orthographic = ortho; camera.enabled = true;
             }
             check("reviewed all trail kinds", road && track && path);
+            // The trail merge fade is only exercised where ribbons meet, so include actual junctions.
+            for (int j = 0; j < Mathf.Min(3, world.TrailJunctions.Count); j++)
+            {
+                Vector3 p = world.TrailJunctions[j];
+                game.Player.Body.position = p + new Vector3(60, 3, 60);
+                focus.transform.position = p; camera.Snap();
+                for (int f = 0; f < 90; f++) yield return null;
+                Render(Camera.main, Path.Combine(directory, "trail-junction-" + j + ".png"));
+            }
+            check("reviewed path junctions", world.TrailJunctions.Count > 0);
             // Road shoulder and town apron, from the gameplay camera and a low oblique view.
             Vector3 town = world.Towns[0], roadPoint = world.NearestPatrolRoad((world.Towns[0] + world.Towns[1]) * .5f);
             foreach (var shot in new[] { ("town", town + new Vector3(0, 0, 0)), ("town-edge", town + new Vector3(26, 0, 0)), ("road", roadPoint) })

@@ -1747,6 +1747,13 @@ namespace MadeInArizona
             if(!swapInstalled)save.installedParts.Remove("swap");if(!swapOwned)save.ownedParts.Remove("swap");
             game.RefreshGarageVehicle();yield return new WaitForSecondsRealtime(.3f);
             Check("removing the engine swap restores the three-cylinder voice",!game.Player.Stats.engineSwapped&&live.Layout.id=="inline3");
+            var physicalSource=live.GetComponent<AudioSource>();physicalSource.Stop();
+            var masterBlock=new float[2048];live.Muted=false;
+            for(int block=0;block<20;block++)live.RenderBlock(masterBlock,2);
+            Check("physical engine generates samples with master unmuted",masterBlock.Any(sample=>Mathf.Abs(sample)>.0001f));
+            live.Muted=true;live.RenderBlock(masterBlock,2);
+            Check("master mute clears physical engine output samples",masterBlock.All(sample=>sample==0));
+            physicalSource.Play();
         }
         static float LayerDifference(EngineLayout layout,float rpm,float throttle,bool intake)
         {

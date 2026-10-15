@@ -124,7 +124,9 @@ namespace MadeInArizona
             var game=GameManager.Instance;if(game==null||Settings==null)return;
             duck=Mathf.MoveTowards(duck,1,Time.unscaledDeltaTime*1.5f);if(music)music.Duck=duck;
             bool active=game.State==GameState.Playing;var player=game.Player;
-            float gain=Settings.engines*duck;
+            // Keep every engine path silent at master zero, including the generated audio filter.
+            float gain=Settings.master>0?Settings.engines*duck:0;
+            physicalEngine.Muted=OutputVolume(Settings.master)<=0;
             var tuning=DevTuning.ForCar(player);
             RefreshEngineShape(tuning);
             engineModeBlend=Mathf.MoveTowards(engineModeBlend,tuning.enginePreserveEdges?1:0,Time.unscaledDeltaTime*20);
