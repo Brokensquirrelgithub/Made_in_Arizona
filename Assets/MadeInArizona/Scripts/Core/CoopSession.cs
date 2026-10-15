@@ -283,7 +283,7 @@ namespace MadeInArizona
             carObject.transform.SetParent(game.World.transform);
             carObject.transform.position = game.World.PlayerSpawn + new Vector3(4f * (guestCars.Count + 1), 0, 3f);
             var car = carObject.AddComponent<VehicleController>();
-            car.Initialize(definition, loadout?.stats ?? VehicleStats.From(definition), true,
+            car.Initialize(definition, loadout?.stats ?? GarageManager.StatsFor(definition,null), true,
                 EnemyFaction.Sunsprawl, loadout?.profiles);
             if (loadout != null) car.Weapons.ConfigurePlayerPrimary(loadout.weaponId);
             car.SetRemoteControls(default);

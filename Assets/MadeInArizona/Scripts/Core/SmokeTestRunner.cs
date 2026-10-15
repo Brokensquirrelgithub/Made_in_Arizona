@@ -443,6 +443,7 @@ namespace MadeInArizona
             foreach(var car in ContentCatalog.Vehicles)
             {
                 var stock=GarageManager.StatsFor(car,new SaveData());
+                var playerStock=GarageManager.StatsFor(car,null);
                 stockTotals&=Mathf.Approximately(stock.maxHealth,car.maxHealth)&&Mathf.Approximately(stock.healthShares[0],.5f);
                 var loadout=new SaveData();
                 foreach(var part in ContentCatalog.Parts)
@@ -457,8 +458,8 @@ namespace MadeInArizona
                     var s=profiles[depth];var whole=profiles[0];
                     profileMass&=Mathf.Approximately(s.mass,whole.mass);
                     profileHealth&=Mathf.Approximately(s.maxHealth,whole.maxHealth);
-                    profileFloors&=s.horsepower+.001f>=Mathf.Min(car.horsepower,whole.horsepower) &&
-                        s.torque+.001f>=Mathf.Min(car.torque,whole.torque) && s.grip+.001f>=Mathf.Min(car.grip,whole.grip) &&
+                    profileFloors&=s.horsepower+.001f>=Mathf.Min(playerStock.horsepower,whole.horsepower) &&
+                        s.torque+.001f>=Mathf.Min(playerStock.torque,whole.torque) && s.grip+.001f>=Mathf.Min(playerStock.grip,whole.grip) &&
                         s.turnSpeed+.001f>=Mathf.Min(car.turnSpeed,whole.turnSpeed) && s.maxSpeed+.001f>=Mathf.Min(car.maxSpeed,whole.maxSpeed) &&
                         s.suspensionTravel+.001f>=Mathf.Min(car.suspensionTravel,whole.suspensionTravel) &&
                         s.damping+.001f>=Mathf.Min(car.damping,whole.damping);
@@ -2428,6 +2429,18 @@ namespace MadeInArizona
                 VehicleController.ShiftSoundEnvelope(.05f)>.5f);
             var shift=Array.Find(vehicles,v=>v.id=="shift");
             var stock=VehicleStats.From(shift);
+            bool playerPower=true,allGrip=true;
+            foreach(var car in vehicles)
+            {
+                var baseline=VehicleStats.From(car);
+                var playable=GarageManager.StatsFor(car,null);
+                playerPower&=Mathf.Approximately(playable.horsepower,baseline.horsepower*1.2f) &&
+                    Mathf.Approximately(playable.torque,baseline.torque*1.2f);
+                allGrip&=Mathf.Approximately(baseline.grip,car.grip*1.1f) &&
+                    Mathf.Approximately(playable.grip,baseline.grip);
+            }
+            Check("every playable car has 20% more stock power and torque",playerPower);
+            Check("every car has 10% more stock grip",allGrip);
             Check("stock power and road-speed boost reaches the unmodified Shift",
                 stock.horsepower>shift.horsepower*1.17f&&stock.torque>shift.torque*1.17f&&stock.maxSpeed>shift.maxSpeed*1.14f);
 

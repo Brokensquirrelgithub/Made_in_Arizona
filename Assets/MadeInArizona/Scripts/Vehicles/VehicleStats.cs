@@ -8,6 +8,7 @@ namespace MadeInArizona
     {
         // Gameplay baseline. Authored vehicle assets retain their inspiration-sheet figures; parts and drivers stack on top.
         public const float StockPowerMultiplier = 1.18f;
+        public const float StockGripMultiplier = 1.10f;
         public const float StockSpeedMultiplier = 1.15f;
         public float mass, horsepower, torque, maxSpeed, grip, turnSpeed, maxHealth;
         public float rideHeight, wheelbase, trackWidth, suspensionTravel, springStiffness, damping, finalDrive;
@@ -27,7 +28,7 @@ namespace MadeInArizona
             {
                 mass = v.mass, horsepower = v.horsepower * StockPowerMultiplier,
                 torque = v.torque * StockPowerMultiplier, maxSpeed = v.maxSpeed * StockSpeedMultiplier,
-                grip = v.grip, turnSpeed = v.turnSpeed, maxHealth = v.maxHealth, rideHeight = v.rideHeight,
+                grip = v.grip * StockGripMultiplier, turnSpeed = v.turnSpeed, maxHealth = v.maxHealth, rideHeight = v.rideHeight,
                 wheelbase = v.wheelbase, trackWidth = v.trackWidth, suspensionTravel = v.suspensionTravel,
                 springStiffness = v.springStiffness, damping = v.damping, finalDrive = v.finalDrive,
                 drivetrain = v.drivetrain, differential = v.differential, cooling = 1f

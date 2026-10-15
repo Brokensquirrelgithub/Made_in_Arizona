@@ -4,12 +4,14 @@ namespace MadeInArizona
 {
     public static class GarageManager
     {
+        public const float PlayerPowerMultiplier = 1.20f;
         public static string LastMessage { get; private set; }
         public static bool Compatible(VehiclePart part,VehicleDefinition vehicle)
         { return part.compatibleVehicles==null||part.compatibleVehicles.Length==0||Array.IndexOf(part.compatibleVehicles,vehicle.id)>=0; }
         public static VehicleStats StatsFor(VehicleDefinition definition,SaveData save,int failedDepth=0)
         {
             ContentCatalog.EnsureLoaded(); var stats=VehicleStats.From(definition);
+            stats.horsepower*=PlayerPowerMultiplier; stats.torque*=PlayerPowerMultiplier;
             if(save==null)return stats;
             var segments=HealthRules.StockSegments(definition.maxHealth);
             foreach(var p in ContentCatalog.Parts)
@@ -29,14 +31,15 @@ namespace MadeInArizona
             var driver=ContentCatalog.Drivers[Mathf.Clamp(save.selectedDriver,0,ContentCatalog.Drivers.Length-1)];
             stats.horsepower*=driver.powerMultiplier; stats.torque*=driver.powerMultiplier; stats.grip*=driver.gripMultiplier;
             stats.finalDrive*=save.finalDriveTuning; stats.maxSpeed/=save.finalDriveTuning; stats.rideHeight+=save.rideHeightTuning;
-            stats.mass=Mathf.Max(400,stats.mass); stats.cooling=Mathf.Clamp(stats.cooling,.25f,3); stats.grip=Mathf.Clamp(stats.grip,.4f,2.2f);
+            stats.mass=Mathf.Max(400,stats.mass); stats.cooling=Mathf.Clamp(stats.cooling,.25f,3);
+            stats.grip=Mathf.Clamp(stats.grip,.4f,2.2f*VehicleStats.StockGripMultiplier);
             stats.maxHealth=0;
             foreach(float amount in segments)stats.maxHealth+=amount;
             stats.healthShares=HealthRules.Shares(segments);
             if(failedDepth>0)
             {
                 var whole=StatsFor(definition,save);
-                var stock=VehicleStats.From(definition);
+                var stock=StatsFor(definition,null);
                 stats.horsepower=Mathf.Max(stats.horsepower,Mathf.Min(stock.horsepower,whole.horsepower));
                 stats.torque=Mathf.Max(stats.torque,Mathf.Min(stock.torque,whole.torque));
                 stats.grip=Mathf.Max(stats.grip,Mathf.Min(stock.grip,whole.grip));

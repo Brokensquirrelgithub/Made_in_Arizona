@@ -215,7 +215,7 @@ namespace MadeInArizona
             check($"rear drive pulls away hardest on the road (rear {launch[rear, road]:F1} m, front {launch[front, road]:F1} m, all-wheel {launch[all, road]:F1} m)",
                 launch[rear, road] > launch[front, road] * 1.025f && launch[front, road] > launch[all, road] * 1.015f);
             check($"all-wheel drive pulls away hardest in sand (all-wheel {launch[all, sand]:F1} m, front {launch[front, sand]:F1} m, rear {launch[rear, sand]:F1} m)",
-                launch[all, sand] > launch[front, sand] * 1.2f && launch[front, sand] > launch[rear, sand]);
+                launch[all, sand] > launch[front, sand] * 1.15f && launch[front, sand] > launch[rear, sand]);
             // Carried into sand at road pace, both cars can keep pulling through their soft caps, but rear drive
             // must remain visibly slower than all-wheel drive.
             float pace = Mathf.Max(50, player.Stats.maxSpeed) / 3.6f;

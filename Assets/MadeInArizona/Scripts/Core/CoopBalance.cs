@@ -162,6 +162,7 @@ namespace MadeInArizona
         static VehicleStats[] SafeProfiles(VehicleStats[] received,VehicleStats whole,VehicleDefinition car)
         {
             var safe=new VehicleStats[5];
+            var playerStock=GarageManager.StatsFor(car,null);
             safe[0]=whole;
             for(int depth=1;depth<safe.Length;depth++)
             {
@@ -169,9 +170,9 @@ namespace MadeInArizona
                 profile.maxHealth=whole.maxHealth;
                 profile.mass=whole.mass;
                 profile.healthShares=whole.healthShares;
-                profile.horsepower=Mathf.Max(profile.horsepower,Mathf.Min(car.horsepower,whole.horsepower));
-                profile.torque=Mathf.Max(profile.torque,Mathf.Min(car.torque,whole.torque));
-                profile.grip=Mathf.Max(profile.grip,Mathf.Min(car.grip,whole.grip));
+                profile.horsepower=Mathf.Max(profile.horsepower,Mathf.Min(playerStock.horsepower,whole.horsepower));
+                profile.torque=Mathf.Max(profile.torque,Mathf.Min(playerStock.torque,whole.torque));
+                profile.grip=Mathf.Max(profile.grip,Mathf.Min(playerStock.grip,whole.grip));
                 profile.turnSpeed=Mathf.Max(profile.turnSpeed,Mathf.Min(car.turnSpeed,whole.turnSpeed));
                 profile.maxSpeed=Mathf.Max(profile.maxSpeed,Mathf.Min(car.maxSpeed,whole.maxSpeed));
                 profile.suspensionTravel=Mathf.Max(profile.suspensionTravel,Mathf.Min(car.suspensionTravel,whole.suspensionTravel));
