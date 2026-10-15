@@ -11,7 +11,7 @@ namespace MadeInArizona
     public sealed class ExplosionSystem : MonoBehaviour
     {
         struct Blast { public Vector3 point, direction; public float radius, damage, falloffPower; public GameObject source; public ExplosionKind kind; public bool cone, environmental; }
-        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public MeshFilter mesh; public Mesh ownedMesh; public float born, until, releaseAt; public Vector3 scale, launchVelocity, launchAngularVelocity; }
+        sealed class Fragment { public GameObject view; public Transform t; public Rigidbody body; public Collider collider; public Renderer renderer; public MeshFilter mesh; public Mesh ownedMesh; public float born, until, releaseAt; public Vector3 scale, launchVelocity, launchAngularVelocity; public bool collideWithVehicles; }
         sealed class Flash { public Light light; public float start, until, power; }
         sealed class Wave { public LineRenderer line; public float start, until, radius; public Color color; }
         sealed class ConeVisual { public LineRenderer outline, innerLeft, innerRight; public float start, until; public Color color; }
@@ -65,8 +65,11 @@ namespace MadeInArizona
             if (instance == null || vehicle == null) return;
             var colliders = vehicle.GetComponentsInChildren<Collider>();
             foreach (var fragment in instance.fragments)
+            {
                 foreach (var collider in colliders)
-                    if (collider.enabled) Physics.IgnoreCollision(fragment.collider, collider, true);
+                    if (collider.enabled) Physics.IgnoreCollision(fragment.collider, collider,
+                        !fragment.collideWithVehicles || vehicle.IsPlayer);
+            }
         }
 
         static ExplosionSystem Get()
@@ -501,7 +504,7 @@ namespace MadeInArizona
                         fragment.launchVelocity += away.normalized * Mathf.Min(12f, radius * 3f * forceAmount / Mathf.Sqrt(fragment.body.mass));
                     }
                     else if (!fragment.body.isKinematic)
-                        fragment.body.AddExplosionForce(radius * 22 * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
+                        fragment.body.AddExplosionForce(radius * (fragment.collideWithVehicles ? 60f : 22f) * forceAmount, blast.point, radius, radius * .18f * forceAmount, ForceMode.Impulse);
                 }
             if (CoopSession.IsRemoteClient) return; // network explosions are visual; the host applies all damage and forces
             damagedVehicles.Clear(); damagedProps.Clear(); pushed.Clear(); damagedPoints.Clear();
@@ -636,6 +639,7 @@ namespace MadeInArizona
                 f = new Fragment { view = go, t = go.transform, body = rb, collider = go.GetComponent<Collider>(), renderer = renderer, mesh = go.GetComponent<MeshFilter>() };
             }
             f.view.SetActive(true); f.collider.enabled = true; f.body.isKinematic = false; f.releaseAt = 0;
+            f.view.layer = 2; f.collideWithVehicles = false;
             f.renderer.sharedMaterial = debrisMaterial;
             var box = f.collider as BoxCollider;
             if (box) { box.center = Vector3.zero; box.size = Vector3.one; }
@@ -658,6 +662,14 @@ namespace MadeInArizona
             foreach (var cell in cells)
             {
                 Fragment f = AcquireFragment();
+                // Fracture cells remain physical targets: cars can kick them aside and projectile
+                // queries (which exclude Ignore Raycast) can hit and push them.
+                f.collideWithVehicles = true;
+                f.view.layer = 0;
+                foreach (var vehicle in VehicleController.Active)
+                    if (vehicle != null)
+                        foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
+                            if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, vehicle.IsPlayer);
                 f.mesh.sharedMesh = f.ownedMesh = cell.mesh;
                 f.renderer.sharedMaterial = cellMaterial;
                 f.t.SetPositionAndRotation(cell.center, Quaternion.identity);
@@ -665,12 +677,12 @@ namespace MadeInArizona
                 var box = f.collider as BoxCollider;
                 if (box) box.size = new Vector3(Mathf.Max(.08f, cell.size.x * .7f), Mathf.Max(.08f, cell.size.y * .7f), Mathf.Max(.08f, cell.size.z * .7f));
                 foreach (var sibling in siblings) Physics.IgnoreCollision(f.collider, sibling.collider, true);
-                f.body.mass = Mathf.Clamp(cell.size.x * cell.size.y * cell.size.z * 4f, 1f, 35f);
+                f.body.mass = Mathf.Clamp(cell.size.x * cell.size.y * cell.size.z * 4f, .35f, 35f);
                 f.body.isKinematic = true;
                 Vector3 away = cell.center - bounds.center;
                 if (away.sqrMagnitude < .01f) away = Random.onUnitSphere;
-                f.launchVelocity = push * .35f + away.normalized * Mathf.Min(force * .16f, 1.5f) + Vector3.up * .35f;
-                f.launchAngularVelocity = Random.insideUnitSphere * 2f;
+                f.launchVelocity = push * .8f + away.normalized * Mathf.Clamp(force * .55f, 2f, 5f) + Vector3.up * 1.2f;
+                f.launchAngularVelocity = Random.insideUnitSphere * 6f;
                 f.born = Time.time; f.releaseAt = Time.time + .12f;
                 f.until = Time.time + 4.5f + Random.value;
                 block.SetColor("_BaseColor", color); f.renderer.SetPropertyBlock(block);
@@ -682,6 +694,7 @@ namespace MadeInArizona
             var f = fragments[i]; f.view.SetActive(false); f.body.isKinematic = true;
             if (f.ownedMesh) { Destroy(f.ownedMesh); f.ownedMesh = null; }
             f.mesh.sharedMesh = cubeFragmentMesh; f.releaseAt = 0;
+            f.view.layer = 2; f.collideWithVehicles = false;
             fragmentPool.Push(f); fragments.RemoveAt(i);
         }
         Light BurnLight(Vector3 point,float radius)

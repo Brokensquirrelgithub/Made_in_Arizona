@@ -302,6 +302,7 @@ namespace MadeInArizona
             Text(name,g,new Vector3(0,height-.23f,-depth*.5f-.22f),Mathf.Min(.5f,width/name.Length*1.6f),Cream);
             Box("Rooftop AC",g,new Vector3(width*.28f,height+.8f,1),new Vector3(2,1.3f,1.5f),new Color(.58f,.59f,.52f));
             for(int i=0;i<5;i++) Box("AC vent",g,new Vector3(width*.28f,height+.45f+i*.17f,.235f),new Vector3(1.7f,.055f,.03f),Ink);
+            MakeBreakable(g,260,false,ExplosionKind.Gasoline,150);
             return g;
         }
         /// <summary>Permanent service bay on the generated map. Its walls stay solid under vehicle and weapon fire.</summary>
