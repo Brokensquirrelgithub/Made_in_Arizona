@@ -90,7 +90,7 @@ namespace MadeInArizona
 
         void Update()
         {
-            PausePressed = !Rebinding && pause.WasPressedThisFrame();
+            PausePressed = !GameUI.ConsoleOpen && !Rebinding && pause.WasPressedThisFrame();
             Vector2 stickAim = aim.ReadValue<Vector2>();
             var pad = Gamepad.current;
             bool padActive = pad != null && (pad.leftStick.ReadValue().sqrMagnitude > .04f || stickAim.sqrMagnitude > .04f || pad.buttonSouth.wasPressedThisFrame || pad.leftTrigger.ReadValue() > .15f || pad.rightTrigger.ReadValue() > .15f
@@ -102,8 +102,8 @@ namespace MadeInArizona
             else if (mouseTravel > 40 || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) || (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame)) UsingGamepad = false;
             // The HUD draws its own reticle; the system arrow would be a second one.
             bool playing = GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
-            Cursor.visible = !playing;
-            if (Rebinding || !gameplayEnabled) { ClearGameplay(); return; }
+            Cursor.visible = !playing || GameUI.ConsoleOpen;
+            if (GameUI.ConsoleOpen || Rebinding || !gameplayEnabled) { ClearGameplay(); return; }
             Move = Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             AimElevation=0;

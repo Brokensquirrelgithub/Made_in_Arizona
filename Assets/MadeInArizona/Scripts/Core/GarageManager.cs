@@ -91,7 +91,7 @@ namespace MadeInArizona
         public static bool SelectVehicle(int index,SaveData save)
         {
             ContentCatalog.EnsureLoaded();if(index<0||index>=ContentCatalog.Vehicles.Length)return false;
-            var car=ContentCatalog.Vehicles[index];if(save.unlockedMission<car.unlockMission){LastMessage="Vehicle unlocks after more campaign jobs.";return false;}
+            var car=ContentCatalog.Vehicles[index];if(save.unlockedMission<car.unlockMission&&!save.ownedVehicles.Contains(car.id)){LastMessage="Vehicle unlocks after more campaign jobs.";return false;}
             if(!save.ownedVehicles.Contains(car.id))
             {
                 if(save.money<car.cost){LastMessage="Need $"+car.cost+" to purchase this vehicle.";return false;}

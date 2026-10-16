@@ -56,6 +56,7 @@ namespace MadeInArizona
         }
         int station, selectedPart, selectedWeapon, settingsPage, menuFocus;
         public int GarageStation => station;
+        public static bool ConsoleOpen { get; private set; }
         bool settings;
         float width, height, smoothedFps = 60;
         Vector2 listScroll, detailScroll;
@@ -64,11 +65,13 @@ namespace MadeInArizona
         void Start()
         {
             game.StateChanged += ResetFocus;
+            Application.logMessageReceived += CaptureConsoleLog;
             if (!Application.isBatchMode) StartCoroutine(SampleReticleContrast());
         }
-        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; DisposeReticleContrast(); }
+        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; Application.logMessageReceived -= CaptureConsoleLog; DisposeReticleContrast(); }
         void ResetFocus()
         {
+            ConsoleOpen = false;
             worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;
             resetProgressPending=false; resetProgressError=null;
             if (game != null && game.Save != null)
@@ -92,6 +95,8 @@ namespace MadeInArizona
                     GameUpdater.Instance.DismissStartupOffer();
                 return;
             }
+            if (Keyboard.current != null && Keyboard.current.f5Key.wasPressedThisFrame) ToggleConsole();
+            if (ConsoleOpen) return;
             TickDevSave();UpdatesInput();if(updatesMenu)return;WorldMenuInput();
             if(game.State==GameState.MainMenu||game.State==GameState.Generating||worldMap)return;
             smoothedFps = Mathf.Lerp(smoothedFps, 1f / Mathf.Max(.001f, Time.unscaledDeltaTime), .05f);
@@ -195,6 +200,7 @@ namespace MadeInArizona
             if (CoopSession.Instance && (CoopSession.Instance.EndChoicePending || CoopSession.Instance.EndingSession))
             { DrawCoopEndPrompt(); GUI.matrix = Matrix4x4.identity; return; }
             if (StartupUpdateOfferVisible) { DrawStartupUpdateOffer(); GUI.matrix = Matrix4x4.identity; return; }
+            if (ConsoleOpen) { DrawConsole(); GUI.matrix = Matrix4x4.identity; return; }
             if(game.State==GameState.MainMenu)
             {
                 if(resetProgressPending)DrawResetProgressConfirmation();
@@ -320,7 +326,7 @@ namespace MadeInArizona
             Tag(56, top + 20, "THESE ALL PASSED SOMEONE’S INSPECTION", Orange);
             listScroll = GUI.BeginScrollView(new Rect(48, top + 57, 418, panelHeight - 75), listScroll, new Rect(0, 0, 390, ContentCatalog.Vehicles.Length * 82));
             for (int i = 0; i < ContentCatalog.Vehicles.Length; i++) {
-                var v = ContentCatalog.Vehicles[i]; bool unlocked = v.unlockMission <= game.Save.unlockedMission;
+                var v = ContentCatalog.Vehicles[i]; bool unlocked = v.unlockMission <= game.Save.unlockedMission || game.Save.ownedVehicles.Contains(v.id);
                 if (Button(0, i * 82, 385, 67, v.displayName.ToUpperInvariant() + "\n" + (unlocked ? v.drivetrain + "  •  " + Mathf.RoundToInt(v.horsepower * VehicleStats.StockPowerMultiplier) + " HP  •  " + v.mass + " KG" : "UNLOCK: WORK ORDER " + (v.unlockMission + 1)), game.Save.selectedVehicle == i, unlocked)) {
                     if (GarageManager.SelectVehicle(i, game.Save)) game.RefreshGarageVehicle(); else game.Notify("The fleet fund cannot cover that vehicle yet.");
                 }
