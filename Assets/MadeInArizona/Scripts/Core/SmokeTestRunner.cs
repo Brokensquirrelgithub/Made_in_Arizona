@@ -629,6 +629,9 @@ namespace MadeInArizona
         {
             var game = GameManager.Instance;
             Check("flail is sold in garage", WeaponRules.GarageWeapon("flail") && WeaponRules.Find("flail") && WeaponRules.ScrapCost("flail") > 0);
+            Check("car travel does not count toward swing speed",
+                WashingMachineFlail.RelativeSwingSpeed(Vector3.forward * 12f, Vector3.forward * 12f, 1f) < .01f &&
+                Mathf.Abs(WashingMachineFlail.RelativeSwingSpeed(Vector3.forward * 17f, Vector3.forward * 12f, 1f) - 5f) < .01f);
             game.Save.selectedWeapon = "flail";
             game.StartMission(0);
             QuietMissionHostiles();
@@ -643,17 +646,83 @@ namespace MadeInArizona
             target.transform.position = player.transform.position + player.transform.forward * 5f;
             target.transform.rotation = player.transform.rotation;
             target.Initialize(ContentCatalog.Vehicles[0], VehicleStats.From(ContentCatalog.Vehicles[0]), false);
-            target.Body.isKinematic = true;
+            target.Body.useGravity = false;
+            target.Body.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
             float before = target.Damage.Health;
+            float peakPush = 0, maxReach = 0;
+            bool chainPlayed = false;
+            var audio = AudioManager.Instance;
             for (int i = 0; i < 45; i++)
             {
                 flail.Swing(player.transform.forward, WeaponRules.Find("flail").damage);
+                if (i == 0)
+                    Check("washer launch plays a metal bang", audio && audio.GetComponentsInChildren<AudioSource>()
+                        .Any(source => source.isPlaying && source.clip && source.clip.name == "Original • washer metal bang"));
                 yield return new WaitForFixedUpdate();
+                chainPlayed |= audio && audio.GetComponentsInChildren<AudioSource>()
+                    .Any(source => source.isPlaying && source.clip && source.clip.name == "Original • loose chain rattle");
+                peakPush = Mathf.Max(peakPush, Vector3.Dot(target.Body.linearVelocity, player.transform.forward));
+                maxReach = Mathf.Max(maxReach, Vector3.Distance(flail.HeadPosition, player.transform.position + Vector3.up * 1.65f));
+                if (i == 19)
+                    Check("washer ejection deals half base swing damage", Mathf.Abs(before - target.Damage.Health -
+                        WeaponRules.Find("flail").damage * .5f * DevTuning.Current.playerDamage) < 1f);
             }
             Check("held flail extends and damages an enemy in its swept path", flail.Extended && target.Damage.Health < before);
+            Check("washer launch pushes enemy vehicles", peakPush > 2f);
+            Check("moving chain plays its rattle", chainPlayed);
+            Check("washer drags on the ground within the longer chain", flail.HeadGrounded && maxReach > 7.2f && maxReach <= 7.93f);
+            var touch = new GameObject("Flail slow touch probe").AddComponent<VehicleController>();
+            touch.transform.position = flail.HeadPosition;
+            touch.Initialize(ContentCatalog.Vehicles[0], VehicleStats.From(ContentCatalog.Vehicles[0]), false);
+            touch.Body.isKinematic = true;
+            int slowContacts = 0;
+            bool slowDamage = false;
+            for (int i = 0; i < 30; i++)
+            {
+                Vector3 previous = flail.HeadPosition;
+                Vector3 previousPlayer = player.transform.position;
+                float health = touch.Damage.Health;
+                flail.Swing(player.transform.forward, WeaponRules.Find("flail").damage);
+                yield return new WaitForFixedUpdate();
+                float speed = WashingMachineFlail.RelativeSwingSpeed(flail.HeadPosition - previous,
+                    player.transform.position - previousPlayer, Time.fixedDeltaTime);
+                if (speed < 4.8f && Vector3.Distance(touch.Hull.ClosestPoint(flail.HeadPosition), flail.HeadPosition) < .95f)
+                { slowContacts++; if (touch.Damage.Health < health - .01f) slowDamage = true; }
+            }
+            Check("slow washer contact cannot deal swing damage", slowContacts >= 5 && !slowDamage);
             yield return new WaitForSecondsRealtime(.7f);
             Check("released flail retracts", !flail.Extended);
+            Check("stowed chain is quiet", !audio || !audio.GetComponentsInChildren<AudioSource>()
+                .Any(source => source.isPlaying && source.clip && source.clip.name == "Original • loose chain rattle"));
+            flail.Swing(player.transform.forward, WeaponRules.Find("flail").damage);
+            Check("new trigger pull launches again after reeling in", Vector3.Distance(flail.HeadPosition,
+                player.transform.position + Vector3.up * 1.65f) < 1.1f);
             Destroy(target.gameObject);
+            Destroy(touch.gameObject);
+            yield return new WaitForFixedUpdate();
+            Vector3 drive = Vector3.ProjectOnPlane(player.transform.forward, Vector3.up).normalized;
+            Vector3 driveStart = player.transform.position;
+            for (int i = 0; i < 35; i++)
+            {
+                player.Body.linearVelocity = drive * 34f;
+                flail.Swing(drive, WeaponRules.Find("flail").damage);
+                yield return new WaitForFixedUpdate();
+            }
+            float lead = Vector3.Dot(flail.HeadPosition - (player.transform.position + Vector3.up * 1.65f), drive);
+            Check("washer keeps its swing reach while the car is moving fast",
+                Vector3.Distance(player.transform.position, driveStart) > 12f && lead > 4f);
+            flail.Release();
+            Vector3 releaseStart = player.transform.position;
+            for (int i = 0; i < 25; i++)
+            {
+                player.Body.linearVelocity = drive * 34f;
+                yield return new WaitForFixedUpdate();
+            }
+            yield return new WaitForEndOfFrame();
+            float releaseTravel = Vector3.Distance(player.transform.position, releaseStart);
+            float stowError = Vector3.Distance(flail.HeadPosition, player.transform.position + Vector3.up * 1.65f +
+                player.transform.forward * 1.05f);
+            Check("released washer reels in at driving speed", releaseTravel > 8f && !flail.Extended && stowError < .3f);
         }
 
         IEnumerator TestCoopSnapshotAndSmoke()
@@ -1320,6 +1389,10 @@ namespace MadeInArizona
             game.WorldConfig.size=GeneratedWorld.MaxSize;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
             Check("maximum world size generates with bounded geometry",Mathf.Approximately(GeneratedWorld.Active.WorldBounds.size.x,GeneratedWorld.MaxSize)&&GeneratedWorld.Active.transform.Find("Chunked terrain").GetComponentsInChildren<MeshCollider>().Length<=256);
             game.WorldConfig.size=1600;WorldConfigStore.Save(game.WorldConfig);game.StartMission(0);yield return new WaitForSecondsRealtime(.3f);
+            float protectedHealth=game.Player.Damage.Health;
+            game.Player.Damage.Invulnerable=true;
+            game.Player.Damage.ApplyDamage(50,game.Player.transform.position,null);
+            Check("dev invulnerability blocks player damage",Mathf.Approximately(game.Player.Damage.Health,protectedHealth));
             // Biomes follow Arizona: Sonoran south (the starter town), red rock north-east, plateau north-west, Rim forest between.
             var active=GeneratedWorld.Active;float span=active.WorldBounds.size.x;
             bool geography=active.BiomeAt(active.Towns[0]).Dominant==Biome.Sonoran
@@ -1434,6 +1507,8 @@ namespace MadeInArizona
                 cactus.ApplyProjectileHit(1,hit,null,Vector3.right);bool survivedFirst=!cactus.IsDestroyed;
                 cactus.ApplyProjectileHit(1,hit,null,Vector3.right);
                 Check("a cactus stops one weak round and breaks on the second",survivedFirst&&cactus.IsDestroyed);
+                // Fracture cells stay kinematic for 0.12 s so their intact outline reads before they scatter.
+                yield return new WaitForSecondsRealtime(.18f);
                 yield return new WaitForFixedUpdate();
                 float along=0;int pieces=0;
                 foreach(var body in FindObjectsByType<Rigidbody>(FindObjectsSortMode.None))if(body.name=="Pooled debris"&&body.gameObject.activeInHierarchy&&!before.Contains(body)){along+=body.linearVelocity.x;pieces++;}

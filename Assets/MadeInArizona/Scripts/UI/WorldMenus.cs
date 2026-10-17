@@ -21,7 +21,7 @@ namespace MadeInArizona
                     resetProgressPending=false;
                 return;
             }
-            if(Keyboard.current!=null&&Keyboard.current.mKey.wasPressedThisFrame&&GeneratedWorld.Active)
+            if(InputManager.Instance!=null&&InputManager.Instance.MapPressed&&GeneratedWorld.Active)
             {if(worldMap){worldMap=false;game.Resume();}else if(game.IsPlaying||game.State==GameState.Paused)OpenWorldMap();}
         }
         void DrawMainMenu()
@@ -126,15 +126,15 @@ namespace MadeInArizona
         void DrawGeneratedMinimap(float x,float y,float size)
         {
             Rect(x,y,size,size,Ink);
-            Text(x+10,y+8,size-20,25,"ARIZONA / M MAP",12,Muted,true);
+            Text(x+10,y+8,size-20,25,"ARIZONA / MAP",12,Muted,true);
             RenderWorldMap(new Rect(x+10,y+35,size-20,size-45),false);
-            if(Button(x,y+size+3,size,25,"OPEN MAP / M"))OpenWorldMap();
+            if(Button(x,y+size+3,size,25,"MAP / M / SELECT"))OpenWorldMap();
         }
         void DrawWorldMap()
         {
             Rect(0,0,width,height,new Color(.035f,.055f,.06f,1));
             Text(30,20,width-320,45,"ARIZONA • SEED "+game.WorldConfig.seed,29,Cream,true);
-            if(Button(width-260,20,230,42,"CLOSE MAP / M",true)){worldMap=false;game.Resume();}
+            if(Button(width-260,20,230,42,"CLOSE MAP / M / SELECT",true)){worldMap=false;game.Resume();}
             if(Button(width-520,20,245,42,"REGENERATE MAP",false,!CoopSession.IsRemoteClient)){worldMap=false;game.RegenerateWorld();}
             float size=Mathf.Min(height-150,width-490);
             var area=new Rect(35,92,size*.9f,size);

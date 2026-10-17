@@ -27,10 +27,11 @@ namespace MadeInArizona
         public bool Interact { get; private set; }
         public bool SwapPressed { get; private set; }
         public bool PausePressed { get; private set; }
+        public bool MapPressed { get; private set; }
         public bool UsingGamepad { get; private set; }
         public bool Rebinding => rebind != null;
         InputActionMap map;
-        InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause, reverse;
+        InputAction move, aim, pointer, primary, secondary, brake, boost, interact, swap, pause, reverse, worldMap;
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
         float mouseTravel;
@@ -55,6 +56,7 @@ namespace MadeInArizona
             reverse = Button("Reverse", "<Keyboard>/r", "<Gamepad>/leftShoulder");
             swap = Button("Swap", "<Keyboard>/f", "<Gamepad>/buttonNorth");
             pause = Button("Pause", "<Keyboard>/escape", "<Gamepad>/start");
+            worldMap = Button("Map", "<Keyboard>/m", "<Gamepad>/select");
             Actions.AddActionMap(map);
             map.Enable();
         }
@@ -91,10 +93,11 @@ namespace MadeInArizona
         void Update()
         {
             PausePressed = !GameUI.ConsoleOpen && !Rebinding && pause.WasPressedThisFrame();
+            MapPressed = !GameUI.ConsoleOpen && !Rebinding && worldMap.WasPressedThisFrame();
             Vector2 stickAim = aim.ReadValue<Vector2>();
             var pad = Gamepad.current;
             bool padActive = pad != null && (pad.leftStick.ReadValue().sqrMagnitude > .04f || stickAim.sqrMagnitude > .04f || pad.buttonSouth.wasPressedThisFrame || pad.leftTrigger.ReadValue() > .15f || pad.rightTrigger.ReadValue() > .15f
-                || pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame);
+                || pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame);
             // The mouse takes over only after deliberate travel. A single jittery frame used to flip devices back and forth,
             // alternating the stick and mouse aim points so the reticle appeared split in two.
             mouseTravel = Mathf.Max(0, mouseTravel - 90 * Time.unscaledDeltaTime) + (Mouse.current != null ? Mouse.current.delta.ReadValue().magnitude : 0);

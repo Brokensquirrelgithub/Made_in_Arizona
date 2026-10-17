@@ -66,6 +66,7 @@ namespace MadeInArizona
         Quaternion networkRotation;
         float networkYawRate;
         public bool HasRemoteInput { get; private set; }
+        bool primaryHeld;
         public CoopControls RemoteControls { get; private set; }
         float remoteInputAt;
         CoopControls FreshRemoteControls => Time.unscaledTime - remoteInputAt < .4f ? RemoteControls : default;
@@ -359,6 +360,8 @@ namespace MadeInArizona
                 aimDirection = new Vector3(controls.aim.x, controls.elevation, controls.aim.y);
                 Weapons.AimAt(aimDirection);
                 if (controls.primary) Weapons.FirePrimary(aimDirection);
+                else if (primaryHeld) Weapons.ReleasePrimary();
+                primaryHeld = controls.primary;
                 if (controls.secondary) Weapons.FireSecondary(aimDirection);
             }
             else if (IsPlayer && input != null)
@@ -366,12 +369,16 @@ namespace MadeInArizona
                 aimDirection = new Vector3(input.Aim.x, input.AimElevation, input.Aim.y);
                 Weapons.AimAt(aimDirection);
                 if (input.Primary) Weapons.FirePrimary(aimDirection);
+                else if (primaryHeld) Weapons.ReleasePrimary();
+                primaryHeld = input.Primary;
                 if (input.Secondary) Weapons.FireSecondary(aimDirection);
             }
             else
             {
                 Weapons.AimAt(aimDirection);
                 if (aiFire) Weapons.FirePrimary(aimDirection);
+                else if (primaryHeld) Weapons.ReleasePrimary();
+                primaryHeld = aiFire;
             }
             AnimateBody();
         }

@@ -35,7 +35,7 @@ namespace MadeInArizona
         }
         readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SIMPLE", "LOW", "MEDIUM", "HIGH" };
-        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause" };
+        readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause", "Map" };
         int[] garageWeaponIndices;
         readonly List<int> visibleParts = new List<int>();
         int partsVehicle = -1;
@@ -503,9 +503,8 @@ namespace MadeInArizona
             bool critical = p.Damage.EngineReached;
             Text(300, height - 177, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
-            Text(300, height - 112, 75, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
+            Text(300, height - 105, 80, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O", 13, Blue, true);
             Text(48, height - 78, 235, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH  " + p.RPM.ToString("0") + " RPM", 17, Cream, true);
-            Text(291, height - 78, 85, 30, "G" + p.Gear + "/" + p.GearCount, 19, Orange, true);
             float weaponsX = 410;
             bool padControls = InputManager.Instance.UsingGamepad;
             Rect(weaponsX, height - 104, 210, 76, Ink);
@@ -675,7 +674,7 @@ namespace MadeInArizona
             if (Button(x + 40, y + 176, 420, 56, "BACK TO THE PROBLEM  /  A", true)) game.Resume();
             if (Button(x + 40, y + 249, 420, 49, "SETTINGS  /  Y")) { settings = true; menuFocus = 0; }
             if (Button(x + 40, y + 315, 420, 49, "DEV TUNING  /  MOUSE")) { devMenu=true; settings=false; }
-            if(Button(x+40,y+380,420,49,"ARIZONA MAP / M",false,GeneratedWorld.Active!=null))OpenWorldMap();
+            if(Button(x+40,y+380,420,49,"ARIZONA MAP / M / SELECT",false,GeneratedWorld.Active!=null))OpenWorldMap();
             if(Button(x+40,y+445,420,49,CoopSession.IsRemoteClient?"LEAVE CO-OP / MAIN MENU":"MAIN MENU")) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ShowMainMenu(); }
             if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE  /  B",false,!CoopSession.IsRemoteClient)) game.ReturnToGarage();
             if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED", false, GeneratedWorld.Active != null && !game.IsCombatTrial && !CoopSession.IsRemoteClient)) game.RegenerateWorld();
@@ -764,24 +763,24 @@ namespace MadeInArizona
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 3) {
-                Text(x + 35, y + 186, 850, 52, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / Esc pause" + (s.shoulderReverse ? " / hold R to reverse" : ""), 17);
+                Text(x + 35, y + 186, 850, 52, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / M map / Esc pause" + (s.shoulderReverse ? " / hold R to reverse" : ""), 17);
                 Text(x + 35, y + 242, 850, 52, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, " +
-                    (s.boostOnSouth ? "A boost, RB interact" : "RB boost, A interact") + ", B drift" + (s.shoulderReverse ? ", LB reverse" : "") + ", Start pause.", 17, Muted);
+                    (s.boostOnSouth ? "A boost, RB interact" : "RB boost, A interact") + ", B drift" + (s.shoulderReverse ? ", LB reverse" : "") + ", Select map, Start pause.", 17, Muted);
                 Tag(x + 35, y + 306, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
-                    float bx = x + 35 + i % 4 * 215, by = y + 338 + i / 4 * 56;
+                    float bx = x + 35 + i % 4 * 215, by = y + 338 + i / 4 * 45;
                     string action = i < 4 ? "Move" : actions[i];
                     int binding = i < 4 ? i + 1 : 0;
                     if (InputManager.Instance.UsingGamepad) binding = InputManager.Instance.Actions.FindAction(action).bindings.Count - 1;
                     if (Button(bx, by, 202, 45, (action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant()) + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 4)) BeginControlRebind(i);
                 }
-                SettingLabel(x, y + 513, "AIM ASSIST", 0);
-                if (Button(x + 465, y + 508, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
-                SettingLabel(x, y + 560, "REVERSE (GAMEPAD)", 1);
-                if (Button(x + 465, y + 555, 426, 38, s.shoulderReverse ? "HOLD LB • STICK NEVER REVERSES" : "AUTO • HOLD STICK BEHIND THE CAR")) s.shoulderReverse = !s.shoulderReverse;
-                SettingLabel(x, y + 607, "NITRO BUTTON (GAMEPAD)", 2);
-                if (Button(x + 465, y + 602, 426, 38, s.boostOnSouth ? "A • INTERACT MOVES TO RB" : "RB • INTERACT ON A")) s.boostOnSouth = !s.boostOnSouth;
-                if (Button(x + 35, y + 652, 273, 37, "RESET INPUT BINDINGS", InputManager.Instance.UsingGamepad && menuFocus == 3)) InputManager.Instance.ResetBindings();
+                SettingLabel(x, y + 535, "AIM ASSIST", 0);
+                if (Button(x + 465, y + 530, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
+                SettingLabel(x, y + 582, "REVERSE (GAMEPAD)", 1);
+                if (Button(x + 465, y + 577, 426, 38, s.shoulderReverse ? "HOLD LB • STICK NEVER REVERSES" : "AUTO • HOLD STICK BEHIND THE CAR")) s.shoulderReverse = !s.shoulderReverse;
+                SettingLabel(x, y + 629, "NITRO BUTTON (GAMEPAD)", 2);
+                if (Button(x + 465, y + 624, 426, 38, s.boostOnSouth ? "A • INTERACT MOVES TO RB" : "RB • INTERACT ON A")) s.boostOnSouth = !s.boostOnSouth;
+                if (Button(x + 35, y + 684, 273, 37, "RESET INPUT BINDINGS", InputManager.Instance.UsingGamepad && menuFocus == 3)) InputManager.Instance.ResetBindings();
                 if (InputManager.Instance.Rebinding) { Rect(x + 180, y + 309, 570, 180, Panel); Text(x + 200, y + 336, 530, 85, "PRESS A NEW KEY OR CONTROL\nEscape cancels. Devices are saved separately.", 23, Cream, true, TextAnchor.MiddleCenter); if (Button(x + 345, y + 431, 240, 37, "CANCEL REBIND")) InputManager.Instance.CancelRebind(); }
             }
             if (Button(x + 570, y + 773, 320, 48, "SAVE & CLOSE  /  B", true)) { game.ApplySettings(); settings = false; }

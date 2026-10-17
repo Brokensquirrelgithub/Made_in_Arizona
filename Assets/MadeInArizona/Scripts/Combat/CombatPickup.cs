@@ -27,6 +27,7 @@ namespace MadeInArizona
         const float SwapRadius = 9f;
         float availableAt, magnetSpeed;
         Vector3 basePosition;
+        Material ownMaterial;
         const float SupplyMagnetRadius = 12f;
         public static CombatPickup NearbyWeapon(VehicleController player)
         {
@@ -36,6 +37,7 @@ namespace MadeInArizona
             {
                 if (!pickup || pickup.Kind != PickupKind.Weapon || Time.time < pickup.availableAt || pickup.SameAsHeld(player)) continue;
                 Vector3 delta = pickup.transform.position - player.transform.position; delta.y = 0;
+                if (Mathf.Abs(pickup.transform.position.y - player.transform.position.y) > 4) continue;
                 if (delta.sqrMagnitude < nearest) { nearest = delta.sqrMagnitude; closest = pickup; }
             }
             return closest;
@@ -77,6 +79,7 @@ namespace MadeInArizona
             go.GetComponent<Renderer>().sharedMaterial = material;
             var pickup = go.AddComponent<CombatPickup>();
             pickup.Kind = kind; pickup.Weapon = weapon; pickup.Amount = amount;
+            pickup.ownMaterial = material;
             pickup.basePosition = go.transform.position; pickup.availableAt = Time.time + .35f;
             return pickup;
         }
@@ -130,6 +133,13 @@ namespace MadeInArizona
         {
             transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
             transform.Rotate(Vector3.up, 85 * Time.deltaTime);
+            if (Kind == PickupKind.Weapon)
+            {
+                var localPlayer = GameManager.Instance ? GameManager.Instance.Player : null;
+                bool selected = localPlayer && NearbyWeapon(localPlayer) == this;
+                transform.localScale = selected ? new Vector3(1.8f, .53f, .97f) : new Vector3(1.5f, .44f, .81f);
+                if (ownMaterial) ownMaterial.SetColor("_EmissionColor", Weapon.projectileColor * (selected ? 7f + Mathf.Sin(Time.time * 10f) : 2f));
+            }
             if (IsNetworkProxy) return;
             var game = GameManager.Instance;
             if (CoopSession.IsRemoteClient || !game || !game.IsPlaying || Time.time < availableAt) return;

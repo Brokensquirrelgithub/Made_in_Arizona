@@ -7,6 +7,7 @@ namespace MadeInArizona
         public float Health { get; private set; }
         public float MaxHealth { get; private set; }
         public bool IsDead { get; private set; }
+        public bool Invulnerable { get; set; }
         /// <summary>Some defeated hostiles keep moving briefly and can collide with live cars.</summary>
         public bool IsSpinningWreck { get; private set; }
         public int FailedDepth { get; private set; }
@@ -120,6 +121,7 @@ namespace MadeInArizona
         {
             if (CoopSession.IsRemoteClient) return;
             if (IsDead || amount <= 0 || vehicle == null) return;
+            if (vehicle.IsPlayer && Invulnerable) return;
             var attacker = source ? source.GetComponentInParent<VehicleController>() : null;
             // Escort health is a mission objective. Scenery, wrecks, self damage and allied splash never deplete it.
             if (!vehicle.IsPlayer && vehicle.FriendlyToPlayer && (environmental || !attacker || attacker.FriendlyToPlayer)) return;

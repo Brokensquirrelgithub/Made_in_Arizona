@@ -244,7 +244,7 @@ namespace MadeInArizona
         }
         void BuildMap()
         {
-            const int res=256;MapTexture=new Texture2D(res,res,TextureFormat.RGBA32,false){name="Seeded Arizona map",filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
+            const int res=512;MapTexture=new Texture2D(res,res,TextureFormat.RGBA32,false){name="Seeded Arizona map",filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
             var px=new Color[res*res];
             for(int y=0;y<res;y++)for(int x=0;x<res;x++)
             {

@@ -7,7 +7,7 @@ namespace MadeInArizona
 {
     public sealed partial class GameUI
     {
-        static readonly string[] consoleCommands = { "help", "clear", "status", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "garage" };
+        static readonly string[] consoleCommands = { "help", "clear", "status", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "invulnerable", "garage" };
         readonly List<string> consoleLines = new List<string>();
         readonly List<string> consoleHistory = new List<string>();
         string consoleInput = "", completionSeed;
@@ -117,6 +117,7 @@ namespace MadeInArizona
                 if (weapon && !WeaponRules.GarageWeapon(weapon.id)) AddSuggestion(result, verb, weapon.id, arg);
             if (verb == "car") foreach (var car in ContentCatalog.Vehicles) if (car) AddSuggestion(result, verb, car.id, arg);
             if (verb == "unlock") foreach (string option in new[] { "cars", "weapons", "missions", "all" }) AddSuggestion(result, verb, option, arg);
+            if (verb == "invulnerable") foreach (string option in new[] { "on", "off" }) AddSuggestion(result, verb, option, arg);
             return result;
         }
 
@@ -158,6 +159,7 @@ namespace MadeInArizona
                 WriteConsole("money <amount>, scrap <amount>  •  add a positive amount");
                 WriteConsole("unlock cars|weapons|missions|all  •  unlock progression");
                 WriteConsole("weapon <id>, field <id>, car <id>  •  Tab lists IDs");
+                WriteConsole("invulnerable on|off  •  ignore all player damage this sortie");
                 WriteConsole("car changes the selected car in the garage; field equips a drop weapon during play.");
                 return;
             }
@@ -165,11 +167,18 @@ namespace MadeInArizona
             if (command == "status")
             {
                 WriteConsole("State " + game.State + "  •  $" + game.Save.money + "  •  " + game.Save.salvage + " scrap  •  mission " + game.Save.unlockedMission);
-                if (game.Player) WriteConsole("Car " + game.Player.Definition.id + "  •  garage weapon " + game.Player.Weapons.GarageWeapon.id);
+                if (game.Player) WriteConsole("Car " + game.Player.Definition.id + "  •  garage weapon " + game.Player.Weapons.GarageWeapon.id + "  •  invulnerable " + (game.Player.Damage.Invulnerable ? "on" : "off"));
                 return;
             }
             if (CoopSession.IsRemoteClient) { WriteConsole("Only the host can run dev commands in co-op."); return; }
             if (words.Length > 2) { WriteConsole("Too many arguments. Type help for syntax."); return; }
+            if (command == "invulnerable")
+            {
+                if (!game.Player || !game.IsPlaying) { WriteConsole("Start a sortie first."); return; }
+                if (arg != "on" && arg != "off") { WriteConsole("Use invulnerable on or invulnerable off."); return; }
+                game.Player.Damage.Invulnerable = arg == "on";
+                WriteConsole("Player invulnerability " + arg + "."); return;
+            }
             if (command == "money" || command == "scrap")
             {
                 if (!int.TryParse(arg, NumberStyles.None, CultureInfo.InvariantCulture, out int amount) || amount <= 0)

@@ -50,7 +50,7 @@ namespace MadeInArizona
         }
         bool TrySpawnVehicle(GeneratedWorld world,VehicleController focus)
         {
-            for(int attempt=0;attempt<18;attempt++)
+            for(int attempt=0;attempt<64;attempt++)
             {
                 float angle=(float)random.NextDouble()*Mathf.PI*2;
                 Vector3 desired=focus.transform.position+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*85;

@@ -439,6 +439,53 @@ namespace MadeInArizona
             }
             return Clip(wood ? "Original • wood break and splinters" : "Original • rock break and debris", samples);
         }
+        /// <summary>A hollow steel cabinet strike with a hard edge and several uneven ringing panels.</summary>
+        public static AudioClip WasherBang()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .7f)];
+            uint seed = 62819;
+            float low = 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, .18f);
+                float strike = (noise - low) * Mathf.Exp(-t * 115f) * .8f;
+                float cabinet = (Wave(122f * t - 23f * t * t) * .62f +
+                    Wave(307f * t) * .42f + Wave(514f * t) * .26f +
+                    Wave(823f * t) * .17f) * Mathf.Exp(-t * 8f);
+                float panel = (Wave(239f * t) * .28f + Wave(681f * t) * .19f) *
+                    Mathf.Exp(-t * 5.5f) * Mathf.Sin(Mathf.PI * Mathf.Clamp01(t * 38f));
+                samples[i] = SoftLimit(strike + cabinet + panel) * Mathf.Min(1, t * 2800f) *
+                    Mathf.Min(1, (samples.Length - i) / (Rate * .06f));
+            }
+            return Clip("Original • washer metal bang", samples);
+        }
+        /// <summary>Loose links striking one another in a short, irregular burst as the cable moves.</summary>
+        public static AudioClip ChainRattle()
+        {
+            var samples = new float[Mathf.RoundToInt(Rate * .29f)];
+            uint seed = 94717;
+            float low = 0;
+            float[] strikes = { .007f, .028f, .052f, .083f, .106f, .14f, .176f, .209f, .244f };
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)Rate, noise = Noise(ref seed);
+                low = Mathf.Lerp(low, noise, .28f);
+                float rattle = 0;
+                for (int link = 0; link < strikes.Length; link++)
+                {
+                    float local = t - strikes[link];
+                    if (local < 0) continue;
+                    float envelope = Mathf.Exp(-local * (65f + link * 2f)) * (1f - link * .055f);
+                    float frequency = 950f + (link % 4) * 172f;
+                    rattle += ((noise - low) * .35f * Mathf.Exp(-local * 210f) +
+                        Wave(frequency * local) * .45f + Wave(frequency * 1.63f * local) * .18f) * envelope;
+                }
+                samples[i] = SoftLimit(rattle * .85f) * Mathf.Min(1, t * 1800f) *
+                    Mathf.Min(1, (samples.Length - i) / (Rate * .018f));
+            }
+            return Clip("Original • loose chain rattle", samples);
+        }
         /// <summary>
         /// Kill confirmation: a heavy punched thunk with a short crunch, topped by a bright two-note ding, so a kill
         /// lands clearly above the ordinary hit tick.

@@ -81,18 +81,18 @@ namespace MadeInArizona
             {
                 shell.transform.localScale = Vector3.one * .26f;
                 shell.ownMaterial.EnableKeyword("_EMISSION");
-                shell.ownMaterial.SetColor("_EmissionColor", new Color(4.2f, 1.55f, .2f));
+                shell.ownMaterial.SetColor("_EmissionColor", new Color(12f, 4.8f, .65f));
                 var fire = Resources.Load<GameObject>("VFX/ExplosionGroundFire");
                 if (fire)
                 {
                     var flame = Instantiate(fire, shell.transform);
                     flame.name = "Tennis ball fire particles";
                     flame.transform.localPosition = Vector3.zero;
-                    flame.transform.localScale = Vector3.one * 1.2f;
+                    flame.transform.localScale = Vector3.one * 2.2f;
                     foreach (var particles in flame.GetComponentsInChildren<ParticleSystem>(true))
                     {
-                        var emission = particles.emission; emission.rateOverTimeMultiplier *= .35f;
-                        var main = particles.main; main.maxParticles = Mathf.Min(main.maxParticles, 24);
+                        var emission = particles.emission; emission.rateOverTimeMultiplier *= 1.5f;
+                        var main = particles.main; main.maxParticles = Mathf.Max(main.maxParticles, 96);
                     }
                     foreach (var audio in flame.GetComponentsInChildren<AudioSource>(true)) { audio.Stop(); audio.enabled = false; }
                     foreach (var child in flame.GetComponentsInChildren<Transform>(true))
@@ -434,7 +434,7 @@ namespace MadeInArizona
                 {
                     if (!Hostile(vehicle)) continue;
                     Vector3 delta = vehicle.transform.position + Vector3.up * .9f - transform.position;
-                    if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > 3.2f * 3.2f || Mathf.Abs(delta.y) > 4f) continue;
+                    if (Vector3.ProjectOnPlane(delta, Vector3.up).sqrMagnitude > 3.52f * 3.52f || Mathf.Abs(delta.y) > 4.4f) continue;
                     VehicleAfflictions.For(vehicle).Ignite(8f, 2.5f, source);
                     Land(); return;
                 }

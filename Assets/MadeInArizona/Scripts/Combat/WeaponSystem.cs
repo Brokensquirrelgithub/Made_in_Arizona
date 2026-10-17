@@ -207,6 +207,10 @@ namespace MadeInArizona
             garageAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
             Fire(weapon, direction);
         }
+        public void ReleasePrimary()
+        {
+            if (flail) flail.Release();
+        }
         public void FireSecondary(Vector3 direction)
         {
             if (!CanFire()) return;
@@ -223,7 +227,7 @@ namespace MadeInArizona
             enemyRocketAt = Time.time + 3.3f;
             AimAt(direction);
             Vector3 muzzle = Muzzle(aimDirection);
-            ProjectileSystem.Fire(muzzle, aimDirection, 49, 62, 6, owner.gameObject, new Color(1, .35f, .08f), ExplosionKind.Rocket, 2.7f);
+            ProjectileSystem.Fire(muzzle, aimDirection, 98, 62, 6, owner.gameObject, new Color(1, .35f, .08f), ExplosionKind.Rocket, 2.7f);
             ExplosionSystem.Burst(muzzle, new Color(1, .5f, .1f), 8, 2);
             Flash(new Color(1, .3f, .06f), 13, .2f);
             AudioManager.Instance?.PlayShot(muzzle, WeaponRules.Find("invoice"));
@@ -251,7 +255,7 @@ namespace MadeInArizona
                     {
                         Vector3 along = Vector3.ProjectOnPlane(aimDirection, Vector3.up).normalized;
                         FieldOrdnance.LaunchShell(owner, muzzle + along * (i * .72f), aimDirection,
-                            weapon, damage, 0, null);
+                            weapon, damage, weapon.speed * (1f - i * .12f), null);
                     }
                     break;
                 case "sweeper": case "boomstick":

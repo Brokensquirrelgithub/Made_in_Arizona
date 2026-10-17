@@ -4,7 +4,7 @@ using UnityEngine;
 namespace MadeInArizona
 {
     /// <summary>The committed attack currently being announced by an enemy vehicle.</summary>
-    public enum EnemyAttackTelegraph { None, Rocket, Sniper, Ram, Mine, Mortar }
+    public enum EnemyAttackTelegraph { None, Rocket, Sniper, Ram, Mine, Mortar, Line, Cone }
 
     /// <summary>Vehicle combat steering, target selection, and readable special attacks.</summary>
     public sealed class EnemyAI : MonoBehaviour
@@ -33,7 +33,7 @@ namespace MadeInArizona
         AttackWarningVisual sniperWarning;
         float phase, specialAt, primaryAt, primaryBurstUntil, stuckTime, hazardAt, telegraphFireAt, ramUntil;
         Vector3 stuckSpot; float stuckAt = float.NegativeInfinity;
-        Vector3 avoidance, committedAim;
+        Vector3 avoidance, committedAim, committedOrigin;
         float committedDistance;
         float orbitSign;
         readonly List<Vector3> route = new List<Vector3>();
@@ -403,19 +403,28 @@ namespace MadeInArizona
                 return distance >= 17 && distance <= 70 ? EnemyAttackTelegraph.Mortar : EnemyAttackTelegraph.None;
             }
             if (Faction == EnemyFaction.RoadScavengers)
+            {
+                if (Archetype == 1 || Archetype == 4)
+                    return distance >= 12 && distance <= 42 ? EnemyAttackTelegraph.Line : EnemyAttackTelegraph.None;
                 return (Archetype == 2 || Archetype == 3 || Archetype == 6 || Archetype == 7) && distance >= 9 && distance <= 32
                     ? EnemyAttackTelegraph.Ram : EnemyAttackTelegraph.None;
+            }
             if (Faction == EnemyFaction.OpenHouseRealty)
             {
+                if (Archetype == 1) return distance >= 10 && distance <= 34 ? EnemyAttackTelegraph.Cone : EnemyAttackTelegraph.None;
                 if (Archetype == 0 || Archetype == 2 || Archetype == 6)
                     return distance >= 8 && distance <= 26 ? EnemyAttackTelegraph.Mine : EnemyAttackTelegraph.None;
                 return (Archetype == 3 || Archetype == 4 || Archetype == 7) && distance >= 18 && distance <= 55
                     ? EnemyAttackTelegraph.Rocket : EnemyAttackTelegraph.None;
             }
             if (Faction == EnemyFaction.SnowbirdConvoy)
+            {
+                if (Archetype == 3) return distance >= 10 && distance <= 34 ? EnemyAttackTelegraph.Cone : EnemyAttackTelegraph.None;
                 return Archetype != 5 && distance >= 8 && distance <= 25 ? EnemyAttackTelegraph.Mine : EnemyAttackTelegraph.None;
+            }
             if (Faction == EnemyFaction.CarOtaku)
             {
+                if (Archetype == 1) return distance >= 12 && distance <= 42 ? EnemyAttackTelegraph.Line : EnemyAttackTelegraph.None;
                 if (Archetype == 3 || Archetype == 4) return distance >= 16 && distance <= 60 ? EnemyAttackTelegraph.Sniper : EnemyAttackTelegraph.None;
                 return (Archetype == 0 || Archetype == 2 || Archetype == 6 || Archetype == 7) && distance >= 10 && distance <= 31
                     ? EnemyAttackTelegraph.Ram : EnemyAttackTelegraph.None;
@@ -437,9 +446,11 @@ namespace MadeInArizona
         {
             AttackTelegraph = attack;
             committedAim = aim.sqrMagnitude > .01f ? aim.normalized : transform.forward;
+            committedAim = Vector3.ProjectOnPlane(committedAim, Vector3.up).normalized;
+            committedOrigin = transform.position;
             committedDistance = distance;
             TelegraphDirection = committedAim;
-            float warning = attack == EnemyAttackTelegraph.Rocket ? 1.2f : attack == EnemyAttackTelegraph.Mortar ? 1.1f : attack == EnemyAttackTelegraph.Mine ? .65f : attack == EnemyAttackTelegraph.Sniper ? 1.25f : .8f;
+            float warning = attack == EnemyAttackTelegraph.Rocket ? 1.2f : attack == EnemyAttackTelegraph.Mortar ? 1.1f : attack == EnemyAttackTelegraph.Mine ? .65f : attack == EnemyAttackTelegraph.Sniper ? 1.25f : attack == EnemyAttackTelegraph.Line || attack == EnemyAttackTelegraph.Cone ? 1.45f : .8f;
             telegraphFireAt = Time.time + warning;
             // Aim is locked at the warning start, so player movement produces a real dodge window.
             specialAt = telegraphFireAt + SpecialRecovery(attack);
@@ -447,6 +458,17 @@ namespace MadeInArizona
 
         void LateUpdate()
         {
+            bool zone = AttackTelegraph == EnemyAttackTelegraph.Line || AttackTelegraph == EnemyAttackTelegraph.Cone;
+            if (zone && IsTelegraphingAttack && vehicle != null && vehicle.Damage != null && !vehicle.Damage.IsDead &&
+                GameManager.Instance != null && GameManager.Instance.IsPlaying)
+            {
+                if (!sniperWarning) sniperWarning = gameObject.AddComponent<AttackWarningVisual>();
+                sniperWarning.HideSniper();
+                sniperWarning.ShowZone(committedOrigin, committedAim, AttackTelegraph == EnemyAttackTelegraph.Cone,
+                    TelegraphRemaining, 1.45f);
+                return;
+            }
+            if (sniperWarning) sniperWarning.HideZone();
             if (AttackTelegraph != EnemyAttackTelegraph.Sniper || !IsTelegraphingAttack ||
                 vehicle == null || vehicle.Damage == null || vehicle.Damage.IsDead ||
                 GameManager.Instance == null || !GameManager.Instance.IsPlaying)
@@ -481,13 +503,35 @@ namespace MadeInArizona
                 return;
             }
             // Cover cancels a launch, and a special never retargets during its warning.
-            if (!clearShot || committedAim.sqrMagnitude < .01f) return;
+            if ((!clearShot && attack != EnemyAttackTelegraph.Line && attack != EnemyAttackTelegraph.Cone) || committedAim.sqrMagnitude < .01f) return;
+            if (attack == EnemyAttackTelegraph.Line || attack == EnemyAttackTelegraph.Cone)
+            {
+                bool cone = attack == EnemyAttackTelegraph.Cone;
+                float range = cone ? 34f : 42f;
+                Vector3 start = committedOrigin + committedAim * 2.5f;
+                Vector3 right = Vector3.Cross(Vector3.up, committedAim);
+                for (float distance = 5; distance < range; distance += 5)
+                    for (int lane = cone ? -1 : 0; lane <= (cone ? 1 : 0); lane++)
+                        ExplosionSystem.Burst(start + committedAim * distance + right * lane * distance * .3f + Vector3.up * .4f,
+                            new Color(1f, .22f, .05f), 4, cone ? 4f : 5f);
+                foreach (var target in VehicleController.Active)
+                {
+                    if (!target || !target.IsPlayer || !target.Damage || target.Damage.IsDead) continue;
+                    Vector3 delta = Vector3.ProjectOnPlane(target.transform.position - start, Vector3.up);
+                    float forward = Vector3.Dot(delta, committedAim);
+                    if (forward < 0 || forward > range) continue;
+                    float side = Mathf.Abs(Vector3.Cross(committedAim, delta).y);
+                    if (side > (cone ? 1f + forward * Mathf.Tan(27f * Mathf.Deg2Rad) : 4.5f)) continue;
+                    target.Damage.ApplyDamage(cone ? 48f : 40f, target.transform.position, gameObject);
+                }
+                return;
+            }
             if (attack == EnemyAttackTelegraph.Rocket) vehicle.Weapons.FireSecondary(committedAim);
             else if (attack == EnemyAttackTelegraph.Mortar)
             {
                 var mortar = WeaponRules.Find("mortar");
                 if (mortar) FieldOrdnance.LaunchShell(vehicle, transform.position + Vector3.up * 1.1f + committedAim * 2.2f,
-                    committedAim, mortar, 55, Mathf.Clamp(committedDistance / 1.94f, 12, 42));
+                    committedAim, mortar, 78, Mathf.Clamp(committedDistance / 1.94f, 12, 42));
             }
             else if (attack == EnemyAttackTelegraph.Sniper)
             {

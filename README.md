@@ -32,7 +32,7 @@ The main menu can host a session for up to four players or join a friend by code
 | Boost | Left Shift | Right shoulder (or A: Settings → Controls → Nitro button) |
 | Reverse (optional, Settings → Controls) | R | Left shoulder |
 | Recover marked objective | E | A (or RB with nitro on A) |
-| World map / waypoint / crafting | M or click minimap | — |
+| World map / waypoint / crafting | M or click minimap | Select / View |
 | Pause | Escape | Start |
 | Settings | F1 | Y in garage or pause |
 | Dev console | F5 | — |
@@ -57,7 +57,7 @@ Edit the live `world-generation.json` path shown in the main menu to change terr
 
 ## Developer tuning
 
-Press **F5** to open the movable dev console in the main menu, garage, or a sortie. Type `help` for commands, use **Tab** or **Shift+Tab** to cycle matching command and item IDs, and **↑/↓** for command history. The console also records Unity warnings and errors. Commands include `money 10000`, `scrap 10000`, `unlock cars`, `unlock weapons`, `unlock missions`, `unlock all`, `weapon riveter`, `field sniper`, `car ronin`, `repair`, `nitro`, `status`, `garage`, and `clear`. Car selection works in the garage; field weapons, repair, and nitro work during a sortie. Progression and garage weapon changes are saved. In co-op, only the host can run commands that change game state.
+Press **F5** to open the movable dev console in the main menu, garage, or a sortie. Type `help` for commands, use **Tab** or **Shift+Tab** to cycle matching command and item IDs, and **↑/↓** for command history. The console also records Unity warnings and errors. Commands include `money 10000`, `scrap 10000`, `unlock cars`, `unlock weapons`, `unlock missions`, `unlock all`, `weapon riveter`, `field sniper`, `car ronin`, `repair`, `nitro`, `invulnerable on`, `invulnerable off`, `status`, `garage`, and `clear`. Car selection works in the garage; field weapons, repair, nitro, and invulnerability work during a sortie. Invulnerability affects the host player's current car until it is replaced. Progression and garage weapon changes are saved. In co-op, only the host can run commands that change game state.
 
 During a mission, press **Escape → Dev Tuning / Mouse**. The header names exactly what the current tab edits (EDITING › the car, the weapon in that slot, world balance or this PC's presentation), the weapon tabs show the equipped weapon's name, and rows on mixed tabs that are world settings are tagged. Tabs expose driving, drift, combat, engine sound, two equipped-weapon balance profiles, camera, light/color, reflection controls (sun glints: intensity, angular tolerance, bloom contribution, fade and which materials can flash), and Dirt & Sky (cloud shadows, lens dirt, tyre smoke, skid marks, gravel spray and how fast dust builds up on cars). Driving, drift, and engine sound are stored per car; weapon balance is stored per weapon. Changes apply immediately and save automatically across launches in solo play. Use **Save & Resume** to drive with the new values. **Reset Local Tuning** restores the baseline profiles and effects. In co-op, the host decides whether to save or discard everyone's session tuning when choosing **Leave Co-op**; shared car and weapon sliders are locked for players other than the item's owner. Health changes preserve the current health percentage. Small-prop momentum applies only when the prop breaks; solid walls and large structures still resist the car.
 

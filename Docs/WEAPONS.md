@@ -14,7 +14,7 @@ Seven former garage weapons now come from faction drops. Existing saves refund t
 | **Coffee-Can Scattergun** | 120 | Shotgun | Shreds anything at bumper distance, several cars at once. | Pellets fizzle out past twenty metres. |
 | **Rain-Gutter Repeater** | 200 | Battle Rifle / DMR | Accurate at range; picks off weak points and fleeing cars. | Slow rate of fire; misses cost you and swarms overwhelm it. |
 | **Sawblade Slingshot** | 140 | Heatwave (horizontal spread) | Blades pass through the first car and keep cutting. | Short reach and light damage per blade. |
-| **Molotov Tennis Ball** | 180 | Bouncing incendiary | Flaming balls launch one, two, then three down a line and burst on a close pass. | Small blast and limited reach. |
+| **Molotov Tennis Ball** | 180 | Bouncing incendiary | Bright, flaming balls launch one, two, then three down a line; later balls travel slower and burst on a close pass. | Small blast and limited reach. |
 | **Cactus-Spine Needler** | 240 | Needler (homing, supercombine) | Spines chase moving cars; seven hits set off a big rupture. | Slow spines, weak until they stack, and cover eats them. |
 | **Jumper-Cable Zapper** | 220 | Plasma Pistol overcharge / Shock Rifle (vehicle EMP, arcs) | Stalls engines and guns; arcs through a pack. | Barely scratches the paint on its own. |
 | **Arc-Welder Railgun** | 320 | Spartan Laser / Skewer (heavy one-shot) | Instant hit at long range that passes through whole convoys. | Two seconds to recharge; a miss hurts. |
@@ -37,7 +37,7 @@ Each oddball splices two firing modes into one weapon — the grenade that burst
 
 | Weapon | Role | Strength | Weakness |
 |---|---|---|---|
-| **Tailpipe Bazooka** | Heavy anti-vehicle | Deletes a car or a cluster of them in one blast. | Slow rockets that fast cars can dodge, and very little ammunition. |
+| **Tailpipe Bazooka** | Heavy anti-vehicle | Deletes a car or a cluster of them in one blast. | Very little ammunition; fast targets can still dodge at range. |
 | **Potato Cannon** | Arcing demolition | Lands over cover and wrecks clusters. | Slow shells; limited rounds; hard to land on moving cars. |
 | **Propane-Tank Mortar** | Long-range artillery | Hits from beyond the enemy's reach. | Long flight time; useless up close; three rounds a drop. |
 | **.50 Cal Weed Whacker** | Long-range precision | Enormous single hits from across the map. | Slow to cycle; nearly useless against a swarm on your bumper. |

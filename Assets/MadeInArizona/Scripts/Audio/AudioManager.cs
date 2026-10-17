@@ -9,7 +9,7 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop,crossbowShot,dynamiteFuse;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop,crossbowShot,dynamiteFuse,washerBang,chainRattle;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         public AudioClip CrossbowShot => crossbowShot;
         public AudioClip DynamiteFuse => dynamiteFuse;
         AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
@@ -75,6 +75,7 @@ namespace MadeInArizona
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             firecrackerPop=Keep(AudioSynthesis.FirecrackerPop());
             crossbowShot=Keep(AudioSynthesis.CrossbowRelease());dynamiteFuse=Keep(AudioSynthesis.DynamiteFuse());
+            washerBang=Keep(AudioSynthesis.WasherBang());chainRattle=Keep(AudioSynthesis.ChainRattle());
             var weaponAudio=Resources.Load<WeaponAudioBank>("Audio/Weapons/WeaponAudioBank");
             if(weaponAudio)ordnanceBlast=weaponAudio.ordnanceExplosion;
             ui=Keep(AudioSynthesis.Chirp(false));radio=Keep(AudioSynthesis.Chirp(true));repair=Keep(AudioSynthesis.Repair());objective=Keep(AudioSynthesis.ObjectiveChime());
@@ -368,6 +369,18 @@ namespace MadeInArizona
         {
             if(Settings==null||hurts==null)return;
             PlayAt(hurts[Random.Range(0,hurts.Length)],position,Settings.weapons*Mathf.Lerp(.55f,1,strength)*duck,Random.Range(.72f,.85f),45);
+        }
+        public void PlayWasherBang(Vector3 position,float strength)
+        {
+            if(Settings==null||!washerBang)return;
+            PlayAt(washerBang,position,Settings.weapons*Mathf.Lerp(.45f,.85f,Mathf.Clamp01(strength))*duck,
+                Random.Range(.9f,1.08f),46);
+        }
+        public void PlayFlailChain(Vector3 position,float intensity)
+        {
+            if(Settings==null||!chainRattle)return;
+            PlayAt(chainRattle,position,Settings.weapons*Mathf.Lerp(.12f,.4f,Mathf.Clamp01(intensity))*duck,
+                Random.Range(.88f,1.12f),78);
         }
         public void PlayExplosion(Vector3 position,float strength,ExplosionKind kind=ExplosionKind.Vehicle)
         {

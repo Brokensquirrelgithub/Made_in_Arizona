@@ -201,7 +201,7 @@ namespace MadeInArizona
                 // ---- Core roles across garage and field ----
                 Weapon(0,"riveter","Chain-Fed Nail Gun","A framing nailer welded to a bicycle chain that feeds nails as fast as the pedals turn. Garage weapon; unlimited ammunition.",12,11,90,0,new Color(1,.79f,.2f),
                     "ALL-ROUNDER AUTOMATIC","Steady damage at any sensible range and it never runs dry.","Low damage per nail; the chain spreads its aim at long range."),
-                Weapon(1,"invoice","Tailpipe Bazooka","A muffler, a road flare and far too much black powder. Huge blast, only a few shots.",110,.9f,49,8,new Color(1,.35f,.08f),
+                Weapon(1,"invoice","Tailpipe Bazooka","A muffler, a road flare and far too much black powder. Huge blast, only a few shots.",110,.9f,98,8,new Color(1,.35f,.08f),
                     "HEAVY ANTI-VEHICLE","Deletes a car or a cluster of them in one blast.","Slow rockets that fast cars can dodge, and very little ammunition."),
                 Weapon(2,"sweeper","Coffee-Can Scattergun","A coffee can of roofing tacks behind a shotgun shell. Eight pellets that clear a path through a crowd.",10,1.7f,96,0,new Color(.3f,1,1),
                     "CLOSE-QUARTERS CROWD CLEARER","Shreds anything at bumper distance, several cars at once.","Pellets fizzle out past twenty metres."),
@@ -263,7 +263,7 @@ namespace MadeInArizona
                     "ARCING SHOTGUN","A directed shower of explosives blankets near and far ground.","No tracking; moving targets can slip between the bursts."),
                 Weapon(30,"fireworks","Firework Cannon","A show mortar mounted at the nose fires aerial shells. Each shell blooms into a real firework over the road.",72,.7f,35,7,new Color(1f,.64f,.25f),
                     "AERIAL BURST","A bright skyburst catches vehicles below it.","The fuse and high arc make close targets hard to hit."),
-                Weapon(31,"flail","Washing Machine Flail","A washing machine on a long chain. Hold fire and circle the mouse or right stick around your car to swing it; release to reel it in.",60,1,0,0,new Color(.72f,.79f,.83f),
+                Weapon(31,"flail","Washing Machine Flail","The first pull blasts a washing machine outward on a long chain. Hold fire and circle the mouse or right stick to drag and swing it; release to reel it in.",60,1,0,0,new Color(.72f,.79f,.83f),
                     "SWEPT MELEE","A fast swing smashes cars and roadside obstacles in a wide arc.","Slow swings glance off; it must build speed before it hits hard.")
             };
         }

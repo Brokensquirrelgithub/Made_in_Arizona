@@ -10,7 +10,7 @@ namespace MadeInArizona
         static readonly Color Red = new Color(1f, .055f, .035f);
         readonly RaycastHit[] groundHits = new RaycastHit[16];
         Material material, coreMaterial;
-        LineRenderer beamGlow, beamHalo, beamCore, impactRing, timerRing;
+        LineRenderer beamGlow, beamHalo, beamCore, impactRing, timerRing, zoneOutline, zoneCenter;
         Vector3 impact;
         Transform impactFollow;
         float radius, impactAt, impactDuration;
@@ -74,6 +74,56 @@ namespace MadeInArizona
             if (beamGlow) beamGlow.enabled = false;
             if (beamHalo) beamHalo.enabled = false;
             if (beamCore) beamCore.enabled = false;
+        }
+
+        /// <summary>Draw a fixed, ground-hugging danger lane or fan while the enemy winds up.</summary>
+        public void ShowZone(Vector3 origin, Vector3 direction, bool cone, float remaining, float duration)
+        {
+            if (!zoneOutline)
+            {
+                zoneOutline = MakeLine("Area attack boundary", 0, .3f, new Color(1, .12f, .05f, .92f));
+                zoneCenter = MakeLine("Area attack center", 0, .15f, new Color(1, .45f, .12f, .7f));
+            }
+            Vector3 forward = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
+            if (forward.sqrMagnitude < .01f) return;
+            Vector3 right = Vector3.Cross(Vector3.up, forward);
+            Vector3 start = origin + forward * 2.5f;
+            float length = cone ? 34f : 42f;
+            if (cone)
+            {
+                const int steps = 20;
+                zoneOutline.positionCount = steps + 3;
+                zoneOutline.SetPosition(0, Ground(start));
+                for (int i = 0; i <= steps; i++)
+                {
+                    float angle = Mathf.Lerp(-27f, 27f, i / (float)steps) * Mathf.Deg2Rad;
+                    zoneOutline.SetPosition(i + 1, Ground(start + (forward * Mathf.Cos(angle) + right * Mathf.Sin(angle)) * length));
+                }
+                zoneOutline.SetPosition(steps + 2, Ground(start));
+            }
+            else
+            {
+                zoneOutline.positionCount = 5;
+                zoneOutline.SetPosition(0, Ground(start - right * 4.5f));
+                zoneOutline.SetPosition(1, Ground(start + forward * length - right * 4.5f));
+                zoneOutline.SetPosition(2, Ground(start + forward * length + right * 4.5f));
+                zoneOutline.SetPosition(3, Ground(start + right * 4.5f));
+                zoneOutline.SetPosition(4, Ground(start - right * 4.5f));
+            }
+            zoneCenter.positionCount = 2;
+            zoneCenter.SetPosition(0, Ground(start));
+            zoneCenter.SetPosition(1, Ground(start + forward * length));
+            float charge = 1f - Mathf.Clamp01(remaining / duration);
+            float pulse = .7f + .3f * Mathf.Sin(Time.time * 16f);
+            zoneOutline.widthMultiplier = (.22f + .22f * charge) * pulse;
+            zoneCenter.widthMultiplier = (.12f + .11f * charge) * pulse;
+            zoneOutline.enabled = zoneCenter.enabled = true;
+        }
+
+        public void HideZone()
+        {
+            if (zoneOutline) zoneOutline.enabled = false;
+            if (zoneCenter) zoneCenter.enabled = false;
         }
 
         public void BeginImpact(Vector3 point, float blastRadius, float timeToImpact, Transform follow = null)
