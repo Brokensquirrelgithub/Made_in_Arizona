@@ -9,7 +9,8 @@ namespace MadeInArizona
     {
         static readonly EquipmentSlot[] MechanicalSlots={EquipmentSlot.Engine,EquipmentSlot.Transmission,
             EquipmentSlot.Drivetrain,EquipmentSlot.Tires,EquipmentSlot.Suspension,EquipmentSlot.Body};
-        int equipmentFocus=10;
+        static readonly int[] ManualNumbers={1,2,4,3,5,6};
+        int equipmentFocus;
         public int EquipmentFocus => equipmentFocus;
         public bool EquipmentBrowsing => browsingParts;
         int vehicleBrowseIndex=-1;
@@ -24,6 +25,23 @@ namespace MadeInArizona
         EquipmentSlot FocusSlot => equipmentFocus<6?MechanicalSlots[equipmentFocus]:EquipmentSlot.Accessory;
         int FocusAccessory => Mathf.Clamp(equipmentFocus-6,0,3);
         VehicleDefinition FocusVehicle => ContentCatalog.Vehicles[game.Save.selectedVehicle];
+
+        static int EquipmentNeighbor(int current,int horizontal,int vertical)
+        {
+            if(current>=6)
+            {
+                if(horizontal!=0)return Mathf.Clamp(current+horizontal,6,9);
+                if(vertical<0)return current<8?4:5;
+                return current;
+            }
+            int[] places={0,1,3,2,4,5};
+            int position=Array.IndexOf(places,current);
+            int row=position/2,column=position%2;
+            if(horizontal!=0)column=Mathf.Clamp(column+horizontal,0,1);
+            if(vertical>0&&row==2)return column==0?6:9;
+            row=Mathf.Clamp(row+vertical,0,2);
+            return places[row*2+column];
+        }
 
         void ChangeGarageVehicle(int delta)
         {
@@ -56,25 +74,14 @@ namespace MadeInArizona
                 if(pad.buttonSouth.wasPressedThisFrame&&equipmentChoices.Count>0)BuyOrEquipCandidate(ContentCatalog.Parts[selectedPart]);
                 return;
             }
-            if(pad.buttonEast.wasPressedThisFrame){equipmentFocus=10;return;}
+            if(pad.buttonEast.wasPressedThisFrame)return;
             if(pad.buttonWest.wasPressedThisFrame&&equipmentFocus<10)
             {if(GarageManager.Unequip(game.Save,FocusSlot,FocusAccessory)){game.RefreshGarageVehicle();game.Notify(GarageManager.LastMessage);}return;}
             int horizontal=pad.dpad.right.wasPressedThisFrame||pad.leftStick.right.wasPressedThisFrame?1:
                 pad.dpad.left.wasPressedThisFrame||pad.leftStick.left.wasPressedThisFrame?-1:0;
             int vertical=pad.dpad.down.wasPressedThisFrame||pad.leftStick.down.wasPressedThisFrame?1:
                 pad.dpad.up.wasPressedThisFrame||pad.leftStick.up.wasPressedThisFrame?-1:0;
-            if(equipmentFocus==10&&horizontal!=0){ChangeGarageVehicle(horizontal);return;}
-            if(equipmentFocus==11&&horizontal!=0)
-            {game.SelectedMission=Mathf.Clamp(game.SelectedMission+horizontal,0,game.Save.unlockedMission);return;}
-            if(equipmentFocus<10&&horizontal!=0)equipmentFocus=Mathf.Clamp(equipmentFocus+horizontal,0,9);
-            if(vertical!=0)
-            {
-                if(equipmentFocus==10)equipmentFocus=vertical>0?0:11;
-                else if(equipmentFocus==11)equipmentFocus=vertical<0?8:12;
-                else if(equipmentFocus==12)equipmentFocus=vertical<0?11:10;
-                else if(vertical<0)equipmentFocus=equipmentFocus<2?10:equipmentFocus-2;
-                else equipmentFocus=equipmentFocus>=8?11:equipmentFocus+2;
-            }
+            if(horizontal!=0||vertical!=0)equipmentFocus=EquipmentNeighbor(equipmentFocus,horizontal,vertical);
             if(pad.buttonSouth.wasPressedThisFrame)ConfirmEquipment();
         }
         void TickEquipmentKeyboard(Keyboard keyboard)
@@ -93,28 +100,12 @@ namespace MadeInArizona
                 selectedPart=equipmentChoices[row];equipmentScroll.y=Mathf.Clamp((row-2)*58,0,Mathf.Max(0,equipmentChoices.Count*58-218));
                 return;
             }
-            if(equipmentFocus==10&&horizontal!=0){ChangeGarageVehicle(horizontal);return;}
-            if(equipmentFocus==11&&horizontal!=0)
-            {game.SelectedMission=Mathf.Clamp(game.SelectedMission+horizontal,0,game.Save.unlockedMission);return;}
-            if(equipmentFocus<10&&horizontal!=0)equipmentFocus=Mathf.Clamp(equipmentFocus+horizontal,0,9);
-            if(vertical!=0)
-            {
-                if(equipmentFocus==10)equipmentFocus=vertical>0?0:11;
-                else if(equipmentFocus==11)equipmentFocus=vertical<0?8:12;
-                else if(equipmentFocus==12)equipmentFocus=vertical<0?11:10;
-                else if(vertical<0)equipmentFocus=equipmentFocus<2?10:equipmentFocus-2;
-                else equipmentFocus=equipmentFocus>=8?11:equipmentFocus+2;
-            }
+            if(horizontal!=0||vertical!=0)equipmentFocus=EquipmentNeighbor(equipmentFocus,horizontal,vertical);
         }
         void ConfirmEquipment()
         {
             if(browsingParts)
             {GatherEquipmentChoices();if(equipmentChoices.Count>0)BuyOrEquipCandidate(ContentCatalog.Parts[selectedPart]);return;}
-            if(equipmentFocus==11)
-            {if(CoopSession.Instance&&CoopSession.Instance.InLobby)CoopSession.Instance.SetReady(!CoopSession.Instance.LocalReady);
-                else game.StartMission(game.SelectedMission);return;}
-            if(equipmentFocus==12){if(!(CoopSession.Instance&&CoopSession.Instance.InLobby))game.StartCombatTrial();return;}
-            if(equipmentFocus==10){ConfirmGarageVehicle();return;}
             browsingParts=true;GatherEquipmentChoices();equipmentScroll=Vector2.zero;
         }
         void GatherEquipmentChoices()
@@ -149,11 +140,11 @@ namespace MadeInArizona
             float uiWidth=Screen.width/scale,uiHeight=Screen.height/scale;
             Vector2 screen=mouse.position.ReadValue();
             Vector2 pointer=new Vector2(screen.x/scale,(Screen.height-screen.y)/scale);
-            float top=169,panelHeight=uiHeight-245,side=uiWidth-520;
+            float top=169,panelHeight=uiHeight-245,side=uiWidth-500;
             if(mouse.leftButton.wasPressedThisFrame&&browsingParts&&equipmentFocus<10)
             {
                 float listHeight=Mathf.Min(245,panelHeight*.39f);
-                if(new Rect(side+18,top+46,452,listHeight).Contains(pointer))
+                if(new Rect(side+18,top+46,432,listHeight).Contains(pointer))
                 {
                     GatherEquipmentChoices();
                     int row=Mathf.FloorToInt((pointer.y-top-46+equipmentScroll.y)/58);
@@ -164,20 +155,33 @@ namespace MadeInArizona
             var candidate=draggingPart;draggingPart=null;
             for(int i=0;i<10;i++)
             {
-                float x=32+17+(i%2)*282;
-                float y=top+(i<6?133+(i/2)*66:360+((i-6)/2)*66);
-                if(!new Rect(x,y,269,61).Contains(pointer))continue;
+                if(!EquipmentCardRect(i,top,uiWidth-560).Contains(pointer))continue;
                 equipmentFocus=i;BuyOrEquipCandidate(candidate);return;
             }
+        }
+        static Rect EquipmentCardRect(int index,float top,float manualWidth)
+        {
+            if(index>=6)
+            {
+                float cardWidth=(manualWidth-64)/4f;
+                return new Rect(52+(index-6)*(cardWidth+8),top+462,cardWidth,80);
+            }
+            int[] places={0,1,3,2,4,5};
+            int position=Array.IndexOf(places,index);
+            return new Rect(position%2==0?52:32+manualWidth-226,
+                top+93+(position/2)*118,206,91);
         }
         void EquipmentSlotButton(int index,float x,float y,float w,float h)
         {
             var slot=index<6?MechanicalSlots[index]:EquipmentSlot.Accessory;
             var installed=GarageManager.Installed(game.Save,FocusVehicle.id,slot,Mathf.Max(0,index-6));
-            string label=(index<6?slot.ToString().ToUpperInvariant():"ACCESSORY "+(index-5))+
-                "\n"+(installed?installed.displayName:"Factory / Empty");
-            if(Button(x,y,w,h,label,equipmentFocus==index))
+            if(Button(x,y,w,h,"",equipmentFocus==index))
             {equipmentFocus=index;browsingParts=true;GatherEquipmentChoices();equipmentScroll=Vector2.zero;}
+            DrawEquipmentIcon(installed,slot,x+8,y+(h-48)*.5f,48,FocusVehicle.id);
+            Text(x+66,y+10,w-74,20,index<6?ManualNumbers[index].ToString("00")+" / "+slot.ToString().ToUpperInvariant():"ACCESSORY "+(index-5),12,
+                equipmentFocus==index?Ink:Lime,true);
+            Text(x+66,y+32,w-74,h-35,installed?installed.displayName:
+                index<6?"Stock "+slot.ToString():"Empty accessory",14,equipmentFocus==index?Ink:Cream,true);
         }
         VehicleStats CandidateStats(VehiclePart candidate)
         {
@@ -309,7 +313,7 @@ namespace MadeInArizona
             }
             else
             {
-                game.Save.dogCosmetic=index-5;game.ReturnToGarage();station=2;
+                game.Save.dogCosmetic=index-5;game.ReturnToGarage();station=4;
             }
             SaveSystem.Save(game.Save);
         }

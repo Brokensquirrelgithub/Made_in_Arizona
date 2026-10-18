@@ -88,7 +88,7 @@ namespace MadeInArizona
             previousHead = HeadPosition;
             previousPivot = Pivot;
             // Velocity is relative to the car; its translation is carried separately each physics step.
-            headVelocity = direction * 28f + Vector3.up * 3.5f;
+            headVelocity = direction * 34f + Vector3.up * 3.5f;
             ExplosionSystem.Burst(HeadPosition, new Color(1f, .65f, .22f, .85f), 12, 2.2f);
             Bang(HeadPosition, .75f);
             if (owner.IsPlayer) CameraController.Instance?.Shake(.13f);
@@ -108,8 +108,8 @@ namespace MadeInArizona
             HeadPosition += vehicleTravel;
             // The head has angular momentum: moving the pointer steers the swing instead of teleporting it.
             float error = Mathf.DeltaAngle(angle, active ? targetAngle : Mathf.Atan2(owner.transform.forward.x, owner.transform.forward.z) * Mathf.Rad2Deg);
-            float acceleration = Mathf.Clamp(error * 24f - angularSpeed * 4.2f, -950f, 950f);
-            angularSpeed = Mathf.Clamp(angularSpeed + acceleration * dt, -720f, 720f);
+            float acceleration = Mathf.Clamp(error * 32f - angularSpeed * 4.2f, -1250f, 1250f);
+            angularSpeed = Mathf.Clamp(angularSpeed + acceleration * dt, -900f, 900f);
             angle += angularSpeed * dt;
             if (active && deployed) MoveHead(dt, worldStart);
             else
@@ -130,10 +130,10 @@ namespace MadeInArizona
         {
             Vector3 desired = Pivot + Direction * Reach;
             Vector3 planarVelocity = Vector3.ProjectOnPlane(headVelocity, Vector3.up);
-            Vector3 pull = Vector3.ProjectOnPlane(desired - HeadPosition, Vector3.up) * 25f - planarVelocity * 4f;
-            headVelocity += Vector3.ClampMagnitude(pull, 85f) * dt;
+            Vector3 pull = Vector3.ProjectOnPlane(desired - HeadPosition, Vector3.up) * 38f - planarVelocity * 4.5f;
+            headVelocity += Vector3.ClampMagnitude(pull, 120f) * dt;
             headVelocity.y -= 24f * dt;
-            headVelocity = Vector3.ClampMagnitude(headVelocity, 38f);
+            headVelocity = Vector3.ClampMagnitude(headVelocity, 48f);
             HeadPosition += headVelocity * dt;
 
             // A loose chain permits a launch arc and a trailing head, but never exceeds its full length.

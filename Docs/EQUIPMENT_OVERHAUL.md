@@ -1,6 +1,8 @@
 # Garage equipment overhaul
 
-The garage now has **Vehicle**, **Weapons**, and **Appearance** tabs. Each car keeps its own six mechanical parts, four interchangeable accessories, one garage weapon, and paint choice. A missing mechanical part uses the car's factory specification. The combat field weapon pickup remains a temporary mission pickup.
+The garage has **Dispatch**, **Motor Pool**, **Parts & Tuning**, **Weapons**, and **Suzuki** tabs. Dispatch, Motor Pool, and Suzuki retain their original layouts. The equipment controls live on Parts & Tuning. Each car keeps its own six mechanical parts, four interchangeable accessories, one garage weapon, and paint choice. A missing mechanical part uses the car's factory specification. The combat field weapon pickup remains a temporary mission pickup.
+
+Parts & Tuning shows a car-specific service-manual plan view based on the vehicle's wheelbase, track width, and chassis. The vehicle runs front to rear across a light technical plate with cutaway mechanical details, panel seams, dimension marks, and six numbered callouts. Their numbers match the six system cards around the plate; four accessory cards sit below. Every card shows a small illustrated icon; an unfilled mechanical card is labeled with its stock part. The inventory list and selected part show the same icons.
 
 ## Reused and reclassified equipment
 
@@ -61,7 +63,7 @@ Order: **Engine / Transmission / Drivetrain / Tires / Suspension / Body**. Facto
 
 ## Controls and save migration
 
-In the garage, LB/RB changes tabs. D-pad or left stick moves focus. A opens a slot, previews a part, and confirms it; B closes the list; X removes the focused part; Y toggles detailed stats; Start opens settings. The car and mission selectors are reachable from the Vehicle tab. Keyboard users can use Tab, arrow keys, Enter, Escape, Backspace, and Y for the same operations. Mouse users can click a slot and part, or drag a part from its list onto a compatible slot. The preview shows current and projected effective stats. Incompatible parts can be revealed, but cannot be installed. Movement and weapon input remain inactive in the garage.
+In the garage, LB/RB changes tabs. On Parts & Tuning, D-pad or left stick moves between diagram cards or part rows. A opens a card and equips a selected part; B closes the list; X restores the stock part; Y toggles detailed stats; Start opens settings. Dispatch selects missions and Motor Pool selects cars. Keyboard users can use Tab, arrow keys, Enter, Escape, Backspace, and Y. Mouse users can click a card and part, or drag a part from its list onto a compatible card. The preview shows current and projected effective stats. Incompatible parts can be revealed, but cannot be installed. Movement and weapon input remain inactive in the garage.
 
 Version 1 saves are still read. At first load, each legacy globally installed part is applied to every compatible vehicle loadout. When several old parts target one new slot, the last installed choice remains fitted; all displaced parts remain owned and can be re-equipped. Existing money, salvage, unlocks, and owned weapons are preserved. Each car subsequently remembers its own installed parts, accessories, garage weapon, and paint. Invalid, unowned, or incompatible saved installations are cleared on load without deleting ownership.
 
@@ -71,6 +73,6 @@ The accessory light bar and tire spikes use visible procedural mounts, so they w
 
 `BuildGame.Validate` calls `EquipmentValidator.Validate`, which reports each vehicle's counts and checks compatibility, migration, baseline restoration, and stat accumulation. Native smoke switches: `-miaSmokeTest -miaEquipmentTest` for controller navigation, mouse drag, and accessory shutdown; `-miaSmokeTest -miaHealthTest` for segmented damage. Both use isolated test saves.
 
-Final verification: Unity catalog/equipment validation and the Windows build passed. The rebuilt Windows player passed the equipment, segmented health, baseline, combat, and transmission progress smoke suites. The equipment suite uses synthetic Input System gamepad and mouse events; a physical controller has not been checked by hand.
+The equipment suite uses synthetic Input System gamepad and mouse events; a physical controller has not been checked by hand.
 
 The mounts are procedural placeholders. A physical controller and visual art pass are still recommended before a public release.

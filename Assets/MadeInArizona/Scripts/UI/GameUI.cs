@@ -33,7 +33,7 @@ namespace MadeInArizona
             foreach (var rect in painted) if (rect.Contains(point)) return false;
             return true;
         }
-        readonly string[] stations = { "VEHICLE", "WEAPONS", "APPEARANCE" };
+        readonly string[] stations = { "DISPATCH", "MOTOR POOL", "PARTS & TUNING", "WEAPONS", "SUZUKI" };
         readonly string[] presets = { "SIMPLE", "LOW", "MEDIUM", "HIGH" };
         readonly string[] actions = { "Move up", "Move down", "Move left", "Move right", "Primary", "Secondary", "Swap", "Handbrake", "Boost", "Interact", "Reverse", "Pause", "Map" };
         int[] garageWeaponIndices;
@@ -103,12 +103,12 @@ namespace MadeInArizona
             smoothedFps = Mathf.Lerp(smoothedFps, 1f / Mathf.Max(.001f, Time.unscaledDeltaTime), .05f);
             if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame) { if (game.IsPlaying) { game.Pause(); settings = true; } else settings = !settings; }
             if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame && game.State == GameState.Garage) { station = (station + 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
-            if (game.State == GameState.Garage && station == 0 && !settings && Keyboard.current != null) TickEquipmentKeyboard(Keyboard.current);
+            if (game.State == GameState.Garage && station == 2 && !settings && Keyboard.current != null) TickEquipmentKeyboard(Keyboard.current);
             if (Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame && game.State == GameState.Garage && !settings) ConfirmSelection();
             if (Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame) DialogueSystem.Instance.Skip();
             if(Keyboard.current!=null && Keyboard.current.f2Key.wasPressedThisFrame && game.State==GameState.Garage && !settings && !(CoopSession.Instance && CoopSession.Instance.InLobby))game.StartCombatTrial();
             if(devMenu)return;
-            if(game.State==GameState.Garage&&station==0&&!settings)TickEquipmentPointer();
+            if(game.State==GameState.Garage&&station==2&&!settings)TickEquipmentPointer();
             var pad = Gamepad.current;
             if (pad == null) return;
             if (settings) {
@@ -126,13 +126,19 @@ namespace MadeInArizona
             if (game.State == GameState.Garage) {
                 if (pad.leftShoulder.wasPressedThisFrame) { station = (station + stations.Length - 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
                 if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
-                if(station==0){TickEquipmentInput(pad);return;}
+                if(station==2){TickEquipmentInput(pad);return;}
+                if(station==0&&pad.buttonWest.wasPressedThisFrame&&!(CoopSession.Instance&&CoopSession.Instance.InLobby))
+                {game.StartCombatTrial();return;}
                 int change = pad.dpad.down.wasPressedThisFrame || pad.dpad.right.wasPressedThisFrame ? 1 : pad.dpad.up.wasPressedThisFrame || pad.dpad.left.wasPressedThisFrame ? -1 : 0;
                 if (change != 0) {
-                    if (station == 1) { selectedWeapon = Mathf.Clamp(selectedWeapon + change, 0, garageWeapons.Length - 1); listScroll.y = Mathf.Max(0, (selectedWeapon - 2) * 91); }
-                    if (station == 2) appearanceFocus=Mathf.Clamp(appearanceFocus+change,0,8);
+                    if(station==0&&!CoopSession.IsRemoteClient)game.SelectedMission=Mathf.Clamp(game.SelectedMission+change,0,game.Save.unlockedMission);
+                    if(station==1)
+                    {int index=Mathf.Clamp(game.Save.selectedVehicle+change,0,ContentCatalog.Vehicles.Length-1);
+                        if(GarageManager.SelectVehicle(index,game.Save))game.RefreshGarageVehicle();}
+                    if(station==3){selectedWeapon=Mathf.Clamp(selectedWeapon+change,0,garageWeapons.Length-1);listScroll.y=Mathf.Max(0,(selectedWeapon-2)*91);}
+                    if(station==4)appearanceFocus=Mathf.Clamp(appearanceFocus+change,0,3);
                 }
-                if (pad.buttonSouth.wasPressedThisFrame) { if(station==2)ChooseAppearance(appearanceFocus);else ConfirmSelection(); }
+                if (pad.buttonSouth.wasPressedThisFrame) ConfirmSelection();
             }
             else if (game.State == GameState.Paused) { if (pad.buttonSouth.wasPressedThisFrame) game.Resume(); if (pad.buttonEast.wasPressedThisFrame) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ReturnToGarage(); } }
             else if (game.State == GameState.Won || game.State == GameState.Lost) { if (CoopSession.IsRemoteClient) { if (pad.buttonEast.wasPressedThisFrame) LeaveCoop(); } else { if (pad.buttonSouth.wasPressedThisFrame) game.ReturnToGarage(); if (pad.buttonWest.wasPressedThisFrame) game.RetryMission(); } }
@@ -140,8 +146,11 @@ namespace MadeInArizona
 
         void ConfirmSelection()
         {
-            if (station == 0) ConfirmEquipment();
-            if (station == 1) SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
+            if(station==0){if(CoopSession.Instance&&CoopSession.Instance.InLobby)CoopSession.Instance.SetReady(!CoopSession.Instance.LocalReady);
+                else game.StartMission(game.SelectedMission);}
+            if(station==2)ConfirmEquipment();
+            if(station==3)SelectGarageWeapon(ContentCatalog.Weapons[garageWeapons[selectedWeapon]]);
+            if(station==4)ChooseAppearance(appearanceFocus+5);
         }
 
         GUIStyle Style(int size, Color color, bool bold = false, TextAnchor anchor = TextAnchor.UpperLeft)
@@ -243,11 +252,15 @@ namespace MadeInArizona
                 if (Button(x, 110, 175, 39, stations[i], station == i)) { station = i; browsingParts=false; listScroll = Vector2.zero; }
             }
             float top = 169, panelHeight = height - 245;
-            if (station == 0) DrawEquipment(top, panelHeight);
-            if (station == 1) DrawWeapons(top, panelHeight);
-            if (station == 2) DrawAppearance(top, panelHeight);
+            if(station==0)DrawDispatch(top,panelHeight);
+            if(station==1)DrawVehicles(top,panelHeight);
+            if(station==2)DrawEquipmentManual(top,panelHeight);
+            if(station==3)DrawWeapons(top,panelHeight);
+            if(station==4)DrawDog(top,panelHeight);
             Rect(0, height - 62, width, 62, Ink);
-            Text(32, height - 42, 850, 30, InputManager.Instance.UsingGamepad ? "LB/RB TAB   D-PAD NAVIGATE   A SELECT   B BACK   X REMOVE   Y DETAILS   START SETTINGS" : "TAB CHANGE TAB   CLICK OR DRAG PART   ENTER SELECT   F1 SETTINGS", 12, Muted, true);
+            Text(32,height-42,850,30,station==2?
+                (InputManager.Instance.UsingGamepad?"LB/RB TAB   D-PAD SLOT/PART   A SELECT   B BACK   X REMOVE   Y DETAILS   START SETTINGS":"TAB CHANGE TAB   CLICK OR DRAG PART   ENTER SELECT   F1 SETTINGS"):
+                (InputManager.Instance.UsingGamepad?"LB/RB TAB   D-PAD CHOOSE   A CONFIRM   X COMBAT TRIAL (DISPATCH)   START SETTINGS":"TAB CHANGE TAB   ENTER CONFIRM   RMB DRAG / Q E ROTATE VIEW   F1 SETTINGS"),12,Muted,true);
             bool freshBuild = GameUpdater.Instance && GameUpdater.Instance.UpdateAvailable;
             if (Button(width - 545, height - 48, 190, 34, freshBuild ? "NEW BUILD READY" : "UPDATES", freshBuild)) OpenUpdates();
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
@@ -329,6 +342,15 @@ namespace MadeInArizona
             Tag(x + 24, top + 20, "CURRENT LIABILITY", Lime);
             Text(x + 24, top + 52, 420, 85, def.displayName.ToUpperInvariant(), 37, Cream, true);
             Text(x + 24, top + 148, 420, 115, def.description, 19, Muted);
+            Rect(x,top+300,468,135,Ink);
+            Tag(x+24,top+312,"PAINT / APPEARANCE ONLY",Orange);
+            string[] paints={"FACTORY","SUNSET","TURQUOISE","MATTE BLACK","DESERT CREAM"};
+            int chosen=GarageManager.Loadout(game.Save,def.id)?.paintIndex??0;
+            for(int i=0;i<paints.Length;i++)
+            {
+                float px=x+24+(i%3)*143,py=top+337+(i/3)*42;
+                if(Button(px,py,134,35,paints[i],chosen==i,true,11))ChooseAppearance(i);
+            }
             DrawVehicleStats(x, top + panelHeight - 200, 468);
         }
 
@@ -472,7 +494,7 @@ namespace MadeInArizona
             Rect(x, top, 448, 399, Ink);
             Tag(x + 25, top + 23, "COMPLETELY NECESSARY EQUIPMENT", Orange);
             string[] looks = { "FACTORY DOG", "SAFETY INSPECTOR", "DESERT DOGGLES", "RECOVERY CAPTAIN" };
-            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) { game.Save.dogCosmetic = i; game.ReturnToGarage(); station = 2; }
+            for (int i = 0; i < looks.Length; i++) if (Button(x + 25, top + 66 + i * 77, 398, 58, looks[i], game.Save.dogCosmetic == i)) ChooseAppearance(i+5);
         }
 
         void DrawHUD()

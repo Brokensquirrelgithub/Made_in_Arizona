@@ -561,7 +561,37 @@ namespace MadeInArizona
                 var arrow=Box("Waypoint tick",g,new Vector3(Mathf.Sin(a)*2.9f,.11f,Mathf.Cos(a)*2.9f),new Vector3(.22f,.04f,.65f),color,false,1.8f);arrow.transform.localRotation=Quaternion.Euler(0,i*90,0);
             }
             if(!string.IsNullOrEmpty(label)) Text(label,g,new Vector3(0,3.2f,0),.36f,color,Quaternion.Euler(45,0,0)).AddComponent<WorldBillboard>();
+            if(label=="OBJECTIVE")
+            {
+                g.localScale=Vector3.one*1.1f;
+                g.gameObject.AddComponent<ObjectiveWaypointFlash>();
+            }
             return g.gameObject;
+        }
+    }
+
+    /// <summary>Briefly blinks an objective marker once per minute without changing salvage or map pins.</summary>
+    public sealed class ObjectiveWaypointFlash : MonoBehaviour
+    {
+        const float Interval=60f, Duration=1.2f, Beat=.2f;
+        Renderer[] renderers;
+        float nextFlash;
+        void Awake()
+        {
+            renderers=GetComponentsInChildren<Renderer>();
+            nextFlash=Time.time+Interval;
+        }
+        void Update()
+        {
+            if(Time.time>=nextFlash+Duration)nextFlash+=Interval*Mathf.Max(1,Mathf.FloorToInt((Time.time-nextFlash)/Interval)+1);
+            bool visible=Time.time<nextFlash||Time.time>=nextFlash+Duration||
+                Mathf.FloorToInt((Time.time-nextFlash)/Beat)%2==0;
+            foreach(var renderer in renderers)if(renderer)renderer.enabled=visible;
+        }
+        void OnDisable()
+        {
+            if(renderers==null)return;
+            foreach(var renderer in renderers)if(renderer)renderer.enabled=true;
         }
     }
 }

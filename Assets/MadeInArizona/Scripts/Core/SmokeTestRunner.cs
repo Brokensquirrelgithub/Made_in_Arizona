@@ -795,16 +795,29 @@ namespace MadeInArizona
             var game=GameManager.Instance;
             var ui=FindFirstObjectByType<GameUI>();
             var car=game.Player;
-            Check("equipment UI opens in garage",ui&&game.State==GameState.Garage&&ui.GarageStation==0);
+            Check("garage opens on restored Dispatch tab",ui&&game.State==GameState.Garage&&ui.GarageStation==0);
             var save=game.Save;
             var vehicle=ContentCatalog.Vehicles[save.selectedVehicle];
             var stock=GarageManager.StatsFor(vehicle,save);
+            var manuals=ContentCatalog.Vehicles.Select(EquipmentIllustrations.Manual).ToArray();
+            Check("each car has a unique service manual diagram",manuals.All(texture=>texture&&texture.width==400&&texture.height==380)&&
+                manuals.Distinct().Count()==ContentCatalog.Vehicles.Length);
+            Check("factory and purchased parts have slot icons",EquipmentIllustrations.Icon(null,EquipmentSlot.Engine,vehicle.id)&&
+                EquipmentIllustrations.Icon(GarageManager.FindPart("intake"),EquipmentSlot.Engine,vehicle.id));
+            Capture("equipment-dispatch");
             if(!save.ownedParts.Contains("intake"))save.ownedParts.Add("intake");
             var pad=InputSystem.AddDevice<Gamepad>();
-            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.DpadDown));
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.RightShoulder));
             yield return new WaitForSecondsRealtime(.08f);
             InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
-            Check("controller D-pad focuses first mechanical slot",ui.EquipmentFocus==0);
+            Check("controller opens restored Motor Pool tab",ui.GarageStation==1);
+            Capture("equipment-motor-pool");
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.RightShoulder));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller opens Parts and Tuning with first slot focused",ui.GarageStation==2&&ui.EquipmentFocus==0);
+            yield return new WaitForSecondsRealtime(.12f);
+            Capture("equipment-service-manual");
             InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
             yield return new WaitForSecondsRealtime(.08f);
             InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
@@ -844,8 +857,8 @@ namespace MadeInArizona
             var mouse=InputSystem.AddDevice<Mouse>();
             float scale=Mathf.Max(.45f,Mathf.Min(Screen.width/1440f,Screen.height/900f)*Mathf.Clamp(save.settings.uiScale,.85f,1.2f));
             float guiWidth=Screen.width/scale;
-            Vector2 Source()=>new Vector2((guiWidth-520+18+75)*scale,Screen.height-(169+46+26)*scale);
-            Vector2 Target()=>new Vector2((32+17+125)*scale,Screen.height-(169+133+31)*scale);
+            Vector2 Source()=>new Vector2((guiWidth-500+18+75)*scale,Screen.height-(169+46+26)*scale);
+            Vector2 Target()=>new Vector2((52+100)*scale,Screen.height-(169+93+45)*scale);
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()});yield return null;
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()}.WithButton(MouseButton.Left));yield return null;
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Target()}.WithButton(MouseButton.Left));yield return null;
