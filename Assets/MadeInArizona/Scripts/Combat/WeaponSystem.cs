@@ -350,7 +350,7 @@ namespace MadeInArizona
                 case "bowling": FieldOrdnance.Roll(owner, muzzle, aimDirection, weapon, damage); break;
                 case "fireworks":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, weapon.blastRadius, source, color,
-                        ExplosionKind.Rocket, 1.25f, new ShotFx { firework = true, castRadius = .3f });
+                        ExplosionKind.Firework, 1.25f, new ShotFx { firework = true, castRadius = .3f });
                     break;
                 case "boomerang":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.7f,

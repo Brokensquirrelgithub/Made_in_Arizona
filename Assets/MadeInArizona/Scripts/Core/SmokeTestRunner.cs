@@ -37,6 +37,8 @@ namespace MadeInArizona
             Application.logMessageReceived += OnLog;
             yield return new WaitForSecondsRealtime(2);
             var game = GameManager.Instance;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFireworkVisualTest")>=0)
+            { yield return TestFireworkVisual(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDisplayReticleTest")>=0)
             { yield return TestDisplayAndReticle(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponDropTest")>=0)
@@ -3444,6 +3446,29 @@ namespace MadeInArizona
                 {var pixel=pixels[y*width+x];total+=(pixel.r*.2126f+pixel.g*.7152f+pixel.b*.0722f)/255f;count++;}
             Destroy(texture);return total/Mathf.Max(1,count);
         }
+        IEnumerator TestFireworkVisual()
+        {
+            var cameraObject = new GameObject("Firework capture camera");
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            camera.cullingMask = 1 << 30;
+            camera.orthographic = false;
+            camera.fieldOfView = 60f;
+            camera.transform.SetPositionAndRotation(new Vector3(0, 7, -36),
+                Quaternion.LookRotation(new Vector3(0, -7, 36)));
+            float before = SceneLuminance("firework-before", camera);
+            var burst = FireworkBurstVisual.Spawn(Vector3.zero);
+            foreach (var child in burst.GetComponentsInChildren<Transform>()) child.gameObject.layer = 30;
+            yield return new WaitForSecondsRealtime(.18f);
+            float after = SceneLuminance("firework-bloom", camera);
+            Check("firework burst visibly brightens the frame", after > before + .005f);
+            yield return new WaitForSecondsRealtime(.25f);
+            SceneLuminance("firework-colors", camera);
+            if (burst) Destroy(burst.gameObject);
+            Destroy(cameraObject);
+        }
         void Check(string name, bool passed) { (passed ? checks : failures).Add((passed ? "PASS " : "FAIL ") + name); if (!passed) fixtureTrace.Add("MIA_SMOKE_FAIL_AT " + name); }
         void TestWeaponDropsAndBazookaCone()
         {
@@ -3456,15 +3481,19 @@ namespace MadeInArizona
                     {
                         string id = WeaponRules.EnemyDropForRoll((EnemyFaction)faction, archetype, roll / 100f);
                         available.Add(id);
-                        validDrops &= WeaponRules.Find(id) && !WeaponRules.GarageWeapon(id) &&
+                        // Fireworks were later added to the garage while remaining a faction drop.
+                        validDrops &= WeaponRules.Find(id) && (!WeaponRules.GarageWeapon(id) || id == "fireworks") &&
                             WeaponRules.PickupAmmo(id) > 0 && WeaponRules.MaxAmmo(id) >= WeaponRules.PickupAmmo(id);
                     }
             Check("all enemy drops have a field weapon and usable ammo", validDrops);
             Check("all eight moved weapons are reachable faction drops", moved.All(available.Contains));
-            var fireworkPrefab = Resources.Load<GameObject>("VFX/Firework_WarmSunset");
-            var fireworkEffect = fireworkPrefab ? fireworkPrefab.GetComponent<UnityEngine.VFX.VisualEffect>() : null;
-            Check("firework cannon is a usable drop with its VFX graph",
-                available.Contains("fireworks") && fireworkEffect && fireworkEffect.visualEffectAsset);
+            var fireworkEffect = FireworkBurstVisual.Spawn(Vector3.zero);
+            Check("firework cannon has bright multi-particle bursts and imported sounds",
+                available.Contains("fireworks") && fireworkEffect &&
+                fireworkEffect.GetComponentsInChildren<ParticleSystem>().Length == 2 &&
+                fireworkEffect.GetComponent<Light>() &&
+                Resources.LoadAll<AudioClip>("Audio/Fireworks").Length == 3);
+            if (fireworkEffect) Destroy(fireworkEffect.gameObject);
             Check("moved weapons are absent from the garage", moved.All(id => !WeaponRules.GarageWeapon(id) && WeaponRules.ScrapCost(id) == 0));
             var legacySave = new SaveData { salvage = 9, selectedWeapon = "deathray" };
             legacySave.ownedWeapons.Add("deathray"); legacySave.ownedWeapons.Add("crossbow");

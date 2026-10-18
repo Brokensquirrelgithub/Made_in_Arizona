@@ -5,7 +5,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace MadeInArizona
 {
-    public enum ExplosionKind { Gasoline, Propane, Ammunition, Electrical, Grenade, Rocket, FuelTank, Vehicle, Massive, Chemical }
+    public enum ExplosionKind { Gasoline, Propane, Ammunition, Electrical, Grenade, Rocket, FuelTank, Vehicle, Massive, Chemical, Firework }
 
     /// <summary>World-scoped effect pools with a bounded chain-reaction queue and quality-dependent budgets.</summary>
     public sealed class ExplosionSystem : MonoBehaviour
@@ -408,6 +408,7 @@ namespace MadeInArizona
                 case ExplosionKind.Chemical: flame = new Color(.48f, 1.7f, .18f); sparkScale = .7f; smokeScale = 1.5f; fireScale = .45f; break;
                 case ExplosionKind.Grenade: flame = new Color(1.3f, .9f, .38f); fireScale = .65f; sparkScale = 1.7f; break;
                 case ExplosionKind.Rocket: sparkScale = 2; upward = .8f; break;
+                case ExplosionKind.Firework: sparkScale = 2; upward = .8f; break;
                 case ExplosionKind.Gasoline: fireScale = 1.3f; smokeScale = 1.4f; break;
                 case ExplosionKind.FuelTank: fireScale = 1.8f; smokeScale = 2; upward = 1.5f; break;
                 case ExplosionKind.Vehicle: sparkScale = 1.8f; smokeScale = 1.5f; break;
@@ -485,6 +486,7 @@ namespace MadeInArizona
             if (quality > 0 && radius >= 6f && (blast.kind == ExplosionKind.Massive || Random.value < .3f))
                 MakeWave(blast.point, radius * .9f, new Color(.95f, .74f, .5f, .65f));
             Scatter(blast.point, radius*forceAmount, 4 + multiplier * 3, new Color(.24f, .2f, .15f), Vector3.zero);
+            if (blast.kind == ExplosionKind.Firework) FireworkBurstVisual.Spawn(blast.point);
             AudioManager.Instance?.PlayExplosion(blast.point, radius,blast.kind);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (player != null)

@@ -8,9 +8,10 @@ namespace MadeInArizona.Editor
     {
         void OnPreprocessAudio()
         {
-            if (!assetPath.StartsWith("Assets/FreeWeaponSounds/", System.StringComparison.Ordinal)) return;
+            bool firework = assetPath.StartsWith("Assets/MadeInArizona/Resources/Audio/Fireworks/", System.StringComparison.Ordinal);
+            if (!firework && !assetPath.StartsWith("Assets/FreeWeaponSounds/", System.StringComparison.Ordinal)) return;
             var importer = (AudioImporter)assetImporter;
-            importer.forceToMono = false;
+            importer.forceToMono = firework;
             var settings = importer.defaultSampleSettings;
             settings.loadType = AudioClipLoadType.DecompressOnLoad;
             settings.preloadAudioData = true;

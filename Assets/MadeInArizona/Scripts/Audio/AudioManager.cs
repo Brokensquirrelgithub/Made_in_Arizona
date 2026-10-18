@@ -9,7 +9,7 @@ namespace MadeInArizona
         /// <summary>Master output; automated test runs (-miaSmokeTest) are always silent so they never play through the speakers.</summary>
         public static float OutputVolume(float master) => SmokeTestRunner.Active ? 0 : master;
         readonly List<AudioClip> clips=new List<AudioClip>();
-        AudioClip[] shots,blasts,hurts,hitMarkers;AudioClip killConfirm,weaponPickup,firecrackerPop,crossbowShot,dynamiteFuse,washerBang,chainRattle;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
+        AudioClip[] shots,blasts,hurts,hitMarkers,fireworkBlasts;AudioClip killConfirm,weaponPickup,firecrackerPop,crossbowShot,dynamiteFuse,washerBang,chainRattle;int hitCursor;float hitAt;AudioClip ui,radio,shift,release,backfire,ordnanceBlast,nitroIgnite,repair,objective;
         public AudioClip CrossbowShot => crossbowShot;
         public AudioClip DynamiteFuse => dynamiteFuse;
         AudioSource whine,road,wind,heartbeat,nitro,squeal,scrub,radioSource,uiSource;
@@ -71,6 +71,7 @@ namespace MadeInArizona
             // Bowling pins: the supplied strike recordings (Resources/Audio/Bowling); the synthesized rack only if they are missing.
             pinStrikes=Resources.LoadAll<AudioClip>("Audio/Bowling");
             if(pinStrikes.Length==0){pinStrikes=new AudioClip[3];for(int i=0;i<pinStrikes.Length;i++)pinStrikes[i]=Keep(AudioSynthesis.PinStrike(i));}
+            fireworkBlasts=Resources.LoadAll<AudioClip>("Audio/Fireworks");
             debrisBreaks=new[]{Keep(AudioSynthesis.DebrisBreak(true)),Keep(AudioSynthesis.DebrisBreak(false))};
             shots=new AudioClip[3];blasts=new AudioClip[3];for(int i=0;i<3;i++){shots[i]=Keep(AudioSynthesis.Shot(i));blasts[i]=Keep(AudioSynthesis.Explosion(i));}
             firecrackerPop=Keep(AudioSynthesis.FirecrackerPop());
@@ -388,6 +389,13 @@ namespace MadeInArizona
         public void PlayExplosion(Vector3 position,float strength,ExplosionKind kind=ExplosionKind.Vehicle)
         {
             if(Settings==null)return;int size=strength>=10?2:strength>=5?1:0;
+            if(kind==ExplosionKind.Firework && fireworkBlasts!=null && fireworkBlasts.Length>0)
+            {
+                PlayAt(fireworkBlasts[Random.Range(0,fireworkBlasts.Length)],position,
+                    Settings.weapons*.52f*duck,Random.Range(.96f,1.04f),38);
+                if(size>0)duck=Mathf.Min(duck,size==2?.3f:.55f);
+                return;
+            }
             var clip=ordnanceBlast&&(kind==ExplosionKind.Grenade||kind==ExplosionKind.Rocket||kind==ExplosionKind.Ammunition)?ordnanceBlast:blasts[size];
             PlayAt(clip,position,Settings.weapons*Mathf.Clamp(.3f+strength*.055f,.35f,.93f),Random.Range(.85f,1.04f),25);
             if(size>0)duck=Mathf.Min(duck,size==2?.3f:.55f);

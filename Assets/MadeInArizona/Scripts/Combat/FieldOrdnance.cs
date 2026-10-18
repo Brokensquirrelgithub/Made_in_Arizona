@@ -33,8 +33,6 @@ namespace MadeInArizona
         Transform head, beaconBeam;
         Material ownMaterial, beaconMaterial;
         static readonly Color BeaconRed = new Color(1, .06f, .03f);
-        static GameObject fireworkPrefab;
-        static bool fireworkPrefabLoaded;
         static readonly RaycastHit[] firePatchHits = new RaycastHit[12];
         readonly HashSet<VehicleController> struck = new HashSet<VehicleController>();
 
@@ -609,8 +607,7 @@ namespace MadeInArizona
         void Detonate()
         {
             Vector3 at = transform.position;
-            if (firework) FireworkBurst(at);
-            var kind = firework ? ExplosionKind.Rocket : mode == Mode.Mine ? ExplosionKind.Ammunition : mode == Mode.Crawler ? ExplosionKind.Gasoline : mode == Mode.Vortex ? ExplosionKind.Massive : ExplosionKind.Grenade;
+            var kind = firework ? ExplosionKind.Firework : mode == Mode.Mine ? ExplosionKind.Ammunition : mode == Mode.Crawler ? ExplosionKind.Gasoline : mode == Mode.Vortex ? ExplosionKind.Massive : ExplosionKind.Grenade;
             ExplosionSystem.Detonate(at, radius, damage, source, kind, falloffPower: mode == Mode.Fuse ? 2f : 0f);
             if (payload == Payload.FireRing && source)
             {
@@ -635,29 +632,6 @@ namespace MadeInArizona
             }
             sentries.Remove(this);
             Destroy(gameObject);
-        }
-        public static void FireworkBurst(Vector3 at)
-        {
-            if (!fireworkPrefabLoaded) { fireworkPrefab = Resources.Load<GameObject>("VFX/Firework_WarmSunset"); fireworkPrefabLoaded = true; }
-            if (fireworkPrefab)
-            {
-                var burst = Instantiate(fireworkPrefab, at, Quaternion.identity);
-                var vfx = burst.GetComponent<UnityEngine.VFX.VisualEffect>();
-                if (vfx) { vfx.SetFloat("Initial Rocket Lifetime", .05f); vfx.Play(); }
-                Destroy(burst, 6f);
-            }
-            else
-            {
-                // The licensed effect is optional; source builds still show a full burst.
-                Vector3 centre = at + Vector3.up * 1.5f;
-                ExplosionSystem.Burst(centre, new Color(1.8f, .65f, .18f), 64, 8f);
-                for (int i = 0; i < 8; i++)
-                {
-                    float angle = i * Mathf.PI * .25f;
-                    Vector3 spoke = new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle)) * 2.4f;
-                    ExplosionSystem.Burst(centre + spoke, i % 2 == 0 ? new Color(1.6f, .9f, .3f) : new Color(.4f, .9f, 1.6f), 3, 2.5f);
-                }
-            }
         }
         void OnDestroy() { sentries.Remove(this); if (ownMaterial) Destroy(ownMaterial); if (beaconMaterial) Destroy(beaconMaterial); }
     }

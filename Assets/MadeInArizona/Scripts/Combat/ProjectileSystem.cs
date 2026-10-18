@@ -406,7 +406,6 @@ namespace MadeInArizona
                 }
                 return;
             }
-            if (fx != null && fx.firework) FieldOrdnance.FireworkBurst(hit.point);
             if (round.radius > .1f)
             {
                 if (fx != null && fx.coneBlast) ExplosionSystem.DetonateCone(hit.point, round.direction, round.radius, round.damage, round.source);
@@ -497,7 +496,6 @@ namespace MadeInArizona
         void Expire(Round round)
         {
             TryTorchPatch(round, round.position);
-            if (round.fx != null && round.fx.firework) FieldOrdnance.FireworkBurst(round.position);
             if (round.radius > .1f)
             {
                 if (round.fx != null && round.fx.coneBlast) ExplosionSystem.DetonateCone(round.position, round.direction, round.radius, round.damage, round.source);
