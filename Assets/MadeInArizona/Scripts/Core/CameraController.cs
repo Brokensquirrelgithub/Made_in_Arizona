@@ -72,6 +72,8 @@ namespace MadeInArizona
         {
             if (!Target || !view || !GameManager.Instance) return;
             bool garage = GameManager.Instance.State == GameState.Garage || GameManager.Instance.State == GameState.MainMenu;
+            if(!garage&&GameManager.Instance.Save != null&&GameManager.Instance.Save.settings.racingStyle)
+            {PositionRacing(snap);return;}
             int station = garage && GameManager.Instance.State == GameState.Garage && garageUi ? garageUi.GarageStation : 0;
             bool motorPool = station == 1, dogView = station == 4;
             if (dogView && !garageSuzuki) garageSuzuki = FindFirstObjectByType<SuzukiDog>();
@@ -138,6 +140,36 @@ namespace MadeInArizona
             ApplyDepthOffset(DepthOffset);
             shake = Mathf.MoveTowards(shake, 0, Time.unscaledDeltaTime * 2.5f);
             if (!garage && shake > 0) transform.position += Random.insideUnitSphere * shake * GameManager.Instance.Save.settings.shake * Mathf.Clamp(DevTuning.Current.shake, 0f, 3f) * .35f;
+        }
+
+        void PositionRacing(bool snap)
+        {
+            var game=GameManager.Instance;
+            var car=Target;
+            if(leadTarget!=car){leadTarget=car;targetBody=car.GetComponentInParent<Rigidbody>();}
+            Vector3 forward=Vector3.ProjectOnPlane(car.forward,Vector3.up).normalized;
+            if(forward.sqrMagnitude<.1f)forward=Vector3.forward;
+            float speed=targetBody?Vector3.ProjectOnPlane(targetBody.linearVelocity,Vector3.up).magnitude:0;
+            float pace=Mathf.Clamp01(speed/42f);
+            Vector3 focus=car.position;
+            FocusPoint=focus;HasFocus=true;
+            Vector3 desired=focus-forward*Mathf.Lerp(12f,17f,pace)+Vector3.up*Mathf.Lerp(5.8f,7.3f,pace);
+            if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+2.5f);
+            Vector3 lookAt=focus+forward*Mathf.Lerp(5f,8f,pace)+Vector3.up*1.6f;
+            Quaternion rotation=Quaternion.LookRotation((lookAt-desired).normalized,Vector3.up);
+            view.orthographic=false;
+            view.fieldOfView=65f;
+            view.nearClipPlane=.3f;
+            int quality=game.Save.settings.quality;
+            view.farClipPlane=quality==0?300:quality==1?380:450;
+            DepthOffset=0;ApplyDepthOffset(0);
+            dynamicZoom=1;dynamicZoomVelocity=0;
+            transform.position=snap?desired:Vector3.SmoothDamp(transform.position,desired,ref velocity,.18f,Mathf.Infinity,Time.unscaledDeltaTime);
+            transform.rotation=snap?rotation:Quaternion.Slerp(transform.rotation,rotation,1-Mathf.Exp(-10f*Time.unscaledDeltaTime));
+            SunGlint.UpdateEye(transform);
+            if(listener)listener.SetPositionAndRotation(transform.position,transform.rotation);
+            shake=Mathf.MoveTowards(shake,0,Time.unscaledDeltaTime*2.5f);
+            if(shake>0)transform.position+=Random.insideUnitSphere*shake*game.Save.settings.shake*Mathf.Clamp(DevTuning.Current.shake,0f,3f)*.35f;
         }
 
         Vector3 Lead(bool snap)

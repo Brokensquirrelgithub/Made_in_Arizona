@@ -22,6 +22,8 @@ namespace MadeInArizona
         public float cameraSway=.5f;
         // Gameplay camera projection: false = the original orthographic view, true = perspective (CameraController.PerspectiveFov).
         public bool perspectiveCamera=true;
+        // Chase camera with accelerator/brake pedals and car-relative steering. The original scheme remains the default.
+        public bool racingStyle;
         // Gamepad: LB is a held reverse button and the left stick never selects reverse by itself.
         public bool shoulderReverse;
         // Gamepad: nitro on A (button south) and interact on RB, instead of the reverse.

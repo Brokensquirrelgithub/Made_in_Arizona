@@ -19,12 +19,19 @@ namespace MadeInArizona
             Text(left+20,top+35,manualWidth-40,25,"FIG. 01 / PLAN VIEW    FRONT ←    SIX SYSTEMS / FOUR FLEXIBLE ACCESSORIES",12,Muted,true);
             float plateX=left+245,plateWidth=manualWidth-490;
             var manual=EquipmentIllustrations.Manual(vehicle);
-            if(manual)GUI.DrawTexture(new Rect(plateX,top+68,plateWidth,374),manual,ScaleMode.StretchToFill);
+            float drawnX=plateX,drawnWidth=plateWidth;
+            if(manual)
+            {
+                drawnWidth=Mathf.Min(plateWidth,374f*manual.width/manual.height);
+                float drawnHeight=drawnWidth*manual.height/manual.width;
+                drawnX=plateX+(plateWidth-drawnWidth)*.5f;
+                GUI.DrawTexture(new Rect(drawnX,top+68+(374-drawnHeight)*.5f,drawnWidth,drawnHeight),manual);
+            }
             for(int row=0;row<3;row++)
             {
                 float lineY=top+93+row*118+46;
-                Rect(left+226,lineY,19,2,Muted);
-                Rect(left+manualWidth-245,lineY,19,2,Muted);
+                Rect(left+226,lineY,Mathf.Max(0,drawnX-left-226),2,Muted);
+                Rect(drawnX+drawnWidth,lineY,Mathf.Max(0,left+manualWidth-226-drawnX-drawnWidth),2,Muted);
             }
             for(int index=0;index<6;index++)
             {
@@ -69,6 +76,8 @@ namespace MadeInArizona
                 return;
             }
             float listHeight=Mathf.Min(245,panelHeight*.39f);
+            if(Event.current.type==EventType.ScrollWheel&&
+                new Rect(side+18,top+46,rightWidth-36,listHeight).Contains(Event.current.mousePosition))Event.current.Use();
             equipmentScroll=GUI.BeginScrollView(new Rect(side+18,top+46,rightWidth-36,listHeight),equipmentScroll,
                 new Rect(0,0,rightWidth-63,equipmentChoices.Count*58));
             for(int row=0;row<equipmentChoices.Count;row++)

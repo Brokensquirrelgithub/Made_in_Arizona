@@ -97,7 +97,7 @@ namespace MadeInArizona
             Vector2 stickAim = aim.ReadValue<Vector2>();
             var pad = Gamepad.current;
             bool padActive = pad != null && (pad.leftStick.ReadValue().sqrMagnitude > .04f || stickAim.sqrMagnitude > .04f || pad.buttonSouth.wasPressedThisFrame || pad.leftTrigger.ReadValue() > .15f || pad.rightTrigger.ReadValue() > .15f
-                || pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame);
+                || pad.dpad.ReadValue().sqrMagnitude > .01f || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame || pad.buttonEast.wasPressedThisFrame || pad.buttonWest.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame);
             // The mouse takes over only after deliberate travel. A single jittery frame used to flip devices back and forth,
             // alternating the stick and mouse aim points so the reticle appeared split in two.
             mouseTravel = Mathf.Max(0, mouseTravel - 90 * Time.unscaledDeltaTime) + (Mouse.current != null ? Mouse.current.delta.ReadValue().magnitude : 0);
@@ -107,12 +107,25 @@ namespace MadeInArizona
             bool playing = GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
             Cursor.visible = !playing || GameUI.ConsoleOpen;
             if (GameUI.ConsoleOpen || Rebinding || !gameplayEnabled) { ClearGameplay(); return; }
-            Move = Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1);
+            var settings = GameManager.Instance != null ? GameManager.Instance.Save?.settings : null;
+            bool racing = settings != null && settings.racingStyle;
+            Vector2 rawMove=Vector2.ClampMagnitude(move.ReadValue<Vector2>(),1);
             var player = GameManager.Instance != null ? GameManager.Instance.Player : null;
+            bool racePad=racing&&UsingGamepad&&pad!=null;
+            float racingBrake=racePad?pad.leftTrigger.ReadValue():Mathf.Max(0,-rawMove.y);
+            float racingThrottle=racePad?pad.rightTrigger.ReadValue():Mathf.Max(0,rawMove.y);
+            float racingSteer=racePad?pad.leftStick.ReadValue().x:rawMove.x;
+            Move=racing?RacingMove(player,racingSteer,Mathf.Max(racingThrottle,racingBrake),racingBrake>.1f):rawMove;
             AimElevation=0;
             if (UsingGamepad)
             {
-                if (stickAim.sqrMagnitude > .08f) Aim = stickAim.normalized;
+                if(racing&&player)
+                {
+                    Vector3 local=stickAim.sqrMagnitude>.08f?new Vector3(stickAim.x,0,stickAim.y):Vector3.forward;
+                    Vector3 world=player.transform.TransformDirection(local);
+                    Aim=new Vector2(world.x,world.z).normalized;
+                }
+                else if (stickAim.sqrMagnitude > .08f) Aim = stickAim.normalized;
             }
             else if (Camera.main != null && player != null && Mouse.current != null)
             {
@@ -155,19 +168,28 @@ namespace MadeInArizona
             // A stick only chooses a heading, so the turret pitch must be chosen for the player. Without it every
             // gamepad shot left flat at muzzle height and sailed over enemies below the player.
             if (UsingGamepad && player != null && GeneratedWorld.Active) AimElevation = GamepadElevation(player, Aim);
-            Primary = primary.IsPressed();
-            Secondary = secondary.IsPressed();
-            Drift = brake.IsPressed();
-            var settings = GameManager.Instance != null ? GameManager.Instance.Save?.settings : null;
+            Primary = racing ? Held(primary,false)||(pad!=null&&pad.rightShoulder.isPressed) : primary.IsPressed();
+            Secondary = racing ? Held(secondary,false)||(pad!=null&&pad.leftShoulder.isPressed) : secondary.IsPressed();
+            Drift = racing ? Held(brake,false)||(pad!=null&&pad.buttonEast.isPressed) : brake.IsPressed();
             // Optional gamepad layout: nitro on A (button south) with interact moved to its old shoulder. Each action's
             // keyboard bindings and rebinds are untouched; only which gamepad control feeds which action swaps.
             bool swapPad = settings != null && settings.boostOnSouth;
-            Boost = Held(boost, false) || Held(swapPad ? interact : boost, true);
-            Interact = PressedThisFrame(interact, false) || PressedThisFrame(swapPad ? boost : interact, true);
+            Boost = racing ? Held(boost,false)||(pad!=null&&pad.buttonSouth.isPressed) :
+                Held(boost, false) || Held(swapPad ? interact : boost, true);
+            Interact = racing ? PressedThisFrame(interact,false)||(pad!=null&&pad.buttonWest.wasPressedThisFrame) :
+                PressedThisFrame(interact, false) || PressedThisFrame(swapPad ? boost : interact, true);
             bool shoulderReverse = settings != null && settings.shoulderReverse;
-            Reverse = shoulderReverse && reverse.IsPressed();
-            ManualReverse = shoulderReverse && UsingGamepad;
-            SwapPressed = swap.WasPressedThisFrame();
+            Reverse = racing ? racingBrake>.1f : shoulderReverse && reverse.IsPressed();
+            ManualReverse = racing || shoulderReverse && UsingGamepad;
+            SwapPressed = racing ? PressedThisFrame(swap,false)||(pad!=null&&pad.buttonNorth.wasPressedThisFrame) : swap.WasPressedThisFrame();
+        }
+
+        static Vector2 RacingMove(VehicleController car,float steer,float pedal,bool reversing)
+        {
+            if(!car||pedal<=.01f)return Vector2.zero;
+            Vector3 direction=Quaternion.AngleAxis(Mathf.Clamp(steer,-1,1)*(reversing?-42f:42f),Vector3.up)*
+                (car.transform.forward*(reversing?-1f:1f));
+            return new Vector2(direction.x,direction.z).normalized*Mathf.Clamp01(pedal);
         }
 
         /// <summary>An action's bound buttons on one kind of device (gamepad or not) held down.</summary>

@@ -283,6 +283,10 @@ namespace MadeInArizona
             { yield return TestSuzukiTreats(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEquipmentTest")>=0)
             { yield return TestEquipmentGarage(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaPauseMenuTest")>=0)
+            { yield return TestPauseMenuController(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaRacingStyleTest")>=0)
+            { yield return TestRacingStyle(); FinishResults(); yield break; }
             Check("six-way texture pairs and shader",Resources.Load<Texture2D>("SixWay/Fireball_P") && Resources.Load<Texture2D>("SixWay/Fireball_N") && Resources.Load<Texture2D>("SixWay/Smoke_P") && Resources.Load<Texture2D>("SixWay/Smoke_N") && Shader.Find("MadeInArizona/SixWaySmoke").isSupported);
             Check("Suzuki present", FindFirstObjectByType<SuzukiDog>() != null);
             Capture("01-garage");
@@ -859,11 +863,20 @@ namespace MadeInArizona
             float guiWidth=Screen.width/scale;
             Vector2 Source()=>new Vector2((guiWidth-500+18+75)*scale,Screen.height-(169+46+26)*scale);
             Vector2 Target()=>new Vector2((52+100)*scale,Screen.height-(169+93+45)*scale);
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Source(),scroll=new Vector2(0,-120)});
+            yield return new WaitForSecondsRealtime(.5f);
+            Check("mouse wheel scrolls Parts and Tuning inventory",ui.EquipmentScrollY>1);
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Source(),scroll=new Vector2(0,120)});
+            yield return new WaitForSecondsRealtime(.5f);
+            Check("mouse wheel can return to first part",ui.EquipmentScrollY<1);
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()});yield return null;
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()}.WithButton(MouseButton.Left));yield return null;
+            Check("mouse pickup starts visible part drag",ui.EquipmentDragging);
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Target()}.WithButton(MouseButton.Left));yield return null;
+            Capture("equipment-drag-ghost");yield return new WaitForSecondsRealtime(.1f);
             InputSystem.QueueStateEvent(mouse,new MouseState{position=Target()});yield return null;yield return null;
             Check("mouse drag uses the same equipment installation",GarageManager.Installed(save,vehicle.id,EquipmentSlot.Engine)?.id=="intake");
+            Check("mouse drag clears its preview on release",!ui.EquipmentDragging);
             InputSystem.RemoveDevice(mouse);
             Vector3 before=game.Player.transform.position;
             InputSystem.QueueStateEvent(pad,new GamepadState{leftStick=Vector2.up,rightTrigger=1});
@@ -871,6 +884,106 @@ namespace MadeInArizona
             Check("garage blocks driving and combat input",Vector3.Distance(before,game.Player.transform.position)<.01f&&
                 game.Player.Body.isKinematic);
             InputSystem.QueueStateEvent(pad,new GamepadState());InputSystem.RemoveDevice(pad);
+        }
+        IEnumerator TestPauseMenuController()
+        {
+            var game=GameManager.Instance;
+            var ui=FindFirstObjectByType<GameUI>();
+            var pad=InputSystem.AddDevice<Gamepad>();
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(.3f);
+            game.Pause();yield return null;
+            Check("controller pause opens with resume focused",game.State==GameState.Paused&&ui.PauseFocus==0);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.DpadDown));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller D-pad focuses pause settings",ui.PauseFocus==1);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller A opens focused pause item",ui.SettingsVisible&&game.State==GameState.Paused);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.East));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller B returns from settings to pause",!ui.SettingsVisible&&game.State==GameState.Paused);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.East));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller B resumes without leaving the mission",game.State==GameState.Playing);
+            game.Pause();yield return null;
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.North));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller Y opens pause settings",ui.SettingsVisible&&game.State==GameState.Paused);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.East));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.Start));
+            yield return new WaitForSecondsRealtime(.08f);
+            Check("controller Start resumes pause",game.State==GameState.Playing);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return null;
+            InputSystem.RemoveDevice(pad);
+        }
+        IEnumerator TestRacingStyle()
+        {
+            var game=GameManager.Instance;
+            var input=InputManager.Instance;
+            var pad=InputSystem.AddDevice<Gamepad>();
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.Start));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            for(int tab=0;tab<3;tab++)
+            {
+                InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.RightShoulder));
+                yield return new WaitForSecondsRealtime(.08f);
+                InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            }
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller can enable racing style in Controls settings",game.Save.settings.racingStyle);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.East));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("racing style persists in settings",SaveSystem.Load().settings.racingStyle);
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(.5f);
+            var car=game.Player;
+            var camera=Camera.main;
+            Vector3 behind=camera.transform.position-car.transform.position;
+            Check("racing camera follows behind the car in perspective",!camera.orthographic&&
+                Mathf.Abs(camera.fieldOfView-65f)<.1f&&behind.y>3&&Vector3.Dot(behind.normalized,car.transform.forward)<-.4f);
+            InputSystem.QueueStateEvent(pad,new GamepadState{leftStick=new Vector2(.6f,0),rightTrigger=.8f,rightStick=Vector2.up}
+                .WithButton(GamepadButton.RightShoulder));
+            yield return new WaitForSecondsRealtime(.2f);
+            Check("racing RT accelerates and RB fires without trigger fire",input.UsingGamepad&&
+                input.Move.magnitude>.6f&&input.Primary&&!input.Secondary&&!input.Reverse&&
+                Vector2.Dot(input.Aim,new Vector2(car.transform.forward.x,car.transform.forward.z))>.7f);
+            InputSystem.QueueStateEvent(pad,new GamepadState{leftStick=new Vector2(.4f,0),leftTrigger=.7f}
+                .WithButton(GamepadButton.LeftShoulder));
+            yield return new WaitForSecondsRealtime(.2f);
+            Check("racing LT brakes and reverses while LB fires field weapon",input.Reverse&&input.ManualReverse&&
+                input.Move.magnitude>.5f&&input.Secondary&&!input.Primary);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            Check("racing A controls boost",input.Boost);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            InputSystem.RemoveDevice(pad);
+            var keys=InputSystem.AddDevice<Keyboard>();
+            InputSystem.QueueStateEvent(keys,new KeyboardState(Key.W,Key.A));
+            yield return new WaitForSecondsRealtime(.18f);
+            Check("racing W accelerates while A steers",!input.UsingGamepad&&input.Move.magnitude>.5f&&!input.Reverse);
+            InputSystem.QueueStateEvent(keys,new KeyboardState(Key.S,Key.D));
+            yield return new WaitForSecondsRealtime(.18f);
+            Check("racing S brakes and reverses while D steers",input.Reverse&&input.ManualReverse&&input.Move.magnitude>.5f);
+            InputSystem.QueueStateEvent(keys,new KeyboardState());yield return null;
+            InputSystem.RemoveDevice(keys);
+            game.Save.settings.racingStyle=false;
+            game.ApplySettings();
+            yield return new WaitForSecondsRealtime(.15f);
+            Check("classic camera returns after switching driving style off",Mathf.Abs(camera.fieldOfView-CameraController.PerspectiveFov)<.1f);
         }
         void TestSegmentedHealth()
         {

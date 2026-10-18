@@ -13,6 +13,8 @@ namespace MadeInArizona
         int equipmentFocus;
         public int EquipmentFocus => equipmentFocus;
         public bool EquipmentBrowsing => browsingParts;
+        public float EquipmentScrollY => equipmentScroll.y;
+        public bool EquipmentDragging => draggingPart;
         int vehicleBrowseIndex=-1;
         bool browsingParts,showIncompatible,showEquipmentDetails;
         VehiclePart draggingPart;
@@ -63,13 +65,17 @@ namespace MadeInArizona
                 if(pad.buttonEast.wasPressedThisFrame){browsingParts=false;return;}
                 GatherEquipmentChoices();
                 int row=equipmentChoices.IndexOf(selectedPart);
-                if(pad.dpad.down.wasPressedThisFrame||pad.leftStick.down.wasPressedThisFrame)row++;
-                if(pad.dpad.up.wasPressedThisFrame||pad.leftStick.up.wasPressedThisFrame)row--;
+                int move=pad.dpad.down.wasPressedThisFrame||pad.leftStick.down.wasPressedThisFrame?1:
+                    pad.dpad.up.wasPressedThisFrame||pad.leftStick.up.wasPressedThisFrame?-1:0;
+                row+=move;
                 if(equipmentChoices.Count>0)
                 {
                     row=Mathf.Clamp(row,0,equipmentChoices.Count-1);
-                    selectedPart=equipmentChoices[row];
-                    equipmentScroll.y=Mathf.Clamp((row-2)*58,0,Mathf.Max(0,equipmentChoices.Count*58-218));
+                    if(move!=0)
+                    {
+                        selectedPart=equipmentChoices[row];
+                        equipmentScroll.y=Mathf.Clamp((row-2)*58,0,Mathf.Max(0,equipmentChoices.Count*58-218));
+                    }
                 }
                 if(pad.buttonSouth.wasPressedThisFrame&&equipmentChoices.Count>0)BuyOrEquipCandidate(ContentCatalog.Parts[selectedPart]);
                 return;
@@ -95,7 +101,7 @@ namespace MadeInArizona
             if(browsingParts)
             {
                 GatherEquipmentChoices();
-                if(equipmentChoices.Count==0)return;
+                if(equipmentChoices.Count==0||vertical==0)return;
                 int row=Mathf.Clamp(equipmentChoices.IndexOf(selectedPart)+vertical,0,equipmentChoices.Count-1);
                 selectedPart=equipmentChoices[row];equipmentScroll.y=Mathf.Clamp((row-2)*58,0,Mathf.Max(0,equipmentChoices.Count*58-218));
                 return;
@@ -141,10 +147,21 @@ namespace MadeInArizona
             Vector2 screen=mouse.position.ReadValue();
             Vector2 pointer=new Vector2(screen.x/scale,(Screen.height-screen.y)/scale);
             float top=169,panelHeight=uiHeight-245,side=uiWidth-500;
+            float listHeight=Mathf.Min(245,panelHeight*.39f);
+            var listRect=new Rect(side+18,top+46,432,listHeight);
+            if(browsingParts&&equipmentFocus<10&&listRect.Contains(pointer))
+            {
+                float wheel=mouse.scroll.ReadValue().y;
+                if(Mathf.Abs(wheel)>.01f)
+                {
+                    GatherEquipmentChoices();
+                    equipmentScroll.y=Mathf.Clamp(equipmentScroll.y-wheel/120f*58f,0,
+                        Mathf.Max(0,equipmentChoices.Count*58-listHeight));
+                }
+            }
             if(mouse.leftButton.wasPressedThisFrame&&browsingParts&&equipmentFocus<10)
             {
-                float listHeight=Mathf.Min(245,panelHeight*.39f);
-                if(new Rect(side+18,top+46,432,listHeight).Contains(pointer))
+                if(listRect.Contains(pointer))
                 {
                     GatherEquipmentChoices();
                     int row=Mathf.FloorToInt((pointer.y-top-46+equipmentScroll.y)/58);
@@ -158,6 +175,34 @@ namespace MadeInArizona
                 if(!EquipmentCardRect(i,top,uiWidth-560).Contains(pointer))continue;
                 equipmentFocus=i;BuyOrEquipCandidate(candidate);return;
             }
+        }
+        void DrawEquipmentDragGhost()
+        {
+            if(!draggingPart||Mouse.current==null||!Mouse.current.leftButton.isPressed)return;
+            var mouse=Mouse.current.position.ReadValue();
+            var pointer=new Vector2(mouse.x/guiScale,(Screen.height-mouse.y)/guiScale);
+            float top=169,manualWidth=width-560;
+            int target=-1;
+            for(int i=0;i<10;i++)if(EquipmentCardRect(i,top,manualWidth).Contains(pointer)){target=i;break;}
+            bool valid=target>=0&&(target<6?MechanicalSlots[target]:EquipmentSlot.Accessory)==draggingPart.equipmentSlot&&
+                GarageManager.Compatible(draggingPart,FocusVehicle);
+            if(target>=0)
+            {
+                var card=EquipmentCardRect(target,top,manualWidth);
+                var color=valid?Lime:Orange;
+                Rect(card.x-3,card.y-3,card.width+6,3,color);
+                Rect(card.x-3,card.y+card.height,card.width+6,3,color);
+                Rect(card.x-3,card.y,3,card.height,color);
+                Rect(card.x+card.width,card.y,3,card.height,color);
+            }
+            float ghostWidth=235,ghostHeight=66;
+            float x=Mathf.Clamp(pointer.x+18,8,Mathf.Max(8,width-ghostWidth-8));
+            float y=Mathf.Clamp(pointer.y+18,8,Mathf.Max(8,height-ghostHeight-8));
+            Rect(x,y,ghostWidth,ghostHeight,Panel);
+            Rect(x,y,4,ghostHeight,valid?Lime:Orange);
+            DrawEquipmentIcon(draggingPart,draggingPart.equipmentSlot,x+11,y+9,48,FocusVehicle.id);
+            Text(x+67,y+8,ghostWidth-76,27,draggingPart.displayName,14,Cream,true);
+            Text(x+67,y+36,ghostWidth-76,18,valid?"RELEASE TO EQUIP":target>=0?"WRONG SLOT":"DRAG TO MATCHING SLOT",11,valid?Lime:Orange,true);
         }
         static Rect EquipmentCardRect(int index,float top,float manualWidth)
         {

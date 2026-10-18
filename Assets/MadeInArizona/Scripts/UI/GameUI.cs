@@ -54,8 +54,10 @@ namespace MadeInArizona
                 return garageWeaponIndices = list.ToArray();
             }
         }
-        int station, selectedPart, selectedWeapon, settingsPage, menuFocus, appearanceFocus;
+        int station, selectedPart, selectedWeapon, settingsPage, menuFocus, appearanceFocus, pauseFocus;
         public int GarageStation => station;
+        public int PauseFocus => pauseFocus;
+        public bool SettingsVisible => settings;
         public static bool ConsoleOpen { get; private set; }
         bool settings;
         float width, height, smoothedFps = 60;
@@ -73,7 +75,7 @@ namespace MadeInArizona
         {
             ConsoleOpen = false;
             browsingParts=false;draggingPart=null;vehicleBrowseIndex=-1;
-            worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;
+            worldSeed=null; worldMap=false; devMenu=false; settings=false; updatesMenu=false; coopPage=false; menuFocus=0;pauseFocus=0;
             resetProgressPending=false; resetProgressError=null;
             if (game != null && game.Save != null)
             {
@@ -122,7 +124,7 @@ namespace MadeInArizona
                 if (direction != 0 || pad.buttonSouth.wasPressedThisFrame) AdjustSetting(direction == 0 ? 1 : direction);
                 return;
             }
-            if (pad.startButton.wasPressedThisFrame && (game.State == GameState.Garage || game.State == GameState.Paused)) { settings = true; menuFocus = 0; return; }
+            if (pad.startButton.wasPressedThisFrame && game.State == GameState.Garage) { settings = true; menuFocus = 0; return; }
             if (game.State == GameState.Garage) {
                 if (pad.leftShoulder.wasPressedThisFrame) { station = (station + stations.Length - 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
                 if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
@@ -140,7 +142,7 @@ namespace MadeInArizona
                 }
                 if (pad.buttonSouth.wasPressedThisFrame) ConfirmSelection();
             }
-            else if (game.State == GameState.Paused) { if (pad.buttonSouth.wasPressedThisFrame) game.Resume(); if (pad.buttonEast.wasPressedThisFrame) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ReturnToGarage(); } }
+            else if (game.State == GameState.Paused) TickPauseInput(pad);
             else if (game.State == GameState.Won || game.State == GameState.Lost) { if (CoopSession.IsRemoteClient) { if (pad.buttonEast.wasPressedThisFrame) LeaveCoop(); } else { if (pad.buttonSouth.wasPressedThisFrame) game.ReturnToGarage(); if (pad.buttonWest.wasPressedThisFrame) game.RetryMission(); } }
         }
 
@@ -219,7 +221,7 @@ namespace MadeInArizona
             if (settings) DrawSettings();
             else
             {
-                if (game.State == GameState.Garage) DrawGarage();
+                if (game.State == GameState.Garage) { DrawGarage(); if(station==2&&!settings)DrawEquipmentDragGhost(); }
                 else if(!devMenu) DrawHUD();
                 if (game.State == GameState.Paused && !devMenu) DrawPause();
                 if(devMenu) DrawDevMenu();
@@ -678,20 +680,44 @@ namespace MadeInArizona
             if(Button(x+w-29,y+6,22,22,"×"))DialogueSystem.Instance.Skip();
         }
 
+        void TickPauseInput(Gamepad pad)
+        {
+            if(pad.buttonEast.wasPressedThisFrame){game.Resume();return;}
+            if(pad.buttonNorth.wasPressedThisFrame){settings=true;menuFocus=0;return;}
+            int move=pad.dpad.down.wasPressedThisFrame||pad.leftStick.down.wasPressedThisFrame?1:
+                pad.dpad.up.wasPressedThisFrame||pad.leftStick.up.wasPressedThisFrame?-1:0;
+            if(move!=0)pauseFocus=(pauseFocus+move+7)%7;
+            if(pad.buttonSouth.wasPressedThisFrame)ActivatePauseChoice(pauseFocus);
+        }
+
+        void ActivatePauseChoice(int choice)
+        {
+            switch(choice)
+            {
+                case 0:game.Resume();break;
+                case 1:settings=true;menuFocus=0;break;
+                case 2:devMenu=true;settings=false;break;
+                case 3:if(GeneratedWorld.Active)OpenWorldMap();break;
+                case 4:if(CoopSession.IsRemoteClient)LeaveCoop();else game.ShowMainMenu();break;
+                case 5:if(!CoopSession.IsRemoteClient)game.ReturnToGarage();break;
+                case 6:if(GeneratedWorld.Active&&!game.IsCombatTrial&&!CoopSession.IsRemoteClient)game.RegenerateWorld();break;
+            }
+        }
+
         void DrawPause()
         {
             Rect(0, 0, width, height, new Color(.02f, .04f, .045f, .74f));
             float x = (width - 500) / 2, y = (height - 690) / 2;
             Rect(x, y, 500, 690, Ink); Tag(x + 40, y + 33, "ENGINE IDLING / WORLD ON HOLD", Orange);
             Text(x + 40, y + 75, 420, 77, "SERVICE BREAK", 41, Cream, true);
-            if (Button(x + 40, y + 176, 420, 56, "BACK TO THE PROBLEM  /  A", true)) game.Resume();
-            if (Button(x + 40, y + 249, 420, 49, "SETTINGS  /  Y")) { settings = true; menuFocus = 0; }
-            if (Button(x + 40, y + 315, 420, 49, "DEV TUNING  /  MOUSE")) { devMenu=true; settings=false; }
-            if(Button(x+40,y+380,420,49,"ARIZONA MAP / M / SELECT",false,GeneratedWorld.Active!=null))OpenWorldMap();
-            if(Button(x+40,y+445,420,49,CoopSession.IsRemoteClient?"LEAVE CO-OP / MAIN MENU":"MAIN MENU")) { if (CoopSession.IsRemoteClient) LeaveCoop(); else game.ShowMainMenu(); }
-            if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE  /  B",false,!CoopSession.IsRemoteClient)) game.ReturnToGarage();
-            if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED", false, GeneratedWorld.Active != null && !game.IsCombatTrial && !CoopSession.IsRemoteClient)) game.RegenerateWorld();
-            Text(x + 40, y + 630, 420, 40, "Restarts this job on a freshly generated Arizona. Progress is kept.", 13, Muted);
+            if (Button(x + 40, y + 176, 420, 56, "BACK TO THE PROBLEM  /  B · START", pauseFocus==0)) ActivatePauseChoice(0);
+            if (Button(x + 40, y + 249, 420, 49, "SETTINGS  /  Y",pauseFocus==1)) ActivatePauseChoice(1);
+            if (Button(x + 40, y + 315, 420, 49, "DEV TUNING",pauseFocus==2)) ActivatePauseChoice(2);
+            if(Button(x+40,y+380,420,49,"ARIZONA MAP / M / SELECT",pauseFocus==3,GeneratedWorld.Active!=null))ActivatePauseChoice(3);
+            if(Button(x+40,y+445,420,49,CoopSession.IsRemoteClient?"LEAVE CO-OP / MAIN MENU":"MAIN MENU",pauseFocus==4))ActivatePauseChoice(4);
+            if (Button(x + 40, y + 510, 420, 49, "RETURN TO GARAGE",pauseFocus==5,!CoopSession.IsRemoteClient)) ActivatePauseChoice(5);
+            if (Button(x + 40, y + 575, 420, 49, "REGENERATE MAP  •  NEW SEED",pauseFocus==6, GeneratedWorld.Active != null && !game.IsCombatTrial && !CoopSession.IsRemoteClient)) ActivatePauseChoice(6);
+            Text(x + 40, y + 630, 420, 40, "D-PAD CHOOSE   •   A CONFIRM   •   B / START RESUME", 13, Muted);
         }
 
         /// <summary>Red flash at the moment of death, a closing dark vignette, and a WRECKED title before the debrief.</summary>
@@ -763,8 +789,8 @@ namespace MadeInArizona
                 Text(x + 35, y + 425, 850, 40, "The camera tips a few degrees as you climb, dip and travel, so hills and drops read in 3D. 0% keeps the fixed overhead view.", 14, Muted);
                 SettingLabel(x, y + 484, "DYNAMIC CAMERA ZOOM", 3); if (Button(x + 465, y + 479, 426, 38, s.dynamicZoom ? "ON • PULLS BACK FOR EDGE THREATS" : "OFF • FIXED DISTANCE")) s.dynamicZoom = !s.dynamicZoom;
                 SettingLabel(x, y + 537, "VSYNC", 4); if (Button(x + 465, y + 532, 426, 38, FrameSyncLabels[s.frameSync])) { s.frameSync = (s.frameSync + 1) % 3; game.ApplySettings(); }
-                SettingLabel(x, y + 590, "CAMERA STYLE", 5); if (Button(x + 465, y + 585, 426, 38, s.perspectiveCamera ? "PERSPECTIVE • 3D DEPTH" : "ORTHOGRAPHIC • FLAT OVERHEAD")) s.perspectiveCamera = !s.perspectiveCamera;
-                Text(x + 35, y + 628, 850, 40, "Perspective keeps the same angle and framing at the car, with distance falling away toward the top of the screen. The garage stays orthographic.", 14, Muted);
+                SettingLabel(x, y + 590, "CAMERA STYLE", 5); if (Button(x + 465, y + 585, 426, 38, s.racingStyle ? "CHASE • SET BY DRIVING STYLE" : s.perspectiveCamera ? "PERSPECTIVE • 3D DEPTH" : "ORTHOGRAPHIC • FLAT OVERHEAD",false,!s.racingStyle)) s.perspectiveCamera = !s.perspectiveCamera;
+                Text(x + 35, y + 628, 850, 40, s.racingStyle ? "Racing style follows behind the car. Switch to classic driving to choose an overhead camera style." : "Perspective keeps the same angle and framing at the car, with distance falling away toward the top of the screen. The garage stays orthographic.", 14, Muted);
                 SettingLabel(x, y + 686, "TIME OF DAY", 6); if (Button(x + 465, y + 681, 426, 38, TimeOfDayLabel(s.sunset))) s.sunset = !s.sunset;
                 Text(x + 35, y + 724, 850, 24, "Sunset: a low warm sun with long shadows and a darker, softer image. Changes ease in over a few seconds.", 14, Muted);
             }
@@ -776,24 +802,36 @@ namespace MadeInArizona
                 Text(x + 35, y + 634, 850, 36, "Original procedural score and synthesized effects. Dialogue is subtitled, with radio cues.", 15, Muted);
             }
             if (settingsPage == 3) {
-                Text(x + 35, y + 186, 850, 52, "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / M map / Esc pause" + (s.shoulderReverse ? " / hold R to reverse" : ""), 17);
-                Text(x + 35, y + 242, 850, 52, "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, " +
+                Text(x + 35, y + 186, 850, 52, s.racingStyle ?
+                    "W accelerate / S brake & reverse / A D steer / mouse aim & shoot\nF swap drop / Space drift / Shift boost / M map / Esc pause" :
+                    "WASD drive / mouse aim / LMB garage weapon / RMB field weapon\nF swap drop / Space drift / Shift boost / M map / Esc pause" + (s.shoulderReverse ? " / hold R to reverse" : ""), 17);
+                Text(x + 35, y + 242, 850, 52, s.racingStyle ?
+                    "GAMEPAD: RT accelerate, LT brake & reverse, left stick steer, right stick aim.\nRB garage weapon, LB field weapon, A boost, B drift, X interact, Y swap." :
+                    "GAMEPAD: left stick drive, right stick aim. RT garage weapon, LT field weapon.\nY swap drop, " +
                     (s.boostOnSouth ? "A boost, RB interact" : "RB boost, A interact") + ", B drift" + (s.shoulderReverse ? ", LB reverse" : "") + ", Select map, Start pause.", 17, Muted);
-                Tag(x + 35, y + 306, "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
+                Tag(x + 35, y + 306, s.racingStyle&&InputManager.Instance.UsingGamepad ?
+                    "RACING GAMEPAD PRESET / KEYBOARD BINDINGS BELOW REMAIN EDITABLE" :
+                    "REBIND / SELECT A CONTROL THEN PRESS A NEW INPUT", Orange);
                 for (int i = 0; i < actions.Length; i++) {
                     float bx = x + 35 + i % 4 * 215, by = y + 338 + i / 4 * 45;
                     string action = i < 4 ? "Move" : actions[i];
                     int binding = i < 4 ? i + 1 : 0;
                     if (InputManager.Instance.UsingGamepad) binding = InputManager.Instance.Actions.FindAction(action).bindings.Count - 1;
-                    if (Button(bx, by, 202, 45, (action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant()) + " / " + InputManager.Instance.BindingLabel(action, binding), InputManager.Instance.UsingGamepad && menuFocus == i + 4)) BeginControlRebind(i);
+                    bool fixedPad=s.racingStyle&&InputManager.Instance.UsingGamepad;
+                    string name=fixedPad?RacingActionLabels[i]:action == "Handbrake" ? "DRIFT" : actions[i].ToUpperInvariant();
+                    string bindingLabel=fixedPad?RacingGamepadBindings[i]:InputManager.Instance.BindingLabel(action,binding);
+                    if (Button(bx, by, 202, 45, name + " / " + bindingLabel,
+                        InputManager.Instance.UsingGamepad && menuFocus == i + 5,!fixedPad)) BeginControlRebind(i);
                 }
-                SettingLabel(x, y + 535, "AIM ASSIST", 0);
-                if (Button(x + 465, y + 530, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
-                SettingLabel(x, y + 582, "REVERSE (GAMEPAD)", 1);
-                if (Button(x + 465, y + 577, 426, 38, s.shoulderReverse ? "HOLD LB • STICK NEVER REVERSES" : "AUTO • HOLD STICK BEHIND THE CAR")) s.shoulderReverse = !s.shoulderReverse;
-                SettingLabel(x, y + 629, "NITRO BUTTON (GAMEPAD)", 2);
-                if (Button(x + 465, y + 624, 426, 38, s.boostOnSouth ? "A • INTERACT MOVES TO RB" : "RB • INTERACT ON A")) s.boostOnSouth = !s.boostOnSouth;
-                if (Button(x + 35, y + 684, 273, 37, "RESET INPUT BINDINGS", InputManager.Instance.UsingGamepad && menuFocus == 3)) InputManager.Instance.ResetBindings();
+                SettingLabel(x, y + 535, "DRIVING STYLE", 0);
+                if (Button(x + 465, y + 530, 426, 38, s.racingStyle ? "RACING • CHASE CAMERA & PEDALS" : "CLASSIC • DIRECTIONAL DRIVE")) s.racingStyle = !s.racingStyle;
+                SettingLabel(x, y + 582, "AIM ASSIST", 1);
+                if (Button(x + 465, y + 577, 426, 38, new[] { "OFF", "LIGHT", "GENEROUS" }[Mathf.Clamp(s.aimAssist, 0, 2)])) s.aimAssist = (s.aimAssist + 1) % 3;
+                SettingLabel(x, y + 629, "REVERSE (GAMEPAD)", 2);
+                if (Button(x + 465, y + 624, 426, 38, s.racingStyle ? "LT • BRAKE & REVERSE" : s.shoulderReverse ? "HOLD LB • STICK NEVER REVERSES" : "AUTO • HOLD STICK BEHIND THE CAR",false,!s.racingStyle)) s.shoulderReverse = !s.shoulderReverse;
+                SettingLabel(x, y + 676, "NITRO BUTTON (GAMEPAD)", 3);
+                if (Button(x + 465, y + 671, 426, 38, s.racingStyle ? "A • RACING PRESET" : s.boostOnSouth ? "A • INTERACT MOVES TO RB" : "RB • INTERACT ON A",false,!s.racingStyle)) s.boostOnSouth = !s.boostOnSouth;
+                if (Button(x + 35, y + 719, 273, 37, "RESET INPUT BINDINGS", InputManager.Instance.UsingGamepad && menuFocus == 4)) InputManager.Instance.ResetBindings();
                 if (InputManager.Instance.Rebinding) { Rect(x + 180, y + 309, 570, 180, Panel); Text(x + 200, y + 336, 530, 85, "PRESS A NEW KEY OR CONTROL\nEscape cancels. Devices are saved separately.", 23, Cream, true, TextAnchor.MiddleCenter); if (Button(x + 345, y + 431, 240, 37, "CANCEL REBIND")) InputManager.Instance.CancelRebind(); }
             }
             if (Button(x + 570, y + 773, 320, 48, "SAVE & CLOSE  /  B", true)) { game.ApplySettings(); settings = false; }
@@ -801,8 +839,10 @@ namespace MadeInArizona
         }
 
         static readonly string[] SettingsTabs = { "DISPLAY & ACCESS", "GRAPHICS & CAMERA", "AUDIO", "CONTROLS" };
+        static readonly string[] RacingActionLabels={"ACCELERATE","BRAKE","STEER LEFT","STEER RIGHT","GARAGE WEAPON","FIELD WEAPON","SWAP DROP","DRIFT","BOOST","INTERACT","REVERSE","PAUSE","MAP"};
+        static readonly string[] RacingGamepadBindings={"RT","LT","LEFT STICK","LEFT STICK","RB","LB","Y","B","A","X","LT","START","SELECT"};
         /// <summary>Gamepad rows on each settings page (the controls page adds one per rebindable action).</summary>
-        int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 7 : page == 2 ? 6 : 4 + actions.Length;
+        int SettingsRows(int page) => page == 0 ? 6 : page == 1 ? 7 : page == 2 ? 6 : 5 + actions.Length;
         static readonly string[] ShadowDetailLabels = { "AUTO • MATCH PRESET", "4K • SOFT", "8K • SOFT" };
         static readonly string[] ShadowDetailNotes = {
             "Simple has no shadows. Low and Medium use softened edges; High uses a 4K sun map.",
@@ -851,7 +891,7 @@ namespace MadeInArizona
                 if (menuFocus == 2) s.cameraSway = Mathf.Clamp01(s.cameraSway + .1f * direction);
                 if (menuFocus == 3) s.dynamicZoom = !s.dynamicZoom;
                 if (menuFocus == 4) { s.frameSync = (s.frameSync + direction + 3) % 3; game.ApplySettings(); }
-                if (menuFocus == 5) s.perspectiveCamera = !s.perspectiveCamera;
+                if (menuFocus == 5&&!s.racingStyle) s.perspectiveCamera = !s.perspectiveCamera;
                 if (menuFocus == 6) s.sunset = !s.sunset;
             } else if (settingsPage == 2) {
                 if (menuFocus == 0) s.master = Mathf.Clamp01(s.master + .1f * direction);
@@ -861,16 +901,18 @@ namespace MadeInArizona
                 if (menuFocus == 4) s.dialogue = Mathf.Clamp01(s.dialogue + .1f * direction);
                 if (menuFocus == 5) s.environment = Mathf.Clamp01(s.environment + .1f * direction);
             } else {
-                if (menuFocus == 0) s.aimAssist = (s.aimAssist + direction + 3) % 3;
-                else if (menuFocus == 1) s.shoulderReverse = !s.shoulderReverse;
-                else if (menuFocus == 2) s.boostOnSouth = !s.boostOnSouth;
-                else if (menuFocus == 3) InputManager.Instance.ResetBindings();
-                else BeginControlRebind(menuFocus - 4);
+                if (menuFocus == 0) s.racingStyle = !s.racingStyle;
+                else if (menuFocus == 1) s.aimAssist = (s.aimAssist + direction + 3) % 3;
+                else if (menuFocus == 2&&!s.racingStyle) s.shoulderReverse = !s.shoulderReverse;
+                else if (menuFocus == 3&&!s.racingStyle) s.boostOnSouth = !s.boostOnSouth;
+                else if (menuFocus == 4) InputManager.Instance.ResetBindings();
+                else if(menuFocus>=5)BeginControlRebind(menuFocus - 5);
             }
         }
 
         void BeginControlRebind(int index)
         {
+            if(game.Save.settings.racingStyle&&InputManager.Instance.UsingGamepad)return;
             string action = index < 4 ? "Move" : actions[index];
             int binding = index < 4 ? index + 1 : 0;
             if (InputManager.Instance.UsingGamepad) binding = InputManager.Instance.Actions.FindAction(action).bindings.Count - 1;
