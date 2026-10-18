@@ -14,6 +14,7 @@ namespace MadeInArizona
             public int protocol;
             public bool ready;
             public string carId, weaponId;
+            public int paintIndex;
             public VehicleStats stats;
             public VehicleStats[] profiles;
             public CarTuning car;
@@ -65,6 +66,7 @@ namespace MadeInArizona
             string fieldId = player && player.Weapons && player.Weapons.FieldWeapon
                 ? player.Weapons.FieldWeapon.id : null;
             return new LoadoutPacket { protocol = Protocol, ready = localReadyRequested, carId = carId, weaponId = weaponId,
+                paintIndex = GarageManager.Loadout(save, carId)?.paintIndex ?? 0,
                 stats = GarageManager.StatsFor(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
                 profiles = GarageManager.DamageProfiles(Array.Find(ContentCatalog.Vehicles, value => value && value.id == carId), save),
                 car = BalanceTuning.LocalCar(carId), slot1 = BalanceTuning.LocalWeapon(weaponId),
@@ -97,6 +99,7 @@ namespace MadeInArizona
             if (packet.car == null || packet.car.id != packet.carId)
                 packet.car = CarTuning.FromLegacy(packet.carId, new DevTuning());
             packet.stats = SafeStats(packet.stats, car);
+            packet.paintIndex = Mathf.Clamp(packet.paintIndex, 0, 4);
             packet.profiles = SafeProfiles(packet.profiles,packet.stats,car);
             packet.car.Clamp();
             if (packet.slot1 == null || packet.slot1.id != packet.weaponId)

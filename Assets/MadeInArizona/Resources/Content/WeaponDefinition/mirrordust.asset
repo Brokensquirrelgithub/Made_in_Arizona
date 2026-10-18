@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d53fdf0647764572a35cfc47cddae06, type: 3}
+  m_Name: mirrordust
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
+  id: mirrordust
+  displayName: Mirror Dust Cannon
+  description: Launches a reflective ground cloud for three seconds. Hostile projectiles
+    bounce back toward their senders; a death ray fractures into ten radial lasers.
+  role: PROJECTILE REFLECTOR
+  strength: Turns incoming fire around and fractures death rays.
+  weakness: The cloud is brief and must be placed in the line of fire.
+  contentOrder: 32
+  damage: 0
+  fireRate: 0.7
+  speed: 65
+  blastRadius: 0
+  projectileColor: {r: 0.7, g: 0.9, b: 1.4, a: 1}
+  fireSounds:
+  - {fileID: 8300000, guid: e07faa26d7d74e348b43973cb93fa6bd, type: 3}
+  - {fileID: 8300000, guid: 345e09e37e315704a8ef418ee7ee8097, type: 3}
+  - {fileID: 8300000, guid: 28b4b9c0fbdb06c4b8e57c5bcd6a9af0, type: 3}

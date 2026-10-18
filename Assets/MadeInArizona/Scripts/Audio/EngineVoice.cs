@@ -277,6 +277,15 @@ namespace MadeInArizona
                 float left = (lastLeft + (nextLeft - lastLeft) * t) * gain, right = (lastRight + (nextRight - lastRight) * t) * gain;
                 phase = (phase + 1) % divider;
                 int o = f * channels;
+                // A runaway procedural sample used to create full-scale static in long co-op sessions.
+                // Keep the audio thread's output finite and gently limit peaks before Unity mixes voices.
+                if (float.IsNaN(left) || float.IsInfinity(left) || float.IsNaN(right) || float.IsInfinity(right))
+                {
+                    Reset(targetRpm);
+                    left = right = 0;
+                }
+                left /= 1 + Math.Abs(left);
+                right /= 1 + Math.Abs(right);
                 if (channels == 1) data[o] = .5f * (left + right);
                 else { data[o] = left; data[o + 1] = right; for (int c = 2; c < channels; c++) data[o + c] = .5f * (left + right); }
             }

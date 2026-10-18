@@ -22,7 +22,7 @@ namespace MadeInArizona
     }
 
     /// <summary>One-off effects the host replicates to guests: things guests cannot work out from vehicle snapshots.</summary>
-    public enum CoopFx { BowlingLaunch = 1, BowlingStrike = 2 }
+    public enum CoopFx { BowlingLaunch = 1, BowlingStrike = 2, MirrorDustLaunch = 3, MirrorDustStrike = 4, RallyHorn = 5, RepairHit = 6, LineStrike = 7, ConeStrike = 8 }
 
     /// <summary>
     /// A small host-authoritative bridge for the existing code-created world. Relay supplies the
@@ -42,7 +42,7 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 7;
+        const int Protocol = 9;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -78,6 +78,7 @@ namespace MadeInArizona
         int nextVehicleId;
         int nextPickupId;
         float inputAt, snapshotAt, missionAt, pickupAt, tuningAt, pinAt;
+        int snapshotTick;
         bool remoteRewardApplied, remoteRewardFirst;
         int remoteRewardMoney, remoteRewardSalvage;
         string lastTuningJson, lastPinFlags;
@@ -112,6 +113,9 @@ namespace MadeInArizona
             public int tow;
             public bool flail;
             public Vector3 flailHead;
+            public int attack;
+            public Vector3 attackDirection;
+            public float attackRemaining, rallyRemaining;
         }
         [Serializable] sealed class PickupPacket
         {
@@ -303,6 +307,7 @@ namespace MadeInArizona
         public void HostWorldChanged()
         {
             if (!IsHost) return;
+            ClearGaragePreviews();
             LobbyWorldChanged();
             vehicleIds.Clear(); nextVehicleId = 0;
             pickupIds.Clear(); nextPickupId = 0;
@@ -350,6 +355,7 @@ namespace MadeInArizona
                 }
             }
             bool wasLobby = remoteWorldReady && InLobby;
+            ClearGaragePreviews();
             remoteWorldReady = false;
             remoteMode = packet.mode;
             remoteRewardApplied = false;
@@ -428,6 +434,13 @@ namespace MadeInArizona
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
             car.Weapons.SetNetworkBeam(packet.beam, packet.beamEnd, packet.beamHeat);
             car.Weapons.SetNetworkFlail(packet.flail, packet.flailHead);
+            if (packet.rallyRemaining > 0) car.ApplyRally(packet.rallyRemaining);
+            if (!packet.player)
+            {
+                var warning = car.GetComponent<NetworkAttackWarning>();
+                if (!warning) warning = car.gameObject.AddComponent<NetworkAttackWarning>();
+                warning.Set((EnemyAttackTelegraph)packet.attack, packet.attackDirection, packet.attackRemaining);
+            }
             if (packet.tow > 0 && proxies.TryGetValue(packet.tow, out var towed) && towed) TowLink.ShowNetwork(car, towed);
             seenAt[packet.id] = Time.unscaledTime;
             if (packet.player && packet.owner == (int)network.LocalClientId && GameManager.Instance.Player != car)
@@ -468,7 +481,7 @@ namespace MadeInArizona
             var packet = new FxPacket { kind = (int)kind, position = position, velocity = velocity };
             foreach (ulong clientId in network.ConnectedClientsIds)
                 if (clientId != NetworkManager.ServerClientId)
-                    Send(FxMessage, clientId, packet, NetworkDelivery.Unreliable);
+                    Send(FxMessage, clientId, packet, NetworkDelivery.ReliableSequenced);
         }
 
         void ReceiveFx(ulong sender, FastBufferReader reader)
@@ -479,6 +492,22 @@ namespace MadeInArizona
             if (packet == null) return;
             if (packet.kind == (int)CoopFx.BowlingLaunch) FieldOrdnance.RollReplica(packet.position, packet.velocity);
             else if (packet.kind == (int)CoopFx.BowlingStrike) FieldOrdnance.ReplicaStrike(packet.position, packet.velocity);
+            else if (packet.kind == (int)CoopFx.MirrorDustLaunch) MirrorDustCloud.Replica(packet.position, packet.velocity);
+            else if (packet.kind == (int)CoopFx.MirrorDustStrike) MirrorDustCloud.ScatterDeathRay(packet.position, null, false);
+            else if (packet.kind == (int)CoopFx.RallyHorn)
+                foreach (var car in VehicleController.Active)
+                    if (car && car.IsPlayer && (car.transform.position - packet.position).sqrMagnitude <= 160f * 160f)
+                    { car.RefillNitro(1); car.ApplyRally(15f); }
+            else if (packet.kind == (int)CoopFx.RepairHit)
+                ExplosionSystem.Burst(packet.position, new Color(.3f, 1.5f, .5f), 20, 5);
+            else if (packet.kind == (int)CoopFx.LineStrike || packet.kind == (int)CoopFx.ConeStrike)
+            {
+                var effect = new GameObject("Replicated area strike");
+                effect.transform.SetParent(GameManager.Instance.World.transform);
+                var warning = effect.AddComponent<AttackWarningVisual>();
+                warning.StrikeZone(packet.position, packet.velocity, packet.kind == (int)CoopFx.ConeStrike);
+                Destroy(effect, .8f);
+            }
         }
 
         public void PublishExplosion(Vector3 position, float radius, ExplosionKind kind)
@@ -679,10 +708,12 @@ namespace MadeInArizona
                 GameManager.Instance.State != GameState.Won && GameManager.Instance.State != GameState.Lost) return;
             if (Time.unscaledTime >= snapshotAt)
             {
-                snapshotAt = Time.unscaledTime + .1f;
+                snapshotAt = Time.unscaledTime + .05f;
+                snapshotTick++;
                 foreach (var car in VehicleController.Active)
                 {
                     if (!car || !car.Definition || !car.Damage) continue;
+                    if (!car.IsPlayer && (snapshotTick & 1) != 0) continue;
                     int owner = car == GameManager.Instance.Player ? (int)NetworkManager.ServerClientId : -1;
                     foreach (var guest in guestCars) if (guest.Value == car) { owner = (int)guest.Key; break; }
                     var ai = car.GetComponent<EnemyAI>();
@@ -705,6 +736,10 @@ namespace MadeInArizona
                         beamHeat = car.Weapons ? car.Weapons.BeamHeat : 0,
                         flail = car.Weapons && car.Weapons.FlailActive,
                         flailHead = car.Weapons ? car.Weapons.FlailHead : Vector3.zero,
+                        attack = ai && ai.IsTelegraphingAttack ? (int)ai.AttackTelegraph : 0,
+                        attackDirection = ai ? ai.TelegraphDirection : Vector3.zero,
+                        attackRemaining = ai ? ai.TelegraphRemaining : 0,
+                        rallyRemaining = car.RallyActive ? car.RallyRemaining : 0,
                         tow = car.Towing && vehicleIds.TryGetValue(car.Towing, out int towId) ? towId : 0 };
                     foreach (ulong clientId in network.ConnectedClientsIds)
                         if (clientId != NetworkManager.ServerClientId)
@@ -772,7 +807,7 @@ namespace MadeInArizona
             }
         }
 
-        // Vehicle snapshots are sent for every active car ten times a second. JSON field names and
+        // Player snapshots run at 20 Hz, other cars at 10 Hz. JSON field names and
         // decimal floats pushed a single car past the 1264-byte unreliable message limit.
         void SendVehicle(ulong clientId, VehiclePacket packet)
         {
@@ -802,6 +837,8 @@ namespace MadeInArizona
             writer.WriteValueSafe(packet.beam); writer.WriteValueSafe(packet.beamEnd);
             writer.WriteValueSafe(packet.beamHeat); writer.WriteValueSafe(packet.tow);
             writer.WriteValueSafe(packet.flail); writer.WriteValueSafe(packet.flailHead);
+            writer.WriteValueSafe(packet.attack); writer.WriteValueSafe(packet.attackDirection);
+            writer.WriteValueSafe(packet.attackRemaining); writer.WriteValueSafe(packet.rallyRemaining);
         }
 
         internal static VehiclePacket ReadVehiclePacket(FastBufferReader reader)
@@ -823,6 +860,8 @@ namespace MadeInArizona
             reader.ReadValueSafe(out packet.beam); reader.ReadValueSafe(out packet.beamEnd);
             reader.ReadValueSafe(out packet.beamHeat); reader.ReadValueSafe(out packet.tow);
             reader.ReadValueSafe(out packet.flail); reader.ReadValueSafe(out packet.flailHead);
+            reader.ReadValueSafe(out packet.attack); reader.ReadValueSafe(out packet.attackDirection);
+            reader.ReadValueSafe(out packet.attackRemaining); reader.ReadValueSafe(out packet.rallyRemaining);
             return packet;
         }
 
@@ -837,6 +876,7 @@ namespace MadeInArizona
 
         void ResetTransport()
         {
+            ClearGaragePreviews();
             foreach (var pair in guestCars)
                 if (pair.Value) Destroy(pair.Value.gameObject);
             if (network)

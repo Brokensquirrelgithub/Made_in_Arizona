@@ -8,7 +8,7 @@ namespace MadeInArizona
         /// <summary>Scrap weapons bought in the garage: core sandbox roles, then oddball hybrids.</summary>
         static readonly string[] Garage = {
             "riveter", "sweeper", "carbine", "shredder", "pothole", "needler", "zapper", "railgun",
-            "sprinkler", "pinata", "minigun", "skewer", "bowling", "firecracker", "flail" };
+            "sprinkler", "pinata", "minigun", "skewer", "bowling", "firecracker", "flail", "fireworks" };
         /// <summary>Oddballs splice two firing modes into one weapon (grenade + flamethrower, rocket + cluster bomb…).</summary>
         static readonly string[] Oddballs = { "sprinkler", "pinata", "skewer", "deathray", "crossbow", "bowling", "boomerang", "harpoon", "firecracker", "sentry", "scattermortar" };
         public static string[] GarageIds => Garage;
@@ -33,6 +33,7 @@ namespace MadeInArizona
                 case "minigun": return 380;
                 case "skewer": return 420;
                 case "flail": return 400;
+                case "fireworks": return 360;
                 default: return 0;
             }
         }
@@ -61,6 +62,8 @@ namespace MadeInArizona
                 case "deathray": return "minigun";
                 case "railgun": case "harpoon": case "skewer": return "sniper";
                 case "aircannon": case "firecracker": return "boomstick";
+                case "mirrordust": return "aircannon";
+                case "rprp": return "invoice";
                 case "sprinkler": return "grenade";
                 case "bowling": case "scattermortar": case "fireworks": return "mortar";
                 case "pinata": return "invoice";
@@ -97,6 +100,8 @@ namespace MadeInArizona
                 case "boomerang": return new Vector2Int(8, 16);
                 case "sentry": return new Vector2Int(2, 4);
                 case "fireworks": return new Vector2Int(4, 8);
+                case "mirrordust": return new Vector2Int(2, 4);
+                case "rprp": case "rallyhorn": return new Vector2Int(1, 1);
                 default: return new Vector2Int(0, 0);
             }
         }

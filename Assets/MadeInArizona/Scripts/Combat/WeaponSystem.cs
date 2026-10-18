@@ -118,7 +118,7 @@ namespace MadeInArizona
         {
             if (!owner || !owner.IsPlayer || !weapon || WeaponRules.GarageWeapon(weapon.id)) return;
             FieldWeapon = weapon; FieldAmmo = Mathf.Clamp(ammo, 1, Mathf.Max(1, WeaponRules.MaxAmmo(weapon.id))); fieldAt = 0;
-            GameManager.Instance?.Notify("FIELD WEAPON • " + weapon.displayName + " / " + FieldAmmo + " rounds");
+            if (owner == GameManager.Instance?.Player) GameManager.Instance.Notify("FIELD WEAPON • " + weapon.displayName + " / " + FieldAmmo + " rounds");
         }
         public void AddFieldAmmo(int ammo)
         {
@@ -181,8 +181,11 @@ namespace MadeInArizona
         public void SetNetworkFieldWeapon(string id, int ammo)
         {
             if (!CoopSession.IsRemoteClient) return;
+            string previous = FieldWeapon ? FieldWeapon.id : null;
             FieldWeapon = string.IsNullOrEmpty(id) ? null : WeaponRules.Find(id);
             FieldAmmo = FieldWeapon ? Mathf.Max(0, ammo) : 0;
+            if (owner == GameManager.Instance?.Player && FieldWeapon && previous != FieldWeapon.id)
+            { GameManager.Instance.Notify("FIELD WEAPON • " + FieldWeapon.displayName.ToUpperInvariant() + " equipped"); AudioManager.Instance?.PlayWeaponPickup(); }
         }
         public void FirePrimary(Vector3 direction)
         {
@@ -219,7 +222,7 @@ namespace MadeInArizona
             var weapon = Effective(FieldWeapon);
             fieldAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
             Fire(weapon, direction);
-            if (--FieldAmmo == 0) { FieldWeapon = null; GameManager.Instance?.Notify("FIELD WEAPON EMPTY • FIND ANOTHER DROP"); }
+            if (--FieldAmmo == 0) { FieldWeapon = null; if (owner == GameManager.Instance?.Player) GameManager.Instance.Notify("FIELD WEAPON EMPTY • FIND ANOTHER DROP"); }
         }
         void FireEnemyRocket(Vector3 direction)
         {
@@ -244,6 +247,20 @@ namespace MadeInArizona
             Color color = weapon.projectileColor;
             switch (weapon.id)
             {
+                case "mirrordust": MirrorDustCloud.Launch(owner, muzzle, aimDirection); break;
+                case "rprp":
+                    ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, 0, 0, source, color,
+                        ExplosionKind.Ammunition, 1.8f, new ShotFx { healAllies = true, castRadius = .9f });
+                    break;
+                case "rallyhorn":
+                    foreach (var ally in VehicleController.Active)
+                        if (ally && ally.IsPlayer && ally.Damage && !ally.Damage.IsDead &&
+                            (ally.transform.position - owner.transform.position).sqrMagnitude <= 160f * 160f)
+                        { ally.RefillNitro(1); ally.ApplyRally(15f); }
+                    if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                        CoopSession.Instance.PublishFx(CoopFx.RallyHorn, owner.transform.position, Vector3.zero);
+                    ExplosionSystem.Burst(owner.transform.position + Vector3.up * 1.5f, color, 30, 13);
+                    break;
                 case "mines": FieldOrdnance.PlaceMine(owner, weapon, damage); break;
                 case "grenade": case "mortar": case "sprinkler":
                     FieldOrdnance.LaunchShell(owner, muzzle, aimDirection, weapon, damage, 0, owner.IsPlayer ? AcquireLobTarget(aimDirection, weapon) : null);
@@ -328,7 +345,7 @@ namespace MadeInArizona
                     break;
                 case "skewer":
                     ProjectileSystem.Fire(muzzle, aimDirection, weapon.speed, damage, 0, source, color, ExplosionKind.Ammunition, 1.15f,
-                        new ShotFx { effect = ShotEffect.Freeze, duration = 3.5f, pierce = 1, castRadius = .36f });
+                        new ShotFx { effect = ShotEffect.Freeze, duration = 3.5f, pierce = 1, castRadius = .55f });
                     break;
                 case "bowling": FieldOrdnance.Roll(owner, muzzle, aimDirection, weapon, damage); break;
                 case "fireworks":
@@ -394,6 +411,13 @@ namespace MadeInArizona
         /// </summary>
         void DeathRay(WeaponDefinition weapon, Vector3 muzzle, float damage)
         {
+            if (MirrorDustCloud.Intersect(muzzle, aimDirection, DeathRayRange, out Vector3 mirrorPoint, out VehicleController reflector))
+            {
+                MirrorDustCloud.ScatterDeathRay(mirrorPoint, reflector, !CoopSession.IsRemoteClient);
+                rayTarget = null; rayHeat = rayContact = 0;
+                Beam.Fire(mirrorPoint, 0);
+                return;
+            }
             Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, DeathRayRange, owner.gameObject, false, damage * 2, scanHits);
             VehicleController target = scanHits.Count > 0 ? scanHits[0].collider.GetComponentInParent<VehicleController>() : null;
             float gap = Time.time - rayLastShot; rayLastShot = Time.time;

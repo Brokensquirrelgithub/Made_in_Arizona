@@ -110,7 +110,9 @@ namespace MadeInArizona
             {
                 if(vehicle.IsPlayer)return DevTuning.Current.playerHealth;
                 var ai=vehicle.GetComponent<EnemyAI>();
-                return DevTuning.Current.enemyHealth*(ai&&ai.IsFriendly?1f:SpawnManager.EnemyHealthMultiplier);
+                int crew = CoopSession.Instance && CoopSession.Instance.IsHost ? CoopSession.Instance.PlayerCount : 1;
+                float coopStrength = ai && ai.IsFriendly ? 1f : 1f + .45f * Mathf.Max(0, crew - 1);
+                return DevTuning.Current.enemyHealth*(ai&&ai.IsFriendly?1f:SpawnManager.EnemyHealthMultiplier)*coopStrength;
             }
         }
         /// <summary>
@@ -133,6 +135,8 @@ namespace MadeInArizona
             }
             if(vehicle.IsPlayer)amount*=DevTuning.Current.incomingDamage;
             else if(attacker && attacker.IsPlayer) amount*=DevTuning.Current.playerDamage;
+            if (vehicle.IsPlayer && attacker && !attacker.FriendlyToPlayer && CoopSession.Instance && CoopSession.Instance.IsHost)
+                amount *= 1f + .1f * Mathf.Max(0, CoopSession.Instance.PlayerCount - 1);
             if(vehicle.Stats!=null&&SegmentMax(HealthCategory.Equipment)>0&&
                 SegmentHealth(HealthCategory.Equipment)>0&&SegmentHealth(HealthCategory.Exterior)<=0&&SegmentHealth(HealthCategory.Armor)<=0)
                 amount*=1-Mathf.Clamp(vehicle.Stats.electronicsResistance,0,.6f);

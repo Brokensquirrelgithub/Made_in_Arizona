@@ -241,7 +241,7 @@ namespace MadeInArizona
                     "AREA DENIAL","Sets every car around the landing point on fire.","Weak blast and a slow lob; the burn does the work."),
                 Weapon(19,"pinata","Piñata Bottle Rocket","ROCKET + CLUSTER BOMB. A papier-mâché rocket that bursts into seven bouncing bomblets.",60,.6f,55,4.5f,new Color(1,.3f,.75f),
                     "AREA SATURATION","One hit carpets a wide area with bomblets.","Bomblets scatter randomly; poor against a single fast car."),
-                Weapon(20,"skewer","Tetrafluoro Skewer","A refrigerant-driven ice spike skewers cars and leaves them crusted in frost. Press fire again while it flies to break it into a cone of shards. Its compressor steals a little of your cabin AC.",82,.9f,100,0,new Color(.55f,.94f,1f),
+                Weapon(20,"skewer","Freon Skewer","A refrigerant-driven ice spike skewers cars and leaves them crusted in frost. Press fire again while it flies to break it into a cone of shards. Its compressor steals a little of your cabin AC.",82,.99f,100,0,new Color(.55f,.94f,1f),
                     "FREEZING LANCE","Pierces two cars, chills their drive and can burst into a close-range shard cone.","One precise spike; the cone needs a second trigger press before impact."),
                 Weapon(21,"deathray","Satellite-Dish Death Ray","SNIPER BEAM + MAGNIFYING GLASS. A mirrored satellite dish focusing the sun into one steady, humming beam; damage builds the longer it stays on one car.",5,12,0,0,new Color(1,.93f,.5f),
                     "SUSTAINED FOCUS BEAM","Melts a target you can keep it on for two seconds.","Weak until it warms up; switching targets resets it."),
@@ -265,7 +265,13 @@ namespace MadeInArizona
                 Weapon(30,"fireworks","Firework Cannon","A show mortar mounted at the nose fires aerial shells. Each shell blooms into a real firework over the road.",72,.7f,35,7,new Color(1f,.64f,.25f),
                     "AERIAL BURST","A bright skyburst catches vehicles below it.","The fuse and high arc make close targets hard to hit."),
                 Weapon(31,"flail","Washing Machine Flail","The first pull blasts a washing machine outward on a long chain. Hold fire and circle the mouse or right stick to drag and swing it; release to reel it in.",60,1,0,0,new Color(.72f,.79f,.83f),
-                    "SWEPT MELEE","A fast swing smashes cars and roadside obstacles in a wide arc.","Slow swings glance off; it must build speed before it hits hard.")
+                    "SWEPT MELEE","A fast swing smashes cars and roadside obstacles in a wide arc.","Slow swings glance off; it must build speed before it hits hard."),
+                Weapon(32,"mirrordust","Mirror Dust Cannon","Launches a reflective ground cloud for three seconds. Hostile projectiles bounce back toward their senders; a death ray fractures into ten radial lasers.",0,.7f,65,0,new Color(.7f,.9f,1.4f),
+                    "PROJECTILE REFLECTOR","Turns incoming fire around and fractures death rays.","The cloud is brief and must be placed in the line of fire."),
+                Weapon(33,"rprp","RPRP: Rocket Propelled Repair Pack","Duct tape and baling wire on a rocket. Hit an allied car to repair its chassis.",0,.8f,95,0,new Color(.25f,1.6f,.45f),
+                    "CO-OP REPAIR","A direct hit restores an allied vehicle.","One shot per pickup; teammates must hold still enough to hit."),
+                Weapon(34,"rallyhorn","Rally Horn","Refills nitro and rallies all allied cars within two screens. Speed and handling rise 25% for 15 seconds.",0,.5f,0,0,new Color(.35f,1.2f,.85f),
+                    "TEAM BUFF","Refills nitro and helps the whole nearby crew drive harder.","One use per pickup; distant allies miss the signal.")
             };
         }
         static WeaponDefinition Weapon(int i,string id,string name,string desc,float damage,float rate,float speed,float radius,Color color,string role,string strength,string weakness)

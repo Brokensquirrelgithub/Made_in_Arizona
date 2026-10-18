@@ -39,7 +39,7 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,MinSize,MaxSize);Chunks=Mathf.Clamp(Mathf.RoundToInt(4+size/400),8,16);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();PlaceRoadPropaneCaches();PlaceWorldHazards();BuildEcology();BuildMap();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildJumpRamps();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();PlaceRoadPropaneCaches();PlaceWorldHazards();BuildEcology();BuildMap();
             // The navigation grid is built with the world, not on the first hostile detour (a hitch in the middle of a fight).
             BuildNavigation();gameObject.AddComponent<RoadPatrolDirector>();
         }
@@ -128,6 +128,47 @@ namespace MadeInArizona
                 Text(n==0?"117 JUNCTION":"ARIZONA  "+(n+1),town,c+new Vector3(0,5,19),.55f,Cream,Quaternion.Euler(0,180,0));Vector3 cactus=c+frame*new Vector3(27,0,-18);if(RoadDistance(XZ(cactus))>=RoadKeepOut&&!LotTaken(lots,27,-18,1.5f,1.5f))RoadsideProps.Cactus(town,cactus,1.4f);
             }
             BuildTownDetail();
+        }
+        /// <summary>Driveable roadside kickers. Seeded route positions keep co-op worlds identical.</summary>
+        void BuildJumpRamps()
+        {
+            int built = 0;
+            foreach (var route in routes)
+            {
+                foreach (float fraction in new[] { .25f, .5f, .75f })
+                {
+                    Vector2 centerline = RoutePoint(route, fraction);
+                    Vector2 tangent = RoutePoint(route, Mathf.Min(.99f, fraction + .01f)) -
+                        RoutePoint(route, Mathf.Max(.01f, fraction - .01f));
+                    if (tangent.sqrMagnitude < .01f) continue;
+                    tangent.Normalize();
+                    Vector2 side = new Vector2(-tangent.y, tangent.x) * (((built + seed) & 1) == 0 ? 1 : -1);
+                    Vector2 site = centerline + side * 13f;
+                    if (!Contains(new Vector3(site.x, 0, site.y)) ||
+                        Mathf.Abs(site.x - RiverX(site.y)) < riverWidth + 8f) continue;
+                    bool nearTown = false;
+                    foreach (var town in Towns)
+                        if ((new Vector2(town.x, town.z) - site).sqrMagnitude < 60f * 60f) { nearTown = true; break; }
+                    if (nearTown) continue;
+                    Vector2 foot = site - side * 5f, back = site + side * 5f;
+                    float ground = HeightInternal(site.x, site.y);
+                    if (Mathf.Abs(HeightInternal(foot.x, foot.y) - ground) > 3f ||
+                        Mathf.Abs(HeightInternal(back.x, back.y) - ground) > 3f) continue;
+                    var ramp = Wedge("Roadside jump ramp " + ++built, roads,
+                        new Vector3(site.x, ground - .15f, site.y), new Vector3(7f, 2.35f, 10f),
+                        new Color(.42f, .28f, .17f), true);
+                    ramp.transform.rotation = Quaternion.LookRotation(new Vector3(side.x, 0, side.y), Vector3.up);
+                    for (int stripe = -1; stripe <= 1; stripe++)
+                    {
+                        var mark = Box("Ramp approach stripe", roads,
+                            new Vector3(foot.x, HeightInternal(foot.x, foot.y) + .04f, foot.y) +
+                            ramp.transform.right * stripe * 1.8f,
+                            new Vector3(.65f, .04f, 1.2f), new Color(.9f, .73f, .31f));
+                        mark.transform.rotation = ramp.transform.rotation;
+                    }
+                }
+            }
+            Debug.Log("MIA_WORLD_RAMPS: " + built + " seeded roadside jump ramps");
         }
         /// <summary>Feathered compacted-earth apron replacing the pad's rectangular edge; the pad keeps its collider.</summary>
         void TownApron(Transform town,Vector3 c,Quaternion frame,Renderer pad)

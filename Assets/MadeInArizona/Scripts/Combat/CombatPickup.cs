@@ -59,6 +59,14 @@ namespace MadeInArizona
             if (scrap) Create(PickupKind.Scrap, origin + new Vector3(0, 0, 2), null, boss ? 8 : Random.Range(1, 4));
             // Every hostile drops a weapon from its crew's arsenal.
             var drop = WeaponRules.Find(WeaponRules.EnemyDrop(faction, archetype));
+            float supportRoll = Random.value;
+            if (CoopSession.Instance && CoopSession.Instance.IsHost && CoopSession.Instance.PlayerCount > 1)
+            {
+                if (supportRoll < .09f) drop = WeaponRules.Find("rprp");
+                else if (supportRoll < .18f) drop = WeaponRules.Find("rallyhorn");
+                else if (supportRoll < .29f) drop = WeaponRules.Find("mirrordust");
+            }
+            else if (supportRoll < .12f) drop = WeaponRules.Find("mirrordust");
             if (drop) Create(PickupKind.Weapon, origin + new Vector3(0, 0, -2), drop, WeaponRules.PickupAmmo(drop.id));
         }
         public static CombatPickup Create(PickupKind kind, Vector3 position, WeaponDefinition weapon, int amount)
@@ -114,9 +122,9 @@ namespace MadeInArizona
             float step = magnetSpeed * Time.deltaTime;
             if (delta.magnitude <= Mathf.Max(MagnetCollect, step))
             {
-                if (equip) { player.Weapons.EquipField(Weapon, Amount); GameManager.Instance.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped"); }
-                else { player.Weapons.AddFieldAmmo(Amount); GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo); }
-                AudioManager.Instance?.PlayWeaponPickup();
+                if (equip) { player.Weapons.EquipField(Weapon, Amount); if (player == GameManager.Instance.Player) GameManager.Instance.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped"); }
+                else { player.Weapons.AddFieldAmmo(Amount); if (player == GameManager.Instance.Player) GameManager.Instance.Notify("AMMO • " + Weapon.displayName + " +" + Amount + " / " + player.Weapons.FieldAmmo); }
+                if (player == GameManager.Instance.Player) AudioManager.Instance?.PlayWeaponPickup();
                 Destroy(gameObject);
                 return true;
             }
@@ -186,8 +194,7 @@ namespace MadeInArizona
                 if (current && !swap) return;
                 int oldAmmo = player.Weapons.FieldAmmo;
                 player.Weapons.EquipField(Weapon, Amount);
-                game.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped");
-                AudioManager.Instance?.PlayWeaponPickup();
+                if (player == game.Player) { game.Notify("FIELD WEAPON • " + Weapon.displayName.ToUpperInvariant() + " equipped"); AudioManager.Instance?.PlayWeaponPickup(); }
                 if (current && oldAmmo > 0)
                 {
                     var discarded = Create(PickupKind.Weapon, player.transform.position + player.transform.right * 3.5f, current, oldAmmo);
@@ -197,19 +204,19 @@ namespace MadeInArizona
             else if (Kind == PickupKind.Health)
             {
                 if (player.Damage.Health >= player.Damage.MaxHealth) return;
-                player.Repair(Amount); game.Notify("REPAIR PICKUP • +" + Amount + " chassis");
+                player.Repair(Amount); if (player == game.Player) game.Notify("REPAIR PICKUP • +" + Amount + " chassis");
                 // Repair tell: a light puff of green sparks and a soft ratchet, deliberately quieter than being hit.
                 ExplosionSystem.Burst(player.transform.position + Vector3.up * 1.1f, new Color(.3f, 1, .45f), 12, 3);
-                AudioManager.Instance?.PlayRepair();
+                if (player == game.Player) AudioManager.Instance?.PlayRepair();
             }
             else if (Kind == PickupKind.Nitro)
             {
                 if (player.BoostCharge >= .99f) return;
-                player.RefillNitro(Amount * .01f); game.Notify("N2O PICKUP • tank " + Mathf.RoundToInt(player.BoostCharge * 100) + "%");
+                player.RefillNitro(Amount * .01f); if (player == game.Player) game.Notify("N2O PICKUP • tank " + Mathf.RoundToInt(player.BoostCharge * 100) + "%");
             }
             else
             {
-                game.Save.salvage += Amount; game.Notify("SCRAP PICKUP • +" + Amount);
+                game.Save.salvage += Amount; if (player == game.Player) game.Notify("SCRAP PICKUP • +" + Amount);
                 SaveSystem.Save(game.Save);
             }
             Destroy(gameObject);

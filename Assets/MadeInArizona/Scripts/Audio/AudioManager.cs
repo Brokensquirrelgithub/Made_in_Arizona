@@ -82,8 +82,8 @@ namespace MadeInArizona
             hitMarkers=new AudioClip[3];for(int i=0;i<hitMarkers.Length;i++)hitMarkers[i]=Keep(AudioSynthesis.HitMarker(i));killConfirm=Keep(AudioSynthesis.KillConfirm());weaponPickup=Keep(AudioSynthesis.WeaponPickup());
             CombatFeedback.HitConfirmed+=PlayHitMarker;CombatFeedback.KillConfirmed+=PlayKillConfirm;
             uiSource=gameObject.AddComponent<AudioSource>();radioSource=gameObject.AddComponent<AudioSource>();uiSource.spatialBlend=0;radioSource.spatialBlend=0;
-            pool=new AudioSource[28];
-            for(int i=0;i<pool.Length;i++){var child=new GameObject("Pooled effect "+i);child.transform.SetParent(transform);pool[i]=child.AddComponent<AudioSource>();pool[i].playOnAwake=false;pool[i].spatialBlend=.5f;pool[i].minDistance=16;pool[i].maxDistance=160;pool[i].rolloffMode=AudioRolloffMode.Linear;pool[i].dopplerLevel=0;}
+            pool=new AudioSource[20];
+            for(int i=0;i<pool.Length;i++){var child=new GameObject("Pooled effect "+i);child.transform.SetParent(transform);pool[i]=child.AddComponent<AudioSource>();pool[i].playOnAwake=false;pool[i].spatialBlend=1;pool[i].minDistance=5;pool[i].maxDistance=80;pool[i].rolloffMode=AudioRolloffMode.Linear;pool[i].dopplerLevel=0;}
             music=gameObject.AddComponent<MusicManager>();
         }
         AudioClip Keep(AudioClip clip){clips.Add(clip);return clip;}
@@ -303,7 +303,10 @@ namespace MadeInArizona
         }
         void PlayAt(AudioClip clip,Vector3 position,float volume,float pitch,int priority)
         {
-            if(pool==null)return;AudioSource source=pool[cursor++%pool.Length];source.Stop();source.transform.position=position;source.clip=clip;source.volume=Mathf.Clamp01(volume);source.pitch=pitch;source.priority=priority;source.Play();
+            if(pool==null||!clip)return;
+            var listener=GameManager.Instance ? GameManager.Instance.Player : null;
+            if(listener && (listener.transform.position-position).sqrMagnitude>80f*80f)return;
+            AudioSource source=pool[cursor++%pool.Length];source.Stop();source.transform.position=position;source.clip=clip;source.volume=Mathf.Clamp01(volume*.8f);source.pitch=pitch;source.priority=priority;source.Play();
         }
         public void PlayShot(Vector3 position,int weapon)
         {if(Settings==null)return;int kind=Mathf.Clamp(weapon,0,2);PlayAt(shots[kind],position,Settings.weapons*(kind==0?.21f:.45f)*duck,Random.Range(.93f,1.06f),kind==0?85:60);}
@@ -394,6 +397,8 @@ namespace MadeInArizona
         /// <summary>Objective progress: checkpoints passed and optional objectives completed.</summary>
         public void PlayObjective(){if(Settings==null||!uiSource||!objective)return;uiSource.PlayOneShot(objective,Mathf.Clamp01(Settings.environment*.45f));}
         public void PlayUI(){if(Settings==null||!uiSource)return;uiSource.PlayOneShot(ui,Settings.environment*.5f);}
+        public void PlayReady(){if(Settings==null||!uiSource||!weaponPickup)return;uiSource.PlayOneShot(weaponPickup,Mathf.Clamp01(Settings.environment*.4f));}
+        public void PlayCountdown(){if(Settings==null||!uiSource||!objective)return;uiSource.PlayOneShot(objective,Mathf.Clamp01(Settings.environment*.7f));}
         public void PlayWeaponPickup(){if(Settings==null||!uiSource||!weaponPickup)return;uiSource.PlayOneShot(weaponPickup,Mathf.Clamp01(Settings.weapons*.72f));}
         public void PlayRadio(){if(Settings==null||!radioSource)return;radioSource.PlayOneShot(radio,Settings.dialogue*.32f);}
         public void SetCombat(bool enabled){if(music)music.SetCombat(enabled);}

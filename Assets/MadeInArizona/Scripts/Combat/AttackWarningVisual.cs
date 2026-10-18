@@ -11,6 +11,8 @@ namespace MadeInArizona
         readonly RaycastHit[] groundHits = new RaycastHit[16];
         Material material, coreMaterial;
         LineRenderer beamGlow, beamHalo, beamCore, impactRing, timerRing, zoneOutline, zoneCenter;
+        LineRenderer[] strikeLines;
+        float strikeUntil;
         Vector3 impact;
         Transform impactFollow;
         float radius, impactAt, impactDuration;
@@ -126,6 +128,44 @@ namespace MadeInArizona
             if (zoneCenter) zoneCenter.enabled = false;
         }
 
+        /// <summary>A bright, full-footprint discharge that persists long enough to read after the warning ends.</summary>
+        public void StrikeZone(Vector3 origin, Vector3 direction, bool cone)
+        {
+            if (strikeLines == null)
+            {
+                strikeLines = new LineRenderer[20];
+                for (int i = 0; i < strikeLines.Length; i++)
+                {
+                    strikeLines[i] = MakeLine("Area attack discharge " + i, 2, i < 13 ? 2.9f : .8f,
+                        new Color(2.5f, .45f, .08f, .8f));
+                    strikeLines[i].sharedMaterial = coreMaterial;
+                }
+            }
+            Vector3 forward = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
+            if (forward.sqrMagnitude < .01f) return;
+            Vector3 right = Vector3.Cross(Vector3.up, forward);
+            Vector3 start = origin + forward * 2.5f;
+            float length = cone ? 34f : 42f;
+            for (int i = 0; i < 13; i++)
+            {
+                float lane = (i - 6) / 6f;
+                float farSide = cone ? length * Mathf.Tan(27f * Mathf.Deg2Rad) : 4.5f;
+                float nearSide = cone ? .15f : 4.5f;
+                strikeLines[i].SetPosition(0, Ground(start + right * lane * nearSide));
+                strikeLines[i].SetPosition(1, Ground(start + forward * length + right * lane * farSide));
+                strikeLines[i].enabled = true;
+            }
+            for (int i = 13; i < 20; i++)
+            {
+                float distance = length * (i - 12) / 8f;
+                float side = cone ? distance * Mathf.Tan(27f * Mathf.Deg2Rad) : 4.5f;
+                strikeLines[i].SetPosition(0, Ground(start + forward * distance - right * side));
+                strikeLines[i].SetPosition(1, Ground(start + forward * distance + right * side));
+                strikeLines[i].enabled = true;
+            }
+            strikeUntil = Time.time + .65f;
+        }
+
         public void BeginImpact(Vector3 point, float blastRadius, float timeToImpact, Transform follow = null)
         {
             impact = Ground(point);
@@ -166,6 +206,20 @@ namespace MadeInArizona
 
         void LateUpdate()
         {
+            if (strikeLines != null)
+            {
+                float strikeRemaining = Mathf.Clamp01((strikeUntil - Time.time) / .65f);
+                foreach (var line in strikeLines)
+                {
+                    line.enabled = strikeRemaining > 0;
+                    if (line.enabled)
+                    {
+                        line.widthMultiplier = 2.9f * strikeRemaining;
+                        var color = new Color(2.5f, .45f + .4f * strikeRemaining, .08f, strikeRemaining * .85f);
+                        line.startColor = line.endColor = color;
+                    }
+                }
+            }
             if (!hasImpact || !timerRing) return;
             bool playing = GameManager.Instance && GameManager.Instance.IsPlaying;
             impactRing.enabled = timerRing.enabled = playing;
@@ -182,10 +236,44 @@ namespace MadeInArizona
             impactRing.startColor = impactRing.endColor = outer;
         }
 
+        void OnDisable()
+        {
+            HideZone(); HideSniper();
+            if (strikeLines != null) foreach (var line in strikeLines) if (line) line.enabled = false;
+        }
+
         void OnDestroy()
         {
             if (material) Destroy(material);
             if (coreMaterial) Destroy(coreMaterial);
         }
+    }
+
+    /// <summary>Guest-side zone warning that follows the interpolated car between host snapshots.</summary>
+    public sealed class NetworkAttackWarning : MonoBehaviour
+    {
+        AttackWarningVisual visual;
+        EnemyAttackTelegraph attack;
+        Vector3 direction;
+        float remaining, receivedAt;
+
+        public void Set(EnemyAttackTelegraph kind, Vector3 aim, float seconds)
+        {
+            attack = kind; direction = aim; remaining = seconds; receivedAt = Time.unscaledTime;
+            if ((kind != EnemyAttackTelegraph.Line && kind != EnemyAttackTelegraph.Cone) && visual)
+                visual.HideZone();
+        }
+
+        void LateUpdate()
+        {
+            if (attack != EnemyAttackTelegraph.Line && attack != EnemyAttackTelegraph.Cone) return;
+            float timeLeft = remaining - (Time.unscaledTime - receivedAt);
+            if (timeLeft <= 0 || Time.unscaledTime - receivedAt > .3f)
+            { if (visual) visual.HideZone(); return; }
+            if (!visual) visual = gameObject.AddComponent<AttackWarningVisual>();
+            visual.ShowZone(transform.position, direction, attack == EnemyAttackTelegraph.Cone, timeLeft, 1.45f);
+        }
+
+        void OnDisable() { if (visual) visual.HideZone(); }
     }
 }

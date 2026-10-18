@@ -50,7 +50,7 @@ namespace MadeInArizona
             {
                 if (!beam) continue;
                 if (beam.enabled != show) beam.enabled = show;
-                if (show) beam.intensity = 11 * on;
+                if (show) beam.intensity = 22 * on;
             }
         }
     }

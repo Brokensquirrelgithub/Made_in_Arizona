@@ -32,9 +32,10 @@ namespace MadeInArizona
             var targetAI = target.GetComponent<EnemyAI>();
             bool targetFriendly = target.IsPlayer || (targetAI != null && targetAI.IsFriendly);
             if (!sourceFriendly || targetFriendly) return;
+            if (sourceVehicle != (GameManager.Instance ? GameManager.Instance.Player : null)) return;
 
             LastHitTime = Time.time;
-            LastHitByPlayer = sourceVehicle.IsPlayer;
+            LastHitByPlayer = sourceVehicle == (GameManager.Instance ? GameManager.Instance.Player : null);
             LastHitDamage = damage;
             LastHitPoint = point;
             HitConfirmed?.Invoke(damage, point);

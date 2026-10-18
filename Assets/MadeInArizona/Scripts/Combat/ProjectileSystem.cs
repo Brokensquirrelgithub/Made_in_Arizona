@@ -26,6 +26,7 @@ namespace MadeInArizona
         /// <summary>Leaves a flame trail (weed burner).</summary>
         public bool flame;
         public bool coneBlast;
+        public bool healAllies;
     }
 
     /// <summary>Shared, swept projectiles. Pool lifetime is scoped to the current world.</summary>
@@ -177,7 +178,7 @@ namespace MadeInArizona
             round.transform.localScale = hubcap ? Vector3.one : heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
             if (fx != null && fx.coneBlast) round.transform.localScale *= 1.1f;
             if (fx != null && fx.effect == ShotEffect.Freeze && fx.pierce >= 0)
-                round.transform.localScale = new Vector3(.22f, .22f, 2.1f);
+                round.transform.localScale = new Vector3(.44f, .44f, 2.7f);
             round.renderer.enabled = !hubcap;
             if (round.hubcap) round.hubcap.gameObject.SetActive(hubcap);
             if (hubcap)
@@ -191,6 +192,7 @@ namespace MadeInArizona
             round.trail.Clear();
             round.trail.time = heavy ? .24f : kind == ExplosionKind.Ammunition ? .075f : .12f;
             round.trail.startWidth = hubcap ? .26f : heavy ? .18f : .065f;
+            if (fx != null && fx.effect == ShotEffect.Freeze && fx.pierce >= 0) round.trail.startWidth = .42f;
             round.trail.endWidth = 0;
             round.trail.startColor = new Color(color.r, color.g, color.b, .82f);
             round.trail.endColor = new Color(color.r, color.g, color.b, 0);
@@ -248,7 +250,22 @@ namespace MadeInArizona
                 // Do not travel beyond the configured lifetime on a long frame.
                 float stepTime = Mathf.Min(Time.deltaTime, Mathf.Max(0, r.remaining));
                 float distance = r.speed * stepTime;
-                if (Cast(r, r.position, r.direction, distance, out RaycastHit hit))
+                bool hitSomething = Cast(r, r.position, r.direction, distance, out RaycastHit hit);
+                float clearDistance = hitSomething ? Mathf.Max(0, hit.distance) : distance;
+                if (!r.friendly && MirrorDustCloud.Intersect(r.position, r.direction, clearDistance, out Vector3 mirrorPoint, out VehicleController reflector))
+                {
+                    var sender = r.source ? r.source.GetComponentInParent<VehicleController>() : null;
+                    r.position = mirrorPoint + Vector3.up * .35f;
+                    r.direction = sender ? (sender.transform.position + Vector3.up - r.position).normalized : -r.direction;
+                    r.source = reflector ? reflector.gameObject : null;
+                    r.friendly = true;
+                    r.struck.Clear();
+                    r.color = new Color(.65f, 1.4f, 2f);
+                    r.transform.SetPositionAndRotation(r.position, Quaternion.LookRotation(r.direction));
+                    ExplosionSystem.Burst(mirrorPoint, r.color, 12, 4);
+                    continue;
+                }
+                if (hitSomething)
                 {
                     if (Resolve(r, hit)) { Retire(i); continue; }
                     // A piercing round carries on from the car it passed through.
@@ -336,7 +353,11 @@ namespace MadeInArizona
                     if (vehicle.Damage == null || vehicle.Damage.IsDead || round.struck.Contains(vehicle)) continue;
                     var ai = vehicle.GetComponent<EnemyAI>();
                     bool friendly = vehicle.IsPlayer || (ai != null && ai.IsFriendly);
-                    if (friendly == round.friendly) continue;
+                    if (round.fx != null && round.fx.healAllies)
+                    {
+                        if (!friendly) continue;
+                    }
+                    else if (friendly == round.friendly) continue;
                 }
                 if (candidate.distance < nearest) { nearest = candidate.distance; closest = candidate; }
             }
@@ -353,7 +374,7 @@ namespace MadeInArizona
             {
                 Hit(round, hit);
                 round.struck.Add(vehicle);
-                if (!fx.boomerang) fx.pierce--;
+                if (!fx.boomerang) { fx.pierce--; if (fx.effect == ShotEffect.Freeze) round.damage *= .5f; }
                 return false;
             }
             if (!vehicle && fx != null && fx.boomerang && !round.returning)
@@ -369,6 +390,18 @@ namespace MadeInArizona
         void Hit(Round round, RaycastHit hit)
         {
             var fx = round.fx;
+            if (fx != null && fx.healAllies)
+            {
+                var ally = hit.collider.GetComponentInParent<VehicleController>();
+                if (ally && ally.Damage && !ally.Damage.IsDead && ally.FriendlyToPlayer)
+                {
+                    ally.Repair(85f);
+                    ExplosionSystem.Burst(hit.point, new Color(.3f, 1.5f, .5f), 20, 5);
+                    if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                        CoopSession.Instance.PublishFx(CoopFx.RepairHit, hit.point, Vector3.zero);
+                }
+                return;
+            }
             if (round.radius > .1f)
             {
                 if (fx != null && fx.coneBlast) ExplosionSystem.DetonateCone(hit.point, round.direction, round.radius, round.damage, round.source);

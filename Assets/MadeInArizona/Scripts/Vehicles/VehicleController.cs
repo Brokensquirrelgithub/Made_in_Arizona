@@ -69,6 +69,17 @@ namespace MadeInArizona
         Vector3 networkVelocity;
         Quaternion networkRotation;
         float networkYawRate;
+        float networkReceivedAt;
+        float rallyUntil;
+        public bool RallyActive => Time.time < rallyUntil;
+        public float RallyRemaining => Mathf.Max(0, rallyUntil - Time.time);
+        public void ApplyRally(float seconds)
+        {
+            rallyUntil = Mathf.Max(rallyUntil, Time.time + seconds);
+            var aura = GetComponent<RallyAura>();
+            if (!aura) aura = gameObject.AddComponent<RallyAura>();
+            aura.Bind(this);
+        }
         public bool HasRemoteInput { get; private set; }
         bool primaryHeld;
         public CoopControls RemoteControls { get; private set; }
@@ -96,6 +107,7 @@ namespace MadeInArizona
             networkRotation = rotation;
             networkVelocity = velocity;
             networkYawRate = yawRate;
+            networkReceivedAt = Time.unscaledTime;
             Damage?.SetNetworkHealth(health, maximumHealth, failedDepth);
             BoostCharge = Mathf.Clamp01(boost);
             RPM = rpm;
@@ -359,9 +371,14 @@ namespace MadeInArizona
         {
             if (IsNetworkProxy)
             {
-                float blend = 1 - Mathf.Exp(-15 * Time.unscaledDeltaTime);
-                Vector3 position = Vector3.Distance(transform.position, networkPosition) > 30 ? networkPosition : Vector3.Lerp(transform.position, networkPosition, blend);
-                Quaternion rotation = Quaternion.Slerp(transform.rotation, networkRotation, blend);
+                // Predict between host snapshots so remote cars keep moving instead of slowing to a
+                // stop at every packet. Bound the prediction when packets are delayed or lost.
+                float age = Mathf.Clamp(Time.unscaledTime - networkReceivedAt, 0, .15f);
+                Vector3 targetPosition = networkPosition + networkVelocity * age;
+                Quaternion targetRotation = networkRotation * Quaternion.Euler(0, networkYawRate * Mathf.Rad2Deg * age, 0);
+                float blend = 1 - Mathf.Exp(-18 * Time.unscaledDeltaTime);
+                Vector3 position = Vector3.Distance(transform.position, targetPosition) > 30 ? targetPosition : Vector3.Lerp(transform.position, targetPosition, blend);
+                Quaternion rotation = Quaternion.Slerp(transform.rotation, targetRotation, blend);
                 transform.SetPositionAndRotation(position, rotation);
                 if (Body) { Body.position = position; Body.rotation = rotation; }
                 // Guests do not simulate the host's cars; slide state for tyre audio is read from the replicated motion.
@@ -468,7 +485,7 @@ namespace MadeInArizona
             var footing = DrivetrainTraits.On(Stats.drivetrain, surface);
             float terrainBonus=surface==SurfaceKind.Asphalt||surface==SurfaceKind.Oil?1f:Stats.terrainGripMultiplier;
             float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * terrainBonus * wheelGrip * diffGrip * footing.cornering;
-            if (IsPlayer) grip *= tuning.grip;
+            if (IsPlayer) grip *= tuning.grip * (RallyActive ? 1.25f : 1f);
             upshiftRemaining = Mathf.Max(0, upshiftRemaining - Time.fixedDeltaTime);
             gearHoldRemaining = Mathf.Max(0, gearHoldRemaining - Time.fixedDeltaTime);
             if (input.sqrMagnitude > .04f)
@@ -482,7 +499,7 @@ namespace MadeInArizona
                 Vector3 driveForward = transform.forward * driveDirection;
                 float angle = Vector3.SignedAngle(driveForward, desired, Vector3.up);
                 float steering = Mathf.Clamp(angle / 42, -1, 1);
-                float handling = 1f;
+                float handling = RallyActive ? 1.25f : 1f;
                 float lockPenalty = Stats.differential == Differential.Locked ? .84f : 1;
                 float turnRate = Mathf.Clamp(Stats.turnSpeed, 35, 240) * LowSpeedTurnMultiplier(speed) * handling * lockPenalty;
                 if (IsPlayer) turnRate *= tuning.steering;
@@ -554,7 +571,7 @@ namespace MadeInArizona
                 if (Afflictions && Afflictions.IsChilled) acceleration *= .8f;
                 acceleration *= ShiftDrive;
                 if (RevLimiterCut) acceleration *= .15f;
-                if (IsPlayer) acceleration *= tuning.acceleration;
+                if (IsPlayer) acceleration *= tuning.acceleration * (RallyActive ? 1.25f : 1f);
                 if (!IsPlayer) acceleration *= Pace;
                 if (boosting)
                 {
@@ -563,7 +580,7 @@ namespace MadeInArizona
                     BoostCharge = Mathf.Max(0, BoostCharge - Time.fixedDeltaTime * NitroBurnRate);
                 }
                 Boosting = boosting;
-                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed * (boosting ? 1.25f : 1) * (IsPlayer ? 1 : Pace);
+                float maxSpeed = Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed * (boosting ? 1.25f : 1) * (RallyActive ? 1.25f : 1f) * (IsPlayer ? 1 : Pace);
                 float speedInDriveDirection = forwardSpeed * driveDirection;
                 float directionalMaxSpeed = driveDirection < 0 ? Mathf.Min(maxSpeed * .34f, 13f) : maxSpeed;
                 float directionalAcceleration = driveDirection < 0 ? acceleration * .78f : acceleration;

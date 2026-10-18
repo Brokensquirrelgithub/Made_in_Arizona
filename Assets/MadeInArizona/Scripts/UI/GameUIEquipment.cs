@@ -155,7 +155,7 @@ namespace MadeInArizona
                 if(Mathf.Abs(wheel)>.01f)
                 {
                     GatherEquipmentChoices();
-                    equipmentScroll.y=Mathf.Clamp(equipmentScroll.y-wheel/120f*58f,0,
+                    equipmentScroll.y=Mathf.Clamp(equipmentScroll.y-wheel/120f*190f,0,
                         Mathf.Max(0,equipmentChoices.Count*58-listHeight));
                 }
             }

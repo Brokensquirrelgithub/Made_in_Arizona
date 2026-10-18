@@ -29,11 +29,13 @@ namespace MadeInArizona
                 bar=new GameObject("Light Bar Accessory").transform;bar.SetParent(owner.Visual,false);
                 float roof=owner.Definition.rideHeight+1.32f;
                 Box(bar,"Mount",new Vector3(0,roof,0),new Vector3(owner.Definition.trackWidth*.65f,.09f,.18f),Steel);
-                Box(bar,"Luminous Strip",new Vector3(0,roof+.055f,.07f),new Vector3(owner.Definition.trackWidth*.56f,.07f,.06f),Amber);
+                var strip=Box(bar,"Luminous Strip",new Vector3(0,roof+.055f,.07f),new Vector3(owner.Definition.trackWidth*.56f,.07f,.06f),Amber);
+                var stripMaterial=strip.GetComponent<Renderer>().material;
+                stripMaterial.EnableKeyword("_EMISSION");stripMaterial.SetColor("_EmissionColor",Amber*8f);
                 var lightObject=new GameObject("Auxiliary beam");lightObject.transform.SetParent(bar,false);
                 lightObject.transform.localPosition=new Vector3(0,roof,.18f);
                 lamp=lightObject.AddComponent<Light>();lamp.type=LightType.Spot;lamp.color=Amber;lamp.range=34;
-                lamp.spotAngle=68;lamp.innerSpotAngle=35;lamp.shadows=LightShadows.None;
+                lamp.spotAngle=68;lamp.innerSpotAngle=35;lamp.shadows=LightShadows.None;lamp.range=48;
             }
             if(!spikes)
             {
@@ -53,9 +55,9 @@ namespace MadeInArizona
         void LateUpdate()
         {
             if(!lamp||!owner||owner.Stats==null)return;
-            bool on=bar&&bar.gameObject.activeSelf&&owner.Damage&&!owner.Damage.IsDead&&TimeOfDay.Blend>.35f;
+            bool on=bar&&bar.gameObject.activeSelf&&owner.Damage&&!owner.Damage.IsDead;
             lamp.enabled=on;
-            if(on)lamp.intensity=8*Mathf.InverseLerp(.35f,.85f,TimeOfDay.Blend);
+            if(on)lamp.intensity=Mathf.Lerp(9f,20f,Mathf.InverseLerp(.35f,.85f,TimeOfDay.Blend));
         }
     }
 }

@@ -126,6 +126,7 @@ namespace MadeInArizona
             }
             if (pad.startButton.wasPressedThisFrame && game.State == GameState.Garage) { settings = true; menuFocus = 0; return; }
             if (game.State == GameState.Garage) {
+                if (pad.buttonEast.wasPressedThisFrame && station != 2) { ReturnGarageToMenu(); return; }
                 if (pad.leftShoulder.wasPressedThisFrame) { station = (station + stations.Length - 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
                 if (pad.rightShoulder.wasPressedThisFrame) { station = (station + 1) % stations.Length; browsingParts=false; listScroll = Vector2.zero; }
                 if(station==2){TickEquipmentInput(pad);return;}
@@ -248,7 +249,6 @@ namespace MadeInArizona
             // Money and scrap are the two spendable currencies: same size, each in its own colour.
             Text(width - 760, 28, 230, 30, "$ " + game.Save.money.ToString("N0"), 25, Lime, true, TextAnchor.MiddleRight);
             Text(width - 510, 28, 270, 30, game.Save.salvage.ToString("N0") + " SCRAP", 25, Orange, true, TextAnchor.MiddleRight);
-            Text(width - 225, 31, 190, 30, "REP " + game.Save.reputation, 16, Cream, true, TextAnchor.MiddleRight);
             for (int i = 0; i < stations.Length; i++) {
                 float x = 32 + i * 185;
                 if (Button(x, 110, 175, 39, stations[i], station == i)) { station = i; browsingParts=false; listScroll = Vector2.zero; }
@@ -264,9 +264,16 @@ namespace MadeInArizona
                 (InputManager.Instance.UsingGamepad?"LB/RB TAB   D-PAD SLOT/PART   A SELECT   B BACK   X REMOVE   Y DETAILS   START SETTINGS":"TAB CHANGE TAB   CLICK OR DRAG PART   ENTER SELECT   F1 SETTINGS"):
                 (InputManager.Instance.UsingGamepad?"LB/RB TAB   D-PAD CHOOSE   A CONFIRM   X COMBAT TRIAL (DISPATCH)   START SETTINGS":"TAB CHANGE TAB   ENTER CONFIRM   RMB DRAG / Q E ROTATE VIEW   F1 SETTINGS"),12,Muted,true);
             bool freshBuild = GameUpdater.Instance && GameUpdater.Instance.UpdateAvailable;
+            if (Button(width - 695, height - 48, 145, 34, "MAIN MENU / B")) ReturnGarageToMenu();
             if (Button(width - 545, height - 48, 190, 34, freshBuild ? "NEW BUILD READY" : "UPDATES", freshBuild)) OpenUpdates();
             if (Button(width - 345, height - 48, 175, 34, "SETTINGS  /  F1")) { settings = true; menuFocus = 0; }
             if (Button(width - 155, height - 48, 120, 34, "QUIT")) Application.Quit();
+        }
+
+        void ReturnGarageToMenu()
+        {
+            if (CoopSession.Instance && (CoopSession.Instance.IsHost || CoopSession.Instance.IsClient)) LeaveCoop();
+            game.ShowMainMenu();
         }
 
         void DrawDispatch(float top, float panelHeight)
@@ -289,13 +296,25 @@ namespace MadeInArizona
             {
                 string label = coop.CountdownRemaining > 0 ? "STARTING IN " + Mathf.CeilToInt(coop.CountdownRemaining) + "  •  CANCEL READY" :
                     coop.LocalReady ? "READY  •  CLICK TO UNREADY" : "READY FOR MISSION  →";
-                if (Button(left + 25, top + panelHeight - 83, w - 50, 58, label, true)) coop.SetReady(!coop.LocalReady);
+                float readyY = top + panelHeight - 83;
+                if (coop.LocalReady)
+                {
+                    float pulse = .78f + .22f * Mathf.Sin(Time.unscaledTime * 5f);
+                    Rect(left + 21, readyY - 4, w - 42, 66, new Color(.14f, .8f, .25f, .22f * pulse));
+                    Rect(left + 25, readyY, w - 50, 58, new Color(.08f, .45f, .15f, .95f));
+                    if (GUI.Button(new Rect(left + 25, readyY, w - 50, 58), label,
+                        Style(16, Color.white, true, TextAnchor.MiddleCenter))) coop.SetReady(false);
+                }
+                else if (Button(left + 25, readyY, w - 50, 58, label, true)) coop.SetReady(true);
             }
             else if (Button(left + 25, top + panelHeight - 83, w - 50, 58, "CLOCK IN. CAUSE A PROBLEM.  →", true)) game.StartMission(game.SelectedMission);
             float right = width - 360;
             Rect(right, top, 328, 88, Ink);
             Tag(right + 20, top + 16, "FLEET STATUS", Lime);
-            Text(right + 20, top + 43, 295, 30, ContentCatalog.Vehicles[game.Save.selectedVehicle].displayName, 22, Cream, true);
+            string fleetName = ContentCatalog.Vehicles[game.Save.selectedVehicle].displayName;
+            int fleetSize = 22;
+            while (fleetSize > 13 && Style(fleetSize, Cream, true).CalcSize(new GUIContent(fleetName)).x > 288) fleetSize--;
+            Text(right + 20, top + 43, 290, 34, fleetName, fleetSize, Cream, true);
             var stats = GarageManager.StatsFor(ContentCatalog.Vehicles[game.Save.selectedVehicle], game.Save);
             Rect(right, top + 100, 328, 91, Ink);
             Text(right + 20, top + 116, 285, 26, Mathf.RoundToInt(stats.horsepower) + " HP     " + Mathf.RoundToInt(stats.mass) + " KG     " + stats.drivetrain, 19, Cream, true);
@@ -304,7 +323,19 @@ namespace MadeInArizona
             if (coop && coop.InLobby)
             {
                 Tag(right + 20, top + 218, "CO-OP / HOST CHOOSES MISSION", Orange);
-                Text(right + 20, top + 251, 290, 150, coop.LobbyRoster(), 17, Cream, true);
+                int[] slots = coop.LobbySlots();
+                for (int i = 0; i < slots.Length; i++)
+                {
+                    bool ready = coop.SlotReady(slots[i]);
+                    float rowY = top + 250 + i * 34;
+                    if (ready)
+                    {
+                        float pulse = .68f + .32f * Mathf.Sin(Time.unscaledTime * 5f + i);
+                        Rect(right + 17, rowY - 2, 294, 31, new Color(.12f, .9f, .24f, .15f * pulse));
+                    }
+                    Text(right + 20, rowY, 290, 30, "P" + slots[i] + "  " + (ready ? "READY" : "CHOOSING LOADOUT"),
+                        16, ready ? new Color(.3f, 1f, .4f) : Cream, true);
+                }
                 Text(right + 20, top + 405, 290, 30, coop.CountdownRemaining > 0 ?
                     "DEPLOYING IN " + Mathf.CeilToInt(coop.CountdownRemaining) : "ALL PLAYERS MUST READY", 14, Lime, true);
             }
@@ -518,18 +549,18 @@ namespace MadeInArizona
             bool critical = p.Damage.EngineReached;
             Text(300, height - 177, 75, 30, Mathf.CeilToInt(p.Damage.Health) + " HP", critical ? 16 : 14, critical ? new Color(1, .3f, .15f) : Cream, true);
             Bar(48, height - 102, 240, 6, p.BoostCharge, Blue);
-            Text(300, height - 105, 140, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O" + (p.DriftNitroActive ? "  +DRIFT" : ""), 13, Blue, true);
+            Text(300, height - 98, 140, 28, Mathf.RoundToInt(p.BoostCharge * 100) + "% N2O" + (p.DriftNitroActive ? "  +DRIFT" : ""), 13, Blue, true);
             Text(48, height - 78, 235, 30, (p.SpeedKph * .621371f).ToString("000") + " MPH  " + p.RPM.ToString("0") + " RPM", 17, Cream, true);
             float weaponsX = 410;
             bool padControls = InputManager.Instance.UsingGamepad;
             Rect(weaponsX, height - 104, 210, 76, Ink);
-            Tag(weaponsX + 12, height - 90, padControls ? "RT  /  GARAGE" : "LMB  /  GARAGE", Lime);
-            Text(weaponsX + 12, height - 66, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "NAIL GUN", 15, Cream, true);
-            Bar(weaponsX + 12, height - 34, 186, 4, 1 - p.Weapons.GarageCooldown, Lime);
+            Tag(weaponsX + 12, height - 90, padControls ? "LT  /  FIELD" : "RMB  /  FIELD", Orange);
+            Text(weaponsX + 12, height - 66, 190, 30, p.Weapons.FieldWeapon ? p.Weapons.FieldWeapon.displayName.ToUpperInvariant() + "  " + p.Weapons.FieldAmmo : "EMPTY • FIND A DROP", p.Weapons.FieldWeapon ? 15 : 13, Cream, true);
+            Bar(weaponsX + 12, height - 34, 186, 4, 1 - p.Weapons.FieldCooldown, Orange);
             Rect(weaponsX + 220, height - 104, 210, 76, Ink);
-            Tag(weaponsX + 232, height - 90, padControls ? "LT  /  FIELD" : "RMB  /  FIELD", Orange);
-            Text(weaponsX + 232, height - 66, 190, 30, p.Weapons.FieldWeapon ? p.Weapons.FieldWeapon.displayName.ToUpperInvariant() + "  " + p.Weapons.FieldAmmo : "EMPTY • FIND A DROP", p.Weapons.FieldWeapon ? 15 : 13, Cream, true);
-            Bar(weaponsX + 232, height - 34, 186, 4, 1 - p.Weapons.FieldCooldown, Orange);
+            Tag(weaponsX + 232, height - 90, padControls ? "RT  /  GARAGE" : "LMB  /  GARAGE", Lime);
+            Text(weaponsX + 232, height - 66, 190, 30, p.Weapons.GarageWeapon ? p.Weapons.GarageWeapon.displayName.ToUpperInvariant() : "NAIL GUN", 15, Cream, true);
+            Bar(weaponsX + 232, height - 34, 186, 4, 1 - p.Weapons.GarageCooldown, Lime);
             var nearbyWeapon = CombatPickup.NearbyWeapon(p);
             if (nearbyWeapon)
             {

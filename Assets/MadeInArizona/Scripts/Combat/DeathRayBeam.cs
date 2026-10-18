@@ -106,7 +106,7 @@ namespace MadeInArizona
             impact = Lamp("Death ray burn point", 6); muzzleGlow = Lamp("Death ray dish glow", 4);
             hum = gameObject.AddComponent<AudioSource>();
             hum.clip = AudioManager.Instance ? AudioManager.Instance.RayLoop : null; hum.loop = true; hum.playOnAwake = false;
-            hum.spatialBlend = .5f; hum.minDistance = 16; hum.maxDistance = 160; hum.rolloffMode = AudioRolloffMode.Linear;
+            hum.spatialBlend = 1; hum.minDistance = 5; hum.maxDistance = 80; hum.rolloffMode = AudioRolloffMode.Linear;
             hum.dopplerLevel = 0; hum.priority = 50; hum.volume = 0;
         }
         LineRenderer Line(string name)

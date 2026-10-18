@@ -26,8 +26,52 @@ namespace MadeInArizona
         public MissionDefinition Definition { get { return definition; } }
         MissionDefinition definition;
         int remoteMarkerStage = -1;
+        LineRenderer uplinkRing;
+        Material uplinkMaterial;
+        void ClearUplinkRing()
+        {
+            if (uplinkRing) Destroy(uplinkRing.gameObject);
+            if (uplinkMaterial) Destroy(uplinkMaterial);
+            uplinkRing = null; uplinkMaterial = null;
+        }
+        void LateUpdate()
+        {
+            bool active = definition && definition.mode == MissionMode.Defense && Stage == 0 &&
+                Game && Game.World && Game.State == GameState.Playing;
+            if (!active) { if (uplinkRing) uplinkRing.enabled = false; return; }
+            if (!uplinkRing)
+            {
+                var ring = new GameObject("Uplink coverage • 55 m");
+                ring.transform.SetParent(Game.World.transform);
+                uplinkRing = ring.AddComponent<LineRenderer>();
+                uplinkMaterial = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default"));
+                uplinkRing.sharedMaterial = uplinkMaterial;
+                uplinkRing.useWorldSpace = true;
+                uplinkRing.positionCount = 97;
+                uplinkRing.widthMultiplier = .8f;
+                uplinkRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                Vector3 ringCenter = Point(1);
+                for (int i = 0; i < 97; i++)
+                {
+                    float angle = i * Mathf.PI * 2 / 96f;
+                    Vector3 point = ringCenter + new Vector3(Mathf.Cos(angle) * 55, 0, Mathf.Sin(angle) * 55);
+                    uplinkRing.SetPosition(i, TerrainPoint(point) + Vector3.up * .3f);
+                }
+            }
+            Vector3 center = Point(1);
+            bool occupied = false;
+            foreach (var car in VehicleController.Active)
+                if (car && car.IsPlayer && car.Damage && !car.Damage.IsDead &&
+                    Vector2.Distance(new Vector2(car.transform.position.x, car.transform.position.z),
+                        new Vector2(center.x, center.z)) < 55) { occupied = true; break; }
+            Color tint = occupied ? new Color(.25f, 1f, .38f, .9f) : new Color(1f, .75f, .16f, .85f);
+            uplinkRing.startColor = uplinkRing.endColor = tint;
+            uplinkRing.enabled = true;
+        }
+        void OnDestroy() { ClearUplinkRing(); }
         internal void SetRemoteMission(MissionDefinition mission)
         {
+            ClearUplinkRing();
             if (!mission)
             {
                 if (!trialDefinition) trialDefinition = ScriptableObject.CreateInstance<MissionDefinition>();
@@ -152,6 +196,7 @@ namespace MadeInArizona
 
         public void Begin(MissionDefinition mission,int index)
         {
+            ClearUplinkRing();
             definition=mission;missionIndex=index;Stage=0;Score=0;Kills=0;DestructionCount=0;Elapsed=0;Combo=0;Progress=0;
             effectiveTimeLimit=mission.timeLimit;
             if(GeneratedWorld.Active!=null)

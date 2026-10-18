@@ -458,12 +458,19 @@ namespace MadeInArizona
 
         void LateUpdate()
         {
+            if (vehicle && vehicle.Damage && vehicle.Damage.IsDead)
+            {
+                AttackTelegraph = EnemyAttackTelegraph.None;
+                if (sniperWarning) { sniperWarning.HideZone(); sniperWarning.HideSniper(); }
+                return;
+            }
             bool zone = AttackTelegraph == EnemyAttackTelegraph.Line || AttackTelegraph == EnemyAttackTelegraph.Cone;
             if (zone && IsTelegraphingAttack && vehicle != null && vehicle.Damage != null && !vehicle.Damage.IsDead &&
                 GameManager.Instance != null && GameManager.Instance.IsPlaying)
             {
                 if (!sniperWarning) sniperWarning = gameObject.AddComponent<AttackWarningVisual>();
                 sniperWarning.HideSniper();
+                committedOrigin = transform.position;
                 sniperWarning.ShowZone(committedOrigin, committedAim, AttackTelegraph == EnemyAttackTelegraph.Cone,
                     TelegraphRemaining, 1.45f);
                 return;
@@ -508,12 +515,18 @@ namespace MadeInArizona
             {
                 bool cone = attack == EnemyAttackTelegraph.Cone;
                 float range = cone ? 34f : 42f;
+                committedOrigin = transform.position;
+                if (sniperWarning) { sniperWarning.HideZone(); sniperWarning.StrikeZone(committedOrigin, committedAim, cone); }
+                if (CoopSession.Instance && CoopSession.Instance.IsHost)
+                    CoopSession.Instance.PublishFx(cone ? CoopFx.ConeStrike : CoopFx.LineStrike,
+                        committedOrigin, committedAim);
                 Vector3 start = committedOrigin + committedAim * 2.5f;
                 Vector3 right = Vector3.Cross(Vector3.up, committedAim);
-                for (float distance = 5; distance < range; distance += 5)
-                    for (int lane = cone ? -1 : 0; lane <= (cone ? 1 : 0); lane++)
-                        ExplosionSystem.Burst(start + committedAim * distance + right * lane * distance * .3f + Vector3.up * .4f,
-                            new Color(1f, .22f, .05f), 4, cone ? 4f : 5f);
+                for (float distance = 5; distance < range; distance += 7)
+                    for (int lane = -2; lane <= 2; lane++)
+                        ExplosionSystem.Burst(start + committedAim * distance + right * lane *
+                            (cone ? distance * Mathf.Tan(27f * Mathf.Deg2Rad) : 4.5f) / 2f + Vector3.up * .4f,
+                            new Color(2f, .38f, .08f), 5, cone ? 6f : 7f);
                 foreach (var target in VehicleController.Active)
                 {
                     if (!target || !target.IsPlayer || !target.Damage || target.Damage.IsDead) continue;
@@ -522,7 +535,7 @@ namespace MadeInArizona
                     if (forward < 0 || forward > range) continue;
                     float side = Mathf.Abs(Vector3.Cross(committedAim, delta).y);
                     if (side > (cone ? 1f + forward * Mathf.Tan(27f * Mathf.Deg2Rad) : 4.5f)) continue;
-                    target.Damage.ApplyDamage(cone ? 48f : 40f, target.transform.position, gameObject);
+                    target.Damage.ApplyDamage(cone ? 112f : 105f, target.transform.position, gameObject);
                 }
                 return;
             }

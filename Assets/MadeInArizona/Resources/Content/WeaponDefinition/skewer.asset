@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: skewer
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: skewer
-  displayName: Tetrafluoro Skewer
+  displayName: Freon Skewer
   description: A refrigerant-driven ice spike skewers cars and leaves them crusted
     in frost. Press fire again while it flies to break it into a cone of shards. Its
     compressor steals a little of your cabin AC.
@@ -23,7 +23,7 @@ MonoBehaviour:
   weakness: One precise spike; the cone needs a second trigger press before impact.
   contentOrder: 20
   damage: 82
-  fireRate: 0.9
+  fireRate: 0.99
   speed: 100
   blastRadius: 0
   projectileColor: {r: 0.55, g: 0.94, b: 1, a: 1}
