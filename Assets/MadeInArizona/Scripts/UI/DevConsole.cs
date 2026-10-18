@@ -7,7 +7,7 @@ namespace MadeInArizona
 {
     public sealed partial class GameUI
     {
-        static readonly string[] consoleCommands = { "help", "clear", "status", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "invulnerable", "garage" };
+        static readonly string[] consoleCommands = { "help", "clear", "status", "cooplog", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "invulnerable", "garage" };
         readonly List<string> consoleLines = new List<string>();
         readonly List<string> consoleHistory = new List<string>();
         string consoleInput = "", completionSeed;
@@ -32,7 +32,10 @@ namespace MadeInArizona
 
         void CaptureConsoleLog(string message, string stack, LogType type)
         {
-            if (type == LogType.Warning || type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
+            if (message.StartsWith("MIA_COOP_TRACE_SAVED:", StringComparison.Ordinal) ||
+                message.StartsWith("MIA_COOP_TRACE_COLLECTED:", StringComparison.Ordinal) ||
+                message.StartsWith("MIA_COOP_TRACE_UPLOADED:", StringComparison.Ordinal)) WriteConsole(message);
+            else if (type == LogType.Warning || type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
                 WriteConsole("[" + type + "] " + message);
         }
 
@@ -160,6 +163,7 @@ namespace MadeInArizona
                 WriteConsole("unlock cars|weapons|missions|all  •  unlock progression");
                 WriteConsole("weapon <id>, field <id>, car <id>  •  Tab lists IDs");
                 WriteConsole("invulnerable on|off  •  ignore all player damage this sortie");
+                WriteConsole("cooplog  •  save the previous 15 seconds from every co-op player; cooplog path shows the folder");
                 WriteConsole("car changes the selected car in the garage; field equips a drop weapon during play.");
                 return;
             }
@@ -168,6 +172,15 @@ namespace MadeInArizona
             {
                 WriteConsole("State " + game.State + "  •  $" + game.Save.money + "  •  " + game.Save.salvage + " scrap  •  mission " + game.Save.unlockedMission);
                 if (game.Player) WriteConsole("Car " + game.Player.Definition.id + "  •  garage weapon " + game.Player.Weapons.GarageWeapon.id + "  •  invulnerable " + (game.Player.Damage.Invulnerable ? "on" : "off"));
+                return;
+            }
+            if (command == "cooplog")
+            {
+                var coop = CoopSession.Instance;
+                if (arg == "path") WriteConsole(coop && !string.IsNullOrEmpty(coop.LastTracePath)
+                    ? "Co-op trace folder: " + coop.LastTracePath : "No co-op trace has been saved in this session.");
+                else if (words.Length == 1) WriteConsole(coop ? coop.RequestDiagnosticCapture() : "Co-op is unavailable.");
+                else WriteConsole("Use cooplog or cooplog path.");
                 return;
             }
             if (CoopSession.IsRemoteClient) { WriteConsole("Only the host can run dev commands in co-op."); return; }

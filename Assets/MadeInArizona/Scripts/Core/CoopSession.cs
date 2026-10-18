@@ -43,6 +43,8 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
+        const string TraceRequestMessage = "mia.coop.trace-request.v1";
+        const string TraceCaptureMessage = "mia.coop.trace-capture.v1";
         const int Protocol = 10;
         const int InputHistorySize = 256;
         public const int MaxPlayers = 4;
@@ -192,6 +194,9 @@ namespace MadeInArizona
             messages.RegisterNamedMessageHandler(TuningMessage, ReceiveTuning);
             messages.RegisterNamedMessageHandler(PinStateMessage, ReceivePinState);
             messages.RegisterNamedMessageHandler(FxMessage, ReceiveFx);
+            messages.RegisterNamedMessageHandler(TraceRequestMessage, ReceiveTraceRequest);
+            messages.RegisterNamedMessageHandler(TraceCaptureMessage, ReceiveTraceCapture);
+            RegisterTraceMessages(messages);
             RegisterBalanceMessages(messages);
             RegisterDraftMessages(messages);
             RegisterLobbyMessages(messages);
@@ -403,6 +408,7 @@ namespace MadeInArizona
             input.aim = Vector2.ClampMagnitude(input.aim, 1);
             input.elevation = Mathf.Clamp(input.elevation, -1, 1);
             car.SetRemoteControls(input);
+            RecordInputReceived(sender, car, input.sequence);
         }
 
         void ReceiveVehicle(ulong sender, FastBufferReader reader)
@@ -444,6 +450,7 @@ namespace MadeInArizona
                 int slot = packet.appliedInputSequence & (InputHistorySize - 1);
                 if (packet.appliedInputSequence > 0 && sentInputSequences[slot] == packet.appliedInputSequence)
                     lead = Time.unscaledTime - sentInputAt[slot];
+                RecordOwnSnapshot(packet, car, lead);
                 car.ReconcileLocalPrediction(packet.position, packet.rotation, packet.velocity, packet.yawRate, lead);
             }
             car.Weapons.AimAt(packet.aim);
@@ -681,6 +688,7 @@ namespace MadeInArizona
                         reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
                     Send(InputMessage, NetworkManager.ServerClientId, new InputPacket { controls = controls }, NetworkDelivery.Unreliable);
+                    RecordInputSent(controls.sequence);
                     queuedInteract = queuedSwap = false;
                 }
                 // A missed despawn packet cannot leave a ghost car on the map indefinitely.
@@ -764,6 +772,7 @@ namespace MadeInArizona
                         attackRemaining = ai ? ai.TelegraphRemaining : 0,
                         rallyRemaining = car.RallyActive ? car.RallyRemaining : 0,
                         tow = car.Towing && vehicleIds.TryGetValue(car.Towing, out int towId) ? towId : 0 };
+                    if (packet.player) RecordSnapshotSent(packet, car);
                     foreach (ulong clientId in network.ConnectedClientsIds)
                         if (clientId != NetworkManager.ServerClientId)
                             SendVehicle(clientId, packet);
@@ -912,6 +921,7 @@ namespace MadeInArizona
                 Destroy(network.gameObject);
             }
             network = null; transport = null;
+            ResetTrace();
             guestCars.Clear(); proxies.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
             inputSequence = 0; Array.Clear(sentInputSequences, 0, sentInputSequences.Length);
             ResetLobby();

@@ -62,9 +62,12 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaReleaseFeaturesTest")>=0)
             { yield return TestReleaseFeatures(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
-                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyGuestTest")>=0)
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyGuestTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceGuestTest")>=0)
             {
-                yield return TestCoopLobbyLive(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0);
+                yield return TestCoopLobbyLive(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
+                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0);
                 FinishResults(); yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
@@ -545,6 +548,35 @@ namespace MadeInArizona
             Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
             if (!host) Check("guest drives a locally predicted car", game.Player && game.Player.IsLocallyPredicted &&
                 game.Player.Body && !game.Player.Body.isKinematic);
+            bool traceTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ? "-miaCoopTraceHostTest" : "-miaCoopTraceGuestTest") >= 0;
+            if (traceTest)
+            {
+                if (!host)
+                {
+                    Vector3 traceStart = game.Player.Body.position;
+                    var traceKeyboard = InputSystem.AddDevice<Keyboard>();
+                    InputSystem.QueueStateEvent(traceKeyboard, new KeyboardState(Key.W));
+                    yield return new WaitForSecondsRealtime(2);
+                    InputSystem.QueueStateEvent(traceKeyboard, new KeyboardState());
+                    yield return null;
+                    InputSystem.RemoveDevice(traceKeyboard);
+                    Check("guest trace records active driving", Vector3.Distance(traceStart, game.Player.Body.position) > 1f);
+                    Check("guest requests synchronized trace", coop.RequestDiagnosticCapture().StartsWith("Requested a synchronized"));
+                }
+                float traceDeadline = Time.unscaledTime + 30;
+                while (Time.unscaledTime < traceDeadline &&
+                    (string.IsNullOrEmpty(coop.LastTracePath) || !Directory.Exists(coop.LastTracePath) ||
+                     (host && (!File.Exists(Path.Combine(coop.LastTracePath, "manifest.txt")) ||
+                         !File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"))) ||
+                     (!host && !coop.LastTraceUploadConfirmed))) yield return null;
+                Check("co-op trace saves a local physics timeline", !string.IsNullOrEmpty(coop.LastTracePath) &&
+                    Directory.Exists(coop.LastTracePath) && Directory.GetFiles(coop.LastTracePath, "*.csv").Any(path =>
+                        File.ReadAllLines(path).Length > 10));
+                if (host) Check("host collects guest timeline in same capture folder", !string.IsNullOrEmpty(coop.LastTracePath) &&
+                    Directory.Exists(coop.LastTracePath) && Directory.GetFiles(coop.LastTracePath, "guest-*.csv").Length > 0 &&
+                    File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"));
+                else Check("guest receives host collection receipt", coop.LastTraceUploadConfirmed);
+            }
             if (host) yield return new WaitForSecondsRealtime(3);
         }
         IEnumerator TestReleaseFeatures()
