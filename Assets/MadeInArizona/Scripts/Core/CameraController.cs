@@ -42,7 +42,7 @@ namespace MadeInArizona
         /// turns that the car appeared to slide across the screen and understeer.
         /// </summary>
         const float MaxLead = 6f, LeadSmoothing = .22f;
-        Vector3 lead, leadVelocity; Rigidbody targetBody; Transform leadTarget;
+        Vector3 lead, leadVelocity; Rigidbody targetBody; VehicleController targetVehicle; Transform leadTarget;
         /// <summary>
         /// Terrain sway (Settings > Graphics &amp; Camera): the camera arm tips a few degrees as the car climbs, dips and
         /// travels, plus a slow drift, so the orthographic view picks up parallax and hills read as hills. Degrees at
@@ -146,10 +146,9 @@ namespace MadeInArizona
         {
             var game=GameManager.Instance;
             var car=Target;
-            if(leadTarget!=car){leadTarget=car;targetBody=car.GetComponentInParent<Rigidbody>();}
             Vector3 forward=Vector3.ProjectOnPlane(car.forward,Vector3.up).normalized;
             if(forward.sqrMagnitude<.1f)forward=Vector3.forward;
-            float speed=targetBody?Vector3.ProjectOnPlane(targetBody.linearVelocity,Vector3.up).magnitude:0;
+            float speed=Vector3.ProjectOnPlane(TargetVelocity(),Vector3.up).magnitude;
             float pace=Mathf.Clamp01(speed/42f);
             Vector3 focus=car.position;
             FocusPoint=focus;HasFocus=true;
@@ -174,18 +173,31 @@ namespace MadeInArizona
 
         Vector3 Lead(bool snap)
         {
-            if (leadTarget != Target) { leadTarget = Target; targetBody = Target.GetComponentInParent<Rigidbody>(); lead = leadVelocity = Vector3.zero; }
+            Vector3 motion = TargetVelocity();
             // Paused: hold the framing instead of drifting back to the car.
             if (!snap && !GameManager.Instance.IsPlaying) return lead;
             Vector3 wanted = Vector3.zero;
-            if (targetBody && !GameManager.Instance.Dying)
+            if (!GameManager.Instance.Dying)
             {
-                Vector3 planar = targetBody.linearVelocity; planar.y = 0;
+                Vector3 planar = motion; planar.y = 0;
                 wanted = Vector3.ClampMagnitude(planar * Mathf.Clamp(DevTuning.Current.cameraLead, 0, .4f) * 1.35f, MaxLead);
             }
             if (snap) { lead = wanted; leadVelocity = Vector3.zero; }
             else lead = Vector3.SmoothDamp(lead, wanted, ref leadVelocity, LeadSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
             return lead;
+        }
+
+        Vector3 TargetVelocity()
+        {
+            if (leadTarget != Target)
+            {
+                leadTarget = Target;
+                targetBody = Target.GetComponentInParent<Rigidbody>();
+                targetVehicle = Target.GetComponentInParent<VehicleController>();
+                lead = leadVelocity = Vector3.zero;
+            }
+            return targetVehicle ? targetVehicle.PresentationVelocity
+                : targetBody ? targetBody.linearVelocity : Vector3.zero;
         }
 
         /// <summary>Rotation applied to the gameplay camera arm for the terrain-sway option (identity when it is off).</summary>
@@ -197,7 +209,7 @@ namespace MadeInArizona
             if (amount > 0 && !game.Dying && game.IsPlaying)
             {
                 swayClock += Time.unscaledDeltaTime;
-                Vector3 velocity = targetBody ? targetBody.linearVelocity : Vector3.zero;
+                Vector3 velocity = TargetVelocity();
                 // Climbing lowers the arm to look along the slope; heading up-screen lowers it to look ahead; sideways
                 // travel swings it a little. A slow drift keeps some parallax even when parked.
                 float pitch = -Mathf.Clamp(velocity.y / 4, -1, 1) * .55f - Mathf.Clamp(velocity.z / 28, -1, 1) * .35f + Mathf.Sin(swayClock * .39f) * .18f;

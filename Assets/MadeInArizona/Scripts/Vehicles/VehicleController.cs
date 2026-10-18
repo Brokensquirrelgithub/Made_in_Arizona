@@ -116,6 +116,9 @@ namespace MadeInArizona
         }
         public float SpeedKph => IsNetworkProxy ? networkVelocity.magnitude * 3.6f
             : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
+        /// <summary>Motion available to local presentation, including host motion on a kinematic guest proxy.</summary>
+        public Vector3 PresentationVelocity => IsNetworkProxy ? networkVelocity
+            : Body ? Body.linearVelocity : Vector3.zero;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
         /// <summary>Audible throttle lift while the automatic disengages and reconnects its clutch.</summary>
