@@ -14,6 +14,7 @@ namespace MadeInArizona
     [Serializable]
     public struct CoopControls
     {
+        public int sequence;
         public Vector2 move, aim;
         public float elevation;
         public bool primary, secondary, drift, boost, interact, swap;
@@ -42,7 +43,8 @@ namespace MadeInArizona
         const string TuningMessage = "mia.coop.tuning.v1";
         const string PinStateMessage = "mia.coop.pin-state.v1";
         const string FxMessage = "mia.coop.fx.v1";
-        const int Protocol = 9;
+        const int Protocol = 10;
+        const int InputHistorySize = 256;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
         public static bool IsRemoteClient => Instance && Instance.IsClient;
@@ -70,6 +72,9 @@ namespace MadeInArizona
         readonly Dictionary<ulong, VehicleController> guestCars = new Dictionary<ulong, VehicleController>();
         readonly Dictionary<int, VehicleController> proxies = new Dictionary<int, VehicleController>();
         readonly Dictionary<int, float> seenAt = new Dictionary<int, float>();
+        readonly Dictionary<int, int> lastVehicleTick = new Dictionary<int, int>();
+        readonly int[] sentInputSequences = new int[InputHistorySize];
+        readonly float[] sentInputAt = new float[InputHistorySize];
         readonly Dictionary<VehicleController, int> vehicleIds = new Dictionary<VehicleController, int>();
         readonly Dictionary<CombatPickup, int> pickupIds = new Dictionary<CombatPickup, int>();
         readonly Dictionary<int, CombatPickup> pickupProxies = new Dictionary<int, CombatPickup>();
@@ -78,7 +83,7 @@ namespace MadeInArizona
         int nextVehicleId;
         int nextPickupId;
         float inputAt, snapshotAt, missionAt, pickupAt, tuningAt, pinAt;
-        int snapshotTick;
+        int snapshotTick, inputSequence;
         bool remoteRewardApplied, remoteRewardFirst;
         int remoteRewardMoney, remoteRewardSalvage;
         string lastTuningJson, lastPinFlags;
@@ -96,7 +101,7 @@ namespace MadeInArizona
         [Serializable] sealed class InputPacket { public CoopControls controls; }
         [Serializable] internal sealed class VehiclePacket
         {
-            public int id, owner, archetype, faction, failedDepth;
+            public int id, owner, archetype, faction, failedDepth, tick, appliedInputSequence;
             public string definition, weapon, fieldWeapon;
             public bool player, friendly;
             public Vector3 position;
@@ -363,7 +368,8 @@ namespace MadeInArizona
             if (packet.mode != 0 || !wasLobby) GuestWorldChanged();
             HostTier = Mathf.Clamp(packet.tier, 0, 3);
             DevTuning.SetCoopOverride(packet.tuning);
-            proxies.Clear(); proxyOwners.Clear(); seenAt.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            proxies.Clear(); proxyOwners.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            inputSequence = 0; Array.Clear(sentInputSequences, 0, sentInputSequences.Length);
             GameManager.Instance.LoadCoopWorld(packet.mode, packet.mission, config);
         }
 
@@ -403,6 +409,8 @@ namespace MadeInArizona
         {
             if (!IsClient || sender != NetworkManager.ServerClientId || !remoteWorldReady || remoteMode == 0) return;
             var packet = ReadVehiclePacket(reader);
+            if (lastVehicleTick.TryGetValue(packet.id, out int previousTick) && packet.tick <= previousTick) return;
+            lastVehicleTick[packet.id] = packet.tick;
             if (!proxies.TryGetValue(packet.id, out var car) || !car)
             {
                 var definition = Array.Find(ContentCatalog.Vehicles, value => value && value.id == packet.definition);
@@ -424,12 +432,20 @@ namespace MadeInArizona
                     ai.enabled = false;
                     if (packet.archetype == 7) car.Visual.localScale = Vector3.one * 1.8f;
                 }
-                car.SetNetworkProxy();
+                car.SetNetworkProxy(packet.player && packet.owner == (int)network.LocalClientId);
                 proxies[packet.id] = car;
             }
             proxyOwners[car] = packet.owner;
             car.ApplyNetworkMotion(packet.position, packet.rotation, packet.velocity, packet.health,
                 packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting,packet.failedDepth);
+            if (car.IsLocallyPredicted)
+            {
+                float lead = .1f;
+                int slot = packet.appliedInputSequence & (InputHistorySize - 1);
+                if (packet.appliedInputSequence > 0 && sentInputSequences[slot] == packet.appliedInputSequence)
+                    lead = Time.unscaledTime - sentInputAt[slot];
+                car.ReconcileLocalPrediction(packet.position, packet.rotation, packet.velocity, packet.yawRate, lead);
+            }
             car.Weapons.AimAt(packet.aim);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
@@ -656,7 +672,11 @@ namespace MadeInArizona
                 {
                     inputAt = Time.unscaledTime + .05f;
                     var input = InputManager.Instance;
-                    var controls = new CoopControls { move = input.Move, aim = input.Aim, elevation = input.AimElevation,
+                    int sequence = ++inputSequence;
+                    int slot = sequence & (InputHistorySize - 1);
+                    sentInputSequences[slot] = sequence;
+                    sentInputAt[slot] = Time.unscaledTime;
+                    var controls = new CoopControls { sequence = sequence, move = input.Move, aim = input.Aim, elevation = input.AimElevation,
                         primary = input.Primary, secondary = input.Secondary, drift = input.Drift, boost = input.Boost,
                         reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
@@ -720,7 +740,8 @@ namespace MadeInArizona
                     foreach (var guest in guestCars) if (guest.Value == car) { owner = (int)guest.Key; break; }
                     var ai = car.GetComponent<EnemyAI>();
                     if (!vehicleIds.TryGetValue(car, out int id)) { id = ++nextVehicleId; vehicleIds[car] = id; }
-                    var packet = new VehiclePacket { id = id, owner = owner,
+                    var packet = new VehiclePacket { id = id, owner = owner, tick = snapshotTick,
+                        appliedInputSequence = car.LastAppliedInputSequence,
                         definition = car.Definition.id, player = car.IsPlayer,
                         archetype = ai ? ai.Archetype : 0, faction = ai ? (int)ai.Faction : 0,
                         friendly = ai && ai.IsFriendly, position = car.transform.position,
@@ -841,6 +862,7 @@ namespace MadeInArizona
             writer.WriteValueSafe(packet.flail); writer.WriteValueSafe(packet.flailHead);
             writer.WriteValueSafe(packet.attack); writer.WriteValueSafe(packet.attackDirection);
             writer.WriteValueSafe(packet.attackRemaining); writer.WriteValueSafe(packet.rallyRemaining);
+            writer.WriteValueSafe(packet.tick); writer.WriteValueSafe(packet.appliedInputSequence);
         }
 
         internal static VehiclePacket ReadVehiclePacket(FastBufferReader reader)
@@ -864,6 +886,7 @@ namespace MadeInArizona
             reader.ReadValueSafe(out packet.flail); reader.ReadValueSafe(out packet.flailHead);
             reader.ReadValueSafe(out packet.attack); reader.ReadValueSafe(out packet.attackDirection);
             reader.ReadValueSafe(out packet.attackRemaining); reader.ReadValueSafe(out packet.rallyRemaining);
+            reader.ReadValueSafe(out packet.tick); reader.ReadValueSafe(out packet.appliedInputSequence);
             return packet;
         }
 
@@ -889,7 +912,8 @@ namespace MadeInArizona
                 Destroy(network.gameObject);
             }
             network = null; transport = null;
-            guestCars.Clear(); proxies.Clear(); seenAt.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            guestCars.Clear(); proxies.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
+            inputSequence = 0; Array.Clear(sentInputSequences, 0, sentInputSequences.Length);
             ResetLobby();
             vehicleIds.Clear(); nextVehicleId = 0;
             pickupIds.Clear(); nextPickupId = 0;

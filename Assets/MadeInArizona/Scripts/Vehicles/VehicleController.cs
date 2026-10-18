@@ -65,11 +65,16 @@ namespace MadeInArizona
         public VehicleAfflictions Afflictions { get; internal set; }
         public bool IsPlayer { get; private set; }
         public bool IsNetworkProxy { get; private set; }
+        public bool IsLocallyPredicted { get; private set; }
+        public int LastAppliedInputSequence { get; private set; }
         Vector3 networkPosition;
         Vector3 networkVelocity;
         Quaternion networkRotation;
         float networkYawRate;
         float networkReceivedAt;
+        Vector3 predictionCorrection;
+        float predictionYawCorrection;
+        bool predictionInitialized;
         float rallyUntil;
         public bool RallyActive => Time.time < rallyUntil;
         public float RallyRemaining => Mathf.Max(0, rallyUntil - Time.time);
@@ -87,18 +92,23 @@ namespace MadeInArizona
         CoopControls FreshRemoteControls => Time.unscaledTime - remoteInputAt < .4f ? RemoteControls : default;
         public void SetRemoteControls(CoopControls controls)
         {
+            if (HasRemoteInput && controls.sequence > 0 && controls.sequence <= RemoteControls.sequence) return;
             HasRemoteInput = true;
             RemoteControls = controls;
             remoteInputAt = Time.unscaledTime;
         }
-        public void SetNetworkProxy()
+        public void SetNetworkProxy(bool predictLocal = false)
         {
             IsNetworkProxy = true;
-            Body.isKinematic = true;
-            Body.detectCollisions = false;
-            Body.interpolation = RigidbodyInterpolation.None;
+            IsLocallyPredicted = predictLocal;
+            Body.isKinematic = !predictLocal;
+            Body.detectCollisions = predictLocal;
+            Body.interpolation = predictLocal ? RigidbodyInterpolation.Interpolate : RigidbodyInterpolation.None;
             networkPosition = transform.position;
             networkRotation = transform.rotation;
+            predictionCorrection = Vector3.zero;
+            predictionYawCorrection = 0;
+            predictionInitialized = false;
         }
         public void ApplyNetworkMotion(Vector3 position, Quaternion rotation, Vector3 velocity,
             float health, float maximumHealth, float boost, float rpm, float throttle, float yawRate, bool boosting, int failedDepth=-1)
@@ -114,10 +124,45 @@ namespace MadeInArizona
             Throttle = throttle;
             Boosting = boosting;
         }
-        public float SpeedKph => IsNetworkProxy ? networkVelocity.magnitude * 3.6f
+        /// <summary>Reconciles the guest's responsive local physics with a projected host snapshot.</summary>
+        public void ReconcileLocalPrediction(Vector3 position, Quaternion rotation, Vector3 velocity, float yawRate, float lead)
+        {
+            if (!IsLocallyPredicted || !Body) return;
+            float age = Mathf.Clamp(lead, 0, .3f);
+            Vector3 target = position + velocity * age;
+            Quaternion targetRotation = rotation * Quaternion.Euler(0, yawRate * Mathf.Rad2Deg * age, 0);
+            float yawError = Mathf.DeltaAngle(Body.rotation.eulerAngles.y, targetRotation.eulerAngles.y);
+            float distance = Vector3.Distance(Body.position, target);
+            if (!predictionInitialized || distance > 20f || Mathf.Abs(yawError) > 120f)
+            {
+                Body.position = target;
+                Body.rotation = targetRotation;
+                Body.linearVelocity = velocity;
+                Body.angularVelocity = Vector3.up * yawRate;
+                predictionCorrection = Vector3.zero;
+                predictionYawCorrection = 0;
+                predictionInitialized = true;
+                return;
+            }
+            // Small differences are noise from two independently stepped physics worlds. Larger
+            // differences ease in while local steering and acceleration continue every physics tick.
+            predictionCorrection = distance > .6f ? target - Body.position : Vector3.zero;
+            predictionYawCorrection = Mathf.Abs(yawError) > 3f ? yawError : 0;
+        }
+        void ApplyPredictionCorrection()
+        {
+            float fraction = 1f - Mathf.Exp(-Time.fixedDeltaTime * 7f);
+            Vector3 step = Vector3.ClampMagnitude(predictionCorrection * fraction, .7f);
+            if (step.sqrMagnitude > .000001f) Body.position += step;
+            predictionCorrection -= step;
+            float yawStep = Mathf.Clamp(predictionYawCorrection * fraction, -4f, 4f);
+            if (Mathf.Abs(yawStep) > .001f) Body.rotation = Quaternion.Euler(0, Body.rotation.eulerAngles.y + yawStep, 0);
+            predictionYawCorrection -= yawStep;
+        }
+        public float SpeedKph => IsNetworkProxy && !IsLocallyPredicted ? networkVelocity.magnitude * 3.6f
             : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
         /// <summary>Motion available to local presentation, including host motion on a kinematic guest proxy.</summary>
-        public Vector3 PresentationVelocity => IsNetworkProxy ? networkVelocity
+        public Vector3 PresentationVelocity => IsNetworkProxy && !IsLocallyPredicted ? networkVelocity
             : Body ? Body.linearVelocity : Vector3.zero;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
@@ -372,7 +417,7 @@ namespace MadeInArizona
 
         void Update()
         {
-            if (IsNetworkProxy)
+            if (IsNetworkProxy && !IsLocallyPredicted)
             {
                 // Predict between host snapshots so remote cars keep moving instead of slowing to a
                 // stop at every packet. Bound the prediction when packets are delayed or lost.
@@ -391,6 +436,11 @@ namespace MadeInArizona
                 SideSlip = Mathf.MoveTowards(SideSlip, Mathf.Clamp01((sideways - 1.5f) / 5f), Time.unscaledDeltaTime * 6);
                 Surface = WorldBuilder.SurfaceAt(transform.position);
                 Grounded = true;
+                if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying) AnimateBody();
+                return;
+            }
+            if (IsLocallyPredicted)
+            {
                 if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying) AnimateBody();
                 return;
             }
@@ -427,15 +477,17 @@ namespace MadeInArizona
         }
         void FixedUpdate()
         {
-            if (!initialized || Damage.IsDead || Body.isKinematic || IsNetworkProxy) return;
+            if (!initialized || Damage.IsDead || Body.isKinematic || (IsNetworkProxy && !IsLocallyPredicted)) return;
             Boosting = false;
             DriftNitroActive=false;
+            if (IsLocallyPredicted) ApplyPredictionCorrection();
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
                 Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; return;
             }
             CoopControls remote = FreshRemoteControls;
+            if (IsPlayer && HasRemoteInput && remote.sequence > 0) LastAppliedInputSequence = remote.sequence;
             Vector2 input = IsPlayer && HasRemoteInput ? remote.move : IsPlayer && InputManager.Instance != null ? InputManager.Instance.Move : aiMove;
             // Shoulder reverse (Settings > Controls): the button selects reverse and the stick never does. Held with the
             // stick centred it backs straight up; with the stick pushed, the tail swings toward that direction.
@@ -662,7 +714,7 @@ namespace MadeInArizona
                 // Pavement throws no dust: sliding and burnouts there make tyre smoke instead (TireEffects).
                 if (surface != SurfaceKind.Asphalt && surface != SurfaceKind.Oil) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
-            SweepScenery(speed);
+            if (!IsNetworkProxy) SweepScenery(speed);
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
@@ -783,13 +835,13 @@ namespace MadeInArizona
         void AnimateBody()
         {
             if (Visual == null) return;
-            Vector3 localVelocity = transform.InverseTransformDirection(IsNetworkProxy ? networkVelocity : Body.linearVelocity);
+            Vector3 localVelocity = transform.InverseTransformDirection(PresentationVelocity);
             // Acceleration is sampled per physics step; per-render-frame sampling alternated between zero and double.
             Vector3 acceleration = transform.InverseTransformDirection(bodyAcceleration);
             float narrow = Mathf.Clamp(Stats.rideHeight / Mathf.Max(1, Stats.trackWidth), .15f, 1);
             // Cornering lean follows turn force (yaw rate x speed) with a little slip, capped low so fast turns never
             // look like the car tipping over; it settles back twice as fast as it leans in.
-            float yawRate = IsNetworkProxy ? networkYawRate : Body.angularVelocity.y;
+            float yawRate = IsNetworkProxy && !IsLocallyPredicted ? networkYawRate : Body.angularVelocity.y;
             float targetRoll = -yawRate * localVelocity.z * .1f * (1 + narrow * .5f) - localVelocity.x * .25f * (1 + narrow);
             targetRoll = Mathf.Clamp(targetRoll, -MaxCorneringLean, MaxCorneringLean);
             visualRoll = Mathf.Lerp(visualRoll, targetRoll, Time.deltaTime * (Mathf.Abs(targetRoll) < Mathf.Abs(visualRoll) ? 12 : 6));
@@ -890,6 +942,7 @@ namespace MadeInArizona
         internal static bool ProbeCounting;
         void OnCollisionEnter(Collision collision)
         {
+            if (IsNetworkProxy) return; // guest prediction collides locally but never resolves gameplay effects
             if (IsPlayer && ProbeCounting) LastHitName = collision.collider.name + " @" + collision.relativeVelocity.magnitude.ToString("F0");
             if (!initialized || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
             if (Damage.IsDead)

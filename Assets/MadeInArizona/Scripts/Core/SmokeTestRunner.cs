@@ -51,6 +51,8 @@ namespace MadeInArizona
             { TestSegmentedHealth(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopSnapshotTest")>=0)
             { yield return TestCoopSnapshotAndSmoke(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopPredictionTest")>=0)
+            { yield return TestCoopPrediction(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopFeatureTest")>=0)
             { yield return TestCoopFeatures(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaRampWorldTest")>=0)
@@ -541,6 +543,8 @@ namespace MadeInArizona
             if (host) Check("guest garage car reaches host spawn", VehicleController.Active.Any(v => v && v.IsPlayer &&
                 v != game.Player && v.Definition == ContentCatalog.Vehicles[1]));
             Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
+            if (!host) Check("guest drives a locally predicted car", game.Player && game.Player.IsLocallyPredicted &&
+                game.Player.Body && !game.Player.Body.isKinematic);
             if (host) yield return new WaitForSecondsRealtime(3);
         }
         IEnumerator TestReleaseFeatures()
@@ -751,6 +755,7 @@ namespace MadeInArizona
         {
             var original = new CoopSession.VehiclePacket {
                 id = 17, owner = 2, archetype = 7, faction = 3, failedDepth = 2,
+                tick = 211, appliedInputSequence = 82,
                 definition = "scarface", weapon = "skewer", fieldWeapon = "crossbow",
                 player = true, friendly = false, position = new Vector3(123.5f, 2.25f, -456.75f),
                 velocity = new Vector3(12, -1, 9), rotation = Quaternion.Euler(5, 120, 3),
@@ -771,6 +776,7 @@ namespace MadeInArizona
                     var copy = CoopSession.ReadVehiclePacket(reader);
                     Check("co-op vehicle snapshot preserves motion, loadout, health and effects",
                         copy.id == original.id && copy.owner == original.owner &&
+                        copy.tick == original.tick && copy.appliedInputSequence == original.appliedInputSequence &&
                         copy.archetype == original.archetype && copy.faction == original.faction &&
                         copy.failedDepth == original.failedDepth && copy.definition == original.definition &&
                         copy.weapon == original.weapon && copy.fieldWeapon == original.fieldWeapon &&
@@ -813,6 +819,36 @@ namespace MadeInArizona
                     preview.GetComponent<NitroExhaust>() && glow && glow.GetComponent<Light>() && glow.GetComponent<Light>().enabled);
             }
             else Check("co-op proxy retains nitro and lights its exhaust", false);
+        }
+        IEnumerator TestCoopPrediction()
+        {
+            var game = GameManager.Instance;
+            game.StartMission(0);
+            QuietMissionHostiles();
+            yield return new WaitForSecondsRealtime(.2f);
+            var car = game.Player;
+            Vector3 origin = car.Body.position;
+            Quaternion rotation = car.Body.rotation;
+            car.SetNetworkProxy(true);
+            car.ApplyNetworkMotion(origin, rotation, Vector3.zero, car.Damage.Health,
+                car.Damage.MaxHealth, car.BoostCharge, car.RPM, car.Throttle, 0, false);
+            car.ReconcileLocalPrediction(origin, rotation, Vector3.zero, 0, 0);
+            Check("guest car runs local physics before host updates", car.IsLocallyPredicted &&
+                !car.Body.isKinematic && car.Body.detectCollisions);
+            var keys = InputSystem.AddDevice<Keyboard>();
+            InputSystem.QueueStateEvent(keys, new KeyboardState(Key.W));
+            yield return new WaitForSecondsRealtime(.65f);
+            Vector3 driven = car.Body.position;
+            Check("guest steering moves car without another snapshot", Vector3.Distance(origin, driven) > 1f);
+            InputSystem.QueueStateEvent(keys, new KeyboardState());
+            yield return null;
+            InputSystem.RemoveDevice(keys);
+            Vector3 before = car.Body.position;
+            Vector3 right = car.transform.right;
+            car.ReconcileLocalPrediction(before + right * 3f, car.Body.rotation, car.Body.linearVelocity, 0, 0);
+            Check("host correction does not immediately snap guest car", Vector3.Distance(before, car.Body.position) < .01f);
+            for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
+            Check("guest eases toward host correction", Vector3.Dot(car.Body.position - before, right) > .4f);
         }
         IEnumerator TestCoopFeatures()
         {
