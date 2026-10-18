@@ -75,6 +75,21 @@ namespace MadeInArizona
         Vector3 predictionCorrection;
         float predictionYawCorrection;
         bool predictionInitialized;
+        const int PredictionHistorySize = 64;
+        struct PredictionStep
+        {
+            public int sequence;
+            public float time;
+            public Vector3 localDisplacement, localVelocityChange;
+            public Quaternion rotationChange;
+        }
+        readonly PredictionStep[] predictionHistory = new PredictionStep[PredictionHistorySize];
+        int predictionHead, predictionCount, pendingPredictionSequence;
+        bool predictionBaselineValid;
+        Vector3 predictionBaselinePosition, predictionBaselineVelocity;
+        Quaternion predictionBaselineRotation;
+        public int LastPredictionReplaySteps { get; private set; }
+        public int PredictionReplayCount { get; private set; }
         float rallyUntil;
         public bool RallyActive => Time.time < rallyUntil;
         public float RallyRemaining => Mathf.Max(0, rallyUntil - Time.time);
@@ -109,6 +124,9 @@ namespace MadeInArizona
             predictionCorrection = Vector3.zero;
             predictionYawCorrection = 0;
             predictionInitialized = false;
+            predictionHead = predictionCount = pendingPredictionSequence = 0;
+            predictionBaselineValid = false;
+            LastPredictionReplaySteps = PredictionReplayCount = 0;
         }
         public void ApplyNetworkMotion(Vector3 position, Quaternion rotation, Vector3 velocity,
             float health, float maximumHealth, float boost, float rpm, float throttle, float yawRate, bool boosting, int failedDepth=-1)
@@ -124,33 +142,98 @@ namespace MadeInArizona
             Throttle = throttle;
             Boosting = boosting;
         }
-        /// <summary>Reconciles the guest's responsive local physics with a projected host snapshot.</summary>
-        public void ReconcileLocalPrediction(Vector3 position, Quaternion rotation, Vector3 velocity, float yawRate, float lead)
+        /// <summary>Replays recent locally simulated input movement from an acknowledged host state.</summary>
+        public void ReconcileLocalPrediction(Vector3 position, Quaternion rotation, Vector3 velocity,
+            float yawRate, int acknowledgedSequence, float snapshotAge)
         {
             if (!IsLocallyPredicted || !Body) return;
-            float age = Mathf.Clamp(lead, 0, .3f);
-            Vector3 target = position + velocity * age;
-            Quaternion targetRotation = rotation * Quaternion.Euler(0, yawRate * Mathf.Rad2Deg * age, 0);
+            CapturePredictionMotion();
+            float age = Mathf.Clamp(snapshotAge, 0, .25f);
+            Vector3 target = position;
+            Quaternion targetRotation = rotation;
+            Vector3 targetVelocity = velocity;
+            LastPredictionReplaySteps = 0;
+            float cutoff = Time.unscaledTime - age;
+            for (int i = 0; i < predictionCount; i++)
+            {
+                var step = predictionHistory[(predictionHead + i) % PredictionHistorySize];
+                if (step.time < cutoff || step.sequence < acknowledgedSequence) continue;
+                if (step.sequence > 0 && CoopSession.Instance && !CoopSession.Instance.HasSentInput(step.sequence)) continue;
+                if (LastPredictionReplaySteps == 0)
+                {
+                    float gap = Mathf.Clamp(step.time - cutoff - Time.fixedDeltaTime, 0, .1f);
+                    target += targetVelocity * gap;
+                    targetRotation *= Quaternion.Euler(0, yawRate * Mathf.Rad2Deg * gap, 0);
+                }
+                target += targetRotation * step.localDisplacement;
+                targetVelocity += targetRotation * step.localVelocityChange;
+                targetRotation *= step.rotationChange;
+                LastPredictionReplaySteps++;
+            }
+            if (LastPredictionReplaySteps == 0)
+            {
+                target += velocity * age;
+                targetRotation *= Quaternion.Euler(0, yawRate * Mathf.Rad2Deg * age, 0);
+            }
+            else PredictionReplayCount++;
             float yawError = Mathf.DeltaAngle(Body.rotation.eulerAngles.y, targetRotation.eulerAngles.y);
             float distance = Vector3.Distance(Body.position, target);
             if (!predictionInitialized || distance > 20f || Mathf.Abs(yawError) > 120f)
             {
                 Body.position = target;
                 Body.rotation = targetRotation;
-                Body.linearVelocity = velocity;
+                Body.linearVelocity = targetVelocity;
                 Body.angularVelocity = Vector3.up * yawRate;
                 predictionCorrection = Vector3.zero;
                 predictionYawCorrection = 0;
                 predictionInitialized = true;
+                predictionHead = predictionCount = 0;
+                predictionBaselineValid = false;
                 return;
             }
-            // Small differences are noise from two independently stepped physics worlds. Larger
-            // differences ease in while local steering and acceleration continue every physics tick.
+            // Keep the live Rigidbody responsive while easing the remaining host disagreement.
             predictionCorrection = distance > .6f ? target - Body.position : Vector3.zero;
             predictionYawCorrection = Mathf.Abs(yawError) > 3f ? yawError : 0;
         }
+        void CapturePredictionMotion()
+        {
+            if (!predictionBaselineValid || !Body) return;
+            Vector3 displacement = Body.position - predictionBaselinePosition;
+            Quaternion rotationChange = Quaternion.Inverse(predictionBaselineRotation) * Body.rotation;
+            if (displacement.sqrMagnitude > 225f)
+            {
+                predictionHead = predictionCount = 0;
+                predictionBaselineValid = false;
+                return;
+            }
+            if (displacement.sqrMagnitude < .0000001f && Quaternion.Angle(Quaternion.identity, rotationChange) < .001f) return;
+            var step = new PredictionStep {
+                sequence = pendingPredictionSequence,
+                time = Time.unscaledTime,
+                localDisplacement = Quaternion.Inverse(predictionBaselineRotation) * displacement,
+                localVelocityChange = Quaternion.Inverse(predictionBaselineRotation) * (Body.linearVelocity - predictionBaselineVelocity),
+                rotationChange = rotationChange
+            };
+            int index = (predictionHead + predictionCount) % PredictionHistorySize;
+            predictionHistory[index] = step;
+            if (predictionCount == PredictionHistorySize) predictionHead = (predictionHead + 1) % PredictionHistorySize;
+            else predictionCount++;
+            predictionBaselinePosition = Body.position;
+            predictionBaselineRotation = Body.rotation;
+            predictionBaselineVelocity = Body.linearVelocity;
+        }
+        void SetPredictionBaseline()
+        {
+            predictionBaselinePosition = Body.position;
+            predictionBaselineRotation = Body.rotation;
+            predictionBaselineVelocity = Body.linearVelocity;
+            pendingPredictionSequence = CoopSession.Instance ? CoopSession.Instance.CurrentLocalInputSequence : 0;
+            predictionBaselineValid = true;
+        }
         void ApplyPredictionCorrection()
         {
+            Vector3 previousPosition = Body.position;
+            float previousYaw = Body.rotation.eulerAngles.y;
             float fraction = 1f - Mathf.Exp(-Time.fixedDeltaTime * 7f);
             Vector3 step = Vector3.ClampMagnitude(predictionCorrection * fraction, .7f);
             if (step.sqrMagnitude > .000001f) Body.position += step;
@@ -158,6 +241,8 @@ namespace MadeInArizona
             float yawStep = Mathf.Clamp(predictionYawCorrection * fraction, -4f, 4f);
             if (Mathf.Abs(yawStep) > .001f) Body.rotation = Quaternion.Euler(0, Body.rotation.eulerAngles.y + yawStep, 0);
             predictionYawCorrection -= yawStep;
+            CameraController.Instance?.CompensatePrediction(this, Body.position - previousPosition,
+                Mathf.DeltaAngle(previousYaw, Body.rotation.eulerAngles.y));
         }
         public float SpeedKph => IsNetworkProxy && !IsLocallyPredicted ? networkVelocity.magnitude * 3.6f
             : Body != null ? Body.linearVelocity.magnitude * 3.6f : 0;
@@ -480,7 +565,7 @@ namespace MadeInArizona
             if (!initialized || Damage.IsDead || Body.isKinematic || (IsNetworkProxy && !IsLocallyPredicted)) return;
             Boosting = false;
             DriftNitroActive=false;
-            if (IsLocallyPredicted) ApplyPredictionCorrection();
+            if (IsLocallyPredicted) { CapturePredictionMotion(); ApplyPredictionCorrection(); }
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
@@ -718,6 +803,7 @@ namespace MadeInArizona
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
+            if (IsLocallyPredicted) SetPredictionBaseline();
         }
         bool SupportSuspension()
         {

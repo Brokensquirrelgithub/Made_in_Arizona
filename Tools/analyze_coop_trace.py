@@ -45,6 +45,8 @@ def compare(host_rows, guest_rows, guest_id):
                          for row in host_rows if row["kind"] == "input_received" and row["owner"] == guest_id
                          and row["input_received"] in sent]
     snapshot_errors = [float(row["error_m"]) for row in guest_rows if row["kind"] == "snapshot_received"]
+    replay_counts = [int(row["replay_steps"]) for row in guest_rows
+                     if row["kind"] == "snapshot_received" and "replay_steps" in row]
     snapshot_sends = {row["snapshot_tick"]: float(row["server_time"]) for row in host_rows
                       if row["kind"] == "snapshot_sent" and row["owner"] == guest_id}
     snapshot_transit_raw = [(float(row["server_time"]) - snapshot_sends[row["snapshot_tick"]]) * 1000
@@ -78,6 +80,9 @@ def compare(host_rows, guest_rows, guest_id):
           f"p95 {fmt(percentile(input_transit, .95), ' ms')} ({len(input_transit)} matched inputs)")
     print(f"  Pre-correction snapshot error: median {fmt(percentile(snapshot_errors, .5), ' m')}, "
           f"p95 {fmt(percentile(snapshot_errors, .95), ' m')} ({len(snapshot_errors)} snapshots)")
+    if replay_counts:
+        print(f"  Snapshots with buffered movement replayed: {sum(count > 0 for count in replay_counts)}/{len(replay_counts)}, "
+              f"p95 {fmt(percentile(replay_counts, .95))} physics steps")
     print(f"  Snapshot send to receive: median {fmt(percentile(snapshot_transit, .5), ' ms')}, "
           f"p95 {fmt(percentile(snapshot_transit, .95), ' ms')} ({len(snapshot_transit)} matched snapshots)")
 

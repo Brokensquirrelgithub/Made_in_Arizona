@@ -30,7 +30,7 @@ namespace MadeInArizona
         {
             public double serverTime;
             public float localTime;
-            public int frame, owner, vehicleId, inputSent, inputReceived, inputApplied, snapshotTick;
+            public int frame, owner, vehicleId, inputSent, inputReceived, inputApplied, snapshotTick, replaySteps;
             public string kind;
             public Vector3 position, velocity, referencePosition, referenceVelocity;
             public float yaw, referenceYaw, errorMeters, yawErrorDegrees, leadMilliseconds;
@@ -276,6 +276,7 @@ namespace MadeInArizona
                 row.yaw = car.Body ? car.Body.rotation.eulerAngles.y : car.transform.eulerAngles.y;
                 row.inputReceived = car.HasRemoteInput ? car.RemoteControls.sequence : 0;
                 row.inputApplied = car.LastAppliedInputSequence;
+                row.replaySteps = car.LastPredictionReplaySteps;
             }
             return row;
         }
@@ -340,7 +341,7 @@ namespace MadeInArizona
         string FormatTrace(double triggerTime)
         {
             var csv = new StringBuilder(262144);
-            csv.AppendLine("kind,server_time,local_time,frame,owner,vehicle_id,input_sent,input_received,input_applied,snapshot_tick,px,py,pz,vx,vy,vz,yaw,host_px,host_py,host_pz,host_vx,host_vy,host_vz,host_yaw,error_m,yaw_error_deg,lead_ms");
+            csv.AppendLine("kind,server_time,local_time,frame,owner,vehicle_id,input_sent,input_received,input_applied,snapshot_tick,px,py,pz,vx,vy,vz,yaw,host_px,host_py,host_pz,host_vx,host_vy,host_vz,host_yaw,error_m,yaw_error_deg,lead_ms,replay_steps");
             foreach (var row in traceRows)
             {
                 if (row.serverTime < triggerTime - TraceCaptureSeconds || row.serverTime > triggerTime) continue;
@@ -352,6 +353,7 @@ namespace MadeInArizona
                 csv.Append(','); Vector(csv, row.referencePosition); csv.Append(','); Vector(csv, row.referenceVelocity);
                 csv.Append(','); Number(csv, row.referenceYaw); csv.Append(','); Number(csv, row.errorMeters);
                 csv.Append(','); Number(csv, row.yawErrorDegrees); csv.Append(','); Number(csv, row.leadMilliseconds);
+                csv.Append(',').Append(row.replaySteps);
                 csv.AppendLine();
             }
             return csv.ToString();

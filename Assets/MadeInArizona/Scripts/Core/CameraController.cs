@@ -43,6 +43,11 @@ namespace MadeInArizona
         /// </summary>
         const float MaxLead = 6f, LeadSmoothing = .22f;
         Vector3 lead, leadVelocity; Rigidbody targetBody; VehicleController targetVehicle; Transform leadTarget;
+        Transform predictionFollowTarget;
+        Vector3 predictionFocusOffset;
+        float predictionHeadingOffset;
+        /// <summary>Guest-only camera anchor; physics corrections decay here rather than moving the lens with the car.</summary>
+        public Vector3 PresentedTargetPosition => Target ? Target.position + predictionFocusOffset : Vector3.zero;
         /// <summary>
         /// Terrain sway (Settings > Graphics &amp; Camera): the camera arm tips a few degrees as the car climbs, dips and
         /// travels, plus a slow drift, so the orthographic view picks up parallax and hills read as hills. Degrees at
@@ -61,6 +66,31 @@ namespace MadeInArizona
         }
         public void Shake(float amount) { shake = Mathf.Min(1.5f, shake + amount); }
         public void Snap() { velocity = Vector3.zero; dynamicZoom = 1; dynamicZoomVelocity = 0; Position(true); }
+        public void CompensatePrediction(VehicleController car, Vector3 positionChange, float yawChange)
+        {
+            if (!car || Target != car.transform || !car.IsLocallyPredicted) return;
+            if (predictionFollowTarget != Target)
+            {
+                predictionFollowTarget = Target;
+                predictionFocusOffset = Vector3.zero;
+                predictionHeadingOffset = 0;
+            }
+            predictionFocusOffset = Vector3.ClampMagnitude(predictionFocusOffset - positionChange, 8f);
+            predictionHeadingOffset = Mathf.Clamp(predictionHeadingOffset - yawChange, -45f, 45f);
+        }
+        void UpdatePredictionFollow(bool snap, bool garage)
+        {
+            if (snap || garage || predictionFollowTarget != Target)
+            {
+                predictionFollowTarget = Target;
+                predictionFocusOffset = Vector3.zero;
+                predictionHeadingOffset = 0;
+                return;
+            }
+            float decay = Mathf.Exp(-6f * Time.unscaledDeltaTime);
+            predictionFocusOffset *= decay;
+            predictionHeadingOffset *= decay;
+        }
         void LateUpdate()
         {
             Position(false);
@@ -72,6 +102,7 @@ namespace MadeInArizona
         {
             if (!Target || !view || !GameManager.Instance) return;
             bool garage = GameManager.Instance.State == GameState.Garage || GameManager.Instance.State == GameState.MainMenu;
+            UpdatePredictionFollow(snap, garage);
             if(!garage&&GameManager.Instance.Save != null&&GameManager.Instance.Save.settings.racingStyle)
             {PositionRacing(snap);return;}
             int station = garage && GameManager.Instance.State == GameState.Garage && garageUi ? garageUi.GarageStation : 0;
@@ -85,7 +116,7 @@ namespace MadeInArizona
             if (!garage) offset = Sway(snap) * offset;
             Transform subject = dogView && garageSuzuki ? garageSuzuki.transform : Target;
             var composition = dogView ? new Vector3(-.4f, .7f, -.2f) : motorPool ? new Vector3(.45f, .4f, -.3f) : new Vector3(-1.5f, .4f, -1f);
-            var focus = subject.position + (garage ? orbit * composition : Vector3.zero);
+            var focus = subject.position + (garage ? orbit * composition : predictionFocusOffset);
             FocusPoint = focus; HasFocus = true;
             if (!garage) focus += Lead(snap);
             var desired = focus + offset;
@@ -146,11 +177,11 @@ namespace MadeInArizona
         {
             var game=GameManager.Instance;
             var car=Target;
-            Vector3 forward=Vector3.ProjectOnPlane(car.forward,Vector3.up).normalized;
+            Vector3 forward=Vector3.ProjectOnPlane(Quaternion.Euler(0,predictionHeadingOffset,0)*car.forward,Vector3.up).normalized;
             if(forward.sqrMagnitude<.1f)forward=Vector3.forward;
             float speed=Vector3.ProjectOnPlane(TargetVelocity(),Vector3.up).magnitude;
             float pace=Mathf.Clamp01(speed/42f);
-            Vector3 focus=car.position;
+            Vector3 focus=PresentedTargetPosition;
             FocusPoint=focus;HasFocus=true;
             Vector3 desired=focus-forward*Mathf.Lerp(12f,17f,pace)+Vector3.up*Mathf.Lerp(5.8f,7.3f,pace);
             if(GeneratedWorld.Active)desired.y=Mathf.Max(desired.y,GeneratedWorld.HeightAt(desired)+2.5f);

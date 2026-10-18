@@ -75,8 +75,11 @@ namespace MadeInArizona
         readonly Dictionary<int, VehicleController> proxies = new Dictionary<int, VehicleController>();
         readonly Dictionary<int, float> seenAt = new Dictionary<int, float>();
         readonly Dictionary<int, int> lastVehicleTick = new Dictionary<int, int>();
-        readonly int[] sentInputSequences = new int[InputHistorySize];
+        readonly CoopControls[] sentInputControls = new CoopControls[InputHistorySize];
         readonly float[] sentInputAt = new float[InputHistorySize];
+        internal int CurrentLocalInputSequence => inputSequence;
+        internal bool HasSentInput(int sequence) => sequence <= 0 ||
+            sentInputControls[sequence & (InputHistorySize - 1)].sequence == sequence;
         readonly Dictionary<VehicleController, int> vehicleIds = new Dictionary<VehicleController, int>();
         readonly Dictionary<CombatPickup, int> pickupIds = new Dictionary<CombatPickup, int>();
         readonly Dictionary<int, CombatPickup> pickupProxies = new Dictionary<int, CombatPickup>();
@@ -86,6 +89,8 @@ namespace MadeInArizona
         int nextPickupId;
         float inputAt, snapshotAt, missionAt, pickupAt, tuningAt, pinAt;
         int snapshotTick, inputSequence;
+        int lastAcknowledgedInputSequence;
+        float estimatedSnapshotAge = .06f;
         bool remoteRewardApplied, remoteRewardFirst;
         int remoteRewardMoney, remoteRewardSalvage;
         string lastTuningJson, lastPinFlags;
@@ -374,7 +379,9 @@ namespace MadeInArizona
             HostTier = Mathf.Clamp(packet.tier, 0, 3);
             DevTuning.SetCoopOverride(packet.tuning);
             proxies.Clear(); proxyOwners.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
-            inputSequence = 0; Array.Clear(sentInputSequences, 0, sentInputSequences.Length);
+            inputSequence = lastAcknowledgedInputSequence = 0;
+            estimatedSnapshotAge = .06f;
+            Array.Clear(sentInputControls, 0, sentInputControls.Length);
             GameManager.Instance.LoadCoopWorld(packet.mode, packet.mission, config);
         }
 
@@ -446,12 +453,19 @@ namespace MadeInArizona
                 packet.maximum, packet.boost, packet.rpm, packet.throttle, packet.yawRate, packet.boosting,packet.failedDepth);
             if (car.IsLocallyPredicted)
             {
-                float lead = .1f;
                 int slot = packet.appliedInputSequence & (InputHistorySize - 1);
-                if (packet.appliedInputSequence > 0 && sentInputSequences[slot] == packet.appliedInputSequence)
-                    lead = Time.unscaledTime - sentInputAt[slot];
-                RecordOwnSnapshot(packet, car, lead);
-                car.ReconcileLocalPrediction(packet.position, packet.rotation, packet.velocity, packet.yawRate, lead);
+                if (packet.appliedInputSequence > lastAcknowledgedInputSequence &&
+                    sentInputControls[slot].sequence == packet.appliedInputSequence)
+                {
+                    float roundTrip = Time.unscaledTime - sentInputAt[slot];
+                    if (roundTrip > 0 && roundTrip < 1f)
+                        estimatedSnapshotAge = Mathf.Lerp(estimatedSnapshotAge,
+                            Mathf.Clamp(roundTrip * .5f, .015f, .25f), .3f);
+                    lastAcknowledgedInputSequence = packet.appliedInputSequence;
+                }
+                car.ReconcileLocalPrediction(packet.position, packet.rotation, packet.velocity, packet.yawRate,
+                    packet.appliedInputSequence, estimatedSnapshotAge);
+                RecordOwnSnapshot(packet, car, estimatedSnapshotAge);
             }
             car.Weapons.AimAt(packet.aim);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
@@ -681,12 +695,12 @@ namespace MadeInArizona
                     var input = InputManager.Instance;
                     int sequence = ++inputSequence;
                     int slot = sequence & (InputHistorySize - 1);
-                    sentInputSequences[slot] = sequence;
                     sentInputAt[slot] = Time.unscaledTime;
                     var controls = new CoopControls { sequence = sequence, move = input.Move, aim = input.Aim, elevation = input.AimElevation,
                         primary = input.Primary, secondary = input.Secondary, drift = input.Drift, boost = input.Boost,
                         reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
+                    sentInputControls[slot] = controls;
                     Send(InputMessage, NetworkManager.ServerClientId, new InputPacket { controls = controls }, NetworkDelivery.Unreliable);
                     RecordInputSent(controls.sequence);
                     queuedInteract = queuedSwap = false;
@@ -923,7 +937,9 @@ namespace MadeInArizona
             network = null; transport = null;
             ResetTrace();
             guestCars.Clear(); proxies.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
-            inputSequence = 0; Array.Clear(sentInputSequences, 0, sentInputSequences.Length);
+            inputSequence = lastAcknowledgedInputSequence = 0;
+            estimatedSnapshotAge = .06f;
+            Array.Clear(sentInputControls, 0, sentInputControls.Length);
             ResetLobby();
             vehicleIds.Clear(); nextVehicleId = 0;
             pickupIds.Clear(); nextPickupId = 0;

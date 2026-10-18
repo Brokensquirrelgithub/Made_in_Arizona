@@ -561,6 +561,7 @@ namespace MadeInArizona
                     yield return null;
                     InputSystem.RemoveDevice(traceKeyboard);
                     Check("guest trace records active driving", Vector3.Distance(traceStart, game.Player.Body.position) > 1f);
+                    Check("guest replays input history after host acknowledgments", game.Player.PredictionReplayCount > 0);
                     Check("guest requests synchronized trace", coop.RequestDiagnosticCapture().StartsWith("Requested a synchronized"));
                 }
                 float traceDeadline = Time.unscaledTime + 30;
@@ -864,7 +865,7 @@ namespace MadeInArizona
             car.SetNetworkProxy(true);
             car.ApplyNetworkMotion(origin, rotation, Vector3.zero, car.Damage.Health,
                 car.Damage.MaxHealth, car.BoostCharge, car.RPM, car.Throttle, 0, false);
-            car.ReconcileLocalPrediction(origin, rotation, Vector3.zero, 0, 0);
+            car.ReconcileLocalPrediction(origin, rotation, Vector3.zero, 0, 0, 0);
             Check("guest car runs local physics before host updates", car.IsLocallyPredicted &&
                 !car.Body.isKinematic && car.Body.detectCollisions);
             var keys = InputSystem.AddDevice<Keyboard>();
@@ -877,10 +878,13 @@ namespace MadeInArizona
             InputSystem.RemoveDevice(keys);
             Vector3 before = car.Body.position;
             Vector3 right = car.transform.right;
-            car.ReconcileLocalPrediction(before + right * 3f, car.Body.rotation, car.Body.linearVelocity, 0, 0);
+            car.ReconcileLocalPrediction(before + right * 3f, car.Body.rotation, car.Body.linearVelocity, 0, 0, .2f);
+            Check("guest replays recent driving movement", car.LastPredictionReplaySteps > 0);
             Check("host correction does not immediately snap guest car", Vector3.Distance(before, car.Body.position) < .01f);
             for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
             Check("guest eases toward host correction", Vector3.Dot(car.Body.position - before, right) > .4f);
+            Check("guest camera buffers physics correction separately", CameraController.Instance &&
+                Vector3.Distance(CameraController.Instance.PresentedTargetPosition, car.transform.position) > .05f);
         }
         IEnumerator TestCoopFeatures()
         {
