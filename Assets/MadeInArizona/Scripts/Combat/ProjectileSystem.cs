@@ -27,6 +27,7 @@ namespace MadeInArizona
         public bool flame;
         public bool coneBlast;
         public bool healAllies;
+        public bool firework;
     }
 
     /// <summary>Shared, swept projectiles. Pool lifetime is scoped to the current world.</summary>
@@ -46,7 +47,7 @@ namespace MadeInArizona
             public Vector3 position, direction;
             public float speed, damage, radius, remaining, trailAt, born, returnAt;
             public GameObject source;
-            public bool friendly, returning;
+            public bool friendly, returning, mirrored;
             public Color color;
             public ExplosionKind kind;
             public ShotFx fx;
@@ -95,7 +96,7 @@ namespace MadeInArizona
         public static void Fire(Vector3 position, Vector3 direction, float speed, float damage, float radius, GameObject source, Color color, ExplosionKind kind, float lifetime, ShotFx fx = null)
         {
             if (CoopSession.Instance && CoopSession.Instance.IsHost)
-                CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime);
+                CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime, fx != null && fx.firework);
             Get().Launch(position, direction, speed, damage, radius, source, color, kind, lifetime, fx);
         }
         /// <summary>Second trigger press breaks a flying skewer into a forward cone of ice shards.</summary>
@@ -152,7 +153,7 @@ namespace MadeInArizona
             round.position = position; round.direction = direction.sqrMagnitude > .0001f ? direction.normalized : fallback;
             round.speed = speed; round.damage = damage; round.radius = radius; round.source = source;
             round.color = color; round.kind = kind; round.remaining = lifetime; round.trailAt = 0; round.born = Time.time;
-            round.fx = fx; round.returning = false; round.returnAt = 0; round.struck.Clear();
+            round.fx = fx; round.returning = false; round.mirrored = false; round.returnAt = 0; round.struck.Clear();
             // The co-op projectile packet carries color but not ShotFx; recognise the needler tint on guests too.
             bool spine = fx != null && fx.effect == ShotEffect.Spine ||
                 kind == ExplosionKind.Ammunition && color.g > .9f && color.r < .4f && color.b < .3f;
@@ -173,7 +174,7 @@ namespace MadeInArizona
             var ai = vehicle != null ? vehicle.GetComponent<EnemyAI>() : null;
             round.friendly = vehicle != null && (vehicle.IsPlayer || (ai != null && ai.IsFriendly));
             round.transform.SetPositionAndRotation(position, Quaternion.LookRotation(round.direction));
-            bool heavy = radius > .1f || (fx != null && (fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback || fx.effect == ShotEffect.Freeze && fx.pierce >= 0));
+            bool heavy = radius > .1f || (fx != null && (fx.firework || fx.boomerang || fx.effect == ShotEffect.Harpoon || fx.effect == ShotEffect.Knockback || fx.effect == ShotEffect.Freeze && fx.pierce >= 0));
             bool hubcap = fx != null && fx.boomerang;
             round.transform.localScale = hubcap ? Vector3.one : heavy ? new Vector3(.24f, .24f, 1.3f) : fx != null && fx.flame ? new Vector3(.3f, .3f, .5f) : new Vector3(.1f, .1f, 1.15f);
             if (fx != null && fx.coneBlast) round.transform.localScale *= 1.1f;
@@ -252,13 +253,16 @@ namespace MadeInArizona
                 float distance = r.speed * stepTime;
                 bool hitSomething = Cast(r, r.position, r.direction, distance, out RaycastHit hit);
                 float clearDistance = hitSomething ? Mathf.Max(0, hit.distance) : distance;
-                if (!r.friendly && MirrorDustCloud.Intersect(r.position, r.direction, clearDistance, out Vector3 mirrorPoint, out VehicleController reflector))
+                if (!r.mirrored && MirrorDustCloud.Intersect(r.position, r.direction, clearDistance,
+                    out Vector3 mirrorPoint, out VehicleController reflector, out Vector3 wallNormal))
                 {
-                    var sender = r.source ? r.source.GetComponentInParent<VehicleController>() : null;
+                    bool alliedShot = r.friendly;
+                    var sender = !alliedShot && r.source ? r.source.GetComponentInParent<VehicleController>() : null;
                     r.position = mirrorPoint + Vector3.up * .35f;
-                    r.direction = sender ? (sender.transform.position + Vector3.up - r.position).normalized : -r.direction;
-                    r.source = reflector ? reflector.gameObject : null;
-                    r.friendly = true;
+                    r.direction = alliedShot ? MirrorDustCloud.Ricochet(r.direction, wallNormal) :
+                        sender ? (sender.transform.position + Vector3.up - r.position).normalized : -r.direction;
+                    if (!alliedShot) { r.source = reflector ? reflector.gameObject : null; r.friendly = true; }
+                    r.mirrored = true;
                     r.struck.Clear();
                     r.color = new Color(.65f, 1.4f, 2f);
                     r.transform.SetPositionAndRotation(r.position, Quaternion.LookRotation(r.direction));
@@ -402,6 +406,7 @@ namespace MadeInArizona
                 }
                 return;
             }
+            if (fx != null && fx.firework) FieldOrdnance.FireworkBurst(hit.point);
             if (round.radius > .1f)
             {
                 if (fx != null && fx.coneBlast) ExplosionSystem.DetonateCone(hit.point, round.direction, round.radius, round.damage, round.source);
@@ -492,6 +497,7 @@ namespace MadeInArizona
         void Expire(Round round)
         {
             TryTorchPatch(round, round.position);
+            if (round.fx != null && round.fx.firework) FieldOrdnance.FireworkBurst(round.position);
             if (round.radius > .1f)
             {
                 if (round.fx != null && round.fx.coneBlast) ExplosionSystem.DetonateCone(round.position, round.direction, round.radius, round.damage, round.source);

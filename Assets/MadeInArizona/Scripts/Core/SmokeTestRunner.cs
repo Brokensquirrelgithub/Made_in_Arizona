@@ -816,8 +816,8 @@ namespace MadeInArizona
         {
             ContentCatalog.EnsureLoaded();
             var player = GameManager.Instance.Player;
-            Check("firework mortar is sold in garage", WeaponRules.GarageWeapon("fireworks") &&
-                WeaponRules.ScrapCost("fireworks") > 0);
+            Check("fast firework cannon is sold in garage", WeaponRules.GarageWeapon("fireworks") &&
+                WeaponRules.ScrapCost("fireworks") > 0 && WeaponRules.Find("fireworks").speed >= 250f);
             Check("co-op support drops have one charge", WeaponRules.MaxAmmo("rprp") == 1 &&
                 WeaponRules.MaxAmmo("rallyhorn") == 1 && WeaponRules.PickupAmmo("mirrordust") > 0);
             Check("skewer has faster reload and new identity", WeaponRules.Find("skewer").displayName == "Freon Skewer" &&
@@ -831,6 +831,13 @@ namespace MadeInArizona
             Check("mirror dust occupies a ground-level projectile lane",
                 MirrorDustCloud.Intersect(muzzle - player.transform.forward * 6, player.transform.forward, 12,
                     out _, out VehicleController reflector) && reflector == player);
+            yield return new WaitForSecondsRealtime(.62f);
+            Vector3 midpoint = muzzle + player.transform.forward * 16f;
+            Vector3 side = player.transform.right;
+            Check("mirror dust trails into a reflective wall",
+                MirrorDustCloud.Intersect(midpoint - side * 7f, side, 14f, out _, out reflector) && reflector == player);
+            Vector3 bounced = MirrorDustCloud.Ricochet(side, -side);
+            Check("friendly shots ricochet off mirror dust", Vector3.Angle(side, bounced) > 25f);
         }
         IEnumerator TestRampWorld()
         {

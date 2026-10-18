@@ -14,15 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: fireworks
   displayName: Firework Cannon
-  description: A show mortar mounted at the nose fires aerial shells. Each shell
-    blooms into a real firework over the road.
-  role: AERIAL BURST
-  strength: A bright skyburst catches vehicles below it.
-  weakness: The fuse and high arc make close targets hard to hit.
+  description: A nose-mounted cannon fires a blazing straight shot at extreme speed.
+    It blooms into a firework on impact.
+  role: FAST ROCKET
+  strength: A brilliant impact catches vehicles in a broad blast.
+  weakness: The straight path needs a clear line to its target.
   contentOrder: 30
   damage: 72
   fireRate: 0.7
-  speed: 35
+  speed: 260
   blastRadius: 7
   projectileColor: {r: 1, g: 0.64, b: 0.25, a: 1}
   fireSounds:

@@ -129,6 +129,7 @@ namespace MadeInArizona
             public float speed, lifetime;
             public Color color;
             public int kind;
+            public bool firework;
         }
         [Serializable] sealed class ExplosionPacket
         {
@@ -464,11 +465,11 @@ namespace MadeInArizona
             pickupSeenAt[packet.id] = Time.unscaledTime;
         }
 
-        public void PublishProjectile(Vector3 position, Vector3 direction, float speed, Color color, ExplosionKind kind, float lifetime)
+        public void PublishProjectile(Vector3 position, Vector3 direction, float speed, Color color, ExplosionKind kind, float lifetime, bool firework = false)
         {
             if (!IsHost) return;
             var packet = new ProjectilePacket { position = position, direction = direction, speed = speed,
-                color = color, kind = (int)kind, lifetime = lifetime };
+                color = color, kind = (int)kind, lifetime = lifetime, firework = firework };
             foreach (ulong clientId in network.ConnectedClientsIds)
                 if (clientId != NetworkManager.ServerClientId)
                     Send(ProjectileMessage, clientId, packet, NetworkDelivery.Unreliable);
@@ -526,7 +527,8 @@ namespace MadeInArizona
             var packet = JsonUtility.FromJson<ProjectilePacket>(json);
             if (packet == null) return;
             ProjectileSystem.Fire(packet.position, packet.direction, packet.speed, 0, 0, null,
-                packet.color, (ExplosionKind)packet.kind, packet.lifetime);
+                packet.color, (ExplosionKind)packet.kind, packet.lifetime,
+                packet.firework ? new ShotFx { firework = true, castRadius = .3f } : null);
         }
 
         void ReceiveExplosion(ulong sender, FastBufferReader reader)

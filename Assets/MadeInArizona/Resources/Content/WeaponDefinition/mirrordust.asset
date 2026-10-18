@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.WeaponDefinition
   id: mirrordust
   displayName: Mirror Dust Cannon
-  description: Launches a reflective ground cloud for three seconds. Hostile projectiles
-    bounce back toward their senders; a death ray fractures into ten radial lasers.
+  description: Launches a reflective cloud that trails into a wall for three seconds.
+    Hostile shots return to sender; friendly shots ricochet; a death ray fractures into ten lasers.
   role: PROJECTILE REFLECTOR
-  strength: Turns incoming fire around and fractures death rays.
+  strength: A wall of dust redirects shots and fractures death rays.
   weakness: The cloud is brief and must be placed in the line of fire.
   contentOrder: 32
   damage: 0
