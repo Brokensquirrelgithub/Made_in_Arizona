@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6a073d4ec4f4eb292a5415bc305c15, type: 3}
+  m_Name: reinforced_gearbox
+  m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
+  id: reinforced_gearbox
+  displayName: Reinforced gearbox
+  category: Transmission
+  description: More drive-layer durability, but its steel case adds weight.
+  contentOrder: 40
+  cost: 520
+  unlockMission: 0
+  salvageCost: 0
+  mass: 34
+  hpMultiplier: 1
+  torqueMultiplier: 1
+  gripMultiplier: 1
+  coolingMultiplier: 1
+  healthCategory: 4
+  partDurability: 100
+  maxSpeedMultiplier: 1
+  turnMultiplier: 1
+  rideHeightBonus: 0
+  suspensionMultiplier: 1
+  springMultiplier: 1
+  dampingMultiplier: 1
+  finalDriveMultiplier: 1
+  changesDrivetrain: 0
+  changesDifferential: 0
+  turbocharger: 0
+  drivetrain: 0
+  differential: 0
+  compatibleVehicles: []
+  equipmentSlot: 1
+  compatibilityClass: 0
+  compatibleChassis: []
+  icon: {fileID: 0}
+  visualPrefab: {fileID: 0}
+  specialBehavior: 
+  shiftTimeMultiplier: 1
+  terrainGripMultiplier: 1
+  ramDamageMultiplier: 1
+  pickupRadiusMultiplier: 1
+  collisionProtection: 0
+  electronicsResistance: 0
+  driftNitroRegen: 0
+  spikeDamage: 0

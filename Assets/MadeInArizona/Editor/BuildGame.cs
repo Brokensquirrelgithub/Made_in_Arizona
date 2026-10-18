@@ -318,8 +318,10 @@ namespace MadeInArizona.Editor
             }
             var save = new SaveData(); save.Normalize();
             var baseStats = GarageManager.StatsFor(ContentCatalog.Vehicles[0], save);
-            save.ownedParts.Add(ContentCatalog.Parts[0].id); save.installedParts.Add(ContentCatalog.Parts[0].id);
+            save.ownedParts.Add(ContentCatalog.Parts[0].id);
+            if(!GarageManager.TryEquip(ContentCatalog.Parts[0],save,ContentCatalog.Parts[0].equipmentSlot,persist:false))throw new Exception("Test upgrade cannot equip");
             if (GarageManager.StatsFor(ContentCatalog.Vehicles[0], save).horsepower <= baseStats.horsepower) throw new Exception("Upgrade does not affect vehicle");
+            EquipmentValidator.Validate();
             Debug.Log("MIA_VALIDATION_PASS: catalog identities, narrative completeness, tuning and content bounds.");
         }
     }

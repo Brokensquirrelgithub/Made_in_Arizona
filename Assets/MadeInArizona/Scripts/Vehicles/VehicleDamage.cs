@@ -133,11 +133,19 @@ namespace MadeInArizona
             }
             if(vehicle.IsPlayer)amount*=DevTuning.Current.incomingDamage;
             else if(attacker && attacker.IsPlayer) amount*=DevTuning.Current.playerDamage;
+            if(vehicle.Stats!=null&&SegmentMax(HealthCategory.Equipment)>0&&
+                SegmentHealth(HealthCategory.Equipment)>0&&SegmentHealth(HealthCategory.Exterior)<=0&&SegmentHealth(HealthCategory.Armor)<=0)
+                amount*=1-Mathf.Clamp(vehicle.Stats.electronicsResistance,0,.6f);
             if(amount<=0)return;
             float previousHealth=Health;
             LastDamageTime=Time.time;LastDamagePoint=hitPoint;LastDamageSource=source;
             Health = Mathf.Max(0, Health - amount);
             UpdateFailures();
+            if(vehicle.IsPlayer&&Health>SegmentMax(HealthCategory.Engine)&&Health<MaxHealth*.25f&&vehicle.TryUseRepairFoam())
+            {
+                Repair(Mathf.Min(MaxHealth*.16f,MaxHealth-SegmentMax(HealthCategory.Engine)-Health));
+                GameManager.Instance?.Notify("EMERGENCY REPAIR FOAM");
+            }
             LastDamageFraction=(previousHealth-Health)/Mathf.Max(1,MaxHealth);
             if (vehicle.IsPlayer)
             {

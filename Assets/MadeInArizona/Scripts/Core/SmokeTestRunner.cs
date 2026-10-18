@@ -281,6 +281,8 @@ namespace MadeInArizona
             { yield return TestVehicleRoster(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaSuzukiTest")>=0)
             { yield return TestSuzukiTreats(); FinishResults(); yield break; }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaEquipmentTest")>=0)
+            { yield return TestEquipmentGarage(); FinishResults(); yield break; }
             Check("six-way texture pairs and shader",Resources.Load<Texture2D>("SixWay/Fireball_P") && Resources.Load<Texture2D>("SixWay/Fireball_N") && Resources.Load<Texture2D>("SixWay/Smoke_P") && Resources.Load<Texture2D>("SixWay/Smoke_N") && Shader.Find("MadeInArizona/SixWaySmoke").isSupported);
             Check("Suzuki present", FindFirstObjectByType<SuzukiDog>() != null);
             Capture("01-garage");
@@ -788,11 +790,80 @@ namespace MadeInArizona
             }
             else Check("co-op proxy retains nitro and lights its exhaust", false);
         }
+        IEnumerator TestEquipmentGarage()
+        {
+            var game=GameManager.Instance;
+            var ui=FindFirstObjectByType<GameUI>();
+            var car=game.Player;
+            Check("equipment UI opens in garage",ui&&game.State==GameState.Garage&&ui.GarageStation==0);
+            var save=game.Save;
+            var vehicle=ContentCatalog.Vehicles[save.selectedVehicle];
+            var stock=GarageManager.StatsFor(vehicle,save);
+            if(!save.ownedParts.Contains("intake"))save.ownedParts.Add("intake");
+            var pad=InputSystem.AddDevice<Gamepad>();
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.DpadDown));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller D-pad focuses first mechanical slot",ui.EquipmentFocus==0);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller A opens filtered part list",ui.EquipmentBrowsing);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.08f);
+            Check("controller A equips highlighted part",GarageManager.Installed(save,vehicle.id,EquipmentSlot.Engine)?.id=="intake"&&!ui.EquipmentBrowsing);
+            Check("equipped part changes actual player horsepower",game.Player.Stats.horsepower>stock.horsepower);
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.West));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("controller X restores factory equipment",GarageManager.Installed(save,vehicle.id,EquipmentSlot.Engine)==null&&
+                Mathf.Approximately(game.Player.Stats.horsepower,stock.horsepower));
+            string[] accessoryIds={"light_bar","tire_spikes","drift_n2o","magnetic_collector"};
+            for(int i=0;i<4;i++)
+            {
+                save.ownedParts.Add(accessoryIds[i]);
+                GarageManager.TryEquip(GarageManager.FindPart(accessoryIds[i]),save,EquipmentSlot.Accessory,i,false);
+            }
+            game.Player.RefreshLocalDamageProfiles();
+            var mounts=game.Player.GetComponent<VehicleAccessoryVisuals>();
+            var lightMount=Array.Find(game.Player.Visual.GetComponentsInChildren<Transform>(),t=>t.name=="Light Bar Accessory");
+            var spikeMount=Array.Find(game.Player.Visual.GetComponentsInChildren<Transform>(),t=>t.name=="Wheel Spikes Accessory");
+            Check("four shared accessory slots activate distinct effects",game.Player.Stats.lightBar&&
+                game.Player.Stats.spikeDamage>0&&game.Player.Stats.driftNitroRegen>0&&
+                game.Player.Stats.pickupRadiusMultiplier>1&&mounts&&lightMount&&spikeMount);
+            Check("equipment layer failure disables accessory benefits",
+                GarageManager.DamageProfiles(vehicle,save)[2].driftNitroRegen==0&&
+                GarageManager.DamageProfiles(vehicle,save)[2].pickupRadiusMultiplier==1);
+            for(int i=0;i<4;i++)GarageManager.Unequip(save,EquipmentSlot.Accessory,i,false);
+            game.Player.RefreshLocalDamageProfiles();
+            InputSystem.QueueStateEvent(pad,new GamepadState().WithButton(GamepadButton.South));
+            yield return new WaitForSecondsRealtime(.08f);
+            InputSystem.QueueStateEvent(pad,new GamepadState());yield return new WaitForSecondsRealtime(.06f);
+            Check("part list reopens for mouse drag",ui.EquipmentBrowsing&&ui.EquipmentFocus==0);
+            var mouse=InputSystem.AddDevice<Mouse>();
+            float scale=Mathf.Max(.45f,Mathf.Min(Screen.width/1440f,Screen.height/900f)*Mathf.Clamp(save.settings.uiScale,.85f,1.2f));
+            float guiWidth=Screen.width/scale;
+            Vector2 Source()=>new Vector2((guiWidth-520+18+75)*scale,Screen.height-(169+46+26)*scale);
+            Vector2 Target()=>new Vector2((32+17+125)*scale,Screen.height-(169+133+31)*scale);
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()});yield return null;
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Source()}.WithButton(MouseButton.Left));yield return null;
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Target()}.WithButton(MouseButton.Left));yield return null;
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=Target()});yield return null;yield return null;
+            Check("mouse drag uses the same equipment installation",GarageManager.Installed(save,vehicle.id,EquipmentSlot.Engine)?.id=="intake");
+            InputSystem.RemoveDevice(mouse);
+            Vector3 before=game.Player.transform.position;
+            InputSystem.QueueStateEvent(pad,new GamepadState{leftStick=Vector2.up,rightTrigger=1});
+            yield return new WaitForSecondsRealtime(.25f);
+            Check("garage blocks driving and combat input",Vector3.Distance(before,game.Player.transform.position)<.01f&&
+                game.Player.Body.isKinematic);
+            InputSystem.QueueStateEvent(pad,new GamepadState());InputSystem.RemoveDevice(pad);
+        }
         void TestSegmentedHealth()
         {
             ContentCatalog.EnsureLoaded();
             Check("part asset durability matches catalog defaults",ContentCatalog.PartHealthAssetsAgree);
-            Check("all 36 parts use mass times durability for HP",ContentCatalog.Parts.Length==36 &&
+            Check("all equipment uses mass times durability for HP",ContentCatalog.Parts.Length>=80 &&
                 Array.TrueForAll(ContentCatalog.Parts,p=>Mathf.Abs(HealthRules.PartHealth(p)-Mathf.Max(0,p.mass)*DevTuning.Current.partHpPerKg*p.partDurability*.01f)<.001f));
             Check("negative mass parts add no HP",Array.TrueForAll(ContentCatalog.Parts,p=>p.mass>=0||HealthRules.PartHealth(p)==0));
             bool stockTotals=true,profileFloors=true,profileMass=true,profileHealth=true;
@@ -836,11 +907,16 @@ namespace MadeInArizona
             armored.ownedParts.Add(armor.id);armored.ownedParts.Add(bumpers.id);
             armored.installedParts.Add(armor.id);armored.installedParts.Add(bumpers.id);
             var armoredStats=GarageManager.StatsFor(ronin,armored);
-            Check("cage and bumpers share the Armor HP pool",Mathf.Abs(armoredStats.maxHealth*armoredStats.healthShares[1]-HealthRules.PartHealth(armor)-HealthRules.PartHealth(bumpers))<.01f);
+            Check("legacy Body collision equips one part and preserves purchases",
+                GarageManager.Installed(armored,ronin.id,EquipmentSlot.Body)==bumpers&&
+                armored.ownedParts.Contains(armor.id)&&armored.ownedParts.Contains(bumpers.id)&&
+                Mathf.Abs(armoredStats.maxHealth*armoredStats.healthShares[1]-HealthRules.PartHealth(bumpers))<.01f);
             var armorSlots=new SaveData();
             armorSlots.ownedParts.Add(armor.id);armorSlots.ownedParts.Add(bumpers.id);
             GarageManager.TogglePart(armor,armorSlots);GarageManager.TogglePart(bumpers,armorSlots);
-            Check("garage permits both Armor parts together",armorSlots.installedParts.Contains(armor.id)&&armorSlots.installedParts.Contains(bumpers.id));
+            Check("Body slot replaces part without losing ownership",
+                GarageManager.Installed(armorSlots,ronin.id,EquipmentSlot.Body)==bumpers&&
+                armorSlots.ownedParts.Contains(armor.id)&&armorSlots.ownedParts.Contains(bumpers.id));
 
             var obj=new GameObject("Segment health test probe");
             var owner=obj.AddComponent<VehicleController>();

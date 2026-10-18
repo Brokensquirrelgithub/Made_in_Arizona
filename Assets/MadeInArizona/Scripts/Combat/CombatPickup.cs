@@ -168,7 +168,8 @@ namespace MadeInArizona
             magnetSpeed = 0;
             Vector3 delta = transform.position - player.transform.position; delta.y = 0;
             // Only supplies follow the car. Keep weapons anchored for deliberate field-slot swaps.
-            if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= SupplyMagnetRadius * SupplyMagnetRadius &&
+            float collector=player.Stats!=null?player.Stats.pickupRadiusMultiplier:1f;
+            if (Kind != PickupKind.Weapon && delta.sqrMagnitude <= SupplyMagnetRadius * SupplyMagnetRadius * collector * collector &&
                 Mathf.Abs(basePosition.y - player.transform.position.y) <= 5f)
             {
                 float speed = 18f + player.Body.linearVelocity.magnitude;
@@ -176,7 +177,7 @@ namespace MadeInArizona
                 transform.position = basePosition + Vector3.up * (.17f * Mathf.Sin(Time.time * 3));
                 delta = transform.position - player.transform.position; delta.y = 0;
             }
-            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? SwapRadius * SwapRadius : 13f) || Mathf.Abs(transform.position.y - player.transform.position.y) > 4) return;
+            if (delta.sqrMagnitude > (Kind == PickupKind.Weapon ? SwapRadius * SwapRadius : 13f * collector * collector) || Mathf.Abs(transform.position.y - player.transform.position.y) > 4) return;
             if (Kind == PickupKind.Weapon)
             {
                 if (NearbyWeapon(player) != this) return;

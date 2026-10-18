@@ -17,6 +17,8 @@ namespace MadeInArizona
         {
             if(damageProfiles==null || depth<0 || depth>=damageProfiles.Length)return;
             Stats=damageProfiles[depth];
+            Body.mass=Mathf.Max(300,Stats.mass);
+            GetComponent<VehicleAccessoryVisuals>()?.Refresh(this);
             if(!IsPlayer || IsNetworkProxy || depth==previous || Damage==null)return;
             if(depth>previous)
             {
@@ -37,6 +39,8 @@ namespace MadeInArizona
             damageProfiles=profiles;
             Damage.Reconfigure(Mathf.Max(60,profiles[0].maxHealth),profiles[0].healthShares);
             Stats=damageProfiles[Damage.FailedDepth];
+            Body.mass=Mathf.Max(300,Stats.mass);
+            GetComponent<VehicleAccessoryVisuals>()?.Refresh(this);
         }
         public void RefreshLocalDamageProfiles()
         {
@@ -215,7 +219,7 @@ namespace MadeInArizona
         // Same integrated drive loss as the original 0.18 s / 0.62-to-1 shift, spread across the
         // more audible 0.34 s change. Acceleration remains close to the pre-gear-profile handling.
         float ShiftDrive => upshiftRemaining > 0 ? Mathf.Lerp(.8f, 1f,
-            Mathf.Clamp01(1f - upshiftRemaining / UpshiftDuration)) : 1f;
+            Mathf.Clamp01(1f - upshiftRemaining / (UpshiftDuration * Mathf.Max(.5f,Stats.shiftTimeMultiplier)))) : 1f;
         // Sound alone performs a real lift / clutch / throttle return. Hold overrun long enough to hear
         // the new, lower gear RPM before the intake and exhaust return to their on-load character.
         public static float ShiftSoundEnvelope(float remaining)
@@ -268,7 +272,19 @@ namespace MadeInArizona
             Body.inertiaTensor = inertia;
             Body.inertiaTensorRotation = Quaternion.identity;
             if (Visual != null) Destroy(Visual.gameObject);
-            Visual = VehicleVisual.Build(definition, transform, !isPlayer, faction);
+            Color? customPaint=null;
+            if(isPlayer&&GameManager.Instance&&GameManager.Instance.Save!=null)
+            {
+                var loadout=GarageManager.Loadout(GameManager.Instance.Save,definition.id);
+                if(loadout!=null&&loadout.paintIndex>0)customPaint=GameUI.GaragePaint(loadout.paintIndex);
+            }
+            Visual = VehicleVisual.Build(definition, transform, !isPlayer, faction,customPaint);
+            if(isPlayer)
+            {
+                var accessories=GetComponent<VehicleAccessoryVisuals>();
+                if(!accessories)accessories=gameObject.AddComponent<VehicleAccessoryVisuals>();
+                accessories.Refresh(this);
+            }
             if (isPlayer)
             {
                 var exhaust = GetComponent<NitroExhaust>();
@@ -326,6 +342,13 @@ namespace MadeInArizona
         public void Repair(float amount) { Damage?.Repair(amount); }
         /// <summary>Adds a share of the tank. Pickups are the only refill; no part changes how much they restore.</summary>
         public void RefillNitro(float amount) { BoostCharge = Mathf.Clamp01(BoostCharge + amount); }
+        public bool DriftNitroActive { get; private set; }
+        bool repairFoamUsed;
+        public bool TryUseRepairFoam()
+        {
+            if(repairFoamUsed||Stats==null||!Stats.repairFoam)return false;
+            repairFoamUsed=true;return true;
+        }
         /// <summary>The player and any friendly AI are one side; hostile crews are the other.</summary>
         public bool FriendlyToPlayer { get { if (IsPlayer) return true; var ai = GetComponent<EnemyAI>(); return ai != null && ai.IsFriendly; } }
         public static bool Allied(VehicleController a, VehicleController b) => a && b && a.FriendlyToPlayer == b.FriendlyToPlayer;
@@ -386,6 +409,7 @@ namespace MadeInArizona
         {
             if (!initialized || Damage.IsDead || Body.isKinematic || IsNetworkProxy) return;
             Boosting = false;
+            DriftNitroActive=false;
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
@@ -442,7 +466,8 @@ namespace MadeInArizona
             float diffGrip = Stats.differential == Differential.Locked ? 1.13f : Stats.differential == Differential.LimitedSlip ? 1.07f : .92f;
             // What the drivetrain makes of this ground: a bonus or a penalty to drive, cornering grip and top speed.
             var footing = DrivetrainTraits.On(Stats.drivetrain, surface);
-            float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * wheelGrip * diffGrip * footing.cornering;
+            float terrainBonus=surface==SurfaceKind.Asphalt||surface==SurfaceKind.Oil?1f:Stats.terrainGripMultiplier;
+            float grip = Mathf.Max(.35f, Stats.grip) * surfaceGrip * terrainBonus * wheelGrip * diffGrip * footing.cornering;
             if (IsPlayer) grip *= tuning.grip;
             upshiftRemaining = Mathf.Max(0, upshiftRemaining - Time.fixedDeltaTime);
             gearHoldRemaining = Mathf.Max(0, gearHoldRemaining - Time.fixedDeltaTime);
@@ -483,8 +508,8 @@ namespace MadeInArizona
                 if (driveDirection > 0 && gearHoldRemaining <= 0 && RPM > upshiftRPM && Gear < gears.Length)
                 {
                     Gear++;
-                    upshiftRemaining = UpshiftDuration;
-                    gearHoldRemaining = UpshiftDuration + .16f;
+                    upshiftRemaining = UpshiftDuration * Mathf.Max(.5f,Stats.shiftTimeMultiplier);
+                    gearHoldRemaining = upshiftRemaining + .16f;
                     driveRatio = gears[Gear - 1] * Mathf.Max(2.5f, Stats.finalDrive);
                     RPM = Mathf.Lerp(RPM, Mathf.Max(900 + targetThrottle * 900, wheelRPM * driveRatio * tachGearScale), .28f);
                 }
@@ -499,7 +524,7 @@ namespace MadeInArizona
                     forwardSpeed > Mathf.Max(50, Stats.maxSpeed) / 3.6f * footing.topSpeed && desiredRPM >= FullThrottleUpshiftRpm;
                 RevLimiterCut = overRev && Stats.revLimiter && Mathf.Repeat(Time.time, .16f) < .055f;
                 if (RevLimiterCut) RPM = Mathf.Min(RPM, 6300f);
-                RedlineSeconds = overRev && !Stats.revLimiter ? RedlineSeconds + Time.fixedDeltaTime : 0;
+                RedlineSeconds = overRev && !Stats.revLimiter ? RedlineSeconds + Time.fixedDeltaTime / Mathf.Max(.25f,Stats.cooling) : 0;
                 if (RedlineSeconds >= 7f)
                 {
                     redlineTick += Time.fixedDeltaTime;
@@ -590,6 +615,9 @@ namespace MadeInArizona
                 if (surface == SurfaceKind.Water || surface == SurfaceKind.Mud) Body.AddForce(-planar * .65f, ForceMode.Acceleration);
             }
             DriftAmount = Mathf.Clamp01(Mathf.Abs(lateralSpeed) / 12);
+            DriftNitroActive=IsPlayer&&Grounded&&DriftBlend>.55f&&speed>9f&&forwardSpeed>5f&&
+                Mathf.Abs(lateralSpeed)>3f&&Stats.driftNitroRegen>0&&BoostCharge<1f;
+            if(DriftNitroActive)RefillNitro(Mathf.Min(.10f,Stats.driftNitroRegen)*Time.fixedDeltaTime);
             WheelSpin = Mathf.MoveTowards(WheelSpin, Grounded || Beached ? spin : 0, Time.fixedDeltaTime * 5);
             SideSlip = Grounded ? Mathf.Clamp01((Mathf.Abs(lateralSpeed) - 1.5f) / 5f) : 0;
             wasDrifting = drifting;
@@ -874,12 +902,18 @@ namespace MadeInArizona
             if(force<6 || Time.time<collisionCooldown)return;
             collisionCooldown=Time.time+.25f;
             // VehicleDamage refuses non-explosive damage between vehicles on the same side, so crews never ram-kill each other.
-            if (other != null && other != Damage) other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3) * RamDamageScale, point, gameObject);
+            if (other != null && other != Damage)
+            {
+                Vector3 local=transform.InverseTransformPoint(point);
+                bool wheelContact=Mathf.Abs(local.x)>Stats.trackWidth*.30f&&Mathf.Abs(local.z)>Stats.wheelbase*.20f&&local.y<1.2f;
+                float spikes=wheelContact?Mathf.Min(30,Stats.spikeDamage):0;
+                other.ApplyDamage(force * 2.4f * Mathf.Clamp(Body.mass / 1000, .5f, 3) * RamDamageScale * Stats.ramDamageMultiplier + spikes, point, gameObject);
+            }
             // Landing on, scraping or bottoming out against the ground never hurts and throws no sparks.
             if (ground) return;
             // A defeated car in its spinout is wreckage, not an allied attacker: it can hurt any combatant it hits.
             bool spinningWreck = other != null && other.IsSpinningWreck;
-            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f * RamDamageScale, point,
+            Damage.ApplyDamage(Mathf.Max(0, impact - 9) * .55f * RamDamageScale * (1-Stats.collisionProtection), point,
                 spinningWreck ? null : collision.gameObject, environmental: spinningWreck);
             if (impact < 4 && other == null) return;
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);

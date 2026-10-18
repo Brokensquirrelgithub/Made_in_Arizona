@@ -56,6 +56,15 @@ namespace MadeInArizona
         static float Unit(float f,float fallback) { return Finite(f)?Mathf.Clamp01(f):fallback; }
     }
     [Serializable]
+    public sealed class VehicleLoadout
+    {
+        public string vehicleId;
+        public string[] mechanical = new string[6];
+        public string[] accessories = new string[4];
+        public string weapon = "riveter";
+        public int paintIndex;
+    }
+    [Serializable]
     public sealed class SaveData
     {
         public int version=1, money=1100, salvage, reputation, selectedVehicle, selectedDriver, unlockedMission, dogCosmetic;
@@ -63,6 +72,8 @@ namespace MadeInArizona
         public List<string> ownedWeapons=new List<string>{"riveter"};
         public List<int> completedMissions=new List<int>(), bestScores=new List<int>();
         public List<string> ownedParts=new List<string>(), installedParts=new List<string>(), ownedVehicles=new List<string>{"ronin","juniper","shift"}, collectibles=new List<string>(), achievements=new List<string>();
+        public int equipmentVersion;
+        public List<VehicleLoadout> loadouts = new List<VehicleLoadout>();
         public float finalDriveTuning=1, rideHeightTuning;
         public GameSettings settings=new GameSettings();
         public void Normalize()
@@ -93,6 +104,7 @@ namespace MadeInArizona
             if(!ownedVehicles.Contains("ronin"))ownedVehicles.Add("ronin"); if(!ownedVehicles.Contains("juniper"))ownedVehicles.Add("juniper");
             if(!ownedVehicles.Contains("shift"))ownedVehicles.Add("shift");
             if(!ownedVehicles.Contains(ContentCatalog.Vehicles[selectedVehicle].id))selectedVehicle=0;
+            GarageManager.NormalizeLoadouts(this);
             if(float.IsNaN(finalDriveTuning)||float.IsInfinity(finalDriveTuning))finalDriveTuning=1;
             if(float.IsNaN(rideHeightTuning)||float.IsInfinity(rideHeightTuning))rideHeightTuning=0;
             finalDriveTuning=Mathf.Clamp(finalDriveTuning,.85f,1.2f); rideHeightTuning=Mathf.Clamp(rideHeightTuning,-.08f,.15f);

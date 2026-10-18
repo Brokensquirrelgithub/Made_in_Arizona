@@ -21,7 +21,7 @@ MonoBehaviour:
   unlockMission: 3
   salvageCost: 0
   mass: 4
-  healthCategory: 2
+  healthCategory: 5
   partDurability: 10
   hpMultiplier: 1.16
   torqueMultiplier: 1.12

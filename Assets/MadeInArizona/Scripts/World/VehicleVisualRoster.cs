@@ -46,11 +46,11 @@ namespace MadeInArizona
         }
 
         /// <summary>Builds a roster car under <paramref name="root"/>; false for the boxed off-road rigs.</summary>
-        static bool BuildRoster(VehicleDefinition definition, Transform root, bool enemy, EnemyFaction faction)
+        static bool BuildRoster(VehicleDefinition definition, Transform root, bool enemy, EnemyFaction faction, Color? paintOverride)
         {
             var build = RosterBody(definition.id);
             if (build == null) return false;
-            var car = new Car(definition, root, enemy, faction);
+            var car = new Car(definition, root, enemy, faction, paintOverride);
             build(car);
             car.Finish();
             return true;
@@ -101,10 +101,10 @@ namespace MadeInArizona
             float gunY = float.NaN, gunZ, plateY = .42f, plateProud = .02f, pipeY = .2f;
             int pipes = 1;
 
-            public Car(VehicleDefinition definition, Transform root, bool enemy, EnemyFaction faction)
+            public Car(VehicleDefinition definition, Transform root, bool enemy, EnemyFaction faction, Color? paintOverride)
             {
                 this.definition = definition; this.root = root; this.enemy = enemy; this.faction = faction;
-                paint = enemy ? FactionRules.Paint(faction) : definition.color;
+                paint = enemy ? FactionRules.Paint(faction) : paintOverride??definition.color;
                 ground = GroundLevel(definition); front = definition.wheelbase * .5f; rear = -front;
                 painted = Paint(paint); glazed = CarGlass(Glass, BodyPillow, BodyWaist, BodyLength);
                 // Bright trim is narrow: the usual tarnish and micro-scratches break a strip of it into dashes.

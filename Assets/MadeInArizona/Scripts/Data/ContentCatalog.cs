@@ -21,8 +21,9 @@ namespace MadeInArizona
             PartHealthAssetsAgree=true;
             for(int i=0;i<Parts.Length;i++)
                 if(Parts[i].healthCategory!=healthCategories[i] || !Mathf.Approximately(Parts[i].partDurability,durabilities[i]))
-                    PartHealthAssetsAgree=false;
+                {PartHealthAssetsAgree=false;Debug.LogWarning("Part health asset mismatch: "+Parts[i].id+" / "+Parts[i].healthCategory+" / "+Parts[i].partDurability);}
             if(!PartHealthAssetsAgree)Debug.LogError("Part health category or durability differs between code and Resources assets.");
+            ConfigureEquipment();
             OverrideResources(Weapons, v => v.id); OverrideResources(Missions, v => v.id); OverrideResources(Drivers, v => v.id);
             BorrowWeaponSounds();
         }
@@ -147,7 +148,7 @@ namespace MadeInArizona
             SetDurability(HealthCategory.Engine, 15, "nitrous");
             SetDurability(HealthCategory.Engine, 75, "mounts");
             SetDurability(HealthCategory.Engine, 0, "revlimiter");
-            SetDurability(HealthCategory.Equipment, 10, "ecu");
+            SetDurability(HealthCategory.Engine, 10, "ecu");
             SetDurability(HealthCategory.Equipment, 50, "boards", "seat");
             SetDurability(HealthCategory.Armor, 125, "cage");
             SetDurability(HealthCategory.Armor, 110, "bumpers");

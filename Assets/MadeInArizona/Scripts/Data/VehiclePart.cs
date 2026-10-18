@@ -2,6 +2,8 @@ using UnityEngine;
 namespace MadeInArizona
 {
     public enum HealthCategory { Exterior, Armor, Equipment, Suspension, Drivetrain, Engine }
+    public enum EquipmentSlot { Engine, Transmission, Drivetrain, Tires, Suspension, Body, Accessory }
+    public enum PartCompatibility { Universal, Chassis, CarSpecific }
 
     [CreateAssetMenu(menuName = "Made In Arizona/Mechanical part")]
     public sealed class VehiclePart : ScriptableObject
@@ -17,5 +19,13 @@ namespace MadeInArizona
         public bool turbocharger;
         public Drivetrain drivetrain; public Differential differential;
         public string[] compatibleVehicles = new string[0];
+        public EquipmentSlot equipmentSlot;
+        public PartCompatibility compatibilityClass;
+        public string[] compatibleChassis = new string[0];
+        public Sprite icon;
+        public GameObject visualPrefab;
+        public string specialBehavior;
+        public float shiftTimeMultiplier = 1, terrainGripMultiplier = 1, ramDamageMultiplier = 1;
+        public float pickupRadiusMultiplier = 1, collisionProtection, electronicsResistance, driftNitroRegen, spikeDamage;
     }
 }

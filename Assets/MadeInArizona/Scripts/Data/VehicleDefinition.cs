@@ -14,6 +14,8 @@ namespace MadeInArizona
         public Drivetrain drivetrain; public Differential differential;
         /// <summary>EngineLayouts id for the physical engine voice (cylinders, firing order, headers, exhaust).</summary>
         public string engineLayout;
+        /// <summary>Physical body classes, independent of FWD/RWD/AWD layout.</summary>
+        public string[] chassisTags = new string[0];
         public EngineLayout Engine => EngineLayouts.Find(string.IsNullOrEmpty(engineLayout) ? EngineLayouts.ForVehicle(id) : engineLayout);
     }
 }

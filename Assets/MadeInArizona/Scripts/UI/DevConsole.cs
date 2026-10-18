@@ -206,6 +206,8 @@ namespace MadeInArizona
                 if (!weapon || !WeaponRules.GarageWeapon(arg)) { WriteConsole("Unknown garage weapon. Type weapon and press Tab."); return; }
                 if (!game.Save.ownedWeapons.Contains(arg)) game.Save.ownedWeapons.Add(arg);
                 game.Save.selectedWeapon = arg;
+                var loadout=GarageManager.Loadout(game.Save,ContentCatalog.Vehicles[game.Save.selectedVehicle].id);
+                if(loadout!=null)loadout.weapon=arg;
                 selectedWeapon = Array.FindIndex(garageWeapons, i => ContentCatalog.Weapons[i].id == arg);
                 game.Player?.Weapons?.ConfigurePlayerPrimary(arg);
                 if (game.State == GameState.Garage) game.RefreshGarageVehicle();

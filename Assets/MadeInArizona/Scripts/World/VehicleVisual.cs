@@ -13,17 +13,17 @@ namespace MadeInArizona
         const int OtakuWrapCount = 8;
         static readonly Mesh[] otakuWrapMeshes = new Mesh[OtakuWrapCount];
         static int nextOtakuWrap;
-        public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl)
+        public static Transform Build(VehicleDefinition definition, Transform parent, bool enemy, EnemyFaction faction = EnemyFaction.Sunsprawl, Color? paintOverride = null)
         {
             Transform root=Group("Original procedural vehicle model",parent,Vector3.zero);
             string id=definition.id ?? "juniper";
-            if(BuildRoster(definition,root,enemy,faction)) return root;
+            if(BuildRoster(definition,root,enemy,faction,paintOverride)) return root;
             bool jeep=id=="juniper", buggy=id=="skitter", van=id=="sidehustle", trophy=id=="sunskip", diesel=id=="foreclosure", monster=id=="vincent";
             bool pickup=trophy||diesel||id=="perennial"||monster;
             float width=definition.trackWidth+.06f, length=definition.wheelbase+1.12f;
             float lift=Mathf.Clamp(definition.rideHeight-.56f,0,.45f);
             float sill=.49f+lift, cabHeight=van?1.28f:jeep?.97f:.74f;
-            Color paint=enemy?FactionRules.Paint(faction):definition.color;
+            Color paint=enemy?FactionRules.Paint(faction):paintOverride??definition.color;
             Color glass=new Color(.11f,.25f,.30f), metal=new Color(.32f,.34f,.32f), rubber=new Color(.035f,.041f,.039f);
             // Polished parts catch the sun (Shaders/SunGlint.hlsl): chrome trim and wheels, glass, bare metal fittings.
             Color chrome=new Color(.78f,.8f,.82f);
