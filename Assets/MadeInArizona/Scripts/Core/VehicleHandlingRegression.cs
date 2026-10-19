@@ -115,8 +115,50 @@ namespace MadeInArizona
             rockDamage.ApplyDamage(50, rock.position, player.gameObject);
             check("roadside rocks break under weapon damage", rockDamage.IsDestroyed && !rock.GetComponent<Collider>().enabled);
             ExplosionSystem.ScatterDebris(origin + Vector3.up * 2, 3, 4, Color.gray);
-            var debris = GameObject.Find("Pooled debris");
-            check("debris cannot push cars or affect suspension casts", debris != null && debris.layer == 2 && Physics.GetIgnoreCollision(debris.GetComponent<Collider>(), player.Hull));
+            int softDebris = 0;
+            bool softDebrisIgnoresCar = true;
+            foreach (var fragment in UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None))
+            {
+                if (fragment.name != "Pooled debris" || fragment.gameObject.layer != 2) continue;
+                softDebris++;
+                softDebrisIgnoresCar &= Physics.GetIgnoreCollision(fragment, player.Hull);
+            }
+            check("debris cannot push cars or affect suspension casts", softDebris > 0 && softDebrisIgnoresCar);
+
+            var bumperSave = new SaveData();
+            bumperSave.ownedParts.Add("bumpers");
+            bumperSave.installedParts.Add("bumpers");
+            var bumperStats = GarageManager.StatsFor(ContentCatalog.Vehicles[0], bumperSave);
+            check("steel bumper prevents tree speed loss while its Body part works", bumperStats.treeBumper &&
+                !GarageManager.StatsFor(ContentCatalog.Vehicles[0], bumperSave, 1).treeBumper);
+
+            var stockTree = HandlingTree(arena.transform, origin + new Vector3(0, 3.5f, 5.5f));
+            yield return Place(player, keyboard, origin, Quaternion.identity);
+            player.Stats.treeBumper = false;
+            player.Body.linearVelocity = Vector3.forward * 14f;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+            yield return new WaitForSeconds(.55f);
+            Release(keyboard);
+            float stockTreeSpeed = player.Body.linearVelocity.z;
+            Debug.Log("MIA_TREE_IMPACT stock destroyed=" + stockTree.IsDestroyed + " speed=" + stockTreeSpeed.ToString("F2") +
+                " distance=" + (player.transform.position.z - origin.z).ToString("F2"));
+            check("standing tree topples without stopping the car", stockTree.IsDestroyed &&
+                player.transform.position.z > origin.z + 5f && stockTreeSpeed > 5f);
+
+            Vector3 bumperLane = origin + Vector3.right * 8f;
+            var bumperTree = HandlingTree(arena.transform, bumperLane + new Vector3(0, 3.5f, 5.5f));
+            yield return Place(player, keyboard, bumperLane, Quaternion.identity);
+            player.Stats.treeBumper = true;
+            player.Body.linearVelocity = Vector3.forward * 14f;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
+            yield return new WaitForSeconds(.55f);
+            Release(keyboard);
+            Debug.Log("MIA_TREE_IMPACT bumper destroyed=" + bumperTree.IsDestroyed + " speed=" +
+                player.Body.linearVelocity.z.ToString("F2") + " distance=" +
+                (player.transform.position.z - bumperLane.z).ToString("F2"));
+            check("steel bumper carries speed through a toppled tree", bumperTree.IsDestroyed &&
+                player.transform.position.z > bumperLane.z + 5f && player.Body.linearVelocity.z > stockTreeSpeed + 3f);
+            player.Stats.treeBumper = false;
 
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = "Handling regression wall";
@@ -259,6 +301,19 @@ namespace MadeInArizona
             player.Repair(10000);
             Physics.SyncTransforms();
             yield return new WaitForSeconds(.35f);
+        }
+
+        static DestructionSystem HandlingTree(Transform parent, Vector3 position)
+        {
+            var trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            trunk.name = "Handling regression standing tree";
+            trunk.transform.SetParent(parent);
+            trunk.transform.position = position;
+            trunk.transform.localScale = new Vector3(.36f, 4f, .36f);
+            var tree = trunk.AddComponent<DestructionSystem>();
+            tree.Configure(26, ExplosionKind.Ammunition, false, 0);
+            tree.MakeTopple(450, true);
+            return tree;
         }
 
         static void Release(Keyboard keyboard)

@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: bumpers
   m_EditorClassIdentifier: Assembly-CSharp::MadeInArizona.VehiclePart
   id: bumpers
-  displayName: Salvaged steel bumpers
+  displayName: Tree-clearing steel bumpers
   category: Armor
-  description: Steel bumpers add 72 kg of protection to the shared Armor pool.
+  description: Adds 72 kg of Armor protection and prevents speed loss when toppling a tree while the Body part is working.
   contentOrder: 21
   cost: 220
   unlockMission: 0

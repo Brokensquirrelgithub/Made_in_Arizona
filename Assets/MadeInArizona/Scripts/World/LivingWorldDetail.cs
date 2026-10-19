@@ -231,7 +231,7 @@ namespace MadeInArizona
             collider.center=Vector3.up*(pine?height*.325f:2f);collider.height=pine?height*.65f:4f;collider.radius=pine?height*.023f:.24f;
             WorldArt.MakeBreakable(root.transform,pine?26:22,false,ExplosionKind.Ammunition,5);
             // Trees fall over rather than shatter; the mass only sets how little a blast or car can shove the trunk.
-            var prop=root.GetComponent<DestructionSystem>();prop.MakeTopple(pine?height*60:450);
+            var prop=root.GetComponent<DestructionSystem>();prop.MakeTopple(pine?height*60:450,true);
             // Dead snags are dry and brittle: a car ploughs through without losing pace and they snap into pieces.
             if(snag){prop.MakeSplinter();prop.SetDebrisColor(new Color(.46f,.38f,.29f));}
         }

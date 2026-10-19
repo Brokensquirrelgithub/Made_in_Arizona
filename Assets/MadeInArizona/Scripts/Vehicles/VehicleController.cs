@@ -800,6 +800,7 @@ namespace MadeInArizona
                 if (surface != SurfaceKind.Asphalt && surface != SurfaceKind.Oil) ExplosionSystem.Burst(transform.position - transform.forward * 1.5f + Vector3.up * .25f, dust, 2, 1.5f + speed * .035f);
             }
             if (!IsNetworkProxy) SweepScenery(speed);
+            else if (IsLocallyPredicted) RestorePredictedTreeContacts();
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
@@ -1028,7 +1029,22 @@ namespace MadeInArizona
         internal static bool ProbeCounting;
         void OnCollisionEnter(Collision collision)
         {
-            if (IsNetworkProxy) return; // guest prediction collides locally but never resolves gameplay effects
+            if (IsNetworkProxy)
+            {
+                // Match the host's tree slowdown locally without destroying scenery or applying damage on the guest.
+                if (IsLocallyPredicted && initialized && GameManager.Instance && GameManager.Instance.IsPlaying &&
+                    !Damage.IsDead && collision.relativeVelocity.magnitude >= 2f)
+                {
+                    var localTree = collision.collider.GetComponentInParent<DestructionSystem>();
+                    if (localTree && localTree.IsStandingTree)
+                    {
+                        ghosted.Add(localTree);
+                        localTree.SetVehicleCollision(Hull, false);
+                        Body.linearVelocity = TreeExitVelocity(preCollisionVelocity, Body.linearVelocity.y, Stats.treeBumper);
+                    }
+                }
+                return;
+            }
             if (IsPlayer && ProbeCounting) LastHitName = collision.collider.name + " @" + collision.relativeVelocity.magnitude.ToString("F0");
             if (!initialized || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
             if (Damage.IsDead)
@@ -1046,8 +1062,13 @@ namespace MadeInArizona
             {
                 float propDamage = IsPlayer ? DevTuning.Current.propDamage : 1f;
                 bool plowable = prop.Plowable || prop.Size < BodyLength * BreakAwayScale;
+                if (prop.IsStandingTree)
+                {
+                    prop.SmashFromVehicle(point, gameObject, preCollisionVelocity * .7f);
+                    Body.linearVelocity = TreeExitVelocity(preCollisionVelocity, Body.linearVelocity.y, Stats.treeBumper);
+                }
                 // A prop the car plows through costs no speed: the velocity from before the contact is restored in full.
-                if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && plowable)
+                else if (prop.TryDestroyFromVehicle(force * Mathf.Sqrt(Body.mass) * .35f * propDamage, point, gameObject, out _) && plowable)
                 {
                     Body.linearVelocity = preCollisionVelocity;
                     return;
@@ -1099,6 +1120,13 @@ namespace MadeInArizona
             return collision.contactCount > 0 ? best : collision.relativeVelocity.magnitude;
         }
 
+        const float TreeSpeedRetained = .65f;
+        static Vector3 TreeExitVelocity(Vector3 incoming, float verticalAfterContact, bool fittedBumper)
+        {
+            float retained = fittedBumper ? 1f : TreeSpeedRetained;
+            return new Vector3(incoming.x * retained, verticalAfterContact, incoming.z * retained);
+        }
+
         // ---- Scenery sweep (every vehicle; hostiles get the same small-obstacle rules as the player) ----
         // Props smaller than 60% of the car are driven straight through (and knocked apart); props up to 120% of the
         // car's length break away without costing speed while the car is moving briskly. Anything larger stays solid
@@ -1108,6 +1136,21 @@ namespace MadeInArizona
         readonly Collider[] sweepHits = new Collider[48];
         readonly HashSet<DestructionSystem> ghosted = new HashSet<DestructionSystem>();
         readonly List<DestructionSystem> ghostScratch = new List<DestructionSystem>();
+        void RestorePredictedTreeContacts()
+        {
+            if (ghosted.Count == 0 || !Hull) return;
+            Bounds car = Hull.bounds;
+            car.Expand(.8f);
+            ghostScratch.Clear();
+            foreach (var tree in ghosted)
+            {
+                if (!tree || tree.IsDestroyed) { ghostScratch.Add(tree); continue; }
+                if (car.Intersects(tree.WorldBounds)) continue;
+                tree.SetVehicleCollision(Hull, true);
+                ghostScratch.Add(tree);
+            }
+            foreach (var tree in ghostScratch) ghosted.Remove(tree);
+        }
         void SweepScenery(float speed)
         {
             var body = Hull;

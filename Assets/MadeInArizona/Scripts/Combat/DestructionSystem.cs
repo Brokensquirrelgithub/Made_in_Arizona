@@ -13,6 +13,7 @@ namespace MadeInArizona
         [SerializeField] int score = 10;
         [SerializeField] bool brittle, plowable, splinters;
         [SerializeField] float toppleMass;
+        bool standingTree;
         [SerializeField] Color debrisColor;
         /// <summary>Props up to this size (and brittle ones) break within two projectile hits.</summary>
         public const float SmallPropSize = 3.2f;
@@ -53,11 +54,12 @@ namespace MadeInArizona
         public bool Plowable => brittle || plowable;
         public void MakePlowable() { plowable = true; }
         /// <summary>Breaks into long wooden pieces (trunk sections and limbs) instead of toppling or crumbling: dead snags.</summary>
-        public void MakeSplinter() { splinters = true; plowable = true; toppleMass = 0; }
+        public void MakeSplinter() { splinters = true; plowable = true; toppleMass = 0; standingTree = false; }
         /// <summary>Colour of the pieces, for props whose material has no base colour (shared scenery shaders).</summary>
         public void SetDebrisColor(Color color) { debrisColor = color; debrisColor.a = 1; }
         /// <summary>Instead of shattering, the prop topples as one heavy body of the given mass and fades (trees).</summary>
-        public void MakeTopple(float mass) { toppleMass = mass; }
+        public void MakeTopple(float mass, bool tree = false) { toppleMass = mass; standingTree = tree; }
+        public bool IsStandingTree => standingTree && !IsDestroyed;
         /// <summary>Breaks caused by hostile vehicles, which award the player nothing (counted for the regression suite).</summary>
         public static int UncreditedHostileBreaks { get; private set; }
         public void ApplyDamage(float amount, Vector3 hitPoint, GameObject source) => ApplyDamage(amount, hitPoint, source, Vector3.zero);
@@ -133,7 +135,7 @@ namespace MadeInArizona
             var bounds = WorldBounds;
             GetComponent<WorldHazard>()?.NetworkBreak(bounds.center);
             Color color = debrisColor.a > 0 ? debrisColor : new Color(.53f, .33f, .19f);
-            if (toppleMass > 0 && name == "Utility pole")
+            if (toppleMass > 0)
             {
                 foreach (var collider in GetComponentsInChildren<Collider>()) collider.enabled = false;
                 ExplosionSystem.Burst(transform.position + Vector3.up, new Color(.58f, .42f, .26f, .5f), 8, 2);

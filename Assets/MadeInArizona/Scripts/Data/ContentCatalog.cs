@@ -119,7 +119,7 @@ namespace MadeInArizona
                 Part("mud","Mud-terrain beadlock set","Tires","+18% grip and +12% travel; -9% speed, +51 kg. Heavy rubber is still rotating mass.",500,2,51,1,1.18f),
                 Part("used","Four almost matching used tires","Tires","Only $35. -12% grip and -7% damping, -8 kg. Customer states the wobble is seasonal.",35,0,-8,1,.88f),
                 Part("cage","Triangulated cage and skid plates","Armor","A triangulated cage and skid plates add 95 kg of protection to the Armor pool.",560,1,95,1,1,1),
-                Part("bumpers","Salvaged steel bumpers","Armor","Steel bumpers add 72 kg of protection to the shared Armor pool.",220,0,72,1,1,1),
+                Part("bumpers","Tree-clearing steel bumpers","Armor","Adds 72 kg of Armor protection and prevents speed loss when toppling a tree while the Body part is working.",220,0,72,1,1,1),
                 Part("boards","Recovery boards and tool roll","Utility","Recovery boards and a tool roll add 3% grip and 24 kg to the Equipment pool.",290,0,24,1,1.03f,1),
                 Part("nitrous","Purge-first nitrous kit","Induction","Adds 25% power and 12% torque for 20 kg. Replaces other forced induction.",690,4,20,1.25f,1,1),
                 // Deferred maintenance: each "upgrade" just brings one part of the car up to what it should have been.
