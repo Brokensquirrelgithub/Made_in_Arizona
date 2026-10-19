@@ -615,6 +615,12 @@ namespace MadeInArizona
                         csv.Contains("bench_received,") && csv.Contains("bench_rtt,"));
                     Check("benchmark retains the full probe window", csv.Split('\n').Count(line =>
                         line.StartsWith("bench_sent,", StringComparison.Ordinal)) >= 200);
+                    Check("benchmark receiver is armed before first probe", csv.Split('\n').Any(line =>
+                    {
+                        if (!line.StartsWith("bench_received,", StringComparison.Ordinal)) return false;
+                        string[] fields = line.Split(',');
+                        return fields.Length > 6 && fields[6] == "1";
+                    }));
                     if (host)
                     {
                         string manifestPath = Path.Combine(coop.LastTracePath, "manifest.txt");
