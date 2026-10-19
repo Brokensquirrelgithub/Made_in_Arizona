@@ -68,9 +68,8 @@ namespace MadeInArizona
         {
             game.StateChanged += ResetFocus;
             Application.logMessageReceived += CaptureConsoleLog;
-            if (!Application.isBatchMode) StartCoroutine(SampleReticleContrast());
         }
-        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; Application.logMessageReceived -= CaptureConsoleLog; DisposeReticleContrast(); }
+        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; Application.logMessageReceived -= CaptureConsoleLog; }
         void ResetFocus()
         {
             ConsoleOpen = false;
@@ -582,8 +581,22 @@ namespace MadeInArizona
             if (game.State == GameState.Playing && InputManager.Instance.UsingGamepad == false && Mouse.current != null) {
                 var m = Mouse.current.position.ReadValue(); float s = Screen.height / height;
                 float x = m.x / s, y = (Screen.height - m.y) / s;
-                Rect(x - 11, y - 1, 7, 2, ReticleInk); Rect(x + 4, y - 1, 7, 2, ReticleInk); Rect(x - 1, y - 11, 2, 7, ReticleInk); Rect(x - 1, y + 4, 2, 7, ReticleInk);
+                DrawReticle(new Vector2(x, y));
             }
+        }
+
+        void DrawReticle(Vector2 point)
+        {
+            float x = point.x, y = point.y;
+            // Each arm has a one-pixel black border so the white reticle stays visible on pale terrain.
+            Rect(x - 14, y - 2.5f, 10, 5, Color.black);
+            Rect(x + 4, y - 2.5f, 10, 5, Color.black);
+            Rect(x - 2.5f, y - 14, 5, 10, Color.black);
+            Rect(x - 2.5f, y + 4, 5, 10, Color.black);
+            Rect(x - 13, y - 1.5f, 8, 3, Color.white);
+            Rect(x + 5, y - 1.5f, 8, 3, Color.white);
+            Rect(x - 1.5f, y - 13, 3, 8, Color.white);
+            Rect(x - 1.5f, y + 5, 3, 8, Color.white);
         }
 
         Vector2 ScreenPoint(Vector3 world)
@@ -657,7 +670,7 @@ namespace MadeInArizona
             if(InputManager.Instance.UsingGamepad) {
                 Vector2 aim=InputManager.Instance.Aim;
                 Vector2 point=ScreenPoint(game.Player.transform.position+new Vector3(aim.x,0,aim.y)*14+Vector3.up*.8f);
-                CombatLine(point+Vector2.left*8,point+Vector2.right*8,2,ReticleInk);CombatLine(point+Vector2.up*8,point+Vector2.down*8,2,ReticleInk);
+                DrawReticle(point);
             }
         }
 

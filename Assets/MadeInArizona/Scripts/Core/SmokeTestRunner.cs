@@ -40,7 +40,7 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaFireworkVisualTest")>=0)
             { yield return TestFireworkVisual(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaDisplayReticleTest")>=0)
-            { yield return TestDisplayAndReticle(); FinishResults(); yield break; }
+            { yield return TestDisplayModes(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaWeaponDropTest")>=0)
             { TestWeaponDropsAndBazookaCone(); FinishResults(); yield break; }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaTransmissionProgressTest")>=0)
@@ -126,7 +126,7 @@ namespace MadeInArizona
                 InputSystem.QueueStateEvent(uiKeyboard,new KeyboardState());
                 Capture("ui-hud-mission");yield return new WaitForSecondsRealtime(.6f);
                 {
-                    // Gamepad reticle at a HUD scale other than 1, where rotated HUD lines used to drift apart.
+                    // Gamepad reticle at a HUD scale other than 1.
                     var reticlePad=InputSystem.AddDevice<Gamepad>();float oldScale=game.Save.settings.uiScale;game.Save.settings.uiScale=1.2f;
                     InputSystem.QueueStateEvent(reticlePad,new GamepadState{rightStick=new Vector2(.6f,.6f)});yield return new WaitForSecondsRealtime(.5f);
                     Capture("ui-gamepad-reticle");yield return new WaitForSecondsRealtime(.4f);
@@ -3339,7 +3339,7 @@ namespace MadeInArizona
                 SceneLuminance("shadow-"+new[]{"simple","low","medium","high"}[quality],view);
             }
         }
-        IEnumerator TestDisplayAndReticle()
+        IEnumerator TestDisplayModes()
         {
             var game=GameManager.Instance;
             int width=Screen.width,height=Screen.height;
@@ -3357,23 +3357,6 @@ namespace MadeInArizona
             game.ChooseWindowResolution(960,540);
             yield return new WaitForSecondsRealtime(.6f);
             Check("explicit window size applies",Screen.fullScreenMode==FullScreenMode.Windowed&&Screen.width==960&&Screen.height==540);
-
-            game.StartMission(0);
-            QuietMissionHostiles();
-            yield return new WaitForSecondsRealtime(1);
-            var mouse=InputSystem.AddDevice<Mouse>();
-            InputSystem.QueueStateEvent(mouse,new MouseState{position=new Vector2(Screen.width*.5f,Screen.height*.5f)});
-            var camera=Camera.main;
-            camera.cullingMask=0;
-            camera.clearFlags=CameraClearFlags.SolidColor;
-            camera.backgroundColor=Color.white;
-            yield return new WaitForSecondsRealtime(.6f);
-            var ui=game.GetComponent<GameUI>();
-            Check("reticle turns black over a light view",ui.ReticleInkForTest==Color.black);
-            camera.backgroundColor=Color.black;
-            yield return new WaitForSecondsRealtime(.6f);
-            Check("reticle turns white over a dark view",ui.ReticleInkForTest==Color.white);
-            InputSystem.RemoveDevice(mouse);
         }
 
         IEnumerator TestVehicleRoster()
