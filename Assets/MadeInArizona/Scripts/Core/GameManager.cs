@@ -80,6 +80,7 @@ namespace MadeInArizona
             gameObject.AddComponent<CoopSession>();
             gameObject.AddComponent<GameUI>();
             gameObject.AddComponent<SmokeTestRunner>();
+            if (LiveTestBridge.ShouldStart()) gameObject.AddComponent<LiveTestBridge>();
             if (TelemetryRecorder.Enabled) gameObject.AddComponent<TelemetryRecorder>();
             ApplySettings();
             ApplyDisplaySettings();

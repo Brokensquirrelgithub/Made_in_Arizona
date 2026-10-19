@@ -664,14 +664,8 @@ namespace MadeInArizona
             foreach (var cell in cells)
             {
                 Fragment f = AcquireFragment();
-                // Fracture cells remain physical targets: cars can kick them aside and projectile
-                // queries (which exclude Ignore Raycast) can hit and push them.
-                f.collideWithVehicles = true;
-                f.view.layer = 0;
-                foreach (var vehicle in VehicleController.Active)
-                    if (vehicle != null)
-                        foreach (var collider in vehicle.GetComponentsInChildren<Collider>())
-                            if (collider.enabled) Physics.IgnoreCollision(f.collider, collider, vehicle.IsPlayer);
+                // Keep the ground bounce, but leave fracture cells on Ignore Raycast like ordinary debris.
+                // Suspension and projectiles cannot hit them, and AcquireFragment ignores every vehicle.
                 f.mesh.sharedMesh = f.ownedMesh = cell.mesh;
                 f.renderer.sharedMaterial = cellMaterial;
                 f.t.SetPositionAndRotation(cell.center, Quaternion.identity);

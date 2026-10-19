@@ -91,7 +91,7 @@ namespace MadeInArizona
         {
             foreach (var exit in exits)
                 if (exit) ExplosionSystem.Burst(exit.position + exit.forward * .3f, new Color(.45f, .75f, 1), 9, 4.5f);
-            CameraController.Instance?.Shake(.12f);
+            if (vehicle && vehicle.IsLocalPlayer) CameraController.Instance?.Shake(.12f);
         }
 
         ParticleSystem Flame(Transform exit)

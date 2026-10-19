@@ -146,13 +146,13 @@ namespace MadeInArizona
                         ", max=" + Measure(Maximum(guest.frames), " ms") +
                         ", guest ping p95=" + Measure(Percentile(guestPing, .95f), " ms") +
                         ", host ping p95=" + Measure(Percentile(hostPing, .95f), " ms") +
-                        ", snapshot error p95=" + Measure(Percentile(guest.snapshotError, .95f), " m") +
+                        ", owner/host pose gap p95=" + Measure(Percentile(guest.snapshotError, .95f), " m") +
                         ", max=" + Measure(Maximum(guest.snapshotError), " m") +
                         ", inputs=" + guest.inputSent + ", snapshots=" + guest.snapshotReceived);
                     complete &= guest.started && guest.ended && guest.frames.Count > 0 &&
                         guest.inputSent > 0 && guest.snapshotReceived > 0;
                     if (Percentile(guest.frames, .95f) > 50) flags.Add("Guest " + clientId + " frame p95 exceeds 50 ms");
-                    if (Percentile(guest.snapshotError, .95f) > 2) flags.Add("Guest " + clientId + " correction error p95 exceeds 2 m");
+                    if (Percentile(guest.snapshotError, .95f) > 2) flags.Add("Guest " + clientId + " owner/host pose gap p95 exceeds 2 m");
                     if (host != null)
                     {
                         complete &= AppendRoute(report, "  Host to guest " + clientId, host, guestId, guest, hostId, flags);

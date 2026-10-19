@@ -26,8 +26,8 @@ namespace MadeInArizona
     public enum CoopFx { BowlingLaunch = 1, BowlingStrike = 2, MirrorDustLaunch = 3, MirrorDustStrike = 4, RallyHorn = 5, RepairHit = 6, LineStrike = 7, ConeStrike = 8 }
 
     /// <summary>
-    /// A small host-authoritative bridge for the existing code-created world. Relay supplies the
-    /// invitation and NGO supplies transport; the host owns simulation and all saves.
+    /// Relay supplies the invitation and NGO supplies transport. Each guest drives its own car;
+    /// the host owns combat, world simulation, mission progress, and saves.
     /// </summary>
     public sealed partial class CoopSession : MonoBehaviour
     {
@@ -45,7 +45,7 @@ namespace MadeInArizona
         const string FxMessage = "mia.coop.fx.v1";
         const string TraceRequestMessage = "mia.coop.trace-request.v1";
         const string TraceCaptureMessage = "mia.coop.trace-capture.v1";
-        const int Protocol = 11;
+        const int Protocol = 12;
         const int InputHistorySize = 256;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
@@ -105,7 +105,14 @@ namespace MadeInArizona
         }
         [Serializable] sealed class TuningPacket { public int protocol; public string tuning; }
         [Serializable] sealed class PinStatePacket { public int protocol, seed; public string flags; }
-        [Serializable] sealed class InputPacket { public CoopControls controls; }
+        [Serializable] sealed class InputPacket
+        {
+            public CoopControls controls;
+            public bool hasMotion;
+            public Vector3 position, velocity;
+            public Quaternion rotation;
+            public float yawRate;
+        }
         [Serializable] internal sealed class VehiclePacket
         {
             public int id, owner, archetype, faction, failedDepth, tick, appliedInputSequence;
@@ -411,10 +418,12 @@ namespace MadeInArizona
             var packet = JsonUtility.FromJson<InputPacket>(json);
             if (packet == null) return;
             var input = packet.controls;
+            if (input.sequence <= car.RemoteControls.sequence) return;
             input.move = Vector2.ClampMagnitude(input.move, 1);
             input.aim = Vector2.ClampMagnitude(input.aim, 1);
             input.elevation = Mathf.Clamp(input.elevation, -1, 1);
             car.SetRemoteControls(input);
+            if (packet.hasMotion) car.ApplyGuestMotion(packet.position, packet.rotation, packet.velocity, packet.yawRate);
             RecordInputReceived(sender, car, input.sequence);
         }
 
@@ -463,8 +472,8 @@ namespace MadeInArizona
                             Mathf.Clamp(roundTrip * .5f, .015f, .25f), .3f);
                     lastAcknowledgedInputSequence = packet.appliedInputSequence;
                 }
-                car.ReconcileLocalPrediction(packet.position, packet.rotation, packet.velocity, packet.yawRate,
-                    packet.appliedInputSequence, estimatedSnapshotAge);
+                // This guest owns its driving motion. Host snapshots still update health, weapons,
+                // and world state, but must never steer the owner's physics or camera back in time.
                 RecordOwnSnapshot(packet, car, estimatedSnapshotAge);
             }
             car.Weapons.AimAt(packet.aim);
@@ -702,7 +711,17 @@ namespace MadeInArizona
                         reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
                     sentInputControls[slot] = controls;
-                    Send(InputMessage, NetworkManager.ServerClientId, new InputPacket { controls = controls }, NetworkDelivery.Unreliable);
+                    var localCar = GameManager.Instance ? GameManager.Instance.Player : null;
+                    var packet = new InputPacket { controls = controls };
+                    if (localCar && localCar.IsLocallyPredicted && localCar.Body)
+                    {
+                        packet.hasMotion = true;
+                        packet.position = localCar.Body.position;
+                        packet.rotation = localCar.Body.rotation;
+                        packet.velocity = localCar.Body.linearVelocity;
+                        packet.yawRate = localCar.Body.angularVelocity.y;
+                    }
+                    Send(InputMessage, NetworkManager.ServerClientId, packet, NetworkDelivery.Unreliable);
                     RecordInputSent(controls.sequence);
                     queuedInteract = queuedSwap = false;
                 }

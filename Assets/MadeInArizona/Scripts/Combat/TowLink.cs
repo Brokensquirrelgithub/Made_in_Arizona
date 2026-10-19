@@ -109,7 +109,7 @@ namespace MadeInArizona
             ExplosionSystem.Burst(point, new Color(1, .7f, .25f), 18, 6);
             ExplosionSystem.ScatterDebris(point, 6, 5, new Color(.42f, .4f, .38f), car.Body ? car.Body.linearVelocity * .3f : Vector3.zero);
             AudioManager.Instance?.PlayCrash(point, share);
-            if (link.owner.IsPlayer) CameraController.Instance?.Shake(.12f + share * .25f);
+            if (link.owner.IsLocalPlayer) CameraController.Instance?.Shake(.12f + share * .25f);
         }
 
         void DrawCable()

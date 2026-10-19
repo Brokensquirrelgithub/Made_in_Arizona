@@ -35,6 +35,21 @@ namespace MadeInArizona
         InputActionRebindingExtensions.RebindingOperation rebind;
         bool gameplayEnabled = true;
         float mouseTravel;
+        bool automationDriving, automationBoost, automationDrift;
+        Vector2 automationMove;
+        float automationUntil;
+
+        /// <summary>Short, local-only driving input for an explicitly enabled development bridge.</summary>
+        public void SetAutomationDrive(Vector2 direction, float seconds, bool useBoost, bool useDrift)
+        {
+            automationMove = Vector2.ClampMagnitude(direction, 1f);
+            automationUntil = Time.unscaledTime + Mathf.Clamp(seconds, .05f, 5f);
+            automationBoost = useBoost;
+            automationDrift = useDrift;
+            automationDriving = true;
+        }
+
+        public void StopAutomationDrive() { automationDriving = false; automationMove = Vector2.zero; }
 
         void Awake()
         {
@@ -106,7 +121,7 @@ namespace MadeInArizona
             // The HUD draws its own reticle; the system arrow would be a second one.
             bool playing = GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
             Cursor.visible = !playing || GameUI.ConsoleOpen;
-            if (GameUI.ConsoleOpen || Rebinding || !gameplayEnabled) { ClearGameplay(); return; }
+            if (GameUI.ConsoleOpen || Rebinding || !gameplayEnabled) { StopAutomationDrive(); ClearGameplay(); return; }
             var settings = GameManager.Instance != null ? GameManager.Instance.Save?.settings : null;
             bool racing = settings != null && settings.racingStyle;
             Vector2 rawMove=Vector2.ClampMagnitude(move.ReadValue<Vector2>(),1);
@@ -182,6 +197,11 @@ namespace MadeInArizona
             Reverse = racing ? racingBrake>.1f : shoulderReverse && reverse.IsPressed();
             ManualReverse = racing || shoulderReverse && UsingGamepad;
             SwapPressed = racing ? PressedThisFrame(swap,false)||(pad!=null&&pad.buttonNorth.wasPressedThisFrame) : swap.WasPressedThisFrame();
+            if (automationDriving)
+            {
+                if (!playing || Time.unscaledTime >= automationUntil) StopAutomationDrive();
+                else { Move = automationMove; Boost = automationBoost; Drift = automationDrift; Reverse = false; ManualReverse = false; }
+            }
         }
 
         static Vector2 RacingMove(VehicleController car,float steer,float pedal,bool reversing)

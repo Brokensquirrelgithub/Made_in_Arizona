@@ -1,4 +1,4 @@
-"""Compare guest driving timelines with the host's authoritative timeline.
+"""Compare guest-owned driving timelines with the host's replicated hitbox.
 
 Usage: python Tools/analyze_coop_trace.py <host CoopDiagnostics/capture-id folder>
 """
@@ -98,10 +98,10 @@ def compare(host_rows, guest_rows, guest_id):
           f"p95 {fmt(percentile(distances, .95), ' m')}, max {fmt(max(distances) if distances else None, ' m')}")
     print(f"  Input send to host receive: median {fmt(statistics.median(input_transit) if input_transit else None, ' ms')}, "
           f"p95 {fmt(percentile(input_transit, .95), ' ms')} ({len(input_transit)} matched inputs)")
-    print(f"  Pre-correction snapshot error: median {fmt(percentile(snapshot_errors, .5), ' m')}, "
+    print(f"  Owner/host snapshot pose gap: median {fmt(percentile(snapshot_errors, .5), ' m')}, "
           f"p95 {fmt(percentile(snapshot_errors, .95), ' m')} ({len(snapshot_errors)} snapshots)")
-    if replay_counts:
-        print(f"  Snapshots with buffered movement replayed: {sum(count > 0 for count in replay_counts)}/{len(replay_counts)}, "
+    if any(replay_counts):
+        print(f"  Legacy snapshots with buffered movement replayed: {sum(count > 0 for count in replay_counts)}/{len(replay_counts)}, "
               f"p95 {fmt(percentile(replay_counts, .95))} physics steps")
     print(f"  Snapshot send to receive: median {fmt(percentile(snapshot_transit, .5), ' ms')}, "
           f"p95 {fmt(percentile(snapshot_transit, .95), ' ms')} ({len(snapshot_transit)} matched snapshots)")

@@ -381,7 +381,7 @@ namespace MadeInArizona
             if (!beamWeapon) AudioManager.Instance?.PlayShot(muzzle, weapon);
             if (weapon.id == "minigun" && owner.Body && !owner.Body.isKinematic)
                 owner.Body.AddForce(-Vector3.ProjectOnPlane(aimDirection, Vector3.up).normalized * .12f, ForceMode.VelocityChange);
-            if (owner.IsPlayer && (weapon.blastRadius > 0 || weapon.id == "railgun")) CameraController.Instance?.Shake(weapon.id == "railgun" ? .2f : .1f);
+            if (owner.IsLocalPlayer && (weapon.blastRadius > 0 || weapon.id == "railgun")) CameraController.Instance?.Shake(weapon.id == "railgun" ? .2f : .1f);
         }
         void Pellets(WeaponDefinition weapon, Vector3 muzzle, float damage, int pellets, float spacing, float lifetime, bool firecrackers)
         {

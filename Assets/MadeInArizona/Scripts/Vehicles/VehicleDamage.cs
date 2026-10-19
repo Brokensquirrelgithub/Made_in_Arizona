@@ -151,7 +151,7 @@ namespace MadeInArizona
                 GameManager.Instance?.Notify("EMERGENCY REPAIR FOAM");
             }
             LastDamageFraction=(previousHealth-Health)/Mathf.Max(1,MaxHealth);
-            if (vehicle.IsPlayer)
+            if (vehicle.IsLocalPlayer)
             {
                 AudioManager.Instance?.PlayHurt(LastDamageFraction);
                 CameraController.Instance?.Shake(Mathf.Clamp(.06f+LastDamageFraction*3f,.06f,.6f));

@@ -66,6 +66,7 @@ namespace MadeInArizona
         public bool IsPlayer { get; private set; }
         public bool IsNetworkProxy { get; private set; }
         public bool IsLocallyPredicted { get; private set; }
+        public bool IsLocalPlayer => IsPlayer && GameManager.Instance && GameManager.Instance.Player == this;
         public int LastAppliedInputSequence { get; private set; }
         Vector3 networkPosition;
         Vector3 networkVelocity;
@@ -112,6 +113,20 @@ namespace MadeInArizona
             RemoteControls = controls;
             remoteInputAt = Time.unscaledTime;
         }
+        /// <summary>Place the host's hitbox at the guest's locally simulated pose.</summary>
+        public void ApplyGuestMotion(Vector3 position, Quaternion rotation, Vector3 velocity, float yawRate)
+        {
+            if (!IsPlayer || IsNetworkProxy || !Body || Damage == null || Damage.IsDead) return;
+            if (!Finite(position.x) || !Finite(position.y) || !Finite(position.z) ||
+                !Finite(velocity.x) || !Finite(velocity.y) || !Finite(velocity.z) ||
+                !Finite(rotation.x) || !Finite(rotation.y) || !Finite(rotation.z) || !Finite(rotation.w) ||
+                !Finite(yawRate) || Quaternion.Dot(rotation, rotation) < .25f) return;
+            Body.position = position;
+            Body.rotation = Quaternion.Normalize(rotation);
+            Body.linearVelocity = velocity;
+            Body.angularVelocity = Vector3.up * yawRate;
+        }
+        static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         public void SetNetworkProxy(bool predictLocal = false)
         {
             IsNetworkProxy = true;
@@ -249,6 +264,8 @@ namespace MadeInArizona
         /// <summary>Motion available to local presentation, including host motion on a kinematic guest proxy.</summary>
         public Vector3 PresentationVelocity => IsNetworkProxy && !IsLocallyPredicted ? networkVelocity
             : Body ? Body.linearVelocity : Vector3.zero;
+        public float PresentationYawRate => IsNetworkProxy && !IsLocallyPredicted ? networkYawRate
+            : Body ? Body.angularVelocity.y : 0;
         public float RPM { get; private set; } = 900;
         public float Throttle { get; private set; }
         /// <summary>Audible throttle lift while the automatic disengages and reconnects its clutch.</summary>
@@ -565,7 +582,6 @@ namespace MadeInArizona
             if (!initialized || Damage.IsDead || Body.isKinematic || (IsNetworkProxy && !IsLocallyPredicted)) return;
             Boosting = false;
             DriftNitroActive=false;
-            if (IsLocallyPredicted) { CapturePredictionMotion(); ApplyPredictionCorrection(); }
             KeepYawOnly();
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying)
             {
@@ -804,7 +820,6 @@ namespace MadeInArizona
             preCollisionVelocity = Body.linearVelocity;
             bodyAcceleration = Vector3.Lerp(bodyAcceleration, (Body.linearVelocity - lastVelocity) / Time.fixedDeltaTime, .5f);
             lastVelocity = Body.linearVelocity;
-            if (IsLocallyPredicted) SetPredictionBaseline();
         }
         bool SupportSuspension()
         {
@@ -1097,7 +1112,7 @@ namespace MadeInArizona
                 spinningWreck ? null : collision.gameObject, environmental: spinningWreck);
             if (impact < 4 && other == null) return;
             ExplosionSystem.Burst(point, new Color(1, .65f, .17f), 9, 4);
-            if (IsPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(impact / 28) * .25f);
+            if (IsLocalPlayer) CameraController.Instance?.Shake(Mathf.Clamp01(impact / 28) * .25f);
         }
         /// <summary>
         /// Ground is judged by the contact normals alone: any mostly horizontal contact (the terrain, roads, a rock's

@@ -91,7 +91,7 @@ namespace MadeInArizona
             headVelocity = direction * 34f + Vector3.up * 3.5f;
             ExplosionSystem.Burst(HeadPosition, new Color(1f, .65f, .22f, .85f), 12, 2.2f);
             Bang(HeadPosition, .75f);
-            if (owner.IsPlayer) CameraController.Instance?.Shake(.13f);
+            if (owner.IsLocalPlayer) CameraController.Instance?.Shake(.13f);
         }
 
         Vector3 Pivot => owner ? owner.transform.position + Vector3.up * 1.65f : transform.position;
@@ -250,7 +250,7 @@ namespace MadeInArizona
             }
             else prop.ApplyProjectileHit(damage, point, owner.gameObject, push);
             Bang(point, Mathf.Clamp01(speed / 32f));
-            if (owner.IsPlayer) CameraController.Instance?.Shake(.08f);
+            if (owner.IsLocalPlayer) CameraController.Instance?.Shake(.08f);
             angularSpeed *= .74f;
         }
 

@@ -565,6 +565,8 @@ namespace MadeInArizona
             bool traceTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ? "-miaCoopTraceHostTest" : "-miaCoopTraceGuestTest") >= 0;
             if (traceTest)
             {
+                var guestOnHost = host ? VehicleController.Active.FirstOrDefault(v => v && v.IsPlayer && v != game.Player) : null;
+                Vector3 guestStartOnHost = guestOnHost ? guestOnHost.Body.position : Vector3.zero;
                 if (!host)
                 {
                     Vector3 traceStart = game.Player.Body.position;
@@ -575,8 +577,16 @@ namespace MadeInArizona
                     yield return null;
                     InputSystem.RemoveDevice(traceKeyboard);
                     Check("guest trace records active driving", Vector3.Distance(traceStart, game.Player.Body.position) > 1f);
-                    Check("guest replays input history after host acknowledgments", game.Player.PredictionReplayCount > 0);
+                    Check("guest remains locally driven after host acknowledgments", game.Player.PredictionReplayCount == 0);
                     Check("guest requests synchronized trace", coop.RequestDiagnosticCapture().StartsWith("Requested a synchronized"));
+                }
+                else
+                {
+                    float motionDeadline = Time.unscaledTime + 10f;
+                    while (guestOnHost && Vector3.Distance(guestStartOnHost, guestOnHost.Body.position) <= 1f &&
+                        Time.unscaledTime < motionDeadline) yield return null;
+                    Check("host hitbox follows guest-driven motion", guestOnHost &&
+                        Vector3.Distance(guestStartOnHost, guestOnHost.Body.position) > 1f);
                 }
                 float traceDeadline = Time.unscaledTime + 30;
                 while (Time.unscaledTime < traceDeadline &&
@@ -687,12 +697,16 @@ namespace MadeInArizona
             var explosion = FindAnyObjectByType<ExplosionSystem>();
             int cellCount = 0;
             bool haveCellBounds = false;
+            bool cellsIgnoreCars = true;
             Bounds assembled = new Bounds();
             double cellVolume = 0;
             foreach (var mesh in explosion.GetComponentsInChildren<MeshFilter>())
             {
                 if (!mesh.sharedMesh || !mesh.sharedMesh.name.StartsWith("Voronoi fracture cell")) continue;
                 cellCount++;
+                var collider = mesh.GetComponent<Collider>();
+                cellsIgnoreCars &= collider && collider.gameObject.layer == 2 &&
+                    Physics.GetIgnoreCollision(collider, game.Player.Hull);
                 var pieceBounds = mesh.GetComponent<Renderer>().bounds;
                 if (!haveCellBounds) { assembled = pieceBounds; haveCellBounds = true; }
                 else assembled.Encapsulate(pieceBounds);
@@ -703,6 +717,7 @@ namespace MadeInArizona
             Check("broken prop becomes cells within its original outline", cellCount >= 6 &&
                 Vector3.Distance(assembled.min, original.min) < .03f && Vector3.Distance(assembled.max, original.max) < .03f &&
                 Math.Abs(cellVolume - 8.0) < .25);
+            Check("fracture cells bounce locally without entering car or shot queries", cellCount >= 6 && cellsIgnoreCars);
             Destroy(fractureProbe);
             yield return new WaitForSecondsRealtime(.18f);
             Check("fracture cells release into physics", explosion.GetComponentsInChildren<MeshFilter>().Any(mesh =>
@@ -934,7 +949,6 @@ namespace MadeInArizona
             car.SetNetworkProxy(true);
             car.ApplyNetworkMotion(origin, rotation, Vector3.zero, car.Damage.Health,
                 car.Damage.MaxHealth, car.BoostCharge, car.RPM, car.Throttle, 0, false);
-            car.ReconcileLocalPrediction(origin, rotation, Vector3.zero, 0, 0, 0);
             Check("guest car runs local physics before host updates", car.IsLocallyPredicted &&
                 !car.Body.isKinematic && car.Body.detectCollisions);
             var keys = InputSystem.AddDevice<Keyboard>();
@@ -946,14 +960,46 @@ namespace MadeInArizona
             yield return null;
             InputSystem.RemoveDevice(keys);
             Vector3 before = car.Body.position;
+            Vector3 velocityBefore = car.Body.linearVelocity;
             Vector3 right = car.transform.right;
-            car.ReconcileLocalPrediction(before + right * 3f, car.Body.rotation, car.Body.linearVelocity, 0, 0, .2f);
-            Check("guest replays recent driving movement", car.LastPredictionReplaySteps > 0);
-            Check("host correction does not immediately snap guest car", Vector3.Distance(before, car.Body.position) < .01f);
-            for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
-            Check("guest eases toward host correction", Vector3.Dot(car.Body.position - before, right) > .4f);
-            Check("guest camera buffers physics correction separately", CameraController.Instance &&
-                Vector3.Distance(CameraController.Instance.PresentedTargetPosition, car.transform.position) > .05f);
+            car.ApplyNetworkMotion(before + right * 30f, car.Body.rotation, Vector3.zero,
+                car.Damage.Health, car.Damage.MaxHealth, car.BoostCharge, car.RPM, car.Throttle, 0, false);
+            Check("host snapshot cannot pull guest driving backward", Vector3.Distance(before, car.Body.position) < .01f &&
+                Vector3.Distance(velocityBefore, car.Body.linearVelocity) < .01f);
+            Check("guest camera follows guest-owned motion", CameraController.Instance &&
+                CameraController.Instance.Target == car.transform);
+
+            var hostGuestObject = new GameObject("Guest motion host probe");
+            hostGuestObject.transform.SetParent(game.World.transform);
+            hostGuestObject.transform.SetPositionAndRotation(before + right * 8f, rotation);
+            var hostGuest = hostGuestObject.AddComponent<VehicleController>();
+            hostGuest.Initialize(car.Definition, VehicleStats.From(car.Definition), true, EnemyFaction.Sunsprawl);
+            Vector3 guestReported = before + right * 12f;
+            Vector3 guestVelocity = right * 9f;
+            hostGuest.ApplyGuestMotion(guestReported, rotation, guestVelocity, .3f);
+            Check("host accepts guest-owned pose for hitbox and peer snapshots",
+                Vector3.Distance(hostGuest.Body.position, guestReported) < .01f &&
+                Vector3.Distance(hostGuest.Body.linearVelocity, guestVelocity) < .01f);
+            Destroy(hostGuestObject);
+
+            // A peer's car is kinematic on this machine. Its local VFX still need to follow the received motion.
+            var visualPeer = new GameObject("Co-op local tyre VFX probe");
+            visualPeer.transform.SetParent(game.World.transform);
+            Vector3 visualStart = car.Body.position + Vector3.right * 7f;
+            if (GeneratedWorld.Active) visualStart.y = GeneratedWorld.HeightAt(visualStart) + 1f;
+            visualPeer.transform.SetPositionAndRotation(visualStart, Quaternion.identity);
+            var peer = visualPeer.AddComponent<VehicleController>();
+            peer.Initialize(car.Definition, VehicleStats.From(car.Definition), true, EnemyFaction.Sunsprawl);
+            peer.SetNetworkProxy();
+            WorldBuilder.SurfaceOverride = SurfaceKind.Asphalt;
+            peer.ApplyNetworkMotion(visualStart, Quaternion.identity, new Vector3(9, 0, 8),
+                peer.Damage.Health, peer.Damage.MaxHealth, 1, 5000, 1, .3f, false);
+            yield return new WaitForSecondsRealtime(.45f);
+            var tyres = peer.GetComponent<TireEffects>();
+            Check("remote co-op car locally draws drift smoke and tyre marks", peer.Body.isKinematic && tyres &&
+                tyres.SmokePuffsEmitted > 0 && tyres.MarkSegmentsEmitted > 0);
+            WorldBuilder.SurfaceOverride = null;
+            Destroy(visualPeer);
         }
         IEnumerator TestCoopFeatures()
         {

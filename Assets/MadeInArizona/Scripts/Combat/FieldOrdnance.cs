@@ -505,7 +505,7 @@ namespace MadeInArizona
                     transform.position += Vector3.up * .15f;
                     StrikeEffects(transform.position);
                     CoopSession.Instance?.PublishFx(CoopFx.BowlingStrike, transform.position, velocity);
-                    if (owner && owner.IsPlayer) CameraController.Instance?.Shake(.16f);
+                    if (owner && owner.IsLocalPlayer) CameraController.Instance?.Shake(.16f);
                 }
             GroundFollow(.54f, true);
             velocity *= 1 - .12f * dt;

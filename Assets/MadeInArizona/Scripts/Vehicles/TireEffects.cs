@@ -15,14 +15,18 @@ namespace MadeInArizona
         sealed class Track { public bool active; public Vector3 left, right, center; public float along, strength, patchAt; }
         VehicleController vehicle;
         public bool IsSkidding { get; private set; }
+        internal int MarkSegmentsEmitted { get; private set; }
+        internal int SmokePuffsEmitted { get; private set; }
         readonly Track[] tracks = { new Track(), new Track(), new Track(), new Track() };
         readonly float[] smokeCarry = new float[4], gritCarry = new float[4];
+        readonly RaycastHit[] visualGroundHits = new RaycastHit[12];
         const float TyreWidth = .27f, MinSegment = .3f, EffectRange = 90;
         static readonly Color Rubber = new Color(.14f, .135f, .13f);
 
         public void Bind(VehicleController owner)
         {
             vehicle = owner;
+            MarkSegmentsEmitted = SmokePuffsEmitted = 0;
             for (int i = 0; i < 4; i++) { tracks[i].active = false; smokeCarry[i] = gritCarry[i] = 0; }
         }
 
@@ -30,29 +34,57 @@ namespace MadeInArizona
         {
             IsSkidding = false;
             var game = GameManager.Instance;
-            if (!vehicle || vehicle.Body == null || vehicle.Damage == null || vehicle.Damage.IsDead || vehicle.Body.isKinematic || !game || !game.IsPlaying) { EndAll(); return; }
+            bool remoteVisual = vehicle && vehicle.IsNetworkProxy && !vehicle.IsLocallyPredicted;
+            if (!vehicle || vehicle.Body == null || vehicle.Damage == null || vehicle.Damage.IsDead ||
+                (vehicle.Body.isKinematic && !remoteVisual) || !game || !game.IsPlaying) { EndAll(); return; }
             if (CameraController.HasFocus && (vehicle.Body.position - CameraController.FocusPoint).sqrMagnitude > EffectRange * EffectRange) { EndAll(); return; }
             var tuning = DevTuning.Current;
             int quality = game.Save != null ? game.Save.settings.quality : 2;
             float scale = quality == 0 ? .45f : quality == 1 ? .7f : quality == 2 ? 1 : 1.35f;
             SurfaceKind surface = vehicle.Surface;
             bool paved = surface == SurfaceKind.Asphalt || surface == SurfaceKind.Oil;
-            Vector3 velocity = vehicle.Body.linearVelocity;
+            Vector3 velocity = vehicle.PresentationVelocity;
             float speed = new Vector2(velocity.x, velocity.z).magnitude;
             for (int i = 0; i < 4; i++)
             {
-                if (!vehicle.WheelContact(i, out Vector3 point, out Vector3 normal)) { End(i); continue; }
+                Vector3 point, normal;
+                if (!(remoteVisual ? VisualWheelContact(i, out point, out normal)
+                    : vehicle.WheelContact(i, out point, out normal))) { End(i); continue; }
                 // Centre the effects under the tyre itself rather than the suspension probe just inboard of it.
                 var wheel = vehicle.Wheel(i);
                 if (wheel) point = wheel.position - normal * Vector3.Dot(wheel.position - point, normal);
                 bool driven = vehicle.Driven(i), rear = i >= 2;
                 float slip = Mathf.Max(driven ? vehicle.WheelSpin : 0, vehicle.SideSlip * (rear ? 1 : .6f));
-                Vector3 pointVelocity = Vector3.ProjectOnPlane(vehicle.Body.GetPointVelocity(point), normal);
+                Vector3 wheelVelocity = remoteVisual
+                    ? velocity + Vector3.Cross(Vector3.up * vehicle.PresentationYawRate, point - vehicle.Body.position)
+                    : vehicle.Body.GetPointVelocity(point);
+                Vector3 pointVelocity = Vector3.ProjectOnPlane(wheelVelocity, normal);
                 if (surface == SurfaceKind.Water) { End(i); continue; }
                 Marks(i, point, normal, pointVelocity, slip, driven, rear, surface, paved, tuning);
                 if (paved) Smoke(i, point, normal, pointVelocity, slip, driven, tuning, scale);
                 else Grit(i, point, normal, pointVelocity, slip, driven, rear, surface, speed, tuning, scale);
             }
+        }
+
+        // Other players' cars are kinematic here. Probe the rendered wheels against this client's ground so their
+        // smoke, grit and tracks remain purely local visuals, with no tyre events or extra physics to synchronize.
+        bool VisualWheelContact(int index, out Vector3 point, out Vector3 normal)
+        {
+            point = Vector3.zero; normal = Vector3.up;
+            var wheel = vehicle.Wheel(index);
+            if (!wheel) return false;
+            Vector3 origin = wheel.position + Vector3.up * .75f;
+            int count = Physics.RaycastNonAlloc(origin, Vector3.down, visualGroundHits, 1.8f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = visualGroundHits[i];
+                if (!hit.collider || hit.normal.y < .5f || hit.distance >= nearest ||
+                    hit.collider.GetComponentInParent<VehicleController>()) continue;
+                nearest = hit.distance; point = hit.point; normal = hit.normal;
+            }
+            return nearest < float.MaxValue;
         }
 
         void Marks(int i, Vector3 point, Vector3 normal, Vector3 pointVelocity, float slip, bool driven, bool rear, SurfaceKind surface, bool paved, DevTuning tuning)
@@ -84,6 +116,7 @@ namespace MadeInArizona
             if (moved >= Mathf.Clamp(pointVelocity.magnitude * .045f, MinSegment, 1.2f))
             {
                 TireMarks.Segment(track.left, track.right, center - across, center + across, tint, track.strength, strength, track.along, track.along + moved, !paved);
+                MarkSegmentsEmitted++;
                 track.left = center - across; track.right = center + across; track.center = center;
                 track.strength = strength; track.along += moved;
             }
@@ -95,6 +128,7 @@ namespace MadeInArizona
                 Vector3 side = Vector3.Cross(normal, along).normalized * TyreWidth * .55f;
                 float layer = .14f * vehicle.WheelSpin;
                 TireMarks.Segment(center - along - side, center - along + side, center + along - side, center + along + side, Rubber, layer, layer, 0, .6f, false);
+                MarkSegmentsEmitted++;
             }
         }
 
@@ -111,6 +145,7 @@ namespace MadeInArizona
                 Vector3 drift = pointVelocity * .25f + back * spin * Random.Range(2f, 4.5f) + Random.insideUnitSphere * .8f + normal * Random.Range(.4f, 1.1f);
                 Vector3 at = point + normal * .3f + back * .25f + Random.insideUnitSphere * .15f;
                 ExplosionSystem.TireSmoke(at, drift, Random.Range(.8f, 1.3f) * (.7f + slip * .5f), Random.Range(2.2f, 3.6f), Mathf.Lerp(.3f, .75f, slip));
+                SmokePuffsEmitted++;
             }
         }
 
