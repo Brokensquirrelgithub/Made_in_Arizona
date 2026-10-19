@@ -66,6 +66,10 @@ namespace MadeInArizona
                 Rect(x, 18, 360, 42, Ink);
                 Text(x + 8, 27, 344, 24, label, 15, Lime, true, TextAnchor.MiddleCenter);
             }
+            Rect(x, 62, 360, 26, Ink);
+            float ping = coop.WorstPingMilliseconds;
+            Text(x + 8, 65, 344, 20, coop.PingSummary, 13,
+                ping < 0 ? Muted : ping >= 150 ? Orange : Lime, true, TextAnchor.MiddleCenter);
         }
 
         void DrawTeammateWaypoints()

@@ -64,10 +64,13 @@ namespace MadeInArizona
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyGuestTest")>=0 ||
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0 ||
-                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceGuestTest")>=0)
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceGuestTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchHostTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchGuestTest")>=0)
             {
                 yield return TestCoopLobbyLive(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
-                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0);
+                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0 ||
+                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchHostTest")>=0);
                 FinishResults(); yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
@@ -577,6 +580,51 @@ namespace MadeInArizona
                     Directory.Exists(coop.LastTracePath) && Directory.GetFiles(coop.LastTracePath, "guest-*.csv").Length > 0 &&
                     File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"));
                 else Check("guest receives host collection receipt", coop.LastTraceUploadConfirmed);
+            }
+            bool benchTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ?
+                "-miaCoopBenchHostTest" : "-miaCoopBenchGuestTest") >= 0;
+            if (benchTest)
+            {
+                if (!host)
+                {
+                    Check("guest requests coordinated co-op benchmark",
+                        coop.RequestCoopBenchmark().StartsWith("Requested co-op benchmark"));
+                    var benchKeyboard = InputSystem.AddDevice<Keyboard>();
+                    InputSystem.QueueStateEvent(benchKeyboard, new KeyboardState(Key.W));
+                    yield return new WaitForSecondsRealtime(2);
+                    InputSystem.QueueStateEvent(benchKeyboard, new KeyboardState());
+                    yield return null;
+                    InputSystem.RemoveDevice(benchKeyboard);
+                }
+                float benchDeadline = Time.unscaledTime + 40;
+                while (Time.unscaledTime < benchDeadline &&
+                    (string.IsNullOrEmpty(coop.LastTracePath) || !Directory.Exists(coop.LastTracePath) ||
+                     (host && (!File.Exists(Path.Combine(coop.LastTracePath, "manifest.txt")) ||
+                         !File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"))) ||
+                     (!host && !coop.LastTraceUploadConfirmed))) yield return null;
+                Check("benchmark captures a shared ID on all machines", !string.IsNullOrEmpty(coop.LastBenchmarkId) &&
+                    !string.IsNullOrEmpty(coop.LastTracePath) &&
+                    Path.GetFileName(coop.LastTracePath) == coop.LastBenchmarkId);
+                Check("co-op tracks live round-trip ping", coop.WorstPingMilliseconds >= 0);
+                if (!string.IsNullOrEmpty(coop.LastTracePath) && Directory.Exists(coop.LastTracePath))
+                {
+                    string local = Directory.GetFiles(coop.LastTracePath, host ? "host-*.csv" : "guest-*.csv")
+                        .FirstOrDefault();
+                    string csv = File.Exists(local) ? File.ReadAllText(local) : "";
+                    Check("benchmark records sends, receives and round trips", csv.Contains("bench_sent,") &&
+                        csv.Contains("bench_received,") && csv.Contains("bench_rtt,"));
+                    Check("benchmark retains the full probe window", csv.Split('\n').Count(line =>
+                        line.StartsWith("bench_sent,", StringComparison.Ordinal)) >= 200);
+                    if (host)
+                    {
+                        string manifestPath = Path.Combine(coop.LastTracePath, "manifest.txt");
+                        string manifest = File.Exists(manifestPath) ? File.ReadAllText(manifestPath) : "";
+                        Check("host collects all guest benchmark logs", manifest.Contains("type=coopbench") &&
+                            manifest.Contains("=received") &&
+                            Directory.GetFiles(coop.LastTracePath, "guest-*.csv").Length == 1);
+                    }
+                    else Check("guest receives benchmark upload receipt", coop.LastTraceUploadConfirmed);
+                }
             }
             if (host) yield return new WaitForSecondsRealtime(3);
         }

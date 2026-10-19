@@ -34,6 +34,26 @@ def position(row):
     return tuple(float(row[axis]) for axis in ("px", "py", "pz"))
 
 
+def compare_probes(sender_rows, receiver_rows, sender_id, receiver_id, label):
+    sent = {int(row["input_sent"]) for row in sender_rows if row["kind"] == "bench_sent"
+            and row["owner"] == sender_id and row["vehicle_id"] == receiver_id}
+    received = {int(row["input_sent"]) for row in receiver_rows if row["kind"] == "bench_received"
+                and row["owner"] == sender_id and row["vehicle_id"] == receiver_id}
+    rtts = sorted((int(row["input_sent"]), float(row["lead_ms"])) for row in sender_rows
+                  if row["kind"] == "bench_rtt" and row["owner"] == sender_id
+                  and row["vehicle_id"] == receiver_id)
+    if not sent:
+        return
+    delays = [delay for sequence, delay in rtts if sequence in sent]
+    jitter = [abs(later[1] - earlier[1]) for earlier, later in zip(rtts, rtts[1:])]
+    delivered = len(sent & received)
+    print(f"  {label} probes: {delivered}/{len(sent)} delivered "
+          f"({100 * (len(sent) - delivered) / len(sent):.1f}% loss); "
+          f"RTT median {fmt(percentile(delays, .5), ' ms')}, "
+          f"p95 {fmt(percentile(delays, .95), ' ms')}; "
+          f"RTT variation p95 {fmt(percentile(jitter, .95), ' ms')}")
+
+
 def compare(host_rows, guest_rows, guest_id):
     host_physics = [row for row in host_rows if row["kind"] == "physics" and row["owner"] == guest_id]
     guest_physics = [row for row in guest_rows if row["kind"] == "physics" and row["owner"] == guest_id]
@@ -85,6 +105,20 @@ def compare(host_rows, guest_rows, guest_id):
               f"p95 {fmt(percentile(replay_counts, .95))} physics steps")
     print(f"  Snapshot send to receive: median {fmt(percentile(snapshot_transit, .5), ' ms')}, "
           f"p95 {fmt(percentile(snapshot_transit, .95), ' ms')} ({len(snapshot_transit)} matched snapshots)")
+    for label, rows, source, target in (("Host", host_rows, "0", guest_id),
+                                         ("Guest", guest_rows, guest_id, "0")):
+        live_ping = [float(row["lead_ms"]) for row in rows if row["kind"] == "live_ping"
+                     and row["owner"] == source and row["vehicle_id"] == target]
+        if live_ping:
+            print(f"  {label} live ping: median {fmt(percentile(live_ping, .5), ' ms')}, "
+                  f"p95 {fmt(percentile(live_ping, .95), ' ms')}")
+    compare_probes(host_rows, guest_rows, "0", guest_id, "Host to guest")
+    compare_probes(guest_rows, host_rows, guest_id, "0", "Guest to host")
+    for label, rows in (("Host", host_rows), ("Guest", guest_rows)):
+        frame_times = [float(row["lead_ms"]) for row in rows if row["kind"] == "bench_frame"]
+        if frame_times:
+            print(f"  {label} frame time: p95 {fmt(percentile(frame_times, .95), ' ms')}, "
+                  f"max {fmt(max(frame_times), ' ms')}")
 
 
 def main():
@@ -99,7 +133,8 @@ def main():
     print(f"Capture {args.capture.name}: {len(host_rows)} host rows, {len(guests)} guest file(s)")
     for guest in guests:
         compare(host_rows, read_rows(guest), guest.stem.removeprefix("guest-"))
-    print("Clock offset assumes similar median delay in both directions; timing and position differences are estimates.")
+    print("Clock offset assumes similar median delay in both directions; one-way timing and position differences are estimates.")
+    print("Probe loss counts datagrams missing from the receiver trace. RTT variation is the p95 absolute change between consecutive echoed probes.")
 
 
 if __name__ == "__main__":

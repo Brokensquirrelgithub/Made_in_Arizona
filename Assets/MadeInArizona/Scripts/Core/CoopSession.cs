@@ -45,7 +45,7 @@ namespace MadeInArizona
         const string FxMessage = "mia.coop.fx.v1";
         const string TraceRequestMessage = "mia.coop.trace-request.v1";
         const string TraceCaptureMessage = "mia.coop.trace-capture.v1";
-        const int Protocol = 10;
+        const int Protocol = 11;
         const int InputHistorySize = 256;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
@@ -684,6 +684,7 @@ namespace MadeInArizona
         {
             TickLobby();
             TickBalance();
+            UpdatePing();
             UpdateSpectatorCamera();
             if (IsClient && remoteWorldReady && remoteMode != 0)
             {

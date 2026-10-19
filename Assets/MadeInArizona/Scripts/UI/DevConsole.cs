@@ -7,7 +7,7 @@ namespace MadeInArizona
 {
     public sealed partial class GameUI
     {
-        static readonly string[] consoleCommands = { "help", "clear", "status", "cooplog", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "invulnerable", "garage" };
+        static readonly string[] consoleCommands = { "help", "clear", "status", "cooplog", "coopbench", "money", "scrap", "unlock", "weapon", "field", "car", "repair", "nitro", "invulnerable", "garage" };
         readonly List<string> consoleLines = new List<string>();
         readonly List<string> consoleHistory = new List<string>();
         string consoleInput = "", completionSeed;
@@ -34,7 +34,8 @@ namespace MadeInArizona
         {
             if (message.StartsWith("MIA_COOP_TRACE_SAVED:", StringComparison.Ordinal) ||
                 message.StartsWith("MIA_COOP_TRACE_COLLECTED:", StringComparison.Ordinal) ||
-                message.StartsWith("MIA_COOP_TRACE_UPLOADED:", StringComparison.Ordinal)) WriteConsole(message);
+                message.StartsWith("MIA_COOP_TRACE_UPLOADED:", StringComparison.Ordinal) ||
+                message.StartsWith("MIA_COOP_BENCH_", StringComparison.Ordinal)) WriteConsole(message);
             else if (type == LogType.Warning || type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
                 WriteConsole("[" + type + "] " + message);
         }
@@ -121,6 +122,7 @@ namespace MadeInArizona
             if (verb == "car") foreach (var car in ContentCatalog.Vehicles) if (car) AddSuggestion(result, verb, car.id, arg);
             if (verb == "unlock") foreach (string option in new[] { "cars", "weapons", "missions", "all" }) AddSuggestion(result, verb, option, arg);
             if (verb == "invulnerable") foreach (string option in new[] { "on", "off" }) AddSuggestion(result, verb, option, arg);
+            if (verb == "coopbench" || verb == "cooplog") AddSuggestion(result, verb, "path", arg);
             return result;
         }
 
@@ -164,6 +166,7 @@ namespace MadeInArizona
                 WriteConsole("weapon <id>, field <id>, car <id>  •  Tab lists IDs");
                 WriteConsole("invulnerable on|off  •  ignore all player damage this sortie");
                 WriteConsole("cooplog  •  save the previous 15 seconds from every co-op player; cooplog path shows the folder");
+                WriteConsole("coopbench  •  run a 12-second co-op latency probe, then collect every player's log");
                 WriteConsole("car changes the selected car in the garage; field equips a drop weapon during play.");
                 return;
             }
@@ -181,6 +184,15 @@ namespace MadeInArizona
                     ? "Co-op trace folder: " + coop.LastTracePath : "No co-op trace has been saved in this session.");
                 else if (words.Length == 1) WriteConsole(coop ? coop.RequestDiagnosticCapture() : "Co-op is unavailable.");
                 else WriteConsole("Use cooplog or cooplog path.");
+                return;
+            }
+            if (command == "coopbench")
+            {
+                var coop = CoopSession.Instance;
+                if (arg == "path" && words.Length == 2) WriteConsole(coop && !string.IsNullOrEmpty(coop.LastTracePath)
+                    ? "Co-op benchmark/trace folder: " + coop.LastTracePath : "No co-op capture has been saved in this session.");
+                else if (words.Length == 1) WriteConsole(coop ? coop.RequestCoopBenchmark() : "Co-op is unavailable.");
+                else WriteConsole("Use coopbench or coopbench path.");
                 return;
             }
             if (CoopSession.IsRemoteClient) { WriteConsole("Only the host can run dev commands in co-op."); return; }

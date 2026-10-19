@@ -15,10 +15,10 @@ namespace MadeInArizona
     {
         const double TraceRetentionSeconds = 20;
         const double TraceCaptureSeconds = 15;
-        const int TraceMaxRows = 8192;
+        const int TraceMaxRows = 16384;
         const int TraceChunkCharacters = 4096;
-        const int TraceMaxChunks = 128;
-        const int TraceMaxBytes = 2 * 1024 * 1024;
+        const int TraceMaxChunks = 256;
+        const int TraceMaxBytes = 4 * 1024 * 1024;
         const string TraceChunkMessage = "mia.coop.trace-chunk.v1";
         const string TraceReceiptMessage = "mia.coop.trace-receipt.v1";
 
@@ -51,12 +51,15 @@ namespace MadeInArizona
         {
             messages.RegisterNamedMessageHandler(TraceChunkMessage, ReceiveTraceChunk);
             messages.RegisterNamedMessageHandler(TraceReceiptMessage, ReceiveTraceReceipt);
+            RegisterBenchmarkMessages(messages);
+            RegisterPingMessages(messages);
         }
 
         /// <summary>Save the previous 15 seconds on every peer and collect all guest files at the host.</summary>
         public string RequestDiagnosticCapture()
         {
             if ((!IsHost && !IsClient) || !network.IsListening) return "Join or host a co-op session first.";
+            if (benchmarkRunning) return "A co-op benchmark is running; its capture will save shortly.";
             if (IsHost)
             {
                 TriggerTraceCapture();
@@ -72,14 +75,14 @@ namespace MadeInArizona
             if (!IsHost || sender == NetworkManager.ServerClientId || !network.ConnectedClients.ContainsKey(sender)) return;
             reader.ReadValueSafe(out string json);
             var request = JsonUtility.FromJson<ReadyPacket>(json);
-            if (request != null && request.protocol == Protocol) TriggerTraceCapture();
+            if (request != null && request.protocol == Protocol && !benchmarkRunning) TriggerTraceCapture();
         }
 
-        void TriggerTraceCapture()
+        void TriggerTraceCapture(string captureId = null)
         {
             var packet = new TraceCapturePacket {
                 protocol = Protocol,
-                id = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N").Substring(0, 8),
+                id = ValidTraceId(captureId) ? captureId : NewTraceId(),
                 serverTime = network.ServerTime.Time
             };
             activeTraceId = packet.id;
@@ -95,6 +98,9 @@ namespace MadeInArizona
             SaveLocalTrace(packet);
             WriteTraceManifest();
         }
+
+        static string NewTraceId() => DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture) +
+            "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
         void ReceiveTraceCapture(ulong sender, FastBufferReader reader)
         {
@@ -217,6 +223,12 @@ namespace MadeInArizona
                 "window_seconds=" + TraceCaptureSeconds.ToString(CultureInfo.InvariantCulture),
                 "host_file=host-" + network.LocalClientId + ".csv"
             };
+            if (activeTraceId == benchmarkId)
+            {
+                lines.Add("type=coopbench");
+                lines.Add("probe_duration_seconds=" + BenchmarkProbeSeconds.ToString(CultureInfo.InvariantCulture));
+                lines.Add("probe_interval_seconds=" + BenchmarkProbeInterval.ToString(CultureInfo.InvariantCulture));
+            }
             foreach (ulong clientId in expectedTraceClients)
                 lines.Add("guest_" + clientId + "=" + (receivedTraceClients.Contains(clientId) ? "received" : "pending"));
             try { File.WriteAllLines(Path.Combine(activeTraceDirectory, "manifest.txt"), lines); }
@@ -368,6 +380,8 @@ namespace MadeInArizona
 
         void ResetTrace()
         {
+            ResetBenchmark();
+            ResetPing();
             traceRows.Clear(); incomingTraces.Clear(); expectedTraceClients.Clear(); receivedTraceClients.Clear();
             activeTraceId = activeTraceDirectory = lastSavedTraceId = null;
             activeTraceTime = 0;
