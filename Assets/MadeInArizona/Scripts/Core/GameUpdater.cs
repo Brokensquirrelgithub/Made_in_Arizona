@@ -349,8 +349,10 @@ namespace MadeInArizona
         {
             string exe = Process.GetCurrentProcess().MainModule.FileName;
             string script = Path.Combine(UpdatesFolder, "install-update.ps1");
+            var bridge = FindFirstObjectByType<LiveTestBridge>();
             File.WriteAllText(script, WindowsInstallScript(LogPath, InstallRoot, Path.GetFileName(exe), downloadedZip, Path.Combine(UpdatesFolder, "staged"),
-                Path.GetFileName(Path.GetFullPath(Application.dataPath)), Process.GetCurrentProcess().Id), new UTF8Encoding(true));
+                Path.GetFileName(Path.GetFullPath(Application.dataPath)), Process.GetCurrentProcess().Id,
+                bridge ? bridge.BridgeDirectory : null), new UTF8Encoding(true));
             Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe", Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"",
@@ -360,7 +362,9 @@ namespace MadeInArizona
         void LaunchMacInstaller()
         {
             string script = Path.Combine(UpdatesFolder, "install-update.sh");
-            File.WriteAllText(script, MacInstallScript(LogPath, InstallRoot, downloadedZip, Path.Combine(UpdatesFolder, "staged"), Process.GetCurrentProcess().Id));
+            var bridge = FindFirstObjectByType<LiveTestBridge>();
+            File.WriteAllText(script, MacInstallScript(LogPath, InstallRoot, downloadedZip, Path.Combine(UpdatesFolder, "staged"), Process.GetCurrentProcess().Id,
+                bridge ? bridge.BridgeDirectory : null));
             Process.Start(new ProcessStartInfo { FileName = "/usr/bin/nohup", Arguments = "/bin/bash \"" + script + "\"", UseShellExecute = false, CreateNoWindow = true });
         }
 
@@ -368,7 +372,8 @@ namespace MadeInArizona
         /// PowerShell that waits for the game to exit, unpacks the build, mirrors the game's own data folder (so stale
         /// files go) and copies the remaining files over without deleting anything else in the folder, then relaunches.
         /// </summary>
-        public static string WindowsInstallScript(string log, string install, string exeName, string zip, string stage, string dataFolder, int pid)
+        public static string WindowsInstallScript(string log, string install, string exeName, string zip, string stage, string dataFolder, int pid,
+            string bridgeDirectory = null)
         {
             var s = new StringBuilder();
             s.AppendLine("$ErrorActionPreference = 'Stop'");
@@ -392,10 +397,13 @@ namespace MadeInArizona
             s.AppendLine("  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue");
             s.AppendLine("  Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue");
             s.AppendLine("  Log 'Installed; relaunching'");
-            s.AppendLine("  Start-Process -FilePath $exe -WorkingDirectory $install");
+            string bridgeArgs = string.IsNullOrEmpty(bridgeDirectory) ? "" :
+                " -ArgumentList @('-miaAutomationBridge', " + Ps("\"-miaBridgeDir=" + bridgeDirectory + "\"") + ")";
+            s.AppendLine("  Start-Process -FilePath $exe -WorkingDirectory $install" + bridgeArgs);
             s.AppendLine("} catch {");
             s.AppendLine("  Log ('Update failed: ' + $_)");
-            s.AppendLine("  Start-Process -FilePath $exe -WorkingDirectory $install -ArgumentList '-miaUpdateFailed'");
+            s.AppendLine("  Start-Process -FilePath $exe -WorkingDirectory $install -ArgumentList @('-miaUpdateFailed'" +
+                (string.IsNullOrEmpty(bridgeDirectory) ? "" : ", '-miaAutomationBridge', " + Ps("\"-miaBridgeDir=" + bridgeDirectory + "\"")) + ")");
             s.AppendLine("}");
             return s.ToString();
         }
@@ -403,14 +411,15 @@ namespace MadeInArizona
         /// Bash that waits for the game to exit, unpacks the bundle with ditto (keeping permissions and symlinks), clears
         /// quarantine, ad-hoc signs it (CI builds from Linux are unsigned), swaps it in place with a rollback, and relaunches.
         /// </summary>
-        public static string MacInstallScript(string log, string app, string zip, string stage, int pid)
+        public static string MacInstallScript(string log, string app, string zip, string stage, int pid, string bridgeDirectory = null)
         {
             var s = new StringBuilder();
             s.AppendLine("#!/bin/bash");
             s.AppendLine("LOG=" + Sh(log) + "; APP=" + Sh(app) + "; ZIP=" + Sh(zip) + "; STAGE=" + Sh(stage));
             s.AppendLine("exec >>\"$LOG\" 2>&1");
             s.AppendLine("relaunch() { open \"$APP\" --args \"$@\"; exit 0; }");
-            s.AppendLine("fail() { echo \"[$(date '+%F %T')] Update failed: $1\"; relaunch -miaUpdateFailed; }");
+            string bridgeArgs = string.IsNullOrEmpty(bridgeDirectory) ? "" : " -miaAutomationBridge " + Sh("-miaBridgeDir=" + bridgeDirectory);
+            s.AppendLine("fail() { echo \"[$(date '+%F %T')] Update failed: $1\"; relaunch -miaUpdateFailed" + bridgeArgs + "; }");
             s.AppendLine("echo \"[$(date '+%F %T')] waiting for the game to close\"");
             s.AppendLine("for i in $(seq 1 360); do kill -0 " + pid + " 2>/dev/null || break; sleep 0.25; done");
             s.AppendLine("sleep 0.5");
@@ -426,7 +435,7 @@ namespace MadeInArizona
             s.AppendLine("if ! mv \"$NEW\" \"$APP\"; then mv \"$OLD\" \"$APP\"; fail 'could not move the new build into place'; fi");
             s.AppendLine("rm -rf \"$OLD\" \"$STAGE\" \"$ZIP\"");
             s.AppendLine("echo \"[$(date '+%F %T')] installed; relaunching\"");
-            s.AppendLine("relaunch");
+            s.AppendLine("relaunch" + bridgeArgs);
             return s.ToString().Replace("\r\n", "\n");
         }
         static string Ps(string value) => "'" + (value ?? "").Replace("'", "''") + "'";

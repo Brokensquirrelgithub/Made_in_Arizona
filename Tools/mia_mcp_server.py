@@ -50,8 +50,28 @@ def main():
 
     @server.tool()
     def game_status() -> dict:
-        """Read the local player's state, co-op membership, ping, position, and trace location."""
+        """Read game state, co-op room code and connection, update progress, ping, and trace location."""
         return request("status")
+
+    @server.tool()
+    def host_coop_game() -> dict:
+        """Create a Relay room from the menu or garage. Poll game_status for the room code."""
+        return request("host_coop")
+
+    @server.tool()
+    def join_coop_game(room_code: str) -> dict:
+        """Join a friend's Relay room from the menu or garage. Poll game_status for connection."""
+        return request("join_coop", roomCode=room_code)
+
+    @server.tool()
+    def check_game_updates() -> dict:
+        """Refresh the published build list; poll game_status for the result."""
+        return request("check_updates")
+
+    @server.tool()
+    def update_game_to_latest() -> dict:
+        """Check, download, verify, install, and reopen the newest build from the menu while offline."""
+        return request("update_game")
 
     @server.tool()
     def run_coop_benchmark() -> dict:

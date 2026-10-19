@@ -39,6 +39,31 @@ class BridgeClientTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "stale"):
                 request("status", bridge_dir=temp)
 
+    def test_join_code_is_sent_to_game(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            root = Path(temp)
+            (root / "session.json").write_text(json.dumps({"utcTicks": 621355968000000000 + time.time_ns() // 100}), encoding="utf-8")
+            (root / "requests").mkdir()
+            (root / "responses").mkdir()
+
+            def fake_game():
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    incoming = list((root / "requests").glob("*.json"))
+                    if incoming:
+                        data = json.loads(incoming[0].read_text(encoding="utf-8"))
+                        (root / "responses" / incoming[0].name).write_text(
+                            json.dumps({"id": data["id"], "ok": data["command"] == "join_coop", "roomCode": data.get("roomCode")}), encoding="utf-8")
+                        return
+                    time.sleep(.01)
+
+            worker = threading.Thread(target=fake_game)
+            worker.start()
+            result = request("join_coop", bridge_dir=temp, timeout=2, roomCode="ABCD12")
+            worker.join()
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["roomCode"], "ABCD12")
+
 
 if __name__ == "__main__":
     unittest.main()
