@@ -471,6 +471,10 @@ namespace MadeInArizona
             UseGeneratedTerrainForSmoke = true;
             var game = GameManager.Instance;
             var coop = CoopSession.Instance;
+            bool benchRun = Array.IndexOf(Environment.GetCommandLineArgs(), host ?
+                "-miaCoopBenchHostTest" : "-miaCoopBenchGuestTest") >= 0;
+            int expectedPlayers = benchRun && int.TryParse(Environment.GetEnvironmentVariable("MIA_COOP_EXPECTED_PLAYERS"),
+                out int requestedPlayers) ? Mathf.Clamp(requestedPlayers, 2, 4) : 2;
             string codePath = Environment.GetEnvironmentVariable("MIA_COOP_CODE_PATH");
             if (string.IsNullOrEmpty(codePath)) { Check("live co-op test has a code path", false); yield break; }
             if (host)
@@ -487,13 +491,14 @@ namespace MadeInArizona
                 File.WriteAllText(pendingCodePath, coop.JoinCode);
                 File.Move(pendingCodePath, codePath);
                 deadline = Time.unscaledTime + 60;
-                while (coop.PlayerCount < 2 && Time.unscaledTime < deadline) yield return null;
-                Check("guest joins host lobby", coop.PlayerCount == 2);
-                if (coop.PlayerCount < 2) yield break;
+                while (coop.PlayerCount < expectedPlayers && Time.unscaledTime < deadline) yield return null;
+                Check("all expected guests join host lobby", coop.PlayerCount == expectedPlayers);
+                if (coop.PlayerCount < expectedPlayers) yield break;
                 deadline = Time.unscaledTime + 15;
-                while (!coop.GaragePreviewForSlot(2, ContentCatalog.Vehicles[1].id) && Time.unscaledTime < deadline)
+                while ((!coop.GaragePreviewForSlot(2, ContentCatalog.Vehicles[1].id) ||
+                    coop.GaragePreviewCount < expectedPlayers - 1) && Time.unscaledTime < deadline)
                     yield return null;
-                Check("host sees guest selected car parked in garage", coop.GaragePreviewCount == 1 &&
+                Check("host sees guest selected car parked in garage", coop.GaragePreviewCount == expectedPlayers - 1 &&
                     coop.GaragePreviewForSlot(2, ContentCatalog.Vehicles[1].id));
                 Check("host cannot launch before all players ready", game.State == GameState.Garage && coop.CountdownRemaining == 0);
                 coop.SetReady(true);
@@ -523,7 +528,12 @@ namespace MadeInArizona
                     game.Player.Definition == ContentCatalog.Vehicles[1]);
                 deadline = Time.unscaledTime + 15;
                 while (!coop.GaragePreviewForSlot(1, null) && Time.unscaledTime < deadline) yield return null;
-                Check("guest sees host car parked in garage", coop.GaragePreviewCount == 1 &&
+                if (expectedPlayers > 2)
+                {
+                    deadline = Time.unscaledTime + 60;
+                    while (coop.GaragePreviewCount < expectedPlayers - 1 && Time.unscaledTime < deadline) yield return null;
+                }
+                Check("guest sees all other cars parked in garage", coop.GaragePreviewCount == expectedPlayers - 1 &&
                     coop.GaragePreviewForSlot(1, null));
                 coop.SetReady(true);
             }
@@ -542,10 +552,11 @@ namespace MadeInArizona
             if (game.State != GameState.Playing) yield break;
             Check("parked garage cars clear on mission launch", coop.GaragePreviewCount == 0);
             float playerDeadline = Time.unscaledTime + 15;
-            while ((!game.Player || !VehicleController.Active.Any(v => v && v.IsPlayer &&
-                v != game.Player && coop.PlayerSlotForCar(v) > 0)) && Time.unscaledTime < playerDeadline)
+            while ((!game.Player || VehicleController.Active.Count(v => v && v.IsPlayer) < expectedPlayers) &&
+                Time.unscaledTime < playerDeadline)
                 yield return null;
-            Check("both player cars appear after launch", game.Player && VehicleController.Active.Count(v => v && v.IsPlayer) >= 2);
+            Check("all player cars appear after launch", game.Player &&
+                VehicleController.Active.Count(v => v && v.IsPlayer) >= expectedPlayers);
             if (host) Check("guest garage car reaches host spawn", VehicleController.Active.Any(v => v && v.IsPlayer &&
                 v != game.Player && v.Definition == ContentCatalog.Vehicles[1]));
             Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
@@ -581,14 +592,13 @@ namespace MadeInArizona
                     File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"));
                 else Check("guest receives host collection receipt", coop.LastTraceUploadConfirmed);
             }
-            bool benchTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ?
-                "-miaCoopBenchHostTest" : "-miaCoopBenchGuestTest") >= 0;
-            if (benchTest)
+            if (benchRun)
             {
                 if (!host)
                 {
-                    Check("guest requests coordinated co-op benchmark",
-                        coop.RequestCoopBenchmark().StartsWith("Requested co-op benchmark"));
+                    if (coop.PlayerSlotForCar(game.Player) == 2)
+                        Check("guest requests coordinated co-op benchmark",
+                            coop.RequestCoopBenchmark().StartsWith("Requested co-op benchmark"));
                     var benchKeyboard = InputSystem.AddDevice<Keyboard>();
                     InputSystem.QueueStateEvent(benchKeyboard, new KeyboardState(Key.W));
                     yield return new WaitForSecondsRealtime(2);
@@ -600,7 +610,7 @@ namespace MadeInArizona
                 while (Time.unscaledTime < benchDeadline &&
                     (string.IsNullOrEmpty(coop.LastTracePath) || !Directory.Exists(coop.LastTracePath) ||
                      (host && (!File.Exists(Path.Combine(coop.LastTracePath, "manifest.txt")) ||
-                         !File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=received"))) ||
+                         File.ReadAllText(Path.Combine(coop.LastTracePath, "manifest.txt")).Contains("=pending"))) ||
                      (!host && !coop.LastTraceUploadConfirmed))) yield return null;
                 Check("benchmark captures a shared ID on all machines", !string.IsNullOrEmpty(coop.LastBenchmarkId) &&
                     !string.IsNullOrEmpty(coop.LastTracePath) &&
@@ -608,8 +618,8 @@ namespace MadeInArizona
                 Check("co-op tracks live round-trip ping", coop.WorstPingMilliseconds >= 0);
                 if (!string.IsNullOrEmpty(coop.LastTracePath) && Directory.Exists(coop.LastTracePath))
                 {
-                    string local = Directory.GetFiles(coop.LastTracePath, host ? "host-*.csv" : "guest-*.csv")
-                        .FirstOrDefault();
+                    string local = Path.Combine(coop.LastTracePath,
+                        (host ? "host-" : "guest-") + NetworkManager.Singleton.LocalClientId + ".csv");
                     string csv = File.Exists(local) ? File.ReadAllText(local) : "";
                     Check("benchmark records sends, receives and round trips", csv.Contains("bench_sent,") &&
                         csv.Contains("bench_received,") && csv.Contains("bench_rtt,"));
@@ -625,9 +635,14 @@ namespace MadeInArizona
                     {
                         string manifestPath = Path.Combine(coop.LastTracePath, "manifest.txt");
                         string manifest = File.Exists(manifestPath) ? File.ReadAllText(manifestPath) : "";
+                        string reportPath = Path.Combine(coop.LastTracePath, "benchmark-report.txt");
+                        string report = File.Exists(reportPath) ? File.ReadAllText(reportPath) : "";
                         Check("host collects all guest benchmark logs", manifest.Contains("type=coopbench") &&
-                            manifest.Contains("=received") &&
-                            Directory.GetFiles(coop.LastTracePath, "guest-*.csv").Length == 1);
+                            !manifest.Contains("=pending") &&
+                            Directory.GetFiles(coop.LastTracePath, "guest-*.csv").Length == expectedPlayers - 1);
+                        Check("host produces a complete benchmark report for every player",
+                            report.Contains("capture_status=complete") &&
+                            report.Contains("players=" + expectedPlayers));
                     }
                     else Check("guest receives benchmark upload receipt", coop.LastTraceUploadConfirmed);
                 }

@@ -83,7 +83,6 @@ namespace MadeInArizona
                     Send(BenchmarkStartMessage, clientId, packet, NetworkDelivery.ReliableSequenced);
                 }
             benchmarkRunning = true;
-            AddTrace(MakeTrace("bench_start", (int)network.LocalClientId, 0, null));
             Debug.Log("MIA_COOP_BENCH_ARMED: " + benchmarkId + " peers=" + benchmarkPeers.Count);
             benchmarkCoroutine = StartCoroutine(WaitForBenchmarkReady());
             return "Co-op benchmark started for all connected players. Logs will be collected in about 14 seconds.";
@@ -100,7 +99,6 @@ namespace MadeInArizona
             benchmarkPeers.Clear();
             benchmarkPeers.Add(sender);
             benchmarkRunning = true;
-            AddTrace(MakeTrace("bench_start", (int)network.LocalClientId, 0, null));
             Send(BenchmarkReadyMessage, sender, packet, NetworkDelivery.ReliableSequenced);
             Debug.Log("MIA_COOP_BENCH_ARMED: " + benchmarkId + " peers=1");
         }
@@ -148,6 +146,7 @@ namespace MadeInArizona
 
         IEnumerator RunBenchmark(bool host)
         {
+            AddTrace(MakeTrace("bench_start", (int)network.LocalClientId, 0, null));
             float endAt = Time.unscaledTime + BenchmarkProbeSeconds;
             float nextAt = Time.unscaledTime;
             float nextFrameSampleAt = Time.unscaledTime + .1f;

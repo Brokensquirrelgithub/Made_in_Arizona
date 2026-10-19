@@ -97,6 +97,7 @@ namespace MadeInArizona
                 }
             SaveLocalTrace(packet);
             WriteTraceManifest();
+            WriteBenchmarkReport();
         }
 
         static string NewTraceId() => DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture) +
@@ -196,6 +197,7 @@ namespace MadeInArizona
                     File.WriteAllBytes(path, output.ToArray());
                     receivedTraceClients.Add(sender);
                     WriteTraceManifest();
+                    WriteBenchmarkReport();
                     Debug.Log("MIA_COOP_TRACE_COLLECTED: " + path);
                     Send(TraceReceiptMessage, sender, new TraceReceiptPacket { id = packet.id }, NetworkDelivery.ReliableSequenced);
                 }
