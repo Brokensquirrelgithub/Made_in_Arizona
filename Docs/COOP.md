@@ -1,6 +1,6 @@
 # Host PC co-op playtest
 
-Co-op supports one host and up to three guests. The host PC runs vehicle physics, enemies, damage, pickups, world exploration, missions, and saving. Guests send driving and combat inputs and render the host's world state. The session uses Unity Relay and an invite code, so players do not need to forward a router port.
+Co-op supports one host and up to three guests. Each machine runs physics for its own player's car. The host PC runs enemies, damage, pickups, world exploration, missions, and saving. Guests send their car's motion and combat inputs and render the host's world state. The session uses Unity Relay and an invite code, so players do not need to forward a router port.
 
 ## Unity Services setup
 
