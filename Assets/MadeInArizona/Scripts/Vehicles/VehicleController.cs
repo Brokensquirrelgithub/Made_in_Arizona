@@ -103,12 +103,15 @@ namespace MadeInArizona
         }
         public bool HasRemoteInput { get; private set; }
         bool primaryHeld;
+        bool pendingRemotePrimaryPress, pendingRemoteSecondaryPress;
         public CoopControls RemoteControls { get; private set; }
         float remoteInputAt;
         CoopControls FreshRemoteControls => Time.unscaledTime - remoteInputAt < .4f ? RemoteControls : default;
         public void SetRemoteControls(CoopControls controls)
         {
             if (HasRemoteInput && controls.sequence > 0 && controls.sequence <= RemoteControls.sequence) return;
+            if (controls.primaryPresses > RemoteControls.primaryPresses) pendingRemotePrimaryPress = true;
+            if (controls.secondaryPresses > RemoteControls.secondaryPresses) pendingRemoteSecondaryPress = true;
             HasRemoteInput = true;
             RemoteControls = controls;
             remoteInputAt = Time.unscaledTime;
@@ -554,10 +557,12 @@ namespace MadeInArizona
                 var controls = FreshRemoteControls;
                 aimDirection = new Vector3(controls.aim.x, controls.elevation, controls.aim.y);
                 Weapons.AimAt(aimDirection);
-                if (controls.primary) Weapons.FirePrimary(aimDirection);
+                if (controls.primary || pendingRemotePrimaryPress) Weapons.FirePrimary(aimDirection);
                 else if (primaryHeld) Weapons.ReleasePrimary();
+                if (pendingRemotePrimaryPress && !controls.primary) Weapons.ReleasePrimary();
                 primaryHeld = controls.primary;
-                if (controls.secondary) Weapons.FireSecondary(aimDirection);
+                if (controls.secondary || pendingRemoteSecondaryPress) Weapons.FireSecondary(aimDirection);
+                pendingRemotePrimaryPress = pendingRemoteSecondaryPress = false;
             }
             else if (IsPlayer && input != null)
             {

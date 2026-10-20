@@ -66,11 +66,14 @@ namespace MadeInArizona
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0 ||
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceGuestTest")>=0 ||
                 Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchHostTest")>=0 ||
-                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchGuestTest")>=0)
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchGuestTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopFireHostTest")>=0 ||
+                Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopFireGuestTest")>=0)
             {
                 yield return TestCoopLobbyLive(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopLobbyHostTest")>=0 ||
                     Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopTraceHostTest")>=0 ||
-                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchHostTest")>=0);
+                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopBenchHostTest")>=0 ||
+                    Array.IndexOf(Environment.GetCommandLineArgs(),"-miaCoopFireHostTest")>=0);
                 FinishResults(); yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-miaMusicTest")>=0)
@@ -562,6 +565,38 @@ namespace MadeInArizona
             Check("teammate has numbered waypoint identity", VehicleController.Active.Any(v => v && v.IsPlayer && v != game.Player && coop.PlayerSlotForCar(v) > 0));
             if (!host) Check("guest drives a locally predicted car", game.Player && game.Player.IsLocallyPredicted &&
                 game.Player.Body && !game.Player.Body.isKinematic);
+            bool fireTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ?
+                "-miaCoopFireHostTest" : "-miaCoopFireGuestTest") >= 0;
+            if (fireTest)
+            {
+                yield return new WaitForSecondsRealtime(1);
+                if (host)
+                {
+                    var guestCar = VehicleController.Active.FirstOrDefault(v => v && v.IsPlayer && v != game.Player);
+                    if (guestCar) guestCar.Weapons.ConfigurePlayerPrimary("riveter");
+                    int before = guestCar ? guestCar.Weapons.PrimaryShotsFired : -1;
+                    float fireDeadline = Time.unscaledTime + 10;
+                    while (guestCar && guestCar.Weapons.PrimaryShotsFired < before + 2 &&
+                        Time.unscaledTime < fireDeadline) yield return null;
+                    Check("host fires both short guest trigger taps", guestCar &&
+                        guestCar.Weapons.PrimaryShotsFired >= before + 2);
+                }
+                else
+                {
+                    game.Save.settings.racingStyle = false;
+                    var firePad = InputSystem.AddDevice<Gamepad>();
+                    for (int tap = 0; tap < 2; tap++)
+                    {
+                        InputSystem.QueueStateEvent(firePad, new GamepadState { rightTrigger = 1 });
+                        yield return null;
+                        Check("guest registers short trigger tap " + (tap + 1), InputManager.Instance.Primary);
+                        InputSystem.QueueStateEvent(firePad, new GamepadState());
+                        yield return null;
+                        yield return new WaitForSecondsRealtime(1);
+                    }
+                    InputSystem.RemoveDevice(firePad);
+                }
+            }
             bool traceTest = Array.IndexOf(Environment.GetCommandLineArgs(), host ? "-miaCoopTraceHostTest" : "-miaCoopTraceGuestTest") >= 0;
             if (traceTest)
             {

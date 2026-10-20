@@ -9,6 +9,7 @@ namespace MadeInArizona
         public WeaponDefinition FieldWeapon { get; private set; }
         public int FieldAmmo { get; private set; }
         public float GarageCooldown => GarageWeapon ? Mathf.Clamp01((garageAt - Time.time) * Mathf.Max(.1f, Effective(GarageWeapon).fireRate)) : 0;
+        public int PrimaryShotsFired { get; private set; }
         public float FieldCooldown => FieldWeapon ? Mathf.Clamp01((fieldAt - Time.time) * Mathf.Max(.1f, Effective(FieldWeapon).fireRate)) : 0;
         readonly Dictionary<string, WeaponDefinition> balancedWeapons = new Dictionary<string, WeaponDefinition>();
         VehicleController owner;
@@ -209,6 +210,7 @@ namespace MadeInArizona
             if (Time.time < garageAt) return;
             garageAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
             Fire(weapon, direction);
+            PrimaryShotsFired++;
         }
         public void ReleasePrimary()
         {

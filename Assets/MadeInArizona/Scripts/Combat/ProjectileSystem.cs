@@ -96,7 +96,8 @@ namespace MadeInArizona
         public static void Fire(Vector3 position, Vector3 direction, float speed, float damage, float radius, GameObject source, Color color, ExplosionKind kind, float lifetime, ShotFx fx = null)
         {
             if (CoopSession.Instance && CoopSession.Instance.IsHost)
-                CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime, fx != null && fx.firework);
+                CoopSession.Instance.PublishProjectile(position, direction, speed, color, kind, lifetime, source,
+                    fx != null && fx.firework);
             Get().Launch(position, direction, speed, damage, radius, source, color, kind, lifetime, fx);
         }
         /// <summary>Second trigger press breaks a flying skewer into a forward cone of ice shards.</summary>

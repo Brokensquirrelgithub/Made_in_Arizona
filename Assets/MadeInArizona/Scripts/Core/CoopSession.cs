@@ -14,7 +14,7 @@ namespace MadeInArizona
     [Serializable]
     public struct CoopControls
     {
-        public int sequence;
+        public int sequence, primaryPresses, secondaryPresses;
         public Vector2 move, aim;
         public float elevation;
         public bool primary, secondary, drift, boost, interact, swap;
@@ -95,6 +95,8 @@ namespace MadeInArizona
         int remoteRewardMoney, remoteRewardSalvage;
         string lastTuningJson, lastPinFlags;
         bool queuedInteract, queuedSwap;
+        bool lastLocalPrimary, lastLocalSecondary;
+        int primaryPresses, secondaryPresses;
         bool remoteWorldReady;
         int remoteMode;
 
@@ -387,6 +389,8 @@ namespace MadeInArizona
             DevTuning.SetCoopOverride(packet.tuning);
             proxies.Clear(); proxyOwners.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
             inputSequence = lastAcknowledgedInputSequence = 0;
+            primaryPresses = secondaryPresses = 0;
+            lastLocalPrimary = lastLocalSecondary = false;
             estimatedSnapshotAge = .06f;
             Array.Clear(sentInputControls, 0, sentInputControls.Length);
             GameManager.Instance.LoadCoopWorld(packet.mode, packet.mission, config);
@@ -511,14 +515,18 @@ namespace MadeInArizona
             pickupSeenAt[packet.id] = Time.unscaledTime;
         }
 
-        public void PublishProjectile(Vector3 position, Vector3 direction, float speed, Color color, ExplosionKind kind, float lifetime, bool firework = false)
+        public void PublishProjectile(Vector3 position, Vector3 direction, float speed, Color color, ExplosionKind kind,
+            float lifetime, GameObject source, bool firework = false)
         {
             if (!IsHost) return;
             var packet = new ProjectilePacket { position = position, direction = direction, speed = speed,
                 color = color, kind = (int)kind, lifetime = lifetime, firework = firework };
+            var shooter = source ? source.GetComponentInParent<VehicleController>() : null;
             foreach (ulong clientId in network.ConnectedClientsIds)
                 if (clientId != NetworkManager.ServerClientId)
-                    Send(ProjectileMessage, clientId, packet, NetworkDelivery.Unreliable);
+                    Send(ProjectileMessage, clientId, packet,
+                        shooter && guestCars.TryGetValue(clientId, out var car) && shooter == car
+                            ? NetworkDelivery.ReliableSequenced : NetworkDelivery.Unreliable);
         }
 
         /// <summary>Host: sends a one-off effect to every guest (bowling balls, which are field ordnance the snapshots miss).</summary>
@@ -697,16 +705,24 @@ namespace MadeInArizona
             UpdateSpectatorCamera();
             if (IsClient && remoteWorldReady && remoteMode != 0)
             {
-                queuedInteract |= InputManager.Instance.Interact;
-                queuedSwap |= InputManager.Instance.SwapPressed;
-                if (Time.unscaledTime >= inputAt)
+                var input = InputManager.Instance;
+                queuedInteract |= input.Interact;
+                queuedSwap |= input.SwapPressed;
+                // Fire edges bypass the 20 Hz motion tick. Repeating cumulative press counts in later
+                // packets also preserves short taps if an unreliable packet is lost on Relay.
+                bool fireChanged = input.Primary != lastLocalPrimary || input.Secondary != lastLocalSecondary;
+                if (input.Primary && !lastLocalPrimary) primaryPresses++;
+                if (input.Secondary && !lastLocalSecondary) secondaryPresses++;
+                lastLocalPrimary = input.Primary;
+                lastLocalSecondary = input.Secondary;
+                if (fireChanged || Time.unscaledTime >= inputAt)
                 {
                     inputAt = Time.unscaledTime + .05f;
-                    var input = InputManager.Instance;
                     int sequence = ++inputSequence;
                     int slot = sequence & (InputHistorySize - 1);
                     sentInputAt[slot] = Time.unscaledTime;
-                    var controls = new CoopControls { sequence = sequence, move = input.Move, aim = input.Aim, elevation = input.AimElevation,
+                    var controls = new CoopControls { sequence = sequence, primaryPresses = primaryPresses,
+                        secondaryPresses = secondaryPresses, move = input.Move, aim = input.Aim, elevation = input.AimElevation,
                         primary = input.Primary, secondary = input.Secondary, drift = input.Drift, boost = input.Boost,
                         reverse = input.Reverse, manualReverse = input.ManualReverse,
                         interact = queuedInteract, swap = queuedSwap };
@@ -958,6 +974,8 @@ namespace MadeInArizona
             ResetTrace();
             guestCars.Clear(); proxies.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
             inputSequence = lastAcknowledgedInputSequence = 0;
+            primaryPresses = secondaryPresses = 0;
+            lastLocalPrimary = lastLocalSecondary = false;
             estimatedSnapshotAge = .06f;
             Array.Clear(sentInputControls, 0, sentInputControls.Length);
             ResetLobby();
