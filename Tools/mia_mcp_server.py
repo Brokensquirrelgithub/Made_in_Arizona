@@ -171,6 +171,18 @@ def main():
         return request("drive", moveX=x, moveY=y, seconds=seconds, boost=boost, drift=drift)
 
     @server.tool()
+    def nudge_test_car(x_metres: float, z_metres: float, guest_slot: int = 0) -> dict:
+        """Move this player's car, or an opted-in guest's car, by at most 20 m in world X/Z for a repeatable collision test."""
+        return request("guest_nudge_car" if guest_slot else "nudge_car",
+                       timeout=15 if guest_slot else 8, guestSlot=guest_slot,
+                       moveX=x_metres, moveY=z_metres)
+
+    @server.tool()
+    def return_coop_host_to_garage() -> dict:
+        """Return the host's live, won, or lost sortie to the co-op garage while keeping the room connected."""
+        return request("return_garage")
+
+    @server.tool()
     def stop_local_car() -> dict:
         """End an active automation drive immediately."""
         return request("stop")

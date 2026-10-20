@@ -204,6 +204,20 @@ namespace MadeInArizona
                         return Snapshot(request.id, false, "Drive duration must be 0.05–5 seconds with finite inputs");
                     InputManager.Instance.SetAutomationDrive(new Vector2(request.moveX, request.moveY), request.seconds, request.boost, request.drift);
                     return Snapshot(request.id, true, "Driving for " + request.seconds.ToString("0.00") + " seconds");
+                case "nudge_car":
+                    if (!game || !game.IsPlaying || !game.Player || !game.Player.Body)
+                        return Snapshot(request.id, false, "A local player in a sortie is required");
+                    if (float.IsNaN(request.moveX) || float.IsNaN(request.moveY) ||
+                        float.IsInfinity(request.moveX) || float.IsInfinity(request.moveY) ||
+                        new Vector2(request.moveX, request.moveY).magnitude > 20f)
+                        return Snapshot(request.id, false, "Nudge must be a finite world X/Z offset within 20 metres");
+                    var body = game.Player.Body;
+                    body.position += new Vector3(request.moveX, 0, request.moveY);
+                    body.linearVelocity = Vector3.zero;
+                    body.angularVelocity = Vector3.zero;
+                    Physics.SyncTransforms();
+                    CameraController.Instance?.Snap();
+                    return Snapshot(request.id, true, "Car nudged to a repeatable test position");
                 case "stop":
                     if (InputManager.Instance) InputManager.Instance.StopAutomationDrive();
                     return Snapshot(request.id, true, "Stopped automation input");
@@ -213,6 +227,12 @@ namespace MadeInArizona
                     coop.Leave();
                     if (wasHost && game && game.IsPlaying) game.ReturnToGarage();
                     return Snapshot(request.id, true, "Left the co-op room");
+                case "return_garage":
+                    if (!game || (game.State != GameState.Playing && game.State != GameState.Paused &&
+                        game.State != GameState.Won && game.State != GameState.Lost) || (coop && coop.IsClient))
+                        return Snapshot(request.id, false, "A host or solo sortie is required");
+                    game.ReturnToGarage();
+                    return Snapshot(request.id, true, "Returned to the garage");
                 case "ready":
                 case "unready":
                     if (!coop || !coop.InLobby) return Snapshot(request.id, false, "A co-op garage lobby is required");
@@ -232,7 +252,7 @@ namespace MadeInArizona
         {
             switch (command)
             {
-                case "status": case "peers": case "errors": case "drive": case "stop":
+                case "status": case "peers": case "errors": case "drive": case "stop": case "nudge_car":
                 case "list_tuning": case "get_tuning": case "set_tuning":
                 case "cooplog": case "coopbench": case "update_game": case "ready": case "unready": return true;
                 default: return false;
