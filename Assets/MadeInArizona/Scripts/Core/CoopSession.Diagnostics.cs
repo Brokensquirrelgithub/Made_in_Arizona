@@ -276,6 +276,11 @@ namespace MadeInArizona
                     row.leadMilliseconds = (Time.unscaledTime - lastOwnSnapshotAt) * 1000;
                     AddTrace(row);
                 }
+                foreach (var pair in proxies)
+                    if (pair.Value && pair.Value.IsPlayer && !pair.Value.IsLocallyPredicted)
+                        AddTrace(MakeTrace("remote_physics",
+                            proxyOwners.TryGetValue(pair.Value, out int owner) ? owner : -1,
+                            pair.Key, pair.Value));
             }
         }
 
@@ -341,6 +346,17 @@ namespace MadeInArizona
             row.errorMeters = Vector3.Distance(row.position, packet.position + packet.velocity * Mathf.Clamp(lead, 0, .3f));
             row.yawErrorDegrees = Mathf.DeltaAngle(row.yaw,
                 (packet.rotation * Quaternion.Euler(0, packet.yawRate * Mathf.Rad2Deg * Mathf.Clamp(lead, 0, .3f), 0)).eulerAngles.y);
+            AddTrace(row);
+        }
+
+        void RecordRemoteSnapshot(VehiclePacket packet, VehicleController car)
+        {
+            var row = MakeTrace("remote_snapshot_received", packet.owner, packet.id, car);
+            row.snapshotTick = packet.tick;
+            row.referencePosition = packet.position;
+            row.referenceVelocity = packet.velocity;
+            row.referenceYaw = packet.rotation.eulerAngles.y;
+            row.errorMeters = Vector3.Distance(row.position, packet.position);
             AddTrace(row);
         }
 

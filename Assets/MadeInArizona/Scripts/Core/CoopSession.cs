@@ -45,7 +45,7 @@ namespace MadeInArizona
         const string FxMessage = "mia.coop.fx.v1";
         const string TraceRequestMessage = "mia.coop.trace-request.v1";
         const string TraceCaptureMessage = "mia.coop.trace-capture.v1";
-        const int Protocol = 12;
+        const int Protocol = 13;
         const int InputHistorySize = 256;
         public const int MaxPlayers = 4;
         public static CoopSession Instance { get; private set; }
@@ -111,7 +111,7 @@ namespace MadeInArizona
         }
         [Serializable] sealed class TuningPacket { public int protocol; public string tuning; }
         [Serializable] sealed class PinStatePacket { public int protocol, seed; public string flags; }
-        [Serializable] sealed class InputPacket
+        [Serializable] internal sealed class InputPacket
         {
             public CoopControls controls;
             public bool hasMotion;
@@ -424,9 +424,7 @@ namespace MadeInArizona
         void ReceiveInput(ulong sender, FastBufferReader reader)
         {
             if (!IsHost || !guestCars.TryGetValue(sender, out var car) || !car) return;
-            reader.ReadValueSafe(out string json);
-            var packet = JsonUtility.FromJson<InputPacket>(json);
-            if (packet == null) return;
+            var packet = ReadInputPacket(reader);
             var input = packet.controls;
             if (input.sequence <= car.RemoteControls.sequence) return;
             input.move = Vector2.ClampMagnitude(input.move, 1);
@@ -486,6 +484,7 @@ namespace MadeInArizona
                 // and world state, but must never steer the owner's physics or camera back in time.
                 RecordOwnSnapshot(packet, car, estimatedSnapshotAge);
             }
+            else if (packet.player) RecordRemoteSnapshot(packet, car);
             car.Weapons.AimAt(packet.aim);
             if (!string.IsNullOrEmpty(packet.weapon)) car.Weapons.SetNetworkGarageWeapon(packet.weapon);
             car.Weapons.SetNetworkFieldWeapon(packet.fieldWeapon, packet.fieldAmmo);
@@ -761,7 +760,7 @@ namespace MadeInArizona
                         packet.velocity = localCar.Body.linearVelocity;
                         packet.yawRate = localCar.Body.angularVelocity.y;
                     }
-                    Send(InputMessage, NetworkManager.ServerClientId, packet, NetworkDelivery.Unreliable);
+                    SendInput(packet);
                     RecordInputSent(controls.sequence);
                     queuedInteract = queuedSwap = false;
                 }
@@ -911,6 +910,56 @@ namespace MadeInArizona
                 writer.WriteValueSafe(json);
                 network.CustomMessagingManager.SendNamedMessage(name, clientId, writer, delivery);
             }
+        }
+
+        void SendInput(InputPacket packet)
+        {
+            if (!network || !network.IsListening) return;
+            using (var writer = new FastBufferWriter(128, Allocator.Temp))
+            {
+                WriteInputPacket(writer, packet);
+                network.CustomMessagingManager.SendNamedMessage(InputMessage, NetworkManager.ServerClientId,
+                    writer, NetworkDelivery.Unreliable);
+            }
+        }
+
+        internal static void WriteInputPacket(FastBufferWriter writer, InputPacket packet)
+        {
+            var input = packet.controls;
+            writer.WriteValueSafe(input.sequence); writer.WriteValueSafe(input.primaryPresses);
+            writer.WriteValueSafe(input.secondaryPresses); writer.WriteValueSafe(input.move);
+            writer.WriteValueSafe(input.aim); writer.WriteValueSafe(input.elevation);
+            writer.WriteValueSafe(input.primary); writer.WriteValueSafe(input.secondary);
+            writer.WriteValueSafe(input.drift); writer.WriteValueSafe(input.boost);
+            writer.WriteValueSafe(input.interact); writer.WriteValueSafe(input.swap);
+            writer.WriteValueSafe(input.reverse); writer.WriteValueSafe(input.manualReverse);
+            writer.WriteValueSafe(packet.hasMotion);
+            if (packet.hasMotion)
+            {
+                writer.WriteValueSafe(packet.position); writer.WriteValueSafe(packet.rotation);
+                writer.WriteValueSafe(packet.velocity); writer.WriteValueSafe(packet.yawRate);
+            }
+        }
+
+        internal static InputPacket ReadInputPacket(FastBufferReader reader)
+        {
+            var packet = new InputPacket();
+            var input = new CoopControls();
+            reader.ReadValueSafe(out input.sequence); reader.ReadValueSafe(out input.primaryPresses);
+            reader.ReadValueSafe(out input.secondaryPresses); reader.ReadValueSafe(out input.move);
+            reader.ReadValueSafe(out input.aim); reader.ReadValueSafe(out input.elevation);
+            reader.ReadValueSafe(out input.primary); reader.ReadValueSafe(out input.secondary);
+            reader.ReadValueSafe(out input.drift); reader.ReadValueSafe(out input.boost);
+            reader.ReadValueSafe(out input.interact); reader.ReadValueSafe(out input.swap);
+            reader.ReadValueSafe(out input.reverse); reader.ReadValueSafe(out input.manualReverse);
+            reader.ReadValueSafe(out packet.hasMotion);
+            if (packet.hasMotion)
+            {
+                reader.ReadValueSafe(out packet.position); reader.ReadValueSafe(out packet.rotation);
+                reader.ReadValueSafe(out packet.velocity); reader.ReadValueSafe(out packet.yawRate);
+            }
+            packet.controls = input;
+            return packet;
         }
 
         // Player snapshots run at 20 Hz, other cars at 10 Hz. JSON field names and

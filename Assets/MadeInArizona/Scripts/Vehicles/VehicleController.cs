@@ -135,7 +135,10 @@ namespace MadeInArizona
             IsNetworkProxy = true;
             IsLocallyPredicted = predictLocal;
             Body.isKinematic = !predictLocal;
-            Body.detectCollisions = predictLocal;
+            // The guest owns its driving physics. Keep teammate proxies collidable there so a
+            // host car pushing into the guest also moves the guest's local Rigidbody immediately.
+            Body.detectCollisions = predictLocal || IsPlayer;
+            if (!predictLocal && IsPlayer) Body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             Body.interpolation = predictLocal ? RigidbodyInterpolation.Interpolate : RigidbodyInterpolation.None;
             networkPosition = transform.position;
             networkRotation = transform.rotation;

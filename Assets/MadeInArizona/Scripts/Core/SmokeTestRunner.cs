@@ -940,6 +940,37 @@ namespace MadeInArizona
 
         IEnumerator TestCoopSnapshotAndSmoke()
         {
+            var input = new CoopSession.InputPacket {
+                controls = new CoopControls { sequence = 6102, primaryPresses = 31,
+                    secondaryPresses = 4, move = new Vector2(.7f, -.3f), aim = new Vector2(.2f, .9f),
+                    elevation = .4f, primary = true, secondary = false, drift = true,
+                    boost = true, interact = true, swap = true, reverse = true, manualReverse = true },
+                hasMotion = true, position = new Vector3(-532.3881f, 8.4197f, -1186.806f),
+                rotation = Quaternion.Euler(0, 192.8753f, 0), velocity = new Vector3(12, 0, -8),
+                yawRate = .3f
+            };
+            using (var writer = new FastBufferWriter(128, Allocator.Temp))
+            {
+                CoopSession.WriteInputPacket(writer, input);
+                Debug.Log("MIA_COOP_INPUT_SIZE: binary=" + writer.Length +
+                    " legacy_json=" + FastBufferWriter.GetWriteSize(JsonUtility.ToJson(input)));
+                Check("co-op driving input fits unreliable delivery at distant world coordinates",
+                    writer.Length < 128);
+                using (var reader = new FastBufferReader(writer, Allocator.Temp))
+                {
+                    var copy = CoopSession.ReadInputPacket(reader);
+                    Check("co-op driving input preserves controls and guest-owned motion",
+                        copy.controls.sequence == input.controls.sequence &&
+                        copy.controls.primaryPresses == input.controls.primaryPresses &&
+                        copy.controls.secondaryPresses == input.controls.secondaryPresses &&
+                        copy.controls.move == input.controls.move && copy.controls.aim == input.controls.aim &&
+                        copy.controls.primary && copy.controls.drift && copy.controls.boost &&
+                        copy.controls.interact && copy.controls.swap && copy.controls.reverse &&
+                        copy.controls.manualReverse && copy.hasMotion && copy.position == input.position &&
+                        copy.rotation == input.rotation && copy.velocity == input.velocity &&
+                        copy.yawRate == input.yawRate);
+                }
+            }
             var original = new CoopSession.VehiclePacket {
                 id = 17, owner = 2, archetype = 7, faction = 3, failedDepth = 2,
                 tick = 211, appliedInputSequence = 82,
@@ -1068,6 +1099,13 @@ namespace MadeInArizona
             var tyres = peer.GetComponent<TireEffects>();
             Check("remote co-op car locally draws drift smoke and tyre marks", peer.Body.isKinematic && tyres &&
                 tyres.SmokePuffsEmitted > 0 && tyres.MarkSegmentsEmitted > 0);
+            Vector3 beforeTeammateContact = car.Body.position;
+            car.Body.linearVelocity = Vector3.zero;
+            peer.ApplyNetworkMotion(beforeTeammateContact + car.transform.right * .6f, Quaternion.identity,
+                Vector3.zero, peer.Damage.Health, peer.Damage.MaxHealth, 1, 0, 0, 0, false);
+            yield return new WaitForSecondsRealtime(.7f);
+            Check("guest car reacts locally when teammate proxy pushes into it",
+                Vector3.Distance(beforeTeammateContact, car.Body.position) > .15f);
             WorldBuilder.SurfaceOverride = null;
             Destroy(visualPeer);
         }
