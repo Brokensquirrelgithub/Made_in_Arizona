@@ -129,6 +129,31 @@ namespace MadeInArizona
             Body.linearVelocity = velocity;
             Body.angularVelocity = Vector3.up * yawRate;
         }
+        float lastLocalPlayerContactAt = -100f;
+        Vector3 lastLocalPlayerContactDelta;
+
+        /// <summary>Apply a host-observed player collision to the guest-owned driving body.</summary>
+        public bool ApplyNetworkPlayerContact(Vector3 deltaVelocity)
+        {
+            if (!IsLocallyPredicted || !IsLocalPlayer || !Body || !GameManager.Instance.IsPlaying ||
+                Damage == null || Damage.IsDead) return false;
+            deltaVelocity.y = 0;
+            if (Time.unscaledTime - lastLocalPlayerContactAt < .25f &&
+                lastLocalPlayerContactDelta.sqrMagnitude > .0001f && deltaVelocity.sqrMagnitude > .0001f)
+            {
+                // The guest may already have felt part of this collision against the host's proxy.
+                Vector3 direction = deltaVelocity.normalized;
+                deltaVelocity -= direction * Mathf.Min(deltaVelocity.magnitude,
+                    Mathf.Max(0, Vector3.Dot(lastLocalPlayerContactDelta, direction)));
+                lastLocalPlayerContactAt = -100f;
+            }
+            if (deltaVelocity.sqrMagnitude > .0001f)
+            {
+                Body.linearVelocity += Vector3.ClampMagnitude(deltaVelocity, 25f);
+                Body.WakeUp();
+            }
+            return true;
+        }
         static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         public void SetNetworkProxy(bool predictLocal = false)
         {
@@ -1067,6 +1092,14 @@ namespace MadeInArizona
         {
             if (IsNetworkProxy)
             {
+                if (IsLocallyPredicted && initialized && GameManager.Instance && GameManager.Instance.IsPlaying &&
+                    collision.collider.GetComponentInParent<VehicleController>() is VehicleController otherPlayer &&
+                    otherPlayer.IsPlayer && otherPlayer != this)
+                {
+                    lastLocalPlayerContactAt = Time.unscaledTime;
+                    lastLocalPlayerContactDelta = Body.linearVelocity - preCollisionVelocity;
+                    lastLocalPlayerContactDelta.y = 0;
+                }
                 // Match the host's tree slowdown locally without destroying scenery or applying damage on the guest.
                 if (IsLocallyPredicted && initialized && GameManager.Instance && GameManager.Instance.IsPlaying &&
                     !Damage.IsDead && collision.relativeVelocity.magnitude >= 2f)
@@ -1083,6 +1116,7 @@ namespace MadeInArizona
             }
             if (IsPlayer && ProbeCounting) LastHitName = collision.collider.name + " @" + collision.relativeVelocity.magnitude.ToString("F0");
             if (!initialized || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
+            if (IsPlayer) CoopSession.Instance?.ReportGuestPlayerContact(this, collision, preCollisionVelocity);
             if (Damage.IsDead)
             {
                 if (Damage.IsSpinningWreck && !IsGroundContact(collision, collision.collider.GetComponentInParent<VehicleDamage>(),

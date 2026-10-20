@@ -219,6 +219,7 @@ namespace MadeInArizona
             RegisterDraftMessages(messages);
             RegisterLobbyMessages(messages);
             RegisterAutomationMessages(messages);
+            RegisterPlayerContactMessages(messages);
         }
 
         public async void Host()
@@ -1046,6 +1047,7 @@ namespace MadeInArizona
             }
             network = null; transport = null;
             ResetTrace();
+            ResetPlayerContacts();
             guestCars.Clear(); proxies.Clear(); seenAt.Clear(); lastVehicleTick.Clear(); pickupProxies.Clear(); pickupSeenAt.Clear();
             inputSequence = lastAcknowledgedInputSequence = 0;
             primaryPresses = secondaryPresses = 0;

@@ -23,7 +23,7 @@ namespace MadeInArizona
             public string joinCode, updaterPhase, updaterStatus, updateResult, currentBuild, latestBuild;
             public string peerSnapshot, recentErrors, tuningField, tuningScope, tuningControls;
             public bool ok, isHost, isGuest, coopBusy, benchmarkRunning, updateAvailable, updateRunning;
-            public int players, guestSlot;
+            public int players, guestSlot, playerContactsSent, playerContactsApplied;
             public float x, y, z, speedKph, updateProgress, tuningValue, tuningMinimum, tuningMaximum;
             public long utcTicks;
         }
@@ -396,6 +396,8 @@ namespace MadeInArizona
                 joinCode = coop ? coop.JoinCode : "", coopBusy = coop && coop.Busy,
                 isHost = coop && coop.IsHost, isGuest = coop && coop.IsClient,
                 players = coop ? coop.PlayerCount : 1, ping = coop ? coop.PingSummary : "--",
+                playerContactsSent = coop ? coop.PlayerContactsSent : 0,
+                playerContactsApplied = coop ? coop.PlayerContactsApplied : 0,
                 tracePath = coop ? coop.LastTracePath : "", benchmarkId = coop ? coop.LastBenchmarkId : "",
                 benchmarkRunning = coop && coop.BenchmarkRunning,
                 x = p.x, y = p.y, z = p.z, speedKph = car ? car.SpeedKph : 0,
