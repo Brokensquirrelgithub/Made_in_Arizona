@@ -580,20 +580,55 @@ namespace MadeInArizona
                         Time.unscaledTime < fireDeadline) yield return null;
                     Check("host fires both short guest trigger taps", guestCar &&
                         guestCar.Weapons.PrimaryShotsFired >= before + 2);
+                    if (guestCar) guestCar.Weapons.EquipField(WeaponRules.Find("aircannon"), 1);
+                    Check("host equips guest field weapon for fire test", guestCar && guestCar.Weapons.FieldAmmo == 1);
+                    float fieldDeadline = Time.unscaledTime + 10;
+                    while (guestCar && guestCar.Weapons.FieldAmmo > 0 &&
+                        Time.unscaledTime < fieldDeadline) yield return null;
+                    Check("host fires guest short field weapon tap", guestCar && guestCar.Weapons.FieldAmmo == 0);
                 }
                 else
                 {
                     game.Save.settings.racingStyle = false;
+                    game.Player.Weapons.ConfigurePlayerPrimary("riveter");
                     var firePad = InputSystem.AddDevice<Gamepad>();
+                    int predictedBefore = coop.PredictedOwnProjectileCount;
+                    int confirmedBefore = coop.ConfirmedOwnProjectileCount;
+                    int reconciledBefore = coop.ReconciledOwnProjectileCount;
                     for (int tap = 0; tap < 2; tap++)
                     {
                         InputSystem.QueueStateEvent(firePad, new GamepadState { rightTrigger = 1 });
                         yield return null;
                         Check("guest registers short trigger tap " + (tap + 1), InputManager.Instance.Primary);
+                        Check("guest draws projectile on trigger frame " + (tap + 1),
+                            coop.PredictedOwnProjectileCount >= predictedBefore + tap + 1);
                         InputSystem.QueueStateEvent(firePad, new GamepadState());
                         yield return null;
                         yield return new WaitForSecondsRealtime(1);
                     }
+                    float echoDeadline = Time.unscaledTime + 5;
+                    while (coop.ConfirmedOwnProjectileCount < confirmedBefore + 2 &&
+                        Time.unscaledTime < echoDeadline) yield return null;
+                    Check("guest reconciles both host shot visuals without duplicates",
+                        coop.ConfirmedOwnProjectileCount >= confirmedBefore + 2 &&
+                        coop.ReconciledOwnProjectileCount >= reconciledBefore + 2);
+                    float fieldReadyDeadline = Time.unscaledTime + 5;
+                    while ((!game.Player.Weapons.FieldWeapon || game.Player.Weapons.FieldWeapon.id != "aircannon") &&
+                        Time.unscaledTime < fieldReadyDeadline) yield return null;
+                    Check("guest receives field weapon for fire test", game.Player.Weapons.FieldWeapon &&
+                        game.Player.Weapons.FieldWeapon.id == "aircannon");
+                    int fieldPredicted = coop.PredictedOwnProjectileCount;
+                    int fieldConfirmed = coop.ConfirmedOwnProjectileCount;
+                    InputSystem.QueueStateEvent(firePad, new GamepadState { leftTrigger = 1 });
+                    yield return null;
+                    Check("guest draws field projectile on trigger frame",
+                        InputManager.Instance.Secondary && coop.PredictedOwnProjectileCount > fieldPredicted);
+                    InputSystem.QueueStateEvent(firePad, new GamepadState());
+                    yield return null;
+                    float fieldEchoDeadline = Time.unscaledTime + 5;
+                    while (coop.ConfirmedOwnProjectileCount <= fieldConfirmed &&
+                        Time.unscaledTime < fieldEchoDeadline) yield return null;
+                    Check("guest receives field shot confirmation", coop.ConfirmedOwnProjectileCount > fieldConfirmed);
                     InputSystem.RemoveDevice(firePad);
                 }
             }

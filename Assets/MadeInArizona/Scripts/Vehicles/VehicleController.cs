@@ -546,7 +546,20 @@ namespace MadeInArizona
             }
             if (IsLocallyPredicted)
             {
-                if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying) AnimateBody();
+                if (initialized && Damage != null && !Damage.IsDead && GameManager.Instance != null && GameManager.Instance.IsPlaying)
+                {
+                    var localInput = InputManager.Instance;
+                    if (localInput && Weapons)
+                    {
+                        Vector3 localAim = new Vector3(localInput.Aim.x, localInput.AimElevation, localInput.Aim.y);
+                        Weapons.AimAt(localAim);
+                        if (localInput.Primary) Weapons.PreviewLocalPrimary(localAim, !primaryHeld);
+                        else if (primaryHeld) Weapons.EndLocalPrimaryPreview();
+                        primaryHeld = localInput.Primary;
+                        if (localInput.Secondary) Weapons.PreviewLocalSecondary(localAim);
+                    }
+                    AnimateBody();
+                }
                 return;
             }
             if (!initialized || Damage.IsDead || GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;

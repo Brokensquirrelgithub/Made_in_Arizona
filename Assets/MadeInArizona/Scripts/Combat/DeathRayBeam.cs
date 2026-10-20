@@ -19,11 +19,13 @@ namespace MadeInArizona
         WeaponSystem weapons;
         Vector3 end, smoothedEnd;
         float heat, lastFireAt = -10, networkSeenAt = -10, sparkAt, level;
-        bool networkActive, wasOn;
+        bool networkActive, wasOn, localPreview, localHeld;
         /// <summary>Seconds after the last damage tick that the beam still counts as held (ticks arrive 12 times a second).</summary>
         const float HoldGrace = .15f;
 
-        public bool Active => weapons && (weapons.IsNetworkBeam ? networkActive && Time.unscaledTime - networkSeenAt < .3f : Time.time - lastFireAt < HoldGrace);
+        public bool Active => weapons && (weapons.IsNetworkBeam ?
+            localPreview && weapons.Owner && weapons.Owner.IsLocallyPredicted ? localHeld :
+            networkActive && Time.unscaledTime - networkSeenAt < .3f : Time.time - lastFireAt < HoldGrace);
         public Vector3 End => end;
         public float Heat => heat;
 
@@ -32,11 +34,18 @@ namespace MadeInArizona
         /// <summary>A damage tick on the host (or in solo): the beam reaches <paramref name="hit"/> at the given focus heat.</summary>
         public void Fire(Vector3 hit, float focus) { end = hit; heat = focus; lastFireAt = Time.time; }
 
+        public void PreviewLocal(bool held, Vector3 hit)
+        {
+            if (!weapons || !weapons.Owner || !weapons.Owner.IsLocallyPredicted) return;
+            localPreview = true; localHeld = held;
+            if (held) end = hit;
+        }
+
         /// <summary>Co-op guests: the host's beam state for this car, refreshed by each vehicle snapshot.</summary>
         public void SetNetwork(bool active, Vector3 hit, float focus)
         {
             networkActive = active; networkSeenAt = Time.unscaledTime;
-            if (active) { end = hit; heat = focus; }
+            if (active) { if (!localPreview) end = hit; heat = focus; }
         }
 
         void LateUpdate()

@@ -22,6 +22,7 @@ namespace MadeInArizona
         Vector3 aimDirection = Vector3.forward;
         float garageAt, fieldAt, enemyRocketAt, recoil, recoilVelocity, lobTargetUntil;
         float minigunSpin, primaryAttemptAt;
+        float previewGarageAt, previewFieldAt, previewMinigunSpin, previewAttemptAt, previewSkewerUntil;
         int lastSkewerFrame = -10;
         int molotovShots;
         float bowlingPushBonus;
@@ -215,6 +216,92 @@ namespace MadeInArizona
         public void ReleasePrimary()
         {
             if (flail) flail.Release();
+        }
+        /// <summary>Immediate cosmetic feedback for the owner on a guest. Host shots still decide all damage.</summary>
+        public void PreviewLocalPrimary(Vector3 direction, bool pressed)
+        {
+            if (!owner || !owner.IsLocallyPredicted || !CanFire() || !GarageWeapon) return;
+            var weapon = Effective(GarageWeapon);
+            if (weapon.id == "skewer" && (!pressed || Time.time < previewSkewerUntil)) return;
+            if (weapon.id == "minigun")
+            {
+                if (Time.time - previewAttemptAt > .12f) previewMinigunSpin = 0;
+                previewAttemptAt = Time.time;
+                previewMinigunSpin = Mathf.Min(.65f, previewMinigunSpin + Time.deltaTime);
+                if (previewMinigunSpin < .55f) return;
+            }
+            if (Time.time < previewGarageAt) return;
+            previewGarageAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
+            PreviewLocalShot(weapon, direction);
+            if (weapon.id == "skewer") previewSkewerUntil = Time.time + 1.15f;
+        }
+        public void PreviewLocalSecondary(Vector3 direction)
+        {
+            if (!owner || !owner.IsLocallyPredicted || !CanFire() || !FieldWeapon || FieldAmmo <= 0) return;
+            var weapon = Effective(FieldWeapon);
+            if (Time.time < previewFieldAt) return;
+            previewFieldAt = Time.time + 1f / Mathf.Max(.1f, weapon.fireRate);
+            PreviewLocalShot(weapon, direction);
+        }
+        void PreviewLocalShot(WeaponDefinition weapon, Vector3 direction)
+        {
+            AimAt(direction);
+            Vector3 muzzle = Muzzle(aimDirection);
+            Color color = weapon.projectileColor;
+            int count = weapon.id == "boomstick" ? 12 : weapon.id == "sweeper" ? 8 :
+                weapon.id == "firecracker" ? 9 : weapon.id == "shredder" || weapon.id == "cluster" ? 3 : 1;
+            bool projectile = weapon.id != "flail" && weapon.id != "deathray" && weapon.id != "railgun" &&
+                weapon.id != "mirrordust" && weapon.id != "rallyhorn" && weapon.id != "rprp" &&
+                weapon.id != "mines" && weapon.id != "grenade" && weapon.id != "mortar" &&
+                weapon.id != "sprinkler" && weapon.id != "pothole" && weapon.id != "scattermortar" &&
+                weapon.id != "bowling" && weapon.id != "sentry" && weapon.id != "gokart" &&
+                weapon.id != "boomerang" && weapon.id != "torch";
+            if (projectile)
+            {
+                float lifetime = weapon.id == "sniper" ? 3f : weapon.id == "minigun" ? .65f :
+                    weapon.id == "sweeper" ? .42f : weapon.id == "boomstick" ? .33f :
+                    weapon.id == "firecracker" ? .45f : weapon.id == "fireworks" ? 1.25f : 1.5f;
+                float spread = weapon.id == "boomstick" ? 3.2f : weapon.id == "sweeper" ? 3.7f :
+                    weapon.id == "firecracker" ? 4.2f : weapon.id == "shredder" ? 9f :
+                    weapon.id == "cluster" ? 8f : 0f;
+                for (int i = 0; i < count; i++)
+                {
+                    float angle = spread > 0 ? (i - (count - 1) * .5f) * spread :
+                        weapon.id == "minigun" ? UnityEngine.Random.Range(-4f, 4f) :
+                        weapon.id == "sniper" ? 0 : UnityEngine.Random.Range(-.7f, .7f);
+                    Vector3 shot = Quaternion.AngleAxis(angle, Vector3.up) * aimDirection;
+                    bool explosive = weapon.blastRadius > 0;
+                    ProjectileSystem.Preview(muzzle, shot, weapon.speed, explosive ? weapon.blastRadius : 0,
+                        owner.gameObject, color, weapon.id == "fireworks" ? ExplosionKind.Firework :
+                            explosive ? ExplosionKind.Rocket : ExplosionKind.Ammunition, lifetime,
+                        weapon.id == "skewer" ? new ShotFx { effect = ShotEffect.Freeze, pierce = 1, castRadius = .55f } :
+                        weapon.id == "needler" ? new ShotFx { effect = ShotEffect.Spine } :
+                        weapon.id == "fireworks" ? new ShotFx { firework = true, castRadius = .3f } : null);
+                }
+            }
+            else if (weapon.id == "railgun")
+            {
+                Vector3 end = ProjectileSystem.Hitscan(muzzle, aimDirection, 140, owner.gameObject, false, 0, scanHits);
+                WeaponFx.Beam(muzzle, end, color, .32f, .35f);
+                WeaponFx.Lightning(muzzle, end, Color.white, .12f);
+            }
+            else if (weapon.id == "deathray")
+            {
+                Beam.PreviewLocal(true, TraceBeam(muzzle));
+                return;
+            }
+            if (weapon.id != "flail")
+            {
+                ExplosionSystem.Burst(muzzle, color, 4, 1);
+                Flash(color, weapon.id == "mortar" || weapon.id == "railgun" ? 14 : 7,
+                    weapon.id == "minigun" ? .035f : .09f);
+                AudioManager.Instance?.PlayShot(muzzle, weapon);
+            }
+        }
+        public void EndLocalPrimaryPreview()
+        {
+            if (owner && owner.IsLocallyPredicted && GarageWeapon && GarageWeapon.id == "deathray" && beam)
+                beam.PreviewLocal(false, beam.End);
         }
         public void FireSecondary(Vector3 direction)
         {

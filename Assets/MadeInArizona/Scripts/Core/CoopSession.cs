@@ -97,6 +97,10 @@ namespace MadeInArizona
         bool queuedInteract, queuedSwap;
         bool lastLocalPrimary, lastLocalSecondary;
         int primaryPresses, secondaryPresses;
+        readonly Queue<float> predictedOwnProjectiles = new Queue<float>();
+        public int PredictedOwnProjectileCount { get; private set; }
+        public int ConfirmedOwnProjectileCount { get; private set; }
+        public int ReconciledOwnProjectileCount { get; private set; }
         bool remoteWorldReady;
         int remoteMode;
 
@@ -149,7 +153,7 @@ namespace MadeInArizona
             public Vector3 position, direction;
             public float speed, lifetime;
             public Color color;
-            public int kind;
+            public int kind, owner;
             public bool firework;
         }
         [Serializable] sealed class ExplosionPacket
@@ -391,6 +395,8 @@ namespace MadeInArizona
             inputSequence = lastAcknowledgedInputSequence = 0;
             primaryPresses = secondaryPresses = 0;
             lastLocalPrimary = lastLocalSecondary = false;
+            predictedOwnProjectiles.Clear();
+            PredictedOwnProjectileCount = ConfirmedOwnProjectileCount = ReconciledOwnProjectileCount = 0;
             estimatedSnapshotAge = .06f;
             Array.Clear(sentInputControls, 0, sentInputControls.Length);
             GameManager.Instance.LoadCoopWorld(packet.mode, packet.mission, config);
@@ -519,14 +525,24 @@ namespace MadeInArizona
             float lifetime, GameObject source, bool firework = false)
         {
             if (!IsHost) return;
-            var packet = new ProjectilePacket { position = position, direction = direction, speed = speed,
-                color = color, kind = (int)kind, lifetime = lifetime, firework = firework };
             var shooter = source ? source.GetComponentInParent<VehicleController>() : null;
+            int owner = -1;
+            if (shooter) foreach (var guest in guestCars)
+                if (guest.Value == shooter) { owner = (int)guest.Key; break; }
+            var packet = new ProjectilePacket { position = position, direction = direction, speed = speed,
+                color = color, kind = (int)kind, lifetime = lifetime, firework = firework, owner = owner };
             foreach (ulong clientId in network.ConnectedClientsIds)
                 if (clientId != NetworkManager.ServerClientId)
                     Send(ProjectileMessage, clientId, packet,
-                        shooter && guestCars.TryGetValue(clientId, out var car) && shooter == car
+                        owner == (int)clientId
                             ? NetworkDelivery.ReliableSequenced : NetworkDelivery.Unreliable);
+        }
+
+        public void NotePredictedOwnProjectile()
+        {
+            if (!IsClient) return;
+            predictedOwnProjectiles.Enqueue(Time.unscaledTime);
+            PredictedOwnProjectileCount++;
         }
 
         /// <summary>Host: sends a one-off effect to every guest (bowling balls, which are field ordnance the snapshots miss).</summary>
@@ -580,6 +596,14 @@ namespace MadeInArizona
             reader.ReadValueSafe(out string json);
             var packet = JsonUtility.FromJson<ProjectilePacket>(json);
             if (packet == null) return;
+            if (packet.owner == (int)network.LocalClientId)
+            {
+                ConfirmedOwnProjectileCount++;
+                while (predictedOwnProjectiles.Count > 0 && Time.unscaledTime - predictedOwnProjectiles.Peek() > 1f)
+                    predictedOwnProjectiles.Dequeue();
+                if (predictedOwnProjectiles.Count > 0)
+                { predictedOwnProjectiles.Dequeue(); ReconciledOwnProjectileCount++; return; }
+            }
             ProjectileSystem.Fire(packet.position, packet.direction, packet.speed, 0, 0, null,
                 packet.color, (ExplosionKind)packet.kind, packet.lifetime,
                 packet.firework ? new ShotFx { firework = true, castRadius = .3f } : null);
@@ -976,6 +1000,8 @@ namespace MadeInArizona
             inputSequence = lastAcknowledgedInputSequence = 0;
             primaryPresses = secondaryPresses = 0;
             lastLocalPrimary = lastLocalSecondary = false;
+            predictedOwnProjectiles.Clear();
+            PredictedOwnProjectileCount = ConfirmedOwnProjectileCount = ReconciledOwnProjectileCount = 0;
             estimatedSnapshotAge = .06f;
             Array.Clear(sentInputControls, 0, sentInputControls.Length);
             ResetLobby();

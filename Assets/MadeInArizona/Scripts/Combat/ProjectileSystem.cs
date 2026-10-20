@@ -47,7 +47,7 @@ namespace MadeInArizona
             public Vector3 position, direction;
             public float speed, damage, radius, remaining, trailAt, born, returnAt;
             public GameObject source;
-            public bool friendly, returning, mirrored;
+            public bool friendly, returning, mirrored, visualOnly;
             public Color color;
             public ExplosionKind kind;
             public ShotFx fx;
@@ -100,6 +100,14 @@ namespace MadeInArizona
                     fx != null && fx.firework);
             Get().Launch(position, direction, speed, damage, radius, source, color, kind, lifetime, fx);
         }
+        /// <summary>A guest-owned tracer appears immediately; it never changes health, props or game state.</summary>
+        public static void Preview(Vector3 position, Vector3 direction, float speed, float radius, GameObject source,
+            Color color, ExplosionKind kind, float lifetime, ShotFx fx = null)
+        {
+            if (!CoopSession.IsRemoteClient) return;
+            Get().Launch(position, direction, speed, 0, radius, source, color, kind, lifetime, fx, true);
+            CoopSession.Instance?.NotePredictedOwnProjectile();
+        }
         /// <summary>Second trigger press breaks a flying skewer into a forward cone of ice shards.</summary>
         public static bool DetonateSkewer(GameObject source)
         {
@@ -130,7 +138,7 @@ namespace MadeInArizona
             if (!shooter) return true;
             return shooter != target && !VehicleController.Allied(shooter, target);
         }
-        void Launch(Vector3 position, Vector3 direction, float speed, float damage, float radius, GameObject source, Color color, ExplosionKind kind, float lifetime, ShotFx fx)
+        void Launch(Vector3 position, Vector3 direction, float speed, float damage, float radius, GameObject source, Color color, ExplosionKind kind, float lifetime, ShotFx fx, bool visualOnly = false)
         {
             if (active.Count >= Maximum) Retire(0);
             Round round;
@@ -154,7 +162,8 @@ namespace MadeInArizona
             round.position = position; round.direction = direction.sqrMagnitude > .0001f ? direction.normalized : fallback;
             round.speed = speed; round.damage = damage; round.radius = radius; round.source = source;
             round.color = color; round.kind = kind; round.remaining = lifetime; round.trailAt = 0; round.born = Time.time;
-            round.fx = fx; round.returning = false; round.mirrored = false; round.returnAt = 0; round.struck.Clear();
+            round.fx = fx; round.returning = false; round.mirrored = false; round.visualOnly = visualOnly;
+            round.returnAt = 0; round.struck.Clear();
             // The co-op projectile packet carries color but not ShotFx; recognise the needler tint on guests too.
             bool spine = fx != null && fx.effect == ShotEffect.Spine ||
                 kind == ExplosionKind.Ammunition && color.g > .9f && color.r < .4f && color.b < .3f;
@@ -199,7 +208,7 @@ namespace MadeInArizona
             round.trail.startColor = new Color(color.r, color.g, color.b, .82f);
             round.trail.endColor = new Color(color.r, color.g, color.b, 0);
             active.Add(round);
-            if (source != null && (fx == null || !fx.detached))
+            if (!visualOnly && source != null && (fx == null || !fx.detached))
             {
                 Vector3 origin = source.transform.position + Vector3.up * .85f;
                 Vector3 delta = position - origin;
@@ -252,6 +261,20 @@ namespace MadeInArizona
                 // Do not travel beyond the configured lifetime on a long frame.
                 float stepTime = Mathf.Min(Time.deltaTime, Mathf.Max(0, r.remaining));
                 float distance = r.speed * stepTime;
+                if (r.visualOnly)
+                {
+                    if (Cast(r, r.position, r.direction, distance, out RaycastHit visualHit))
+                    {
+                        ExplosionSystem.Burst(visualHit.point, r.color, 4, 2);
+                        Retire(i);
+                        continue;
+                    }
+                    r.position += r.direction * distance;
+                    r.transform.SetPositionAndRotation(r.position, Quaternion.LookRotation(r.direction));
+                    r.remaining -= stepTime;
+                    if (r.remaining <= 0) Retire(i);
+                    continue;
+                }
                 bool hitSomething = Cast(r, r.position, r.direction, distance, out RaycastHit hit);
                 float clearDistance = hitSomething ? Mathf.Max(0, hit.distance) : distance;
                 if (!r.mirrored && MirrorDustCloud.Intersect(r.position, r.direction, clearDistance,
