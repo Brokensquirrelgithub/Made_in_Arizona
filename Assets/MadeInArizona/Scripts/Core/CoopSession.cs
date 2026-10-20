@@ -218,6 +218,7 @@ namespace MadeInArizona
             RegisterBalanceMessages(messages);
             RegisterDraftMessages(messages);
             RegisterLobbyMessages(messages);
+            RegisterAutomationMessages(messages);
         }
 
         public async void Host()

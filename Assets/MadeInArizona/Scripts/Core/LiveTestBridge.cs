@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -10,8 +11,9 @@ namespace MadeInArizona
     {
         [Serializable] sealed class Request
         {
-            public string id, command, roomCode;
-            public float moveX, moveY, seconds;
+            public string id, command, roomCode, field;
+            public float moveX, moveY, seconds, value;
+            public int guestSlot;
             public bool boost, drift;
         }
 
@@ -19,13 +21,18 @@ namespace MadeInArizona
         {
             public string id, message, state, coopStatus, ping, tracePath, benchmarkId, screenshotPath;
             public string joinCode, updaterPhase, updaterStatus, updateResult, currentBuild, latestBuild;
+            public string peerSnapshot, recentErrors, tuningField, tuningScope, tuningControls;
             public bool ok, isHost, isGuest, coopBusy, benchmarkRunning, updateAvailable, updateRunning;
-            public int players;
-            public float x, y, z, speedKph, updateProgress;
+            public int players, guestSlot;
+            public float x, y, z, speedKph, updateProgress, tuningValue, tuningMinimum, tuningMaximum;
             public long utcTicks;
         }
 
         string root, requests, responses;
+        readonly Dictionary<string, PendingGuest> pendingGuests = new Dictionary<string, PendingGuest>();
+        readonly Queue<string> recentErrors = new Queue<string>();
+        struct PendingGuest { public ulong clientId; public int slot; public float deadline; }
+        public static LiveTestBridge Instance { get; private set; }
         public string BridgeDirectory => root;
         float nextPoll, nextHeartbeat;
         bool updateRunning;
@@ -39,6 +46,8 @@ namespace MadeInArizona
 
         void Awake()
         {
+            Instance = this;
+            Application.logMessageReceived += RecordLog;
             string configured = null;
             foreach (string arg in Environment.GetCommandLineArgs())
                 if (arg.StartsWith("-miaBridgeDir=", StringComparison.Ordinal)) configured = arg.Substring(14);
@@ -53,6 +62,19 @@ namespace MadeInArizona
             Debug.Log("MIA_AUTOMATION_BRIDGE: " + root);
         }
 
+        void OnDestroy()
+        {
+            Application.logMessageReceived -= RecordLog;
+            if (Instance == this) Instance = null;
+        }
+
+        void RecordLog(string condition, string stackTrace, LogType type)
+        {
+            if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert) return;
+            recentErrors.Enqueue(DateTime.UtcNow.ToString("o") + " " + condition.Substring(0, Math.Min(240, condition.Length)));
+            while (recentErrors.Count > 12) recentErrors.Dequeue();
+        }
+
         void Update()
         {
             if (Time.unscaledTime >= nextHeartbeat)
@@ -62,6 +84,15 @@ namespace MadeInArizona
             }
             if (Time.unscaledTime < nextPoll) return;
             nextPoll = Time.unscaledTime + .05f;
+            var expired = new List<string>();
+            foreach (var pair in pendingGuests)
+                if (Time.unscaledTime > pair.Value.deadline) expired.Add(pair.Key);
+            foreach (string id in expired)
+            {
+                pendingGuests.Remove(id);
+                WriteAtomic(Path.Combine(responses, id + ".json"),
+                    JsonUtility.ToJson(Snapshot(id, false, "Guest did not answer within 12 seconds; check its bridge and connection")));
+            }
             string[] pending = Directory.GetFiles(requests, "*.json");
             Array.Sort(pending, StringComparer.Ordinal);
             for (int i = 0; i < Math.Min(4, pending.Length); i++) Handle(pending[i]);
@@ -82,7 +113,7 @@ namespace MadeInArizona
             catch (Exception e) { result = Snapshot(id, false, e.Message); }
             try
             {
-                WriteAtomic(Path.Combine(responses, id + ".json"), JsonUtility.ToJson(result));
+                if (result != null) WriteAtomic(Path.Combine(responses, id + ".json"), JsonUtility.ToJson(result));
                 File.Delete(path);
             }
             catch (Exception e) { Debug.LogWarning("Automation bridge response failed: " + e.Message); }
@@ -92,9 +123,33 @@ namespace MadeInArizona
         {
             var game = GameManager.Instance;
             var coop = CoopSession.Instance;
+            if (request.command != null && request.command.StartsWith("guest_", StringComparison.Ordinal))
+            {
+                string command = request.command.Substring(6);
+                if (!RemoteAllowed(command)) return Snapshot(request.id, false, "Guest command is not allowed");
+                if (!coop) return Snapshot(request.id, false, "Co-op is unavailable");
+                request.command = command;
+                string json = JsonUtility.ToJson(request);
+                if (!coop.RequestGuestAutomation(request.guestSlot, request.id, json, out ulong clientId, out string error))
+                    return Snapshot(request.id, false, error);
+                pendingGuests[request.id] = new PendingGuest { clientId = clientId,
+                    slot = request.guestSlot, deadline = Time.unscaledTime + 12f };
+                return null;
+            }
             switch (request.command)
             {
                 case "status": return Snapshot(request.id, true, "Ready");
+                case "peers": return Snapshot(request.id, true, "Peer positions and input counters");
+                case "errors": return Snapshot(request.id, true, "Recent Unity errors on this player");
+                case "list_tuning":
+                    var controls = new List<string>();
+                    foreach (var control in DevControl.All)
+                        controls.Add(control.field.Name + " [" + control.min + ", " + control.max + "] " + control.scope);
+                    var listed = Snapshot(request.id, true, "Available runtime tuning fields");
+                    listed.tuningControls = string.Join("\n", controls);
+                    return listed;
+                case "get_tuning": return TuningResponse(request.id, request.field, false, 0);
+                case "set_tuning": return TuningResponse(request.id, request.field, true, request.value);
                 case "host_coop":
                     if (!game || (game.State != GameState.MainMenu && game.State != GameState.Garage))
                         return Snapshot(request.id, false, "Open the main menu or garage before hosting");
@@ -152,6 +207,17 @@ namespace MadeInArizona
                 case "stop":
                     if (InputManager.Instance) InputManager.Instance.StopAutomationDrive();
                     return Snapshot(request.id, true, "Stopped automation input");
+                case "leave_coop":
+                    if (!coop || (!coop.IsHost && !coop.IsClient)) return Snapshot(request.id, false, "Not in co-op");
+                    bool wasHost = coop.IsHost;
+                    coop.Leave();
+                    if (wasHost && game && game.IsPlaying) game.ReturnToGarage();
+                    return Snapshot(request.id, true, "Left the co-op room");
+                case "ready":
+                case "unready":
+                    if (!coop || !coop.InLobby) return Snapshot(request.id, false, "A co-op garage lobby is required");
+                    coop.SetReady(request.command == "ready");
+                    return Snapshot(request.id, true, request.command == "ready" ? "Ready" : "Choosing loadout");
                 case "screenshot":
                     string screenshot = Path.Combine(root, "screen-" + request.id + ".png");
                     ScreenCapture.CaptureScreenshot(screenshot);
@@ -160,6 +226,96 @@ namespace MadeInArizona
                     return captured;
                 default: return Snapshot(request.id, false, "Unknown bridge command");
             }
+        }
+
+        static bool RemoteAllowed(string command)
+        {
+            switch (command)
+            {
+                case "status": case "peers": case "errors": case "drive": case "stop":
+                case "list_tuning": case "get_tuning": case "set_tuning":
+                case "cooplog": case "coopbench": case "update_game": case "ready": case "unready": return true;
+                default: return false;
+            }
+        }
+
+        /// <summary>Only the connected host may reach this through the co-op automation handler.</summary>
+        public string ExecuteRemote(string json)
+        {
+            try
+            {
+                if (json.Length > 4096) throw new InvalidDataException("Remote request exceeds 4 KB");
+                var request = JsonUtility.FromJson<Request>(json);
+                if (request == null || !Guid.TryParseExact(request.id, "N", out _) || !RemoteAllowed(request.command))
+                    throw new InvalidDataException("Remote command is not allowed");
+                if (request.command == "update_game")
+                {
+                    if (updateRunning || !GameUpdater.Instance || GameUpdater.Instance.InstallBlocker != null)
+                        return JsonUtility.ToJson(Snapshot(request.id, false, "Updater is unavailable or busy"));
+                    updateRunning = true;
+                    updateResult = "Leaving co-op to update";
+                    StartCoroutine(LeaveAndUpdate());
+                    return JsonUtility.ToJson(Snapshot(request.id, true, "Guest update started; this player will leave co-op and restart"));
+                }
+                return JsonUtility.ToJson(Run(request));
+            }
+            catch (Exception e) { return JsonUtility.ToJson(Snapshot("remote", false, e.Message)); }
+        }
+
+        IEnumerator LeaveAndUpdate()
+        {
+            // Let the reliable response leave before shutting down this transport.
+            yield return null;
+            CoopSession.Instance?.Leave();
+            float deadline = Time.unscaledTime + 10f;
+            while (Time.unscaledTime < deadline && GameManager.Instance &&
+                   GameManager.Instance.State != GameState.MainMenu && GameManager.Instance.State != GameState.Garage)
+                yield return null;
+            if (!GameManager.Instance || (GameManager.Instance.State != GameState.MainMenu &&
+                GameManager.Instance.State != GameState.Garage))
+            {
+                updateResult = "Could not return to the menu for update";
+                updateRunning = false;
+                yield break;
+            }
+            yield return UpdateLatest();
+        }
+
+        public void CompleteGuestRequest(string id, ulong sender, string json)
+        {
+            if (!pendingGuests.TryGetValue(id, out var pending) || pending.clientId != sender) return;
+            pendingGuests.Remove(id);
+            Response response;
+            try { response = JsonUtility.FromJson<Response>(json); }
+            catch { response = null; }
+            if (response == null) response = Snapshot(id, false, "Guest returned an invalid response");
+            response.id = id;
+            response.guestSlot = pending.slot;
+            WriteAtomic(Path.Combine(responses, id + ".json"), JsonUtility.ToJson(response));
+        }
+
+        Response TuningResponse(string id, string field, bool set, float value)
+        {
+            DevControl selected = null;
+            foreach (var control in DevControl.All)
+                if (string.Equals(control.field.Name, field, StringComparison.OrdinalIgnoreCase)) { selected = control; break; }
+            if (selected == null) return Snapshot(id, false, "Unknown tuning field; call list_tuning");
+            if (set)
+            {
+                if (float.IsNaN(value) || float.IsInfinity(value) || value < selected.min || value > selected.max)
+                    return Snapshot(id, false, "Value must be within the field's finite allowed range");
+                if (CoopSession.IsRemoteClient && selected.scope == DevScope.Shared)
+                    return Snapshot(id, false, "Shared tuning is controlled by the host");
+                selected.field.SetValue(DevTuning.Local, value);
+                DevTuning.Apply();
+            }
+            var result = Snapshot(id, true, set ? "Runtime tuning applied" : "Runtime tuning value");
+            result.tuningField = selected.field.Name;
+            result.tuningScope = selected.scope.ToString();
+            result.tuningValue = (float)selected.field.GetValue(DevTuning.Local);
+            result.tuningMinimum = selected.min;
+            result.tuningMaximum = selected.max;
+            return result;
         }
 
         IEnumerator UpdateLatest()
@@ -228,7 +384,9 @@ namespace MadeInArizona
                 currentBuild = updater && updater.Current != null ? updater.Current.ShortCommit : "unpublished",
                 latestBuild = updater && updater.Builds.Count > 0 ? updater.Builds[0].ShortCommit : "",
                 updateProgress = updater ? updater.Progress : 0,
-                updateAvailable = updater && updater.UpdateAvailable, updateRunning = updateRunning
+                updateAvailable = updater && updater.UpdateAvailable, updateRunning = updateRunning,
+                peerSnapshot = coop ? coop.BridgePeerSnapshot() : "{\"peers\":[]}",
+                recentErrors = string.Join("\n", recentErrors.ToArray())
             };
         }
 
