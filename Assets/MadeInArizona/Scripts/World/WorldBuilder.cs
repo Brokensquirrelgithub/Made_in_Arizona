@@ -551,47 +551,117 @@ namespace MadeInArizona
             for(int i=0;i<steps;i++)
             {
                 float a=i*Mathf.PI*2/steps;
-                v[i*2]=new Vector3(Mathf.Sin(a)*2.1f,.08f,Mathf.Cos(a)*2.1f);v[i*2+1]=new Vector3(Mathf.Sin(a)*2.28f,.08f,Mathf.Cos(a)*2.28f);
+                v[i*2]=new Vector3(Mathf.Sin(a)*2.1f,.08f,Mathf.Cos(a)*2.1f);v[i*2+1]=new Vector3(Mathf.Sin(a)*2.38f,.08f,Mathf.Cos(a)*2.38f);
                 int n=(i+1)%steps;int t=i*6;tris[t]=i*2;tris[t+1]=n*2;tris[t+2]=i*2+1;tris[t+3]=i*2+1;tris[t+4]=n*2;tris[t+5]=n*2+1;
             }
             var ring=MeshObject("Navigation ring",g,v,tris,color);ring.GetComponent<Renderer>().sharedMaterial=Material(color,0,.3f,2.2f);
+            var outer=MeshObject("Pulsing approach ring",g,v,tris,color);
+            outer.transform.localPosition=new Vector3(0,.04f,0);
+            outer.transform.localScale=new Vector3(1.55f,1,1.55f);
+            outer.GetComponent<Renderer>().sharedMaterial=Material(color,0,.3f,1.3f);
             for(int i=0;i<4;i++)
             {
                 float a=i*Mathf.PI*.5f;
                 var arrow=Box("Waypoint tick",g,new Vector3(Mathf.Sin(a)*2.9f,.11f,Mathf.Cos(a)*2.9f),new Vector3(.22f,.04f,.65f),color,false,1.8f);arrow.transform.localRotation=Quaternion.Euler(0,i*90,0);
             }
-            if(!string.IsNullOrEmpty(label)) Text(label,g,new Vector3(0,3.2f,0),.36f,color,Quaternion.Euler(45,0,0)).AddComponent<WorldBillboard>();
-            if(label=="OBJECTIVE")
+            // Smoke carries the destination above roadside clutter; the hovering chevron points back to the exact spot.
+            Cylinder("Flare canister",g,new Vector3(0,.24f,0),.18f,.4f,Ink);
+            Box("Flare ignition",g,new Vector3(0,.5f,0),new Vector3(.32f,.16f,.32f),color,false,3.5f);
+            CreateMarkerSmoke(g,color);
+            Transform beacon=Group("Hovering waypoint chevron",g,new Vector3(0,5.1f,0));
+            for(int side=-1;side<=1;side+=2)
             {
-                g.localScale=Vector3.one*1.1f;
-                g.gameObject.AddComponent<ObjectiveWaypointFlash>();
+                var arm=Box("Chevron arm",beacon,new Vector3(side*.48f,.24f,0),new Vector3(.17f,1.4f,.17f),color,false,2.8f);
+                arm.transform.localRotation=Quaternion.Euler(0,0,-side*43);
             }
+            var centre=Box("Chevron point",beacon,new Vector3(0,-.28f,0),new Vector3(.28f,.28f,.28f),color,false,3f);
+            centre.transform.localRotation=Quaternion.Euler(0,45,0);
+            if(!string.IsNullOrEmpty(label))
+            {
+                Transform caption=Group("Waypoint caption",g,new Vector3(0,6.75f,0));
+                Box("Caption backing",caption,Vector3.zero,new Vector3(Mathf.Max(3.6f,label.Length*.23f),.62f,.06f),Ink);
+                Text(label,caption,new Vector3(0,0,-.05f),.5f,Color.white);
+                caption.gameObject.AddComponent<WorldBillboard>();
+            }
+            g.gameObject.AddComponent<ObjectiveWaypointFlash>().Initialize(outer.transform,beacon);
             return g.gameObject;
+        }
+
+        static Material markerSmokeMaterial;
+        void CreateMarkerSmoke(Transform marker,Color color)
+        {
+            Transform source=Group("Smoke flare",marker,new Vector3(0,.22f,0));
+            var smoke=source.gameObject.AddComponent<ParticleSystem>();
+            smoke.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main=smoke.main;
+            main.loop=true;main.playOnAwake=false;main.simulationSpace=ParticleSystemSimulationSpace.Local;
+            main.startLifetime=new ParticleSystem.MinMaxCurve(2.8f,3.7f);
+            main.startSpeed=new ParticleSystem.MinMaxCurve(2.6f,3.8f);
+            main.startSize=new ParticleSystem.MinMaxCurve(.75f,1.25f);
+            main.startColor=new Color(color.r,color.g,color.b,.78f);
+            main.maxParticles=90;
+            var emission=smoke.emission;emission.rateOverTime=quality==0?9:16;
+            var shape=smoke.shape;shape.shapeType=ParticleSystemShapeType.Cone;shape.angle=9;shape.radius=.18f;
+            var size=smoke.sizeOverLifetime;size.enabled=true;
+            size.size=new ParticleSystem.MinMaxCurve(1,new AnimationCurve(new Keyframe(0,.55f),new Keyframe(.3f,1.1f),new Keyframe(1,2.4f)));
+            var fade=smoke.colorOverLifetime;fade.enabled=true;
+            var gradient=new Gradient();
+            gradient.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},
+                new[]{new GradientAlphaKey(0,0),new GradientAlphaKey(.7f,.12f),new GradientAlphaKey(.52f,.6f),new GradientAlphaKey(0,1)});
+            fade.color=gradient;
+            var noise=smoke.noise;noise.enabled=true;noise.strength=.28f;noise.frequency=.35f;
+            var renderer=smoke.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode=ParticleSystemRenderMode.Billboard;
+            renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows=false;
+            if(!markerSmokeMaterial)
+            {
+                Shader shader=Shader.Find("Universal Render Pipeline/Particles/Unlit")??Shader.Find("Particles/Standard Unlit");
+                if(shader)
+                {
+                    markerSmokeMaterial=new Material(shader){name="Waypoint smoke flare",renderQueue=3000};
+                    Texture2D texture=MarkerSmokeTexture();
+                    if(markerSmokeMaterial.HasProperty("_BaseMap"))markerSmokeMaterial.SetTexture("_BaseMap",texture);
+                    if(markerSmokeMaterial.HasProperty("_MainTex"))markerSmokeMaterial.SetTexture("_MainTex",texture);
+                    markerSmokeMaterial.SetFloat("_Surface",1);
+                    markerSmokeMaterial.SetFloat("_Blend",0);
+                    markerSmokeMaterial.SetFloat("_SrcBlend",5);
+                    markerSmokeMaterial.SetFloat("_DstBlend",10);
+                    markerSmokeMaterial.SetFloat("_ZWrite",0);
+                    markerSmokeMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                }
+            }
+            if(markerSmokeMaterial)renderer.sharedMaterial=markerSmokeMaterial;
+            smoke.Play();
+        }
+
+        static Texture2D MarkerSmokeTexture()
+        {
+            const int width=32;
+            var texture=new Texture2D(width,width,TextureFormat.RGBA32,false)
+                {name="Soft waypoint smoke",filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
+            var pixels=new Color[width*width];
+            for(int y=0;y<width;y++)for(int x=0;x<width;x++)
+            {
+                float radius=new Vector2((x+.5f)/width*2-1,(y+.5f)/width*2-1).magnitude;
+                pixels[y*width+x]=new Color(1,1,1,Mathf.Pow(Mathf.Clamp01(1-radius),1.5f));
+            }
+            texture.SetPixels(pixels);texture.Apply(false,true);return texture;
         }
     }
 
-    /// <summary>Briefly blinks an objective marker once per minute without changing salvage or map pins.</summary>
+    /// <summary>Keeps the approach ring and overhead pointer in motion without hiding the marker.</summary>
     public sealed class ObjectiveWaypointFlash : MonoBehaviour
     {
-        const float Interval=60f, Duration=1.2f, Beat=.2f;
-        Renderer[] renderers;
-        float nextFlash;
-        void Awake()
-        {
-            renderers=GetComponentsInChildren<Renderer>();
-            nextFlash=Time.time+Interval;
-        }
+        Transform outerRing,beacon;
+        Vector3 ringScale,beaconPosition;
+        public void Initialize(Transform ring,Transform pointer)
+        {outerRing=ring;beacon=pointer;ringScale=ring.localScale;beaconPosition=pointer.localPosition;}
         void Update()
         {
-            if(Time.time>=nextFlash+Duration)nextFlash+=Interval*Mathf.Max(1,Mathf.FloorToInt((Time.time-nextFlash)/Interval)+1);
-            bool visible=Time.time<nextFlash||Time.time>=nextFlash+Duration||
-                Mathf.FloorToInt((Time.time-nextFlash)/Beat)%2==0;
-            foreach(var renderer in renderers)if(renderer)renderer.enabled=visible;
-        }
-        void OnDisable()
-        {
-            if(renderers==null)return;
-            foreach(var renderer in renderers)if(renderer)renderer.enabled=true;
+            float phase=Time.time*2.8f;
+            if(outerRing)outerRing.localScale=ringScale*(1+.08f*Mathf.Sin(phase));
+            if(beacon)beacon.localPosition=beaconPosition+Vector3.up*(.25f*Mathf.Sin(phase));
         }
     }
 }

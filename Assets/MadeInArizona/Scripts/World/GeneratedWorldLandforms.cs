@@ -366,6 +366,7 @@ namespace MadeInArizona
         bool ButtressFits(Vector2 at, float radius)
         {
             if (!InOutline(at / size) || RoadDistance(at) < radius + 14 || TownDistance(at) < radius + 80) return false;
+            if (ExperimentalFloorNear(at, radius)) return false;
             if (riverWidth > 0 && Mathf.Abs(at.x - RiverX(at.y)) < radius + riverWidth + 12) return false;
             foreach (var pin in Pins) if (pin.kind != "town" && Vector2.Distance(at, XZ(pin.position)) < radius + 40) return false;
             return true;
@@ -544,6 +545,7 @@ namespace MadeInArizona
             {
                 var c = new Vector2(circle.x, circle.y); float r = circle.z;
                 if (RoadDistance(c) < r + LandformRoadClearance) return false;
+                if (ExperimentalFloorNear(c, r)) return false;
                 if (riverWidth > 0 && Mathf.Abs(c.x - RiverX(c.y)) < r + riverWidth + LandformRiverClearance) return false;
                 for (int k = 0; k < 5; k++)
                 {
@@ -594,6 +596,7 @@ namespace MadeInArizona
             if (!InOutline(c / size) || !InOutline((c + new Vector2(r * 1.3f, 0)) / size) || !InOutline((c - new Vector2(r * 1.3f, 0)) / size)
                 || !InOutline((c + new Vector2(0, r * 1.3f)) / size) || !InOutline((c - new Vector2(0, r * 1.3f)) / size)) return false;
             if (RoadDistance(c) < r + LandformRoadClearance || TownDistance(c) < r + LandformTownClearance) return false;
+            if (ExperimentalFloorNear(c, r)) return false;
             if (riverWidth > 0 && Mathf.Abs(c.x - RiverX(c.y)) < r + riverWidth + LandformRiverClearance) return false;
             foreach (var pin in Pins) if (pin.kind != "town" && Vector2.Distance(c, XZ(pin.position)) < r + LandformPinClearance) return false;
             // Exact distance to every other landform's rock (the cell query is capped at 48 m, short of the spacing).
@@ -669,6 +672,7 @@ namespace MadeInArizona
             float grow = MediumRockScale(random);
             float radius = Rand(random, MinSolidRockRadius, 9) * grow, height = Rand(random, 3, 5.5f) * grow, yaw = Rand(random, 0, 360);
             if (!InOutline(p / size) || RoadDistance(p) < radius + CoverRoadClearance || TownDistance(p) < radius + CoverTownClearance) return false;
+            if (ExperimentalFloorNear(p, radius)) return false;
             if (TrailEdgeDistance(p) < radius + 1.5f || ObstacleDistance(p) < radius + CoverGap || ArchSpanDistance(p) < radius) return false;
             if (riverWidth > 0 && Mathf.Abs(p.x - RiverX(p.y)) < radius + riverWidth + 4) return false;
             foreach (var objective in objectives) if ((objective - p).sqrMagnitude < (radius + CoverObjectiveClearance) * (radius + CoverObjectiveClearance)) return false;
@@ -1023,6 +1027,7 @@ namespace MadeInArizona
         bool RubbleFits(Vector2 at, float radius, float roadClearance)
         {
             if (RoadDistance(at) < radius + roadClearance || TrailEdgeDistance(at) < radius + 1.5f || TownDistance(at) < radius + CoverTownClearance) return false;
+            if (ExperimentalFloorNear(at, radius)) return false;
             if (ArchSpanDistance(at) < radius || JunctionDistance(at) < radius + CoverObjectiveClearance) return false;
             for (int i = 0; i < PassPoints.Count; i++)
                 if (Vector2.Distance(at, XZ(PassPoints[i])) < radius + PassWidths[i] * .5f + 3) return false;

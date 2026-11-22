@@ -21,6 +21,7 @@ namespace MadeInArizona
         float introSlideStarted;
         int introSeed;
         float introWorldSize;
+        bool introExperimentalTerrain;
         Texture2D[] introImages;
 
         static string OpeningYearCaption()
@@ -41,10 +42,11 @@ namespace MadeInArizona
             }
         }
 
-        void BeginOpening(int seed, float size)
+        void BeginOpening(int seed, float size, bool experimentalTerrain)
         {
             introSeed = seed;
             introWorldSize = size;
+            introExperimentalTerrain = experimentalTerrain;
             introImages = new Texture2D[OpeningImagePaths.Length];
             for (int i = 0; i < introImages.Length; i++)
                 introImages[i] = Resources.Load<Texture2D>(OpeningImagePaths[i]);
@@ -59,7 +61,7 @@ namespace MadeInArizona
             if (!introActive) return;
             introActive = false;
             introImages = null;
-            game.StartCampaign(introSeed, introWorldSize);
+            game.StartCampaign(introSeed, introWorldSize, introExperimentalTerrain);
         }
 
         void TickOpening()

@@ -13,4 +13,14 @@ $arguments = @('-batchmode', '-nographics', '-quit', '-projectPath', ('"' + $pro
     '-executeMethod', "MadeInArizona.Editor.BuildGame.$method", '-logFile',
     ('"' + (Join-Path $projectRoot "Builds\unity-$method.log") + '"'))
 $process = Start-Process -FilePath $UnityEditor -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
-exit $process.ExitCode
+$buildExitCode = $process.ExitCode
+if ($method.StartsWith('Build')) {
+    $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($python) {
+        & $python.Source (Join-Path $PSScriptRoot 'cleanup_builds.py') --apply
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'Local build cleanup failed. See Docs/UPDATES.md.' }
+    } else {
+        Write-Warning 'Python is unavailable for local build cleanup. See Docs/UPDATES.md.'
+    }
+}
+exit $buildExitCode

@@ -88,9 +88,9 @@ namespace MadeInArizona
                     if(!game.Save.collectibles.Contains(seen))game.Save.collectibles.Add(seen);
                     SaveSystem.Save(game.Save);game.Notify("MAP DISCOVERED • "+pin.label);
                 }
+                if (distance < 34 && IsSalvage(pin) && !saved) EnsureSalvageMarker(pin,game);
                 if (distance < 14 && IsSalvage(pin) && !saved)
                 {
-                    EnsureSalvageMarker(pin,game);
                     if(interact) Collect(pin,key,game);
                     else if(warned.Add(key+":use")) game.Notify("Press E / gamepad South to recover specialty salvage.");
                 }

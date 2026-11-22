@@ -99,7 +99,8 @@ namespace MadeInArizona
                 if (!marker || remoteMarkerStage != stage)
                 {
                     if (marker) Destroy(marker);
-                    marker = Game.World.CreateMarker(position, new Color(1, .76f, .15f), "OBJECTIVE");
+                    marker = Game.World.CreateMarker(position, new Color(1, .76f, .15f),
+                        objective != null && objective.Contains("INTERACT") ? "INTERACT" : "OBJECTIVE");
                     remoteMarkerStage = stage;
                 }
                 else marker.transform.position = position;
@@ -459,7 +460,8 @@ namespace MadeInArizona
         void SetObjective(string text,Vector3 point)
         {
             point=TerrainPoint(point);Objective=text;ObjectivePosition=point;if(marker)Destroy(marker);
-            marker=Game.World.CreateMarker(point,new Color(1,.76f,.15f),"OBJECTIVE");
+            marker=Game.World.CreateMarker(point,new Color(1,.76f,.15f),
+                text.Contains("INTERACT")?"INTERACT":"OBJECTIVE");
         }
         void Midpoint(){if(midwaySaid)return;midwaySaid=true;DialogueSystem.Instance?.SayLine(definition.midpoint,13);}
         /// <summary>The escort van starts on the road beside the starter town rather than in a lot or ditch.</summary>

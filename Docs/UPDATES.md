@@ -46,6 +46,27 @@ SKIP_BUILD=1 Tools/publish-playtest.sh   # publish the players already in Builds
 It needs Unity (as for `Tools/build.sh`), the Windows build module and the GitHub CLI (`brew install gh`, then `gh auth login`). The commit must be committed and pushed, because the release points at it.
 Both publishing paths verify that each ZIP's embedded `StreamingAssets/build.json` has the same full commit and updater protocol as the release notes. If you package a build manually, run `Tools/verify-release-stamps.py` against both archives and the notes before uploading them. Build from committed source; CI's `-miaCommit` must name that same checked-out commit. A mismatch makes the updater keep offering the release after installation.
 
+## Local build cleanup
+
+The desktop build scripts and the local publish script run `Tools/cleanup_builds.py` with Python 3.8 or newer. The cleanup keeps the three newest entries in each of these folders and removes older entries once they are at least 24 hours old.
+
+| Folder | Entries covered |
+|---|---|
+| `Builds/archive/` | Completed build snapshots. Put each finished snapshot in its own folder here to include it in retention. |
+| `Builds/dist/` | Local release packages in `build-<commit>` folders. |
+| `Builds/hotfix-jobs/` | Completed or failed hotfix jobs with a valid `status.json`. The 24 hours start when the job finished. |
+
+The default Windows and macOS outputs use fixed paths and are rebuilt in place. Keep long-term snapshots outside the folders in the table. GitHub Actions artifacts expire after three days. Published GitHub Releases are used by the game's version picker and are outside local retention.
+
+Run these commands from the project root. On Windows, use `python` in place of `python3`.
+
+```sh
+python3 Tools/cleanup_builds.py          # preview the folders that qualify
+python3 Tools/cleanup_builds.py --apply  # delete those folders
+```
+
+Use the manual command after archiving a build from the Unity Editor or whenever you want to reclaim space between local builds.
+
 ## Tester setup (once)
 
 1. Download the zip for your platform from the newest release on the [Releases page](https://github.com/Brokensquirrelgithub/Made_in_Arizona/releases).

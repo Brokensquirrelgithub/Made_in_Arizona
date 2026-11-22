@@ -39,7 +39,11 @@ namespace MadeInArizona
             cfg=config??new WorldGenConfig();seed=cfg.seed;size=Mathf.Clamp(cfg.size,MinSize,MaxSize);Chunks=Mathf.Clamp(Mathf.RoundToInt(4+size/400),8,16);half=size*.5f;amp=Mathf.Clamp(cfg.terrainHeight,0,150);riverWidth=Mathf.Clamp(cfg.riverWidth,0,30);townCount=Mathf.Clamp(cfg.townCount,WorldGenConfig.MinTowns,TownPlan.Length);poiCount=Mathf.Clamp(cfg.poiCount,4,40);rng=new System.Random(seed);Active=this;
             transform.SetParent(parent,false);WorldBounds=new Bounds(Vector3.up*amp*.25f,new Vector3(size,amp*2.5f,size));
             desert=new Material(Shader.Find("MadeInArizona/BiomeTerrain"));WorldArt.ConfigureBiomeTerrain(desert);high=GroundMaterial(new Color(.42f,.34f,.23f),8);rock=GroundMaterial(new Color(.39f,.22f,.16f),12);asphalt=new Material(GroundMaterial(new Color(.10f,.12f,.115f),10)){name="MIA_Asphalt"};asphalt.SetFloat("_Smoothness",.46f);asphalt.SetFloat("_SpecularHighlights",1);asphalt.SetFloat("_EnvironmentReflections",1);water=RiverWaterMaterial();
-            Plan();BakeRoutes();BuildTerrain();BuildRiver();BuildRoads();BuildTowns();BuildJumpRamps();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();PlanCover();BuildLandforms();PlaceRoadPropaneCaches();PlaceWorldHazards();BuildEcology();BuildMap();
+            Plan();BakeRoutes();BuildTerrain();BuildRiver();
+            var riverbankTrees=PlanRiverbankTrees();
+            BuildRoads();BuildTowns();BuildJumpRamps();BuildPins();PlanLandforms();PlanBoundary();PlanTrails();BuildTrails();
+            BuildRiverbankTrees(riverbankTrees);
+            PlanCover();BuildLandforms();PlaceRoadPropaneCaches();PlaceWorldHazards();BuildEcology();BuildMap();
             // The navigation grid is built with the world, not on the first hostile detour (a hitch in the middle of a fight).
             BuildNavigation();gameObject.AddComponent<RoadPatrolDirector>();
         }
@@ -97,6 +101,7 @@ namespace MadeInArizona
             terrainRoot=Group("Chunked terrain",transform,Vector3.zero);props=Group("Streamed ecology",transform,Vector3.zero);roads=Group("Road and river network",transform,Vector3.zero);float cs=size/Chunks;int grid=Chunks*Cells;float step=size/grid;heights=new float[grid+1,grid+1];
             for(int z=0;z<=grid;z++)for(int x=0;x<=grid;x++)heights[x,z]=HeightInternal(-half+x*step,-half+z*step);
             EnsureReachable(step);
+            ShapeExperimentalTerrain(step);
             // The terrain shader tints by altitude so the elevation levels read from the top-down camera.
             float low=float.MaxValue,top=float.MinValue;
             for(int z=0;z<=grid;z+=2)for(int x=0;x<=grid;x+=2){if(!InsideVertex(x,z,step))continue;low=Mathf.Min(low,heights[x,z]);top=Mathf.Max(top,heights[x,z]);}
@@ -104,7 +109,25 @@ namespace MadeInArizona
             for(int cz=0;cz<Chunks;cz++)for(int cx=0;cx<Chunks;cx++){float x0=-half+cx*cs,z0=-half+cz*cs;var v=new Vector3[(Cells+1)*(Cells+1)];var uv=new Vector2[v.Length];
                 for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){float wx=x0+x*cs/Cells,wz=z0+z*cs/Cells;int k=z*(Cells+1)+x;v[k]=new Vector3(wx,heights[cx*Cells+x,cz*Cells+z],wz);uv[k]=new Vector2(wx/12,wz/12);}
                 var tri=new List<int>();for(int z=0;z<Cells;z++)for(int x=0;x<Cells;x++){int a=z*(Cells+1)+x,b=a+1,c=a+Cells+1,d=c+1;if(Contains((v[a]+v[c]+v[b])/3)){tri.Add(a);tri.Add(c);tri.Add(b);}if(Contains((v[b]+v[c]+v[d])/3)){tri.Add(b);tri.Add(c);tri.Add(d);}}
-                var go=new GameObject("Terrain "+cx+"_"+cz,typeof(MeshFilter),typeof(MeshRenderer),typeof(MeshCollider));go.transform.SetParent(terrainRoot,false);var m=new Mesh{name="Arizona terrain chunk",vertices=v,triangles=tri.ToArray(),uv=uv};var normals=new Vector3[v.Length];for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){int gx=cx*Cells+x,gz=cz*Cells+z;normals[z*(Cells+1)+x]=new Vector3(heights[Mathf.Max(0,gx-1),gz]-heights[Mathf.Min(grid,gx+1),gz],step*2,heights[gx,Mathf.Max(0,gz-1)]-heights[gx,Mathf.Min(grid,gz+1)]).normalized;}m.normals=normals;m.RecalculateTangents();m.RecalculateBounds();go.GetComponent<MeshFilter>().sharedMesh=m;if(tri.Count>0)go.GetComponent<MeshCollider>().sharedMesh=m;go.GetComponent<MeshRenderer>().sharedMaterial=desert;var colors=new Color[v.Length];for(int k=0;k<v.Length;k++){colors[k]=BiomeColor(v[k]);colors[k].a=RiverBedMask(v[k]);}m.colors=colors;go.AddComponent<GeneratedMeshOwner>().Mesh=m;details.Add(Group("Details "+cx+"_"+cz,props,Vector3.zero));
+                var go=new GameObject("Terrain "+cx+"_"+cz,typeof(MeshFilter),typeof(MeshRenderer),typeof(MeshCollider));go.transform.SetParent(terrainRoot,false);var m=new Mesh{name="Arizona terrain chunk",vertices=v,triangles=tri.ToArray(),uv=uv};var normals=new Vector3[v.Length];for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++){int gx=cx*Cells+x,gz=cz*Cells+z;normals[z*(Cells+1)+x]=new Vector3(heights[Mathf.Max(0,gx-1),gz]-heights[Mathf.Min(grid,gx+1),gz],step*2,heights[gx,Mathf.Max(0,gz-1)]-heights[gx,Mathf.Min(grid,gz+1)]).normalized;}m.normals=normals;m.RecalculateTangents();m.RecalculateBounds();go.GetComponent<MeshFilter>().sharedMesh=m;if(tri.Count>0)go.GetComponent<MeshCollider>().sharedMesh=m;go.GetComponent<MeshRenderer>().sharedMaterial=desert;
+                var colors=new Color[v.Length];
+                for(int z=0;z<=Cells;z++)for(int x=0;x<=Cells;x++)
+                {
+                    int k=z*(Cells+1)+x;
+                    colors[k]=BiomeColor(v[k]);
+                    int gx=cx*Cells+x,gz=cz*Cells+z;
+                    float lake=dryLakeCoverage==null?0:dryLakeCoverage[gx,gz];
+                    float terrace=terraceCoverage==null?0:terraceCoverage[gx,gz];
+                    float fan=fanCoverage==null?0:fanCoverage[gx,gz];
+                    float canyon=canyonRoutes==null?0:canyonRoutes[gx,gz], wall=canyonWalls==null?0:canyonWalls[gx,gz];
+                    if(canyon>0 || wall>0)colors[k]=TintNarrows(colors[k],canyon,wall,.64f);
+                    else if(fan>0)colors[k]=TintFan(colors[k],fan,fanRibs[gx,gz],.55f);
+                    else if(terrace>0)colors[k]=TintTerrace(colors[k],terrace,terraceRisers[gx,gz],.53f);
+                    else if(lake>0)colors[k]=TintDryLake(colors[k],lake,.73f);
+                    else if(experimentalRelief!=null)colors[k]=TintDryWash(colors[k],experimentalRelief[gx,gz]);
+                    colors[k].a=RiverBedMask(v[k]);
+                }
+                m.colors=colors;go.AddComponent<GeneratedMeshOwner>().Mesh=m;details.Add(Group("Details "+cx+"_"+cz,props,Vector3.zero));
             }
         }
         /// <summary>Player spawn and extraction offsets from the starter town, kept clear of buildings.</summary>
@@ -272,9 +295,39 @@ namespace MadeInArizona
             // Nothing grows in the drive-through under an arch.
             c=Mathf.Min(c,ArchSpanDistance(XZ(p)));
             if(riverWidth>0)c=Mathf.Min(c,DistanceToRiver(p)-riverWidth-1);
+            if(DryLakeCoverageAt(p)>=ClearLakeFloor)c=Mathf.Min(c,0);
+            else if(ExperimentalReliefAt(p)<=-ClearWashDepth || TerraceCoverageAt(p)>=ClearTerraceRamp ||
+                FanCoverageAt(p)>=ClearFanApron || CanyonRouteAt(p)>=ClearCanyonRoute)c=Mathf.Min(c,2f);
             return c;
         }
-        void BuildPins(){if(HasGarage)Pins.Add(new WorldPin{id="garage",label="117° Auto Care Garage",kind="garage",position=GarageLocation,requiredTier=0,discovered=true});for(int i=0;i<Towns.Count;i++)Pins.Add(new WorldPin{id="town_"+i,label=i==0?"117 Junction":"Route Town "+(i+1),kind="town",position=Towns[i],requiredTier=Mathf.Min(3,i),discovered=true});string[] names={"Abandoned mine","Desert overlook","Lost fuel stop","Petroglyph canyon","Radio tower","Mesa camp","Dry lake wreck","Forest lookout"};for(int i=0;i<poiCount;i++){Vector3 p;int guard=0;do{p=RandomPoint();guard++;}while((!Contains(p)||TownDistance(XZ(p))<65||RoadDistance(XZ(p))<25)&&guard<80);if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);string kind=i%9==0?"hideout":i%7==0?"salvage-tech":i%5==0?"salvage-alloy":i%4==0?"salvage-fuel":"landmark";if(kind=="hideout"&&Vector3.Distance(p,Towns[0])<170)kind="salvage-alloy";var pin=new WorldPin{id="poi_"+i,label=names[i%names.Length],kind=kind,position=p,requiredTier=Mathf.Clamp(Mathf.FloorToInt(Mathf.InverseLerp(-half,half,p.z)*4),0,3)};Pins.Add(pin);POI(p,i,pin.label);}if(cfg.pins!=null)foreach(WorldPin authored in cfg.pins){if(authored==null)continue;Vector3 p=authored.position;if(!Contains(p))continue;p.y=HeightInternal(p.x,p.z);POI(p,Pins.Count,authored.label);Pins.Add(new WorldPin{id=authored.id,label=authored.label,kind=authored.kind,position=p,requiredTier=authored.requiredTier,discovered=authored.discovered});}}
+        void BuildPins()
+        {
+            if(HasGarage)Pins.Add(new WorldPin{id="garage",label="117° Auto Care Garage",kind="garage",position=GarageLocation,requiredTier=0,discovered=true});
+            for(int i=0;i<Towns.Count;i++)Pins.Add(new WorldPin{id="town_"+i,label=i==0?"117 Junction":"Route Town "+(i+1),kind="town",position=Towns[i],requiredTier=Mathf.Min(3,i),discovered=true});
+            string[] names={"Abandoned mine","Desert overlook","Lost fuel stop","Petroglyph canyon","Radio tower","Mesa camp","Dry lake wreck","Forest lookout"};
+            for(int i=0;i<poiCount;i++)
+            {
+                Vector3 p;int guard=0;
+                do{p=RandomPoint();guard++;}while((!Contains(p)||TownDistance(XZ(p))<65||RoadDistance(XZ(p))<25)&&guard<80);
+                if(!Contains(p))continue;
+                p.y=HeightInternal(p.x,p.z);
+                string kind=i%9==0?"hideout":i%7==0?"salvage-tech":i%5==0?"salvage-alloy":i%4==0?"salvage-fuel":"landmark";
+                if(kind=="hideout"&&Vector3.Distance(p,Towns[0])<170)kind="salvage-alloy";
+                if(ExperimentalReliefAt(p)!=0)p.y=SampleHeight(p);
+                var pin=new WorldPin{id="poi_"+i,label=names[i%names.Length],kind=kind,position=p,requiredTier=Mathf.Clamp(Mathf.FloorToInt(Mathf.InverseLerp(-half,half,p.z)*4),0,3)};
+                Pins.Add(pin);POI(p,i,pin.label);
+            }
+            if(cfg.pins==null)return;
+            foreach(WorldPin authored in cfg.pins)
+            {
+                if(authored==null)continue;
+                Vector3 p=authored.position;
+                if(!Contains(p))continue;
+                p.y=HeightInternal(p.x,p.z);
+                POI(p,Pins.Count,authored.label);
+                Pins.Add(new WorldPin{id=authored.id,label=authored.label,kind=authored.kind,position=p,requiredTier=authored.requiredTier,discovered=authored.discovered});
+            }
+        }
         void POI(Vector3 p,int i,string label){Transform g=Group("POI • "+label,transform,p);if(i%3==0){for(int y=0;y<4;y++)Box("Radio mast",g,new Vector3(0,y*3+1.5f,0),new Vector3(.4f,3,.4f),Cream);Lamp("Beacon",g,new Vector3(0,13,0),Orange,4,10);}else if(i%3==1){Box("Mine portal",g,new Vector3(0,2,0),new Vector3(7,4,1),Ink,true);Box("Mine lintel",g,new Vector3(0,4.2f,0),new Vector3(9,.7f,1.2f),Rust);}else{RoadsideProps.JunkCar(g,Vector3.zero,Rust,R(0,360));RoadsideProps.Crate(g,new Vector3(3,0,1),1.3f);}}
         Color BiomeColor(Vector3 p)
         {
@@ -294,7 +347,14 @@ namespace MadeInArizona
                 Vector3 normal=new Vector3(h-SampleHeight(p+Vector3.right*e),e,h-SampleHeight(p+Vector3.forward*e)).normalized;
                 // Hillshade from the north-west makes level ramps and cliffs visible on the map.
                 float shade=Mathf.Lerp(.55f,1.25f,Mathf.Clamp01(Vector3.Dot(normal,new Vector3(-.5f,.7f,.5f).normalized)));
-                Color c=BiomeColor(p)*Mathf.Lerp(.72f,1.18f,Mathf.InverseLerp(-amp*.3f,amp,h))*shade;c.a=1;
+                float fan=FanCoverageAt(p);
+                float canyon=CanyonRouteAt(p), wall=CanyonWallAt(p);
+                Color ground=BiomeColor(p);
+                Color relief;
+                if(canyon>0||wall>0)relief=TintNarrows(ground,canyon,wall,.76f);
+                else if(fan>0)relief=TintFan(ground,fan,FanRibsAt(p),.61f);
+                else relief=MapReliefColor(ground,ExperimentalReliefAt(p),DryLakeCoverageAt(p),TerraceCoverageAt(p),TerraceRiserAt(p));
+                Color c=relief*Mathf.Lerp(.72f,1.18f,Mathf.InverseLerp(-amp*.3f,amp,h))*shade;c.a=1;
                 if(riverWidth>0&&Mathf.Abs(p.x-RiverX(p.z))<riverWidth)c=new Color(.05f,.48f,.57f);
                 if(TrailEdgeDistance(XZ(p))<2)c=Color.Lerp(c,new Color(.72f,.55f,.36f),.75f);
                 c=MapLandform(XZ(p),c);
@@ -307,9 +367,13 @@ namespace MadeInArizona
         float SampleHeight(Vector3 p)
         {
             if(heights==null)return HeightInternal(p.x,p.z);
+            return SampleHeightGrid(heights,p);
+        }
+        float SampleHeightGrid(float[,] gridHeights,Vector3 p)
+        {
             int grid=Chunks*Cells;float xx=Mathf.Clamp((p.x+half)/size*grid,0,grid-.0001f),zz=Mathf.Clamp((p.z+half)/size*grid,0,grid-.0001f);
             int x=Mathf.FloorToInt(xx),z=Mathf.FloorToInt(zz);float u=xx-x,v=zz-z;
-            return u+v<=1?heights[x,z]+(heights[x+1,z]-heights[x,z])*u+(heights[x,z+1]-heights[x,z])*v:heights[x+1,z+1]+(heights[x,z+1]-heights[x+1,z+1])*(1-u)+(heights[x+1,z]-heights[x+1,z+1])*(1-v);
+            return u+v<=1?gridHeights[x,z]+(gridHeights[x+1,z]-gridHeights[x,z])*u+(gridHeights[x,z+1]-gridHeights[x,z])*v: gridHeights[x+1,z+1]+(gridHeights[x,z+1]-gridHeights[x+1,z+1])*(1-u)+(gridHeights[x+1,z]-gridHeights[x+1,z+1])*(1-v);
         }
         public static bool Contains(Vector3 p)=>Active&&Active.InOutline(new Vector2(p.x/Active.size,p.z/Active.size));
         public static SurfaceKind SurfaceAt(Vector3 p)
@@ -317,7 +381,10 @@ namespace MadeInArizona
             if(!Active)return SurfaceKind.Dirt;
             if(Active.RoadDistance(XZ(p))<9 || Active.TownDistance(XZ(p))<34)return SurfaceKind.Asphalt;
             if(Active.riverWidth>0&&Mathf.Abs(p.x-Active.RiverX(p.z))<Active.riverWidth)return SurfaceKind.Water;
-            if(Active.TrailEdgeDistance(XZ(p))<0)return SurfaceKind.Dirt;
+            if(Active.TrailEdgeDistance(XZ(p))<0 || Active.DryLakeCoverageAt(p)>=ClearLakeFloor ||
+                Active.TerraceCoverageAt(p)>=TerraceDrivingSurface || Active.CanyonRouteAt(p)>=.55f)return SurfaceKind.Dirt;
+            if(Active.CanyonWallAt(p)>=.45f)return SurfaceKind.Rocks;
+            if(Active.FanCoverageAt(p)>=FanDrivingSurface)return SurfaceKind.Gravel;
             // Desert floors (Sonoran, red sand) are sand, the plateau is rock and the Rim forest is dirt.
             var biome=Active.BiomeAt(p).Dominant;
             return biome==Biome.Sonoran||biome==Biome.RedRock?SurfaceKind.Sand:biome==Biome.Plateau?SurfaceKind.Rocks:SurfaceKind.Dirt;
@@ -386,7 +453,7 @@ namespace MadeInArizona
                 var crown=MeshObject("Ponderosa layered needles",p,v,tri,new Color(.10f+tier*.018f,.24f+tier*.025f,.14f));crown.transform.localPosition=a;
             }
         }
-        void Tree(Transform p,Vector3 a,float h){Cylinder("Cottonwood trunk",p,a+Vector3.up*h*.35f,h*.08f,h*.7f,new Color(.27f,.18f,.1f));Shape("Cottonwood crown",p,PrimitiveType.Sphere,a+Vector3.up*h*.78f,new Vector3(h*.62f,h*.42f,h*.62f),new Color(.25f,.43f,.18f));}void Mesa(Vector3 p,float s,bool crag){Transform g=Group(crag?"Northern crag":"Layered mesa",Detail(p),p);for(int i=0;i<(crag?3:4);i++){float k=1-i/(float)((crag?3:4)+1);Cylinder("Eroded rock tier",g,new Vector3(0,i*s*.16f,0),s*k,s*.22f,i%2==0?new Color(.49f,.26f,.17f):new Color(.58f,.31f,.19f));}}
+        void Mesa(Vector3 p,float s,bool crag){Transform g=Group(crag?"Northern crag":"Layered mesa",Detail(p),p);for(int i=0;i<(crag?3:4);i++){float k=1-i/(float)((crag?3:4)+1);Cylinder("Eroded rock tier",g,new Vector3(0,i*s*.16f,0),s*k,s*.22f,i%2==0?new Color(.49f,.26f,.17f):new Color(.58f,.31f,.19f));}}
         void Update(){if(details.Count==0||!Camera.main)return;Vector3 p=CameraController.HasFocus?CameraController.FocusPoint:Camera.main.transform.position;float cs=size/Chunks;int quality=GameManager.Instance&&GameManager.Instance.Save!=null?GameManager.Instance.Save.settings.quality:2;float distance=quality==0?250:quality==1?340:Mathf.Max(360,size*.34f),sq=distance*distance;for(int i=0;i<details.Count;i++){Transform d=details[i];if(!d)continue;int x=i%Chunks,z=i/Chunks;Vector3 center=new Vector3(-half+(x+.5f)*cs,0,-half+(z+.5f)*cs);bool show=(center-p).sqrMagnitude<sq;if(d.gameObject.activeSelf!=show)d.gameObject.SetActive(show);}}
         void OnDisable(){if(Active==this)Active=null;}void OnDestroy(){if(MapTexture)Destroy(MapTexture);if(desert)Destroy(desert);if(landformMaterial)Destroy(landformMaterial);if(water)Destroy(water);if(townScenery)Destroy(townScenery);}
     }

@@ -28,13 +28,14 @@ namespace MadeInArizona
             ShowMainMenu();
             return true;
         }
-        public void StartCampaign(int seed,float size)
+        public void StartCampaign(int seed,float size,bool? experimentalTerrain=null)
         {
             if (CoopSession.IsRemoteClient) return;
             if (CoopSession.Instance && CoopSession.Instance.IsHost &&
                 (State == GameState.MainMenu || State == GameState.Garage)) { ReturnToGarage(); return; }
             if(State==GameState.Generating)return;
             WorldConfig.seed=seed;WorldConfig.size=size;
+            if(experimentalTerrain.HasValue)WorldConfig.experimentalTerrain=experimentalTerrain.Value;
             if(!WorldConfigStore.Save(WorldConfig)){Notify(WorldConfigStore.LastError);return;}
             StartCoroutine(GenerateCampaign(0));
         }

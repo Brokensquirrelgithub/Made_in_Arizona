@@ -21,6 +21,7 @@ namespace MadeInArizona
         public float vegetation = 1f;
         public float riverWidth = 10f;
         public float trailDensity = 1f;
+        public bool experimentalTerrain;
         public BiomeThresholds biomeThresholds = new BiomeThresholds();
         public List<WorldPin> pins = new List<WorldPin>();
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using static MadeInArizona.WorldArt;
 
@@ -13,6 +14,8 @@ namespace MadeInArizona
     {
         static readonly float[] BankSamples = { -2.6f, -1.6f, 1.6f, 2.6f };
         const float RiverStep = 4, RiverSurfaceDrop = 2.2f, RiverMaxGrade = .07f, RiverBedDepth = 2f, RiverShelf = .6f;
+        int RiverMeshRows => Mathf.CeilToInt(size / 3) + 1;
+        float RiverMeshRowZ(int row, int rows) => Mathf.Lerp(-half * .93f, half * .94f, row / (float)(rows - 1));
         float[] riverLevels, riverReach;
 
         // ---- Roads and the river ----
@@ -187,12 +190,11 @@ namespace MadeInArizona
         void BuildRiver()
         {
             if (riverLevels == null) return;
-            int rows = Mathf.CeilToInt(size / 3) + 1; const int columns = 7;
+            int rows = RiverMeshRows; const int columns = 7;
             var vertices = new Vector3[rows * columns]; var uv = new Vector2[vertices.Length];
-            var centre = new Vector3[rows];
             for (int i = 0; i < rows; i++)
             {
-                float z = Mathf.Lerp(-half * .93f, half * .94f, i / (float)(rows - 1)), x = RiverX(z), level = RiverLevel(z);
+                float z = RiverMeshRowZ(i, rows), x = RiverX(z), level = RiverLevel(z);
                 Vector2 tangent = new Vector2(RiverX(z + 1) - RiverX(z - 1), 2).normalized, n = new Vector2(-tangent.y, tangent.x);
                 // Each edge reaches just past the waterline on its own bank, so it always tucks under the ground.
                 float left = WaterEdge(x, z, n, level), right = WaterEdge(x, z, -n, level);
@@ -202,7 +204,6 @@ namespace MadeInArizona
                     var p = new Vector3(x + n.x * across, level, z + n.y * across);
                     vertices[i * columns + j] = p; uv[i * columns + j] = new Vector2(p.x, p.z) / 7f;
                 }
-                centre[i] = new Vector3(x, level, z);
             }
             var triangles = new int[(rows - 1) * (columns - 1) * 6]; int t = 0;
             for (int i = 0; i < rows - 1; i++) for (int j = 0; j < columns - 1; j++)
@@ -219,10 +220,39 @@ namespace MadeInArizona
             go.GetComponent<MeshFilter>().sharedMesh = mesh; go.AddComponent<GeneratedMeshOwner>().Mesh = mesh;
             var renderer = go.GetComponent<MeshRenderer>(); renderer.sharedMaterial = water;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        // Draw the same random values before generating towns and points of interest, then place trees once trails exist.
+        List<(Vector3 point, float height)> PlanRiverbankTrees()
+        {
+            var trees = new List<(Vector3 point, float height)>();
+            if (riverLevels == null) return trees;
+            int rows = RiverMeshRows;
             for (int i = 2; i < rows - 2; i += 30) for (int side = -1; side <= 1; side += 2)
             {
-                Vector3 p = centre[i]; p.x += side * (RiverReach(p.z) + R(2, 8)); p.z += R(-6, 6); p.y = HeightInternal(p.x, p.z);
-                Tree(Detail(p), p, R(5, 9));
+                float z = RiverMeshRowZ(i, rows);
+                float x = RiverX(z) + side * (RiverReach(z) + R(2, 8));
+                z += R(-6, 6);
+                trees.Add((new Vector3(x, HeightInternal(x, z), z), R(5, 9)));
+            }
+            return trees;
+        }
+
+        void BuildRiverbankTrees(List<(Vector3 point, float height)> trees)
+        {
+            foreach (var (point, height) in trees)
+            {
+                float crownWidth = height * .62f, crownRadius = crownWidth * .5f;
+                Vector2 at = XZ(point);
+                if (RoadDistance(at) < RoadKeepOut + crownRadius || TrailEdgeDistance(at) < crownRadius || ExperimentalFloorNear(at, crownRadius))
+                    continue;
+
+                var grounded = point;
+                if (ExperimentalReliefAt(point) != 0) grounded.y = SampleHeight(point);
+                Transform parent = Detail(grounded);
+                Cylinder("Cottonwood trunk", parent, grounded + Vector3.up * height * .35f, height * .08f, height * .7f, new Color(.27f, .18f, .1f));
+                Shape("Cottonwood crown", parent, PrimitiveType.Sphere, grounded + Vector3.up * height * .78f,
+                    new Vector3(crownWidth, height * .42f, crownWidth), new Color(.25f, .43f, .18f));
             }
         }
 

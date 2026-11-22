@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -142,6 +143,196 @@ namespace MadeInArizona
                 Debug.Log($"MIA_LANDFORMS seed={seed} size={mapSize} landforms={generated.LandformCount} cover={generated.CoverCount} issue={landformIssue ?? "none"}");
                 check($"seed {seed} at {mapSize} m landforms keep roads, objectives and routes open", landformIssue == null && generated.LandformCount <= GeneratedWorld.MaxLandforms * Mathf.Clamp(mapSize * mapSize / (1600f * 1600f), 1, 4));
             }
+        }
+
+        public static IEnumerator ExperimentalTerrain(Action<string, bool> check)
+        {
+            var game = GameManager.Instance;
+            game.StartCampaign(173, 1600, false);
+            yield return new WaitUntil(() => game.State == GameState.Playing);
+            var baseline = GeneratedWorld.Active;
+            check("experimental terrain is off on the baseline map", baseline.DryWashCount == 0 && baseline.FoothillCount == 0 &&
+                baseline.DryLakeCenters.Count == 0 && baseline.Terraces.Count == 0 && baseline.Fans.Count == 0 && baseline.Narrows.Count == 0);
+            var baselinePins = baseline.Pins.ConvertAll(pin => new Vector2(pin.position.x, pin.position.z));
+            Color neutral = GeneratedWorld.SonoranGround;
+            Color lake = GeneratedWorld.MapReliefColor(neutral, -4, 1);
+            Color wash = GeneratedWorld.MapReliefColor(neutral, -4, 0);
+            Color hill = GeneratedWorld.MapReliefColor(neutral, 8, 0);
+            check("map colors separate dry lakes, washes and foothills", lake.b > neutral.b + .18f &&
+                wash.r < neutral.r && wash.g < neutral.g - .025f && hill.r > neutral.r + .04f && hill.b < wash.b);
+
+            float[] first = null, other = null;
+            var path = new List<Vector3>();
+            foreach (var (seed, size) in new[] { (173, 1600f), (271, 1600f), (2024, 4800f), (173, 1600f) })
+            {
+                game.StartCampaign(seed, size, true);
+                yield return new WaitUntil(() => game.State == GameState.Playing);
+                var world = GeneratedWorld.Active;
+                string label = $"seed {seed} at {size} m";
+                check(label + " has washes and foothills", world.DryWashCount > 0 && world.FoothillCount > 0);
+                check(label + " keeps solid landforms clear of roads and objectives", world.LandformIssue() == null);
+                Vector3 start = game.World.PlayerSpawn;
+                bool routesOpen = world.Towns.TrueForAll(town => world.FindPath(start, town, path)) &&
+                    game.World.ObjectivePoints.TrueForAll(beat => world.FindPath(start, beat, path));
+                check(label + " routes from the starter car reach towns and mission objectives", routesOpen);
+                bool lakeFlat = world.DryLakeCenters.Count > 0, lakeRoutes = lakeFlat, lakeVisible = lakeFlat;
+                foreach (var site in world.DryLakeCenters)
+                {
+                    var center = new Vector3(site.x, 0, site.y);
+                    center.y = GeneratedWorld.HeightAt(center);
+                    lakeRoutes &= world.FindPath(start, center, path);
+                    int paleSamples = 0, exits = 0;
+                    foreach (var direction in new[] { Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
+                    {
+                        Vector3 near = center + direction * 16;
+                        lakeFlat &= world.DryLakeCoverageAt(near) > .99f && Mathf.Abs(GeneratedWorld.HeightAt(near) - center.y) < .05f &&
+                            GeneratedWorld.SurfaceAt(near) == SurfaceKind.Dirt;
+                        Color pixel = world.MapTexture.GetPixelBilinear(.5f + near.x / size, .5f + near.z / size);
+                        if (pixel.b > pixel.r * .69f) paleSamples++;
+                        Vector3 bank = near;
+                        for (int distance = 16; distance < 256 && world.DryLakeCoverageAt(bank) > .35f; distance += 8)
+                            bank += direction * 8;
+                        if (world.DryLakeCoverageAt(bank) <= .35f && world.DirectDrivable(center, bank)) exits++;
+                    }
+                    lakeVisible &= paleSamples >= 2;
+                    lakeRoutes &= exits >= 3;
+                }
+                check(label + " has a flat, firm dry lake floor", lakeFlat);
+                check(label + " dry lake floors have an AI route and broad driving exits", lakeRoutes);
+                check(label + " shows pale dry lake beds in the map texture", lakeVisible);
+                CheckTerraces(world, start, size, label, path, check);
+                CheckFans(world, start, size, label, path, check);
+                CheckNarrows(world, start, size, label, path, check);
+                if (seed == 173)
+                {
+                    bool samePins = world.Pins.Count == baselinePins.Count;
+                    for (int i = 0; samePins && i < baselinePins.Count; i++)
+                        samePins = baselinePins[i] == new Vector2(world.Pins[i].position.x, world.Pins[i].position.z);
+                    check(label + " keeps the original town and pin coordinates", samePins);
+                    if (first == null) first = SampleRelief(world, size);
+                    else check("the same seed reproduces the same terrain changes", SameRelief(first, SampleRelief(world, size)));
+                }
+                if (seed == 271) other = SampleRelief(world, size);
+            }
+            check("different seeds place terrain changes in different locations", !SameRelief(first, other));
+        }
+
+        static void CheckTerraces(GeneratedWorld world, Vector3 start, float size, string label, List<Vector3> path, Action<string, bool> check)
+        {
+            bool shelves = world.Terraces.Count > 0, open = shelves, visible = shelves;
+            foreach (var terrace in world.Terraces)
+            {
+                Vector3 lower = terrace.Point(0, GeneratedWorld.LowerShelfLane);
+                Vector3 upper = terrace.Point(0, GeneratedWorld.UpperShelfLane);
+                lower.y = GeneratedWorld.HeightAt(lower);
+                upper.y = GeneratedWorld.HeightAt(upper);
+                shelves &= upper.y > lower.y + 2.5f && GeneratedWorld.SurfaceAt(lower) == SurfaceKind.Dirt &&
+                    GeneratedWorld.SurfaceAt(upper) == SurfaceKind.Dirt;
+                open &= world.FindPath(start, upper, path) && world.DirectDrivable(lower, upper);
+                foreach (float lane in new[] { GeneratedWorld.LowerShelfLane, GeneratedWorld.UpperShelfLane })
+                {
+                    Vector3 end = terrace.Point(1, lane), otherEnd = terrace.Point(-1, lane);
+                    open &= world.DirectDrivable(otherEnd, end);
+                }
+                int distinctBands = 0;
+                foreach (float along in new[] { -.25f, 0, .25f })
+                {
+                    Vector3 shelf = terrace.Point(along, GeneratedWorld.UpperShelfLane);
+                    Vector3 riser = terrace.Point(along, -.12f);
+                    Color shelfPixel = world.MapTexture.GetPixelBilinear(.5f + shelf.x / size, .5f + shelf.z / size);
+                    Color riserPixel = world.MapTexture.GetPixelBilinear(.5f + riser.x / size, .5f + riser.z / size);
+                    if (shelfPixel.r > riserPixel.r + .03f) distinctBands++;
+                }
+                visible &= distinctBands >= 2;
+            }
+            check(label + " has two firm sandstone shelves at distinct elevations", shelves);
+            check(label + " terraces have AI access and a through route with ramps at both ends", open);
+            check(label + " terrace shelves and risers are distinct in the map texture", visible);
+        }
+
+        static void CheckFans(GeneratedWorld world, Vector3 start, float size, string label, List<Vector3> path, Action<string, bool> check)
+        {
+            bool slopes = world.Fans.Count > 0, routes = slopes, visible = slopes;
+            foreach (var fan in world.Fans)
+            {
+                Vector3 near = fan.Point(.24f), middle = fan.Point(.55f), far = fan.Point(.76f);
+                float drop = GeneratedWorld.HeightAt(near) - GeneratedWorld.HeightAt(far);
+                SurfaceKind surface = GeneratedWorld.SurfaceAt(middle);
+                slopes &= drop > 1 && fan.WidthAt(.76f) > fan.WidthAt(.24f) * 1.6f &&
+                    world.FanCoverageAt(middle) > .9f && (surface == SurfaceKind.Gravel || surface == SurfaceKind.Dirt);
+                routes &= world.FindPath(start, middle, path) && world.DirectDrivable(near, far) &&
+                    world.DirectDrivable(fan.Point(.58f, -.62f), fan.Point(.58f, .62f));
+
+                float lightest = 0, darkest = 1;
+                for (int i = 0; i <= 12; i++)
+                {
+                    Vector3 sample = fan.Point(.64f, Mathf.Lerp(-.60f, .60f, i / 12f));
+                    Color pixel = world.MapTexture.GetPixelBilinear(.5f + sample.x / size, .5f + sample.z / size);
+                    lightest = Mathf.Max(lightest, pixel.r);
+                    darkest = Mathf.Min(darkest, pixel.r);
+                }
+                visible &= lightest - darkest > .025f;
+            }
+            check(label + " has gravel fans that widen and descend away from their source", slopes);
+            check(label + " has AI access and drivable routes down and across the fans", routes);
+            check(label + " shows the fan ribs in the map texture", visible);
+        }
+
+        static void CheckNarrows(GeneratedWorld world, Vector3 start, float size, string label, List<Vector3> path, Action<string, bool> check)
+        {
+            bool fits = world.Narrows.Count > 0, routes = fits, visible = fits;
+            foreach (var canyon in world.Narrows)
+            {
+                Vector3 floor = canyon.Point(0), shelf = canyon.BypassPoint(0);
+                fits &= canyon.HalfFloorAt(0) * 2 >= 30 && canyon.HalfFloorAt(1) > canyon.HalfFloorAt(0) * 1.5f &&
+                    GeneratedWorld.HeightAt(shelf) - GeneratedWorld.HeightAt(floor) > 5 &&
+                    GeneratedWorld.SurfaceAt(floor) == SurfaceKind.Dirt && GeneratedWorld.SurfaceAt(shelf) == SurfaceKind.Dirt;
+
+                Vector3 entry = canyon.Point(-1.06f), exit = canyon.Point(1.06f);
+                Vector3 passage = entry, bypass = canyon.BypassPoint(-1.06f);
+                routes &= world.FindPath(start, entry, path) && world.DirectDrivable(entry, bypass);
+                for (int i = 1; i <= 8; i++)
+                {
+                    float along = Mathf.Lerp(-1.06f, 1.06f, i / 8f);
+                    Vector3 nextPassage = canyon.Point(along), nextBypass = canyon.BypassPoint(along);
+                    routes &= world.DirectDrivable(passage, nextPassage) && world.DirectDrivable(bypass, nextBypass);
+                    passage = nextPassage; bypass = nextBypass;
+                }
+                routes &= world.DirectDrivable(bypass, exit);
+
+                int distinctBands = 0;
+                foreach (float along in new[] { -.24f, 0, .24f })
+                {
+                    float wall = canyon.HalfFloorAt(along) + canyon.wallRun * .5f;
+                    Vector3 opening = canyon.Point(along), left = canyon.Point(along, -wall), right = canyon.Point(along, wall);
+                    Color lane = world.MapTexture.GetPixelBilinear(.5f + opening.x / size, .5f + opening.z / size);
+                    Color leftBank = world.MapTexture.GetPixelBilinear(.5f + left.x / size, .5f + left.z / size);
+                    Color rightBank = world.MapTexture.GetPixelBilinear(.5f + right.x / size, .5f + right.z / size);
+                    if (lane.r > Mathf.Max(leftBank.r, rightBank.r) + .04f) distinctBands++;
+                }
+                visible &= distinctBands >= 2;
+            }
+            check(label + " canyon narrows have wide floors, flared mouths and high bypasses", fits);
+            check(label + " has AI access to connected canyon passages and bypasses", routes);
+            check(label + " shows a visible corridor between canyon walls on the map", visible);
+        }
+
+        static float[] SampleRelief(GeneratedWorld world, float size)
+        {
+            const int samples = 48;
+            var result = new float[samples * samples];
+            for (int z = 0; z < samples; z++)
+                for (int x = 0; x < samples; x++)
+                    result[z * samples + x] = world.ExperimentalReliefAt(new Vector3(
+                        (x / (float)samples - .5f) * size, 0, (z / (float)samples - .5f) * size));
+            return result;
+        }
+
+        static bool SameRelief(float[] a, float[] b)
+        {
+            for (int i = 0; i < a.Length; i++)
+                if (Mathf.Abs(a[i] - b[i]) > .001f) return false;
+            return true;
         }
 
         static void Render(Camera camera, string path)

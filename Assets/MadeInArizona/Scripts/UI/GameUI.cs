@@ -16,6 +16,7 @@ namespace MadeInArizona
         static readonly Color Lime = new Color(.80f, .90f, .42f);
         static readonly Color Blue = new Color(.30f, .83f, .87f);
         readonly Dictionary<string, GUIStyle> styles = new Dictionary<string, GUIStyle>();
+        Texture2D dialoguePortraitPlaceholder;
         // Every rectangle the latest pass painted outside a scroll view, in window pixels from the top left: where a
         // click belongs to the interface and not to the shop behind it.
         static readonly List<Rect> painted = new List<Rect>();
@@ -69,7 +70,12 @@ namespace MadeInArizona
             game.StateChanged += ResetFocus;
             Application.logMessageReceived += CaptureConsoleLog;
         }
-        void OnDestroy() { if (game != null) game.StateChanged -= ResetFocus; Application.logMessageReceived -= CaptureConsoleLog; }
+        void OnDestroy()
+        {
+            if (game != null) game.StateChanged -= ResetFocus;
+            Application.logMessageReceived -= CaptureConsoleLog;
+            if (dialoguePortraitPlaceholder) Destroy(dialoguePortraitPlaceholder);
+        }
         void ResetFocus()
         {
             ConsoleOpen = false;
@@ -716,12 +722,75 @@ namespace MadeInArizona
 
         void DrawDialogue()
         {
-            float w=350,x=28,y=135;
-            float h=StylesRadioHeight(DialogueSystem.Instance.Text,w-42);
-            Rect(x,y,w,h+40,Ink);Rect(x,y,3,h+40,Blue);
-            Text(x+12,y+8,w-44,18,"RADIO / "+DialogueSystem.Instance.Speaker.ToUpperInvariant(),11,Blue,true);
-            Text(x+12,y+31,w-30,h,DialogueSystem.Instance.Text,14);
-            if(Button(x+w-29,y+6,22,22,"×"))DialogueSystem.Instance.Skip();
+            const float portraitSize = 88f;
+            float x = 28f, y = 225f, w = Mathf.Min(460f, width - 56f);
+            float textX = x + portraitSize + 24f;
+            float textW = w - portraitSize - 38f;
+            float bodyH = StylesRadioHeight(DialogueSystem.Instance.Text, textW);
+            float panelH = Mathf.Max(portraitSize + 24f, bodyH + 43f);
+            string speaker = DialogueSystem.Instance.Speaker;
+            Rect(x, y, w, panelH, Ink);
+            Rect(x, y, 3, panelH, Blue);
+            DrawDialoguePortrait(x + 12f, y + 12f, portraitSize, speaker);
+            Text(textX, y + 8f, textW - 20f, 18f, "RADIO / " + speaker.ToUpperInvariant(), 11, Blue, true);
+            Text(textX, y + 31f, textW, bodyH, DialogueSystem.Instance.Text, 14);
+            if (Button(x + w - 29f, y + 6f, 22f, 22f, "×")) DialogueSystem.Instance.Skip();
+        }
+
+        void DrawDialoguePortrait(float x, float y, float size, string speaker)
+        {
+            Color accent = DialoguePortraitAccent(speaker);
+            Rect(x, y, size, size, new Color(.12f, .19f, .20f));
+            Rect(x, y, size, 3f, accent);
+            Rect(x + 8f, y + 9f, size - 16f, size - 31f, new Color(.17f, .25f, .26f));
+            if (!dialoguePortraitPlaceholder) dialoguePortraitPlaceholder = CreateDialoguePortraitPlaceholder();
+            Color previous = GUI.color;
+            GUI.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? accent.linear : accent;
+            GUI.DrawTexture(new Rect(x + 12f, y + 10f, size - 24f, size - 29f), dialoguePortraitPlaceholder);
+            GUI.color = previous;
+            Text(x + 4f, y + size - 20f, size - 8f, 14f, "PORTRAIT", 9, Muted, true, TextAnchor.MiddleCenter);
+        }
+
+        static Color DialoguePortraitAccent(string speaker)
+        {
+            switch ((speaker ?? "").ToUpperInvariant())
+            {
+                case "JOHNNY": return Orange;
+                case "STALLION": return Lime;
+                case "SUZUKI": return Cream;
+                case "IVO": return new Color(.85f, .65f, .95f);
+                case "ELLIS": return new Color(.55f, .75f, 1f);
+                case "SILT": return new Color(.96f, .76f, .43f);
+                case "RICK": return new Color(.93f, .58f, .54f);
+                case "NOVA": return new Color(.94f, .54f, .83f);
+                case "BASCULE": return new Color(.79f, .52f, .48f);
+                default: return Blue;
+            }
+        }
+
+        static Texture2D CreateDialoguePortraitPlaceholder()
+        {
+            const int size = 96;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Dialogue portrait placeholder",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var pixels = new Color[size * size];
+            for (int py = 0; py < size; py++)
+            for (int px = 0; px < size; px++)
+            {
+                float dx = px - 47.5f;
+                float head = 1f - dx * dx / (17f * 17f) - (py - 61f) * (py - 61f) / (20f * 20f);
+                float shoulders = 1f - dx * dx / (40f * 40f) - (py + 2f) * (py + 2f) / (48f * 48f);
+                float alpha = Mathf.Max(Mathf.Clamp01(head * 12f), Mathf.Clamp01(shoulders * 12f));
+                pixels[py * size + px] = new Color(1f, 1f, 1f, alpha);
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         void TickPauseInput(Gamepad pad)

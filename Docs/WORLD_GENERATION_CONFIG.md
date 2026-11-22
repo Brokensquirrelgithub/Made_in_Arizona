@@ -12,6 +12,7 @@
   "vegetation": 1.0,
   "riverWidth": 10.0,
   "trailDensity": 1.0,
+  "experimentalTerrain": false,
   "biomeThresholds": {
     "lowland": 0.28,
     "scrub": 0.52,
@@ -40,6 +41,18 @@ Authored pins are placed at world-space `x`/`z` coordinates and snapped to terra
 The generator uses bounded terrain chunks, seeded biome noise, a carved river, graded road corridors and predefined town geometry. Broad grades now use 65% of their original relief; crag and mesa relief use about 40%, keeping hills gentler under the top-down camera even with an existing saved config. `terrainHeight` still scales the landscape; roads, towns, river surfaces and collision all use the same revised heightfield. Increasing map size spreads the same bounded terrain resolution across a larger area. This is a finite region; town blueprints are currently defined in code. Regeneration is synchronous after the loading screen is drawn and can briefly stall on large or dense configurations.
 
 ## Landscape detail
+
+Enable **Experimental terrain** on the main menu before starting or regenerating a campaign. The same setting is available as `"experimentalTerrain": true` in the live JSON. Existing configs default to off. Try seeds `173` and `271` at the same map width to compare the newly shaped terrain.
+
+The experiment adds shallow, meandering dry washes, broad foothills with low saddles, dry lake beds, two-level red-rock terraces, alluvial fans, and canyon narrows. Their placement and orientation vary by seed. The terrain mesh, collision and AI routing share the resulting heights. Washes and foothills are softened or skipped if they would exceed a 36% grade. Dry lakes have flat, firm floors and broad banks capped at 30%. Terraces have two wide benches connected by a sloping rise, and both benches ramp down into open ground at either end. A terrace is omitted if the shaped ground would exceed a 32% grade. Fans spread downhill from the base of higher ground into a gravel apron with broad, shallow ribs. A fan is omitted if any shaped slope would exceed a 30% grade.
+
+Canyon narrows have a firm floor at least 30 m across. The walls taper out at both mouths, where the lower passage rejoins a wider route around one side on higher ground. Candidates are skipped unless the passage, bypass and connections all fit within a 30% grade.
+
+Paved roads, town pads, river banks and authored pin approaches have setbacks. Dirt trails route over the resulting terrain, so off-road paths and mission junctions can differ. Large rocks and vegetation keep clear of the deeper washes, lake beds, terrace ramps and benches, main fan aprons, and both canyon routes. Co-op guests use the host’s setting and need a build that supports the same terrain generation.
+
+On the world map and minimap, dry washes trace darker ribbons, foothills read as warm shading over the raised ground, and dry lake beds show as pale basins with darker shores. Terraces show as paired sandstone bands with a darker strip between the two levels. Alluvial fans show as muted gravel wedges with faint ribs spreading downhill. Canyon narrows show as a lighter corridor between two dark rock bands that open out at each end.
+
+For a driving playtest, enter a wash from each side, stop in the bottom and drive out again in the starter car. Repeat during a pursuit and watch whether the pursuer follows or takes a passable route around it. The automated route check runs with `-miaSmokeTest -miaExperimentalTerrainTest`.
 
 `trailDensity` scales the dirt trail network (default 1, range 0–3; 0 disables it). Trails link scattered junctions, every point of interest, and the main roads. Each junction joins its nearest two or three neighbours, so the map fills with a loose web of routes. Every trail curves on its own and is a dirt road (6–8 m), a track (4–5.5 m) or a footpath (2.4–3.4 m). Trails avoid town centres, can ford the river, keep scenery clear, show on the minimap and drive as dirt.
 

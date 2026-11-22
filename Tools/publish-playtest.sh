@@ -16,7 +16,9 @@ if gh release view "$tag" >/dev/null 2>&1; then echo "$tag is already published.
 
 [ "${SKIP_BUILD:-0}" = 1 ] || "$root/Tools/build.sh" all
 
-dist="$root/Builds/dist"; rm -rf "$dist"; mkdir -p "$dist"
+dist="$root/Builds/dist/$tag"
+mkdir -p "$dist"
+rm -f "$dist/MadeInArizona-Windows.zip" "$dist/MadeInArizona-macOS.zip"
 # ditto keeps the bundle's permissions and symlinks; --keepParent puts the .app at the zip root.
 ditto -c -k --sequesterRsrc --keepParent "$root/Builds/macOS/Made in Arizona.app" "$dist/MadeInArizona-macOS.zip"
 (cd "$root/Builds/Windows" && zip -q -r -X "$dist/MadeInArizona-Windows.zip" . -x '*_BurstDebugInformation_DoNotShip*' '*_BackUpThisFolder_ButDontShipItWithYourGame*')
@@ -28,4 +30,5 @@ python3 "$root/Tools/verify-release-stamps.py" --commit "$commit" \
   --windows "$dist/MadeInArizona-Windows.zip" --macos "$dist/MadeInArizona-macOS.zip" --notes "$dist/notes.md"
 gh release create "$tag" "$dist/MadeInArizona-Windows.zip" "$dist/MadeInArizona-macOS.zip" \
   --target "$commit" --title "Playtest $short • $subject" --notes-file "$dist/notes.md"
+python3 "$root/Tools/cleanup_builds.py" --apply || echo 'Local build cleanup failed. See Docs/UPDATES.md.' >&2
 echo "Published $tag. Testers see it under Versions & Updates."

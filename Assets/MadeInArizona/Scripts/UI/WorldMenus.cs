@@ -10,6 +10,7 @@ namespace MadeInArizona
         string resetProgressError;
         string worldSeed;
         float worldSize;
+        bool? terrainSelection;
         Vector3? mapWaypoint;
         public void OpenWorldMap(){if(!GeneratedWorld.Active)return;if(game.IsPlaying)game.Pause();worldMap=true;settings=false;devMenu=false;}
         void WorldMenuInput()
@@ -44,14 +45,19 @@ namespace MadeInArizona
             Text(x+25,y+308,180,25,"MAP WIDTH",15,Muted);
             worldSize=GUI.HorizontalSlider(new Rect(x+235,y+311,320,26),Mathf.Max(worldSize,GeneratedWorld.MinSize),GeneratedWorld.MinSize,GeneratedWorld.MaxSize);
             Text(x+580,y+305,120,28,(worldSize/1000).ToString("0.0")+" km",19,Lime,true);
-            Text(x+25,y+355,panelW-50,64,"Sonoran desert • salt flats • riparian washes • pine highlands • craggy mountains. Towns share blueprints; roads and wilderness follow your seed.",16,Muted);
             bool valid=int.TryParse(worldSeed,out int seed);
             bool inCoop=CoopSession.Instance&&(CoopSession.Instance.IsHost||CoopSession.Instance.IsClient);
+            bool experimentalTerrain=terrainSelection??game.WorldConfig.experimentalTerrain;
+            if(!inCoop)
+            {
+                bool enabled=GUI.Toggle(new Rect(x+25,y+367,panelW-50,28),experimentalTerrain,"Experimental terrain (washes, hills, dry lakes, terraces, fans and canyons)");
+                if(enabled!=experimentalTerrain)terrainSelection=experimentalTerrain=enabled;
+            }
             if(Button(x+25,y+438,panelW-50,56,inCoop?"OPEN CO-OP GARAGE / READY":"START CAMPAIGN  /  GENERATE WORLD",true,
                 inCoop?CoopSession.Instance.IsHost:valid))
-            { if(inCoop)game.ReturnToGarage();else BeginOpening(seed,Mathf.Round(worldSize/50)*50); }
+            { if(inCoop)game.ReturnToGarage();else {terrainSelection=null;BeginOpening(seed,Mathf.Round(worldSize/50)*50,experimentalTerrain);} }
             if(Button(x+25,y+512,220,48,"GARAGE / SAVED",false,!CoopSession.IsRemoteClient))game.ReturnToGarage();
-            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!inCoop)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50);}
+            if(Button(x+260,y+512,panelW-420,48,"REGENERATE MAP",false,!inCoop)){int fresh=Random.Range(1,int.MaxValue);worldSeed=fresh.ToString();terrainSelection=null;game.StartCampaign(fresh,Mathf.Round(worldSize/50)*50,experimentalTerrain);}
             if(Button(x+panelW-145,y+512,120,48,"QUIT"))Application.Quit();
             if(Button(x+25,y+568,220,38,"RESET PROGRESS",false,!inCoop))
             { resetProgressPending=true; resetProgressError=null; }

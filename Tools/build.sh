@@ -13,4 +13,9 @@ case "${1:-all}" in
 esac
 mkdir -p "$project_root/Builds"
 export MIA_BUILD_ROOT="${MIA_BUILD_ROOT:-$project_root}"
-"$unity_editor" -batchmode -nographics -quit -projectPath "$project_path" -executeMethod "MadeInArizona.Editor.BuildGame.$method" -logFile "$project_root/Builds/unity-$method.log"
+build_status=0
+"$unity_editor" -batchmode -nographics -quit -projectPath "$project_path" -executeMethod "MadeInArizona.Editor.BuildGame.$method" -logFile "$project_root/Builds/unity-$method.log" || build_status=$?
+if [[ "$method" == Build* ]]; then
+  python3 "$project_root/Tools/cleanup_builds.py" --apply || echo 'Local build cleanup failed. See Docs/UPDATES.md.' >&2
+fi
+exit "$build_status"
