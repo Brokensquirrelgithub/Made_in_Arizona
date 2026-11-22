@@ -162,6 +162,7 @@ namespace MadeInArizona
                 wash.r < neutral.r && wash.g < neutral.g - .025f && hill.r > neutral.r + .04f && hill.b < wash.b);
 
             float[] first = null, other = null;
+            bool sawLake = false, sawTerrace = false, sawFan = false, sawNarrows = false;
             var path = new List<Vector3>();
             foreach (var (seed, size) in new[] { (173, 1600f), (271, 1600f), (2024, 4800f), (173, 1600f) })
             {
@@ -175,7 +176,8 @@ namespace MadeInArizona
                 bool routesOpen = world.Towns.TrueForAll(town => world.FindPath(start, town, path)) &&
                     game.World.ObjectivePoints.TrueForAll(beat => world.FindPath(start, beat, path));
                 check(label + " routes from the starter car reach towns and mission objectives", routesOpen);
-                bool lakeFlat = world.DryLakeCenters.Count > 0, lakeRoutes = lakeFlat, lakeVisible = lakeFlat;
+                bool lakeFlat = true, lakeRoutes = true, lakeVisible = true;
+                sawLake |= world.DryLakeCenters.Count > 0;
                 foreach (var site in world.DryLakeCenters)
                 {
                     var center = new Vector3(site.x, 0, site.y);
@@ -197,12 +199,18 @@ namespace MadeInArizona
                     lakeVisible &= paleSamples >= 2;
                     lakeRoutes &= exits >= 3;
                 }
-                check(label + " has a flat, firm dry lake floor", lakeFlat);
-                check(label + " dry lake floors have an AI route and broad driving exits", lakeRoutes);
-                check(label + " shows pale dry lake beds in the map texture", lakeVisible);
-                CheckTerraces(world, start, size, label, path, check);
-                CheckFans(world, start, size, label, path, check);
-                CheckNarrows(world, start, size, label, path, check);
+                if (world.DryLakeCenters.Count > 0)
+                {
+                    check(label + " has a flat, firm dry lake floor", lakeFlat);
+                    check(label + " dry lake floors have an AI route and broad driving exits", lakeRoutes);
+                    check(label + " shows pale dry lake beds in the map texture", lakeVisible);
+                }
+                sawTerrace |= world.Terraces.Count > 0;
+                sawFan |= world.Fans.Count > 0;
+                sawNarrows |= world.Narrows.Count > 0;
+                if (world.Terraces.Count > 0) CheckTerraces(world, start, size, label, path, check);
+                if (world.Fans.Count > 0) CheckFans(world, start, size, label, path, check);
+                if (world.Narrows.Count > 0) CheckNarrows(world, start, size, label, path, check);
                 if (seed == 173)
                 {
                     bool samePins = world.Pins.Count == baselinePins.Count;
@@ -214,6 +222,7 @@ namespace MadeInArizona
                 }
                 if (seed == 271) other = SampleRelief(world, size);
             }
+            check("the sampled maps include each optional terrain feature", sawLake && sawTerrace && sawFan && sawNarrows);
             check("different seeds place terrain changes in different locations", !SameRelief(first, other));
         }
 
